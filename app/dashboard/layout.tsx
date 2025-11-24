@@ -32,6 +32,9 @@ export default function DashboardLayout({ children }: any) {
           <Link href="/dashboard/cash" className="block p-2">
             Cashbook
           </Link>
+          <Link href="/dashboard/reports" className="block p-2">
+            Reports
+          </Link>
         </nav>
       </aside>
 
