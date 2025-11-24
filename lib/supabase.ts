@@ -1,3 +1,5 @@
+// lib/supabase.ts
+
 import { createBrowserClient } from "@supabase/ssr";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
@@ -8,23 +10,23 @@ export function createClient() {
   );
 }
 
-export function createServerClientForRoute(cookies: any) {
+export function createServerClientForRoute(cookieStore: any) {
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
-          return cookies.get(name)?.value;
+          return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
           try {
-            cookies.set(name, value, options);
+            cookieStore.set(name, value, options);
           } catch (e) {}
         },
         remove(name: string, options: CookieOptions) {
           try {
-            cookies.set(name, "", options);
+            cookieStore.set(name, "", options);
           } catch (e) {}
         },
       },
