@@ -1,65 +1,110 @@
-import Image from "next/image";
+"use client";
+
+import { DashboardLayout } from "@/components/layout/dashboard-layout";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <DashboardLayout>
+      <div className="space-y-8">
+        {/* Header Section */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-primary mb-2">Welcome to Ultra POS</h1>
+          <p className="text-muted-foreground text-lg">
+            Modern Point of Sale System with Royal Blue Theme
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { label: "Total Sales", value: "$12,345", icon: "💰" },
+            { label: "Orders Today", value: "42", icon: "📦" },
+            { label: "Customers", value: "238", icon: "👥" },
+            { label: "Inventory", value: "1,245", icon: "📊" },
+          ].map((stat, idx) => (
+            <Card key={idx} className="hover:shadow-lg transition-shadow">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
+                    <p className="text-2xl font-bold text-primary">{stat.value}</p>
+                  </div>
+                  <div className="text-3xl">{stat.icon}</div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
-      </main>
-    </div>
+
+        {/* Demo Buttons Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-primary">Theme Components Demo</CardTitle>
+            <CardDescription>Try out the Royal Blue themed components</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Button Variants */}
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-3">Button Variants:</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button variant="primary">Primary</Button>
+                <Button variant="secondary">Secondary</Button>
+                <Button variant="outline">Outline</Button>
+                <Button variant="ghost">Ghost</Button>
+                <Button variant="destructive">Destructive</Button>
+              </div>
+            </div>
+
+            {/* Button Sizes */}
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-3">Button Sizes:</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button size="sm">Small</Button>
+                <Button size="md">Medium</Button>
+                <Button size="lg">Large</Button>
+              </div>
+            </div>
+
+            {/* Input Fields */}
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-3">Input Fields:</h3>
+              <div className="flex flex-col gap-3">
+                <Input placeholder="Enter product name..." />
+                <Input placeholder="Enter price..." type="number" />
+                <Input placeholder="Search..." disabled />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Color Palette Reference */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-primary">Royal Blue Color Palette</CardTitle>
+            <CardDescription>Reference for all theme colors</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {[
+                { name: "Primary", color: "bg-primary" },
+                { name: "Primary Dark", color: "bg-primary-dark" },
+                { name: "Primary Light", color: "bg-primary-light" },
+                { name: "Accent", color: "bg-accent" },
+                { name: "Success", color: "bg-success" },
+                { name: "Error", color: "bg-error" },
+              ].map((item) => (
+                <div key={item.name} className="space-y-2">
+                  <div className={`${item.color} h-24 rounded-md shadow-sm`} />
+                  <p className="text-sm font-medium text-foreground">{item.name}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
   );
 }

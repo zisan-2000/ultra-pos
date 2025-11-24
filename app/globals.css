@@ -1,21 +1,107 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Royal Blue Modern Theme */
+  --primary: #1A73E8;
+  --primary-foreground: #ffffff;
+  
+  --primary-dark: #1558B0;
+  --primary-light: #E8F0FE;
+  --primary-lighter: #F3F9FD;
+  
+  --accent: #00A8E8;
+  --accent-light: #E0F4FF;
+  
+  --background: #F5F7FA;
+  --foreground: #1A1A1A;
+  --secondary-foreground: #555555;
+  
+  --border: #E0E7FF;
+  --input-border: #D1D5DB;
+  --muted: #E8F0FE;
+  --muted-foreground: #6B7280;
+  
+  --success: #10B981;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --info: #00A8E8;
+  
+  /* ShadCN UI Colors */
+  --card: #ffffff;
+  --card-foreground: #1A1A1A;
+  --popover: #ffffff;
+  --popover-foreground: #1A1A1A;
+  --secondary: #F3F9FD;
+  --secondary-foreground: #1A73E8;
+  --destructive: #EF4444;
+  --destructive-foreground: #ffffff;
+  --ring: #1A73E8;
 }
 
 @theme inline {
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-light: var(--primary-light);
+  --color-primary-lighter: var(--primary-lighter);
+  
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  
+  --color-border: var(--border);
+  --color-input-border: var(--input-border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
+  
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-secondary: var(--secondary);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-ring: var(--ring);
+  
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --primary: #2E88F0;
+    --primary-foreground: #ffffff;
+    
+    --primary-dark: #1A5CB8;
+    --primary-light: #1E3A5F;
+    --primary-lighter: #0F1E2E;
+    
+    --accent: #00D4FF;
+    --accent-light: #003D5C;
+    
+    --background: #0F1419;
+    --foreground: #E8E8E8;
+    --secondary-foreground: #A0A0A0;
+    
+    --border: #1E3A5F;
+    --input-border: #2A4A7C;
+    --muted: #1E3A5F;
+    --muted-foreground: #94A3B8;
+    
+    --card: #1A2332;
+    --card-foreground: #E8E8E8;
+    --popover: #1A2332;
+    --popover-foreground: #E8E8E8;
+    --secondary: #1E3A5F;
+    --secondary-foreground: #2E88F0;
   }
 }
 
