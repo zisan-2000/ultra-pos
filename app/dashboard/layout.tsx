@@ -1,8 +1,12 @@
 // app/dashboard/layout.tsx
+"use client";
 
 import Link from "next/link";
+import { useOnlineStatus } from "@/lib/sync/net-status";
 
 export default function DashboardLayout({ children }: any) {
+  const online = useOnlineStatus();
+
   return (
     <div className="flex">
       {/* Sidebar */}
@@ -33,8 +37,16 @@ export default function DashboardLayout({ children }: any) {
 
       {/* Main content */}
       <main className="flex-1 p-6">
-        <header className="border-b pb-4 mb-6">
+        <header className="border-b pb-4 mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Dashboard</h1>
+
+          <span
+            className={`text-xs px-2 py-1 rounded ${
+              online ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+            }`}
+          >
+            {online ? "Online" : "Offline"}
+          </span>
         </header>
 
         {children}

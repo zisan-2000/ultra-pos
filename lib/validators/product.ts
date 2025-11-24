@@ -1,4 +1,5 @@
 // lib/validators/product.ts
+
 import { z } from "zod";
 
 export const productSchema = z.object({

@@ -1,3 +1,5 @@
+// app/dashboard/expenses/new/page.tsx
+
 import { createExpense } from "@/app/actions/expenses";
 import { redirect } from "next/navigation";
 

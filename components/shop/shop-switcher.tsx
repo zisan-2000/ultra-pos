@@ -1,3 +1,5 @@
+// components/shop/shop-switcher.tsx
+
 "use client";
 
 type Shop = {

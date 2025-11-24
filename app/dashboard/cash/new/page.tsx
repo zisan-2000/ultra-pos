@@ -1,3 +1,5 @@
+// app/dashboard/cash/new/page.tsx
+
 import { createCashEntry } from "@/app/actions/cash";
 import { redirect } from "next/navigation";
 

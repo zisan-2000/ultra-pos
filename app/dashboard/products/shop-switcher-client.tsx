@@ -1,3 +1,5 @@
+// app/dashboard/products/shop-switcher-client.tsx
+
 "use client";
 
 import { ShopSwitcher } from "@/components/shop/shop-switcher";

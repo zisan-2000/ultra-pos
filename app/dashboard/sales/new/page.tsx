@@ -36,7 +36,6 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       : shops[0].id;
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
-
   const products = await getActiveProductsByShop(selectedShopId);
 
   async function submitSale(formData: FormData) {

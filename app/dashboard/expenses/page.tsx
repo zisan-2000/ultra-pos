@@ -1,3 +1,5 @@
+// app/dashboard/expenses/page.tsx
+
 import Link from "next/link";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getExpensesByShop } from "@/app/actions/expenses";

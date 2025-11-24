@@ -1,10 +1,14 @@
 // app/dashboard/sales/PosPageClient.tsx
 "use client";
 
-import { useState } from "react";
-import { PosProductSearch } from "./components/PosProductSearch";
-import { PosCartItem } from "./components/PosCartItem";
+import { useState, FormEvent } from "react";
+import { PosProductSearch } from "./components/pos-product-search";
+import { PosCartItem } from "./components/pos-cart-item";
 import { useCart } from "@/hooks/use-cart";
+
+import { useOnlineStatus } from "@/lib/sync/net-status";
+import { db } from "@/lib/dexie/db";
+import { queueAdd } from "@/lib/sync/queue";
 
 type PosPageClientProps = {
   products: {
@@ -26,19 +30,51 @@ export function PosPageClient({
   const { items, totalAmount, clear } = useCart();
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [note, setNote] = useState("");
+  const online = useOnlineStatus();
 
-  async function handleAction(formData: FormData) {
-    if (items.length === 0) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+
+    if (items.length === 0) return;
+
+    // Online case → use server action
+    if (online) {
+      const formData = new FormData(e.currentTarget);
+
+      formData.set("shopId", shopId);
+      formData.set("paymentMethod", paymentMethod);
+      formData.set("note", note);
+      formData.set("cart", JSON.stringify(items));
+      formData.set("totalAmount", totalAmount().toString());
+
+      await submitSale(formData);
+      clear();
       return;
     }
 
-    formData.set("shopId", shopId);
-    formData.set("paymentMethod", paymentMethod);
-    formData.set("note", note);
-    formData.set("cart", JSON.stringify(items));
-    formData.set("totalAmount", totalAmount().toString());
+    // Offline case → save to Dexie + queue
+    const salePayload = {
+      tempId: crypto.randomUUID(),
+      shopId,
+      items: items.map((i) => ({
+        productId: i.productId,
+        name: i.name,
+        unitPrice: i.unitPrice,
+        qty: i.qty,
+      })),
+      paymentMethod,
+      note,
+      totalAmount: totalAmount().toFixed(2),
+      createdAt: Date.now(),
+      syncStatus: "new" as const,
+    };
 
-    await submitSale(formData);
+    await db.sales.put(salePayload);
+    await queueAdd("sale", "create", salePayload);
+
+    alert(
+      "Sale stored offline. It will sync automatically when you're online."
+    );
     clear();
   }
 
@@ -46,11 +82,21 @@ export function PosPageClient({
     <div className="grid grid-cols-3 gap-4">
       {/* Left: Products */}
       <div className="col-span-2">
-        <div className="mb-3">
-          <h1 className="text-xl font-bold">POS</h1>
-          <p className="text-sm text-gray-600">
-            Shop: <span className="font-semibold">{shopName}</span>
-          </p>
+        <div className="mb-3 flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-bold">POS</h1>
+            <p className="text-sm text-gray-600">
+              Shop: <span className="font-semibold">{shopName}</span>
+            </p>
+          </div>
+
+          <span
+            className={`text-xs px-2 py-1 rounded ${
+              online ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+            }`}
+          >
+            {online ? "Online" : "Offline"}
+          </span>
         </div>
 
         <PosProductSearch products={products} />
@@ -98,13 +144,13 @@ export function PosPageClient({
           </div>
         </div>
 
-        <form action={handleAction} className="space-y-2">
+        <form onSubmit={handleSubmit} className="space-y-2">
           <button
             type="submit"
             disabled={items.length === 0}
             className="w-full bg-black text-white p-3 rounded disabled:bg-gray-400"
           >
-            Complete Sale
+            {online ? "Complete Sale" : "Save Sale Offline"}
           </button>
 
           <button

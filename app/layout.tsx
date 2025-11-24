@@ -1,8 +1,11 @@
 // app/layout.tsx
 
+"use client"; // 👈 service worker register করার জন্য দরকার
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { useEffect } from "react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,6 +27,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // 🟦 Register Service Worker (Next.js 15 compatible)
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/service-worker");
+    }
+  }, []);
+
   return (
     <html lang="en">
       <body
