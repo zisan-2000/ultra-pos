@@ -1,22 +1,64 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@layer base {
+  :root {
+    /* Base background & text */
+    --background: #ffffff;
+    --foreground: #222222;
+
+    /* Primary (Blue) */
+    --primary: #0057ff;
+    --primary-foreground: #ffffff;
+
+    /* Cards & muted areas */
+    --card: #f5f5f5;
+    --card-foreground: #222222;
+
+    --muted: #f5f5f5;
+    --muted-foreground: #666666;
+
+    /* Borders */
+    --border: #e4e4e4;
+
+    /* Status colors */
+    --success: #1abc9c;
+    --warning: #ff9f43;
+    --destructive: #e74c3c;
+  }
+
+  /* optional dark mode (will be useful later) */
+  .dark {
+    --background: #0a0a0a;
+    --foreground: #ffffff;
+
+    --card: #111111;
+    --card-foreground: #ffffff;
+
+    --muted: #1a1a1a;
+    --muted-foreground: #cccccc;
+
+    --border: #333333;
+
+    --primary: #0057ff;
+    --primary-foreground: #ffffff;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
