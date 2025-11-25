@@ -4,13 +4,14 @@ import { createExpense } from "@/app/actions/expenses";
 import { redirect } from "next/navigation";
 
 type NewExpensePageProps = {
-  searchParams?: {
-    shopId?: string;
-  };
+  searchParams?: Promise<{ shopId?: string } | undefined>;
 };
 
-export default function NewExpensePage({ searchParams }: NewExpensePageProps) {
-  const shopId = searchParams?.shopId;
+export default async function NewExpensePage({
+  searchParams,
+}: NewExpensePageProps) {
+  const resolvedSearch = await searchParams;
+  const shopId = resolvedSearch?.shopId;
 
   if (!shopId) {
     return <p>You must select a shop first.</p>;

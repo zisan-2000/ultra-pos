@@ -4,7 +4,7 @@
 
 import { db } from "@/db/client";
 import { products, shops } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { createServerClientForRoute } from "@/lib/supabase";
 
@@ -159,8 +159,9 @@ export async function getActiveProductsByShop(shopId: string) {
   const rows = await db
     .select()
     .from(products)
-    .where(eq(products.shopId, shopId))
-    .where(eq(products.isActive, true as any));
+    .where(
+      and(eq(products.shopId, shopId), eq(products.isActive, true as any))
+    );
 
   return rows;
 }

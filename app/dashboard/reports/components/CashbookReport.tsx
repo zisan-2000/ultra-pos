@@ -1,39 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DateRangePicker } from "./DateRangePicker";
 import PieChartComponent from "../charts/PieChart";
 import { QuickDateFilter } from "./QuickDateFilter";
 import { generateCSV } from "@/lib/utils/csv";
 import { downloadFile } from "@/lib/utils/download";
 
-export default function CashbookReport({ shopId }: { shopId: string }) {
-  const [items, setItems] = useState<any[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
+type CashRow = {
+  id: string;
+  entryType: "IN" | "OUT";
+  amount: string | number;
+  reason?: string | null;
+  createdAt: string | number;
+};
 
-  async function load(from: string, to: string) {
-    const res = await fetch(
-      `/api/reports/cash?shopId=${shopId}&from=${from}&to=${to}`
-    );
+export default function CashbookReport({ shopId }: { shopId: string }) {
+  const [items, setItems] = useState<CashRow[]>([]);
+  const [chartData, setChartData] = useState<{ name: string; value: number }[]>(
+    []
+  );
+
+  async function load(from?: string, to?: string) {
+    const params = new URLSearchParams({ shopId });
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+
+    const res = await fetch(`/api/reports/cash?${params.toString()}`);
 
     const data = await res.json();
-    const rows = data.rows || [];
+    const rows: CashRow[] = data.rows || [];
 
     setItems(rows);
 
     const totalIn = rows
-      .filter((i: any) => i.entryType === "IN")
-      .reduce((s, i) => s + Number(i.amount), 0);
+      .filter((i) => i.entryType === "IN")
+      .reduce((sum, i) => sum + Number(i.amount), 0);
 
     const totalOut = rows
-      .filter((i: any) => i.entryType === "OUT")
-      .reduce((s, i) => s + Number(i.amount), 0);
+      .filter((i) => i.entryType === "OUT")
+      .reduce((sum, i) => sum + Number(i.amount), 0);
 
     setChartData([
       { name: "Cash IN", value: totalIn },
       { name: "Cash OUT", value: totalOut },
     ]);
   }
+
+  useEffect(() => {
+    load(); // all time by default
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId]);
 
   return (
     <div className="space-y-4">

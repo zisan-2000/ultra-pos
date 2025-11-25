@@ -1,18 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import BarChart from "../charts/BarChart";
 
-export default function TopProductsReport({ shopId }: { shopId: string }) {
-  const [data, setData] = useState<any[]>([]);
+type TopProduct = { name: string; qty: number; revenue: number };
 
-  async function load(limit = 10) {
-    const res = await fetch(
-      `/api/reports/top-products?shopId=${shopId}&limit=${limit}`
-    );
-    const json = await res.json();
-    setData(json.data || []);
-  }
+export default function TopProductsReport({ shopId }: { shopId: string }) {
+  const [data, setData] = useState<TopProduct[]>([]);
+
+  const load = useCallback(
+    async (limit = 10) => {
+      const res = await fetch(
+        `/api/reports/top-products?shopId=${shopId}&limit=${limit}`
+      );
+      const json = await res.json();
+      setData(json.data || []);
+    },
+    [shopId]
+  );
+
+  useEffect(() => {
+    load(10);
+  }, [load]);
 
   return (
     <div className="space-y-4">
@@ -21,12 +30,11 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
 
         <select
           className="border px-2 py-1"
+          defaultValue="10"
           onChange={(e) => load(Number(e.target.value))}
         >
           <option value="5">Top 5</option>
-          <option value="10" selected>
-            Top 10
-          </option>
+          <option value="10">Top 10</option>
           <option value="20">Top 20</option>
         </select>
       </div>
@@ -48,7 +56,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
             <tr>
               <th className="p-2 text-left">Product</th>
               <th className="p-2 text-right">Quantity Sold</th>
-              <th className="p-2 text-right">Revenue (৳)</th>
+              <th className="p-2 text-right">Revenue (?)</th>
             </tr>
           </thead>
 
@@ -71,9 +79,6 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
           </tbody>
         </table>
       </div>
-
-      {/* Auto load initial */}
-      {data.length === 0 && load()}
     </div>
   );
 }

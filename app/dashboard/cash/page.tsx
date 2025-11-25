@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getCashByShop } from "@/app/actions/cash";
+import ShopSelectorClient from "./ShopSelectorClient";
 
 type CashPageProps = {
-  searchParams?: { shopId?: string };
+  searchParams?: Promise<{ shopId?: string } | undefined>;
 };
 
 export default async function CashPage({ searchParams }: CashPageProps) {
   const shops = await getShopsByUser();
+  const resolvedSearch = await searchParams;
 
   if (!shops || shops.length === 0) {
     return (
@@ -27,8 +29,9 @@ export default async function CashPage({ searchParams }: CashPageProps) {
   }
 
   const selectedShopId =
-    searchParams?.shopId && shops.some((s) => s.id === searchParams.shopId)
-      ? searchParams.shopId
+    resolvedSearch?.shopId &&
+    shops.some((s) => s.id === resolvedSearch.shopId)
+      ? resolvedSearch.shopId
       : shops[0].id;
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
@@ -54,19 +57,7 @@ export default async function CashPage({ searchParams }: CashPageProps) {
         </div>
 
         <div className="flex gap-2">
-          <select
-            className="border p-2"
-            defaultValue={selectedShopId}
-            onChange={(e) => {
-              window.location.href = `/dashboard/cash?shopId=${e.target.value}`;
-            }}
-          >
-            {shops.map((shop) => (
-              <option key={shop.id} value={shop.id}>
-                {shop.name}
-              </option>
-            ))}
-          </select>
+          <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
 
           <Link
             href={`/dashboard/cash/new?shopId=${selectedShopId}`}

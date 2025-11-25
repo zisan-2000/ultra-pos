@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PieChartComponent from "../charts/PieChart";
 import BarChart from "../charts/BarChart";
 import { DateRangePicker } from "./DateRangePicker";
@@ -8,14 +8,23 @@ import { DateRangePicker } from "./DateRangePicker";
 export default function PaymentMethodReport({ shopId }: { shopId: string }) {
   const [chartData, setChartData] = useState<any[]>([]);
 
-  async function load(from: string, to: string) {
+  async function load(from?: string, to?: string) {
+    const params = new URLSearchParams({ shopId });
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+
     const res = await fetch(
-      `/api/reports/payment-method?shopId=${shopId}&from=${from}&to=${to}`
+      `/api/reports/payment-method?${params.toString()}`
     );
 
     const json = await res.json();
     setChartData(json.data || []);
   }
+
+  useEffect(() => {
+    load(); // all time by default
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId]);
 
   return (
     <div className="space-y-6">

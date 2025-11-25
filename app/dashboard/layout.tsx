@@ -11,7 +11,7 @@ export default function DashboardLayout({ children }: any) {
     <div className="flex">
       {/* Sidebar */}
       <aside className="w-64 h-screen bg-gray-100 p-4 space-y-3">
-        <h2 className="text-lg font-bold">My POS</h2>
+        <h2 className="text-lg font-bold">Task</h2>
 
         <nav className="space-y-2">
           <Link href="/dashboard" className="block p-2">

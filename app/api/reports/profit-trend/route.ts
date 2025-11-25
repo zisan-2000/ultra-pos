@@ -1,25 +1,38 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { sales, expenses } from "@/db/schema";
-import { and, between, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 
-function dateFilter(col: any, from?: string, to?: string) {
-  if (from && to) return between(col, from, to);
-  if (from) return gte(col, from);
-  if (to) return lte(col, to);
-  return undefined;
+function parseRange(from?: string | null, to?: string | null) {
+  const start = from ? new Date(from) : undefined;
+  const end = to ? new Date(to) : undefined;
+
+  if (start) start.setUTCHours(0, 0, 0, 0);
+  if (end) end.setUTCHours(23, 59, 59, 999);
+
+  return { start, end };
 }
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const shopId = searchParams.get("shopId")!;
-  const from = searchParams.get("from") || undefined;
-  const to = searchParams.get("to") || undefined;
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
+
+  const { start, end } = parseRange(from, to);
+  const startDateOnly = start ? start.toISOString().split("T")[0] : undefined;
+  const endDateOnly = end ? end.toISOString().split("T")[0] : undefined;
 
   const salesRows = await db
     .select()
     .from(sales)
-    .where(and(eq(sales.shopId, shopId), dateFilter(sales.saleDate, from, to)));
+    .where(
+      and(
+        eq(sales.shopId, shopId),
+        start ? gte(sales.saleDate, start) : undefined,
+        end ? lte(sales.saleDate, end) : undefined
+      )
+    );
 
   const expenseRows = await db
     .select()
@@ -27,11 +40,12 @@ export async function GET(req: Request) {
     .where(
       and(
         eq(expenses.shopId, shopId),
-        dateFilter(expenses.expenseDate, from, to)
+        startDateOnly ? gte(expenses.expenseDate, startDateOnly) : undefined,
+        endDateOnly ? lte(expenses.expenseDate, endDateOnly) : undefined
       )
     );
 
-  const format = (d: string) => new Date(d).toISOString().split("T")[0];
+  const format = (d: string | Date) => new Date(d).toISOString().split("T")[0];
 
   const map: Record<string, { sales: number; expense: number }> = {};
 

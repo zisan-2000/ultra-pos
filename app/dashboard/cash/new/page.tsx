@@ -3,10 +3,14 @@
 import { createCashEntry } from "@/app/actions/cash";
 import { redirect } from "next/navigation";
 
-type NewCashProps = { searchParams?: { shopId?: string } };
+type NewCashProps = {
+  searchParams?: Promise<{ shopId?: string | string[] } | undefined>;
+};
 
-export default function NewCashPage({ searchParams }: NewCashProps) {
-  const shopId = searchParams?.shopId;
+export default async function NewCashPage({ searchParams }: NewCashProps) {
+  const resolvedSearchParams = await searchParams;
+  const shopIdValue = resolvedSearchParams?.shopId;
+  const shopId = Array.isArray(shopIdValue) ? shopIdValue[0] : shopIdValue;
 
   if (!shopId) return <p>You must select a shop first.</p>;
 

@@ -7,33 +7,38 @@ import {
   getCashSummary,
   getProfitSummary,
 } from "@/app/actions/reports";
+
 import { StatCard } from "./components/StatCard";
+import SalesReport from "./components/SalesReport";
+import ExpenseReport from "./components/ExpenseReport";
+import CashbookReport from "./components/CashbookReport";
 import ProfitTrendReport from "./components/ProfitTrendReport";
 import PaymentMethodReport from "./components/PaymentMethodReport";
 import TopProductsReport from "./components/TopProductsReport";
 import LowStockReport from "./components/LowStockReport";
+import ShopSelectorClient from "./ShopSelectorClient";
 
 type ReportsPageProps = {
-  searchParams?: {
-    shopId?: string;
-  };
+  searchParams?: Promise<{ shopId?: string } | undefined>;
 };
 
 export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const shops = await getShopsByUser();
+  const resolvedSearch = await searchParams;
 
   if (!shops || shops.length === 0) {
     return (
       <div>
-        <h1 className="text-xl font-bold mb-4">Reports</h1>
+        <h1 className="text-2xl font-bold mb-4">Reports</h1>
         <p>You need to create a shop first.</p>
       </div>
     );
   }
 
   const selectedShopId =
-    searchParams?.shopId && shops.some((s) => s.id === searchParams.shopId)
-      ? searchParams.shopId
+    resolvedSearch?.shopId &&
+    shops.some((s) => s.id === resolvedSearch.shopId)
+      ? resolvedSearch.shopId
       : shops[0].id;
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
@@ -47,32 +52,20 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     ]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+    <div className="space-y-8">
+      {/* HEADER + SHOP SELECTOR */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Reports</h1>
+          <h1 className="text-2xl font-bold">Reports & Analytics</h1>
           <p className="text-sm text-gray-600">
             Shop: <span className="font-semibold">{selectedShop.name}</span>
           </p>
         </div>
 
-        <select
-          className="border px-2 py-1"
-          defaultValue={selectedShopId}
-          onChange={(e) => {
-            window.location.href = `/dashboard/reports?shopId=${e.target.value}`;
-          }}
-        >
-          {shops.map((shop) => (
-            <option key={shop.id} value={shop.id}>
-              {shop.name}
-            </option>
-          ))}
-        </select>
+        <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
       </div>
 
-      {/* Summary Cards */}
+      {/* TOP SUMMARY CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
           title="Total Sales"
@@ -100,13 +93,50 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         />
       </div>
 
-      <ProfitTrendReport shopId={selectedShopId} />
+      {/* MAIN CHARTS AREA */}
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* LEFT: Profit trend */}
+        <div className="border rounded-lg p-4 bg-white">
+          <ProfitTrendReport shopId={selectedShopId} />
+        </div>
 
-      <PaymentMethodReport shopId={selectedShopId} />
+        {/* RIGHT: Payment method analytics */}
+        <div className="border rounded-lg p-4 bg-white">
+          <PaymentMethodReport shopId={selectedShopId} />
+        </div>
+      </section>
 
-      <TopProductsReport shopId={selectedShopId} />
+      {/* SECONDARY ANALYTICS */}
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* Top products */}
+        <div className="border rounded-lg p-4 bg-white">
+          <TopProductsReport shopId={selectedShopId} />
+        </div>
 
-      <LowStockReport shopId={selectedShopId} />
+        {/* Low stock */}
+        <div className="border rounded-lg p-4 bg-white">
+          <LowStockReport shopId={selectedShopId} />
+        </div>
+      </section>
+
+      {/* DETAILED REPORTS (TABLES + EXPORT) */}
+      <section className="space-y-6">
+        <h2 className="text-xl font-semibold">Detailed Reports</h2>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="border rounded-lg p-4 bg-white">
+            <SalesReport shopId={selectedShopId} />
+          </div>
+
+          <div className="border rounded-lg p-4 bg-white">
+            <ExpenseReport shopId={selectedShopId} />
+          </div>
+
+          <div className="border rounded-lg p-4 bg-white">
+            <CashbookReport shopId={selectedShopId} />
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

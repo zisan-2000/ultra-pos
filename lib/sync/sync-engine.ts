@@ -13,7 +13,11 @@ function isOnline() {
 // -----------------------------
 // SYNC PRODUCTS (create/update/delete)
 // -----------------------------
-async function syncProducts(batch: any[]) {
+async function syncProducts(batch: {
+  newItems: any[];
+  updatedItems: any[];
+  deletedIds: string[];
+}) {
   // API route already exists: /api/sync/products
   const res = await fetch("/api/sync/products", {
     method: "POST",
@@ -29,7 +33,7 @@ async function syncProducts(batch: any[]) {
 // -----------------------------
 // SYNC SALES
 // -----------------------------
-async function syncSales(batch: any[]) {
+async function syncSales(batch: { newItems: any[] }) {
   const res = await fetch("/api/sync/sales", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

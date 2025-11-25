@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DateRangePicker } from "./DateRangePicker";
 import LineChart from "../charts/LineChart";
 import { QuickDateFilter } from "./QuickDateFilter";
@@ -11,10 +11,17 @@ export default function SalesReport({ shopId }: { shopId: string }) {
   const [items, setItems] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
 
-  async function load(from: string, to: string) {
-    const res = await fetch(
-      `/api/reports/sales?shopId=${shopId}&from=${from}&to=${to}`
-    );
+  async function load(from?: string, to?: string) {
+    const params = new URLSearchParams({ shopId });
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+
+    const res = await fetch(`/api/reports/sales?${params.toString()}`);
+    if (!res.ok) {
+      setItems([]);
+      setChartData([]);
+      return;
+    }
     const data = await res.json();
     const rows = data.rows || [];
 
@@ -28,6 +35,11 @@ export default function SalesReport({ shopId }: { shopId: string }) {
 
     setChartData(mapped);
   }
+
+  useEffect(() => {
+    load(); // load all time by default
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId]);
 
   return (
     <div className="space-y-4">

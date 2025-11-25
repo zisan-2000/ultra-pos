@@ -3,25 +3,29 @@
 import { getExpense, updateExpense } from "@/app/actions/expenses";
 import { redirect } from "next/navigation";
 
-export default async function EditExpensePage({ params }: any) {
-  const expense = await getExpense(params.id);
+type PageProps = { params: Promise<{ id: string }> };
+
+export default async function EditExpensePage({ params }: PageProps) {
+  const { id } = await params;
+  const expense = await getExpense(id);
 
   if (!expense) {
     return <p>Expense not found</p>;
   }
+  const expenseShopId = expense.shopId;
 
   async function handleUpdate(formData: FormData) {
     "use server";
 
-    await updateExpense(params.id, {
-      shopId: expense.shopId,
+    await updateExpense(id, {
+      shopId: expenseShopId,
       amount: formData.get("amount") as string,
       category: formData.get("category") as string,
       expenseDate: formData.get("expenseDate") as string,
       note: formData.get("note") as string,
     });
 
-    redirect(`/dashboard/expenses?shopId=${expense.shopId}`);
+    redirect(`/dashboard/expenses?shopId=${expenseShopId}`);
   }
 
   return (

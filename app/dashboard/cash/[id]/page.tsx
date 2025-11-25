@@ -3,22 +3,26 @@
 import { getCashEntry, updateCashEntry } from "@/app/actions/cash";
 import { redirect } from "next/navigation";
 
-export default async function EditCashPage({ params }: any) {
-  const entry = await getCashEntry(params.id);
+type PageProps = { params: Promise<{ id: string }> };
+
+export default async function EditCashPage({ params }: PageProps) {
+  const { id } = await params;
+  const entry = await getCashEntry(id);
 
   if (!entry) return <p>Cash entry not found.</p>;
+  const entryShopId = entry.shopId;
 
   async function handleSubmit(formData: FormData) {
     "use server";
 
-    await updateCashEntry(params.id, {
-      shopId: entry.shopId,
+    await updateCashEntry(id, {
+      shopId: entryShopId,
       entryType: formData.get("entryType") as string,
       amount: formData.get("amount") as string,
       reason: formData.get("reason") as string,
     });
 
-    redirect(`/dashboard/cash?shopId=${entry.shopId}`);
+    redirect(`/dashboard/cash?shopId=${entryShopId}`);
   }
 
   return (

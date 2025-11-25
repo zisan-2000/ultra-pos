@@ -1,7 +1,7 @@
 "use client";
 
 type Props = {
-  onSelect: (from: string, to: string) => void;
+  onSelect: (from?: string, to?: string) => void;
 };
 
 export function QuickDateFilter({ onSelect }: Props) {
@@ -51,6 +51,13 @@ export function QuickDateFilter({ onSelect }: Props) {
         className="px-2 py-1 border rounded text-xs"
       >
         Last Month
+      </button>
+
+      <button
+        onClick={() => onSelect(undefined, undefined)}
+        className="px-2 py-1 border rounded text-xs"
+      >
+        All Time
       </button>
     </div>
   );

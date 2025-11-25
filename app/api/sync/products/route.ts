@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { products } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 export async function POST(req: Request) {
   try {
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 
     // Delete
     if (deletedIds.length > 0) {
-      await db.delete(products).where(products.id.in(deletedIds));
+      await db.delete(products).where(inArray(products.id, deletedIds));
     }
 
     return NextResponse.json({ success: true });

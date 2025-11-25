@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DateRangePicker } from "./DateRangePicker";
 import {
   LineChart as LChart,
@@ -17,13 +17,23 @@ import { QuickDateFilter } from "./QuickDateFilter";
 export default function ProfitTrendReport({ shopId }: { shopId: string }) {
   const [data, setData] = useState<any[]>([]);
 
-  async function load(from: string, to: string) {
+  async function load(from?: string, to?: string) {
+    const params = new URLSearchParams({ shopId });
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+
     const res = await fetch(
-      `/api/reports/profit-trend?shopId=${shopId}&from=${from}&to=${to}`
+      `/api/reports/profit-trend?${params.toString()}`
     );
     const json = await res.json();
     setData(json.data || []);
   }
+
+  // Load last 7 days by default
+  useEffect(() => {
+    load(); // all time by default
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId]);
 
   return (
     <div className="space-y-4">

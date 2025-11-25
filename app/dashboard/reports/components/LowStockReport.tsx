@@ -1,24 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
 import BarChart from "../charts/BarChart";
 
 export default function LowStockReport({ shopId }: { shopId: string }) {
   const [items, setItems] = useState<any[]>([]);
   const [threshold, setThreshold] = useState(10);
+  const [loading, setLoading] = useState(false);
 
-  async function load(th = threshold) {
-    const res = await fetch(
-      `/api/reports/low-stock?shopId=${shopId}&limit=${th}`
-    );
-    const json = await res.json();
-    setItems(json.data || []);
-  }
+  const load = useCallback(
+    async (th: number) => {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `/api/reports/low-stock?shopId=${shopId}&limit=${th}`
+        );
+        const json = await res.json();
+        setItems(json.data || []);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [shopId]
+  );
 
-  // auto load first time
+  // auto load first time and whenever threshold changes
   useEffect(() => {
-    load();
-  }, []);
+    load(threshold);
+  }, [load, threshold]);
 
   return (
     <div className="space-y-4">
@@ -31,23 +42,28 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
           onChange={(e) => {
             const th = Number(e.target.value);
             setThreshold(th);
-            load(th);
           }}
         >
-          <option value={5}>Stock ≤ 5</option>
-          <option value={10}>Stock ≤ 10</option>
-          <option value={20}>Stock ≤ 20</option>
+          <option value={5}>Stock {"<="} 5</option>
+          <option value={10}>Stock {"<="} 10</option>
+          <option value={20}>Stock {"<="} 20</option>
         </select>
       </div>
 
       {/* Bar Chart */}
       <div className="border rounded p-3">
-        <BarChart
-          data={items.map((p) => ({
-            name: p.name,
-            value: Number(p.stockQty),
-          }))}
-        />
+        {items.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            {loading ? "Loading..." : "No low stock products"}
+          </p>
+        ) : (
+          <BarChart
+            data={items.map((p) => ({
+              name: p.name,
+              value: Number(p.stockQty),
+            }))}
+          />
+        )}
       </div>
 
       {/* Table */}
@@ -65,7 +81,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
             {items.length === 0 ? (
               <tr>
                 <td className="p-2 text-center" colSpan={3}>
-                  No low stock products 🎉
+                  {loading ? "Loading..." : "No low stock products"}
                 </td>
               </tr>
             ) : (

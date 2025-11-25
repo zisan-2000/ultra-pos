@@ -3,13 +3,16 @@
 import { getShop, updateShop } from "@/app/actions/shops";
 import { redirect } from "next/navigation";
 
-export default async function EditShop({ params }: any) {
-  const shop = await getShop(params.id);
+type PageProps = { params: Promise<{ id: string }> };
+
+export default async function EditShop({ params }: PageProps) {
+  const { id } = await params;
+  const shop = await getShop(id);
 
   async function handleUpdate(formData: FormData) {
     "use server";
 
-    await updateShop(params.id, {
+    await updateShop(id, {
       name: formData.get("name"),
       address: formData.get("address"),
       phone: formData.get("phone"),

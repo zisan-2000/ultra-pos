@@ -2,16 +2,39 @@
 
 import { db } from "@/db/client";
 import { sales, expenses, cashEntries } from "@/db/schema";
-import { and, between, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 
 /* --------------------------------------------------
    DATE FILTER HELPER
 -------------------------------------------------- */
-function dateFilter(column: any, from?: string, to?: string) {
-  if (from && to) return between(column, from, to);
-  if (from) return gte(column, from);
-  if (to) return lte(column, to);
-  return undefined;
+function parseTimestampRange(from?: string, to?: string) {
+  const startDate = from ? new Date(from) : undefined;
+  const endDate = to ? new Date(to) : undefined;
+
+  const start =
+    startDate && !Number.isNaN(startDate.getTime()) ? startDate : undefined;
+  const end =
+    endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
+
+  if (start) start.setUTCHours(0, 0, 0, 0);
+  if (end) end.setUTCHours(23, 59, 59, 999);
+
+  return { start, end };
+}
+
+function parseDateRange(from?: string, to?: string) {
+  const startDate = from ? new Date(from) : undefined;
+  const endDate = to ? new Date(to) : undefined;
+
+  const start =
+    startDate && !Number.isNaN(startDate.getTime()) ? startDate : undefined;
+  const end =
+    endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
+
+  const toDateString = (d?: Date) =>
+    d ? d.toISOString().split("T")[0] : undefined;
+
+  return { start: toDateString(start), end: toDateString(end) };
 }
 
 /* --------------------------------------------------
@@ -22,10 +45,18 @@ export async function getSalesWithFilter(
   from?: string,
   to?: string
 ) {
+  const { start, end } = parseTimestampRange(from, to);
+
   return db
     .select()
     .from(sales)
-    .where(and(eq(sales.shopId, shopId), dateFilter(sales.saleDate, from, to)));
+    .where(
+      and(
+        eq(sales.shopId, shopId),
+        start ? gte(sales.saleDate, start) : undefined,
+        end ? lte(sales.saleDate, end) : undefined
+      )
+    );
 }
 
 /* --------------------------------------------------
@@ -36,13 +67,16 @@ export async function getExpensesWithFilter(
   from?: string,
   to?: string
 ) {
+  const { start, end } = parseDateRange(from, to);
+
   return db
     .select()
     .from(expenses)
     .where(
       and(
         eq(expenses.shopId, shopId),
-        dateFilter(expenses.expenseDate, from, to)
+        start ? gte(expenses.expenseDate, start) : undefined,
+        end ? lte(expenses.expenseDate, end) : undefined
       )
     );
 }
@@ -55,13 +89,16 @@ export async function getCashWithFilter(
   from?: string,
   to?: string
 ) {
+  const { start, end } = parseTimestampRange(from, to);
+
   return db
     .select()
     .from(cashEntries)
     .where(
       and(
         eq(cashEntries.shopId, shopId),
-        dateFilter(cashEntries.createdAt, from, to)
+        start ? gte(cashEntries.createdAt, start) : undefined,
+        end ? lte(cashEntries.createdAt, end) : undefined
       )
     );
 }

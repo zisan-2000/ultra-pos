@@ -3,36 +3,37 @@
 import { getShopsByUser } from "@/app/actions/shops";
 import { getActiveProductsByShop } from "@/app/actions/products";
 import { createSale } from "@/app/actions/sales";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PosPageClient } from "../PosPageClient";
 
 type NewSalePageProps = {
-  searchParams?: {
-    shopId?: string;
-  };
+  searchParams?: Promise<{ shopId?: string } | undefined>;
 };
 
 export default async function NewSalePage({ searchParams }: NewSalePageProps) {
   const shops = await getShopsByUser();
+  const resolvedSearch = await searchParams;
 
   if (!shops || shops.length === 0) {
     return (
       <div>
         <h1 className="text-xl font-bold mb-4">POS</h1>
         <p className="mb-4">You don&apos;t have any shop yet.</p>
-        <a
+        <Link
           href="/dashboard/shops/new"
           className="px-4 py-2 bg-black text-white rounded"
         >
           Create your first shop
-        </a>
+        </Link>
       </div>
     );
   }
 
   const selectedShopId =
-    searchParams?.shopId && shops.some((s) => s.id === searchParams.shopId)
-      ? searchParams.shopId
+    resolvedSearch?.shopId &&
+    shops.some((s) => s.id === resolvedSearch.shopId)
+      ? resolvedSearch.shopId
       : shops[0].id;
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;

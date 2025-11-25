@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DateRangePicker } from "./DateRangePicker";
 import BarChart from "../charts/BarChart";
 import { QuickDateFilter } from "./QuickDateFilter";
@@ -11,10 +11,12 @@ export default function ExpenseReport({ shopId }: { shopId: string }) {
   const [items, setItems] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
 
-  async function load(from: string, to: string) {
-    const res = await fetch(
-      `/api/reports/expenses?shopId=${shopId}&from=${from}&to=${to}`
-    );
+  async function load(from?: string, to?: string) {
+    const params = new URLSearchParams({ shopId });
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+
+    const res = await fetch(`/api/reports/expenses?${params.toString()}`);
 
     const data = await res.json();
     const rows = data.rows || [];
@@ -36,6 +38,11 @@ export default function ExpenseReport({ shopId }: { shopId: string }) {
 
     setChartData(mapped);
   }
+
+  useEffect(() => {
+    load(); // all time by default
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId]);
 
   return (
     <div className="space-y-4">

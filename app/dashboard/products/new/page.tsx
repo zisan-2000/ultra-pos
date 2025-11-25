@@ -2,13 +2,14 @@
 
 "use client";
 
+import { Suspense } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
-import { db } from "@/lib/dexie/db";
+import { db, type LocalProduct } from "@/lib/dexie/db";
 import { createProduct } from "@/app/actions/products";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function NewProductPage() {
+function ProductForm() {
   const router = useRouter();
   const params = useSearchParams();
   const online = useOnlineStatus();
@@ -23,14 +24,15 @@ export default function NewProductPage() {
       </div>
     );
   }
+  const ensuredShopId = shopId;
 
   async function handleSubmit(e: any) {
     e.preventDefault();
     const form = new FormData(e.target);
 
-    const payload = {
+    const payload: LocalProduct = {
       id: crypto.randomUUID(),
-      shopId,
+      shopId: ensuredShopId,
       name: form.get("name") as string,
       sellPrice: form.get("sellPrice") as string,
       stockQty: form.get("stockQty") as string,
@@ -47,7 +49,7 @@ export default function NewProductPage() {
       alert("Product saved offline. It will sync automatically.");
     }
 
-    router.push(`/dashboard/products?shopId=${shopId}`);
+    router.push(`/dashboard/products?shopId=${ensuredShopId}`);
   }
 
   return (
@@ -90,5 +92,13 @@ export default function NewProductPage() {
         Save Product
       </button>
     </form>
+  );
+}
+
+export default function NewProductPage() {
+  return (
+    <Suspense fallback={<div>Loading product form...</div>}>
+      <ProductForm />
+    </Suspense>
   );
 }
