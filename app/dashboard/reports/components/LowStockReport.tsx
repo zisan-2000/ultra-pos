@@ -1,5 +1,4 @@
-"use client";
-
+// app/dashboard/reports/components/LowStockReport.tsx
 "use client";
 
 import { useCallback, useEffect, useState } from "react";

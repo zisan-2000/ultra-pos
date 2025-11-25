@@ -1,3 +1,5 @@
+// app/dashboard/reports/charts/BarChart.tsx
+
 "use client";
 
 import {
