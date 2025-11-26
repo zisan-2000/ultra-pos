@@ -1,8 +1,6 @@
-// app/dashboard/reports/components/LowStockReport.tsx
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import BarChart from "../charts/BarChart";
 
 export default function LowStockReport({ shopId }: { shopId: string }) {
   const [items, setItems] = useState<any[]>([]);
@@ -33,10 +31,15 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-lg font-bold">Low Stock Items</h2>
+        <div>
+          <h2 className="text-lg font-bold">Low Stock Items</h2>
+          <p className="text-xs text-gray-500">
+            Simple list to restock fast. No graphs.
+          </p>
+        </div>
 
         <select
-          className="border px-2 py-1"
+          className="border px-2 py-1 text-sm"
           value={threshold}
           onChange={(e) => {
             const th = Number(e.target.value);
@@ -49,24 +52,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
         </select>
       </div>
 
-      {/* Bar Chart */}
-      <div className="border rounded p-3">
-        {items.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            {loading ? "Loading..." : "No low stock products"}
-          </p>
-        ) : (
-          <BarChart
-            data={items.map((p) => ({
-              name: p.name,
-              value: Number(p.stockQty),
-            }))}
-          />
-        )}
-      </div>
-
-      {/* Table */}
-      <div className="border rounded mt-4">
+      <div className="border rounded">
         <table className="w-full text-sm">
           <thead className="bg-gray-100">
             <tr>

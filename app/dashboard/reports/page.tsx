@@ -56,9 +56,12 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       {/* HEADER + SHOP SELECTOR */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Reports & Analytics</h1>
+          <h1 className="text-2xl font-bold">Reports</h1>
           <p className="text-sm text-gray-600">
             Shop: <span className="font-semibold">{selectedShop.name}</span>
+          </p>
+          <p className="text-xs text-gray-500">
+            Ultra-simple, ultra-fast. Lists only—no charts to slow you down.
           </p>
         </div>
 
@@ -69,59 +72,55 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
           title="Total Sales"
-          value={`${salesSummary.totalAmount.toFixed(2)} ৳`}
+          value={`${salesSummary.totalAmount.toFixed(2)} ?`}
           subtitle={`${salesSummary.count} invoices`}
         />
         <StatCard
           title="Total Expenses"
-          value={`${expenseSummary.totalAmount.toFixed(2)} ৳`}
+          value={`${expenseSummary.totalAmount.toFixed(2)} ?`}
           subtitle={`${expenseSummary.count} records`}
         />
         <StatCard
           title="Cash Balance"
-          value={`${cashSummary.balance.toFixed(2)} ৳`}
+          value={`${cashSummary.balance.toFixed(2)} ?`}
           subtitle={`IN: ${cashSummary.totalIn.toFixed(
             2
-          )} ৳ | OUT: ${cashSummary.totalOut.toFixed(2)} ৳`}
+          )} ? | OUT: ${cashSummary.totalOut.toFixed(2)} ?`}
         />
         <StatCard
           title="Net Profit"
-          value={`${profitSummary.profit.toFixed(2)} ৳`}
+          value={`${profitSummary.profit.toFixed(2)} ?`}
           subtitle={`Sales: ${profitSummary.salesTotal.toFixed(
             2
-          )} ৳ | Expenses: ${profitSummary.expenseTotal.toFixed(2)} ৳`}
+          )} ? | Expenses: ${profitSummary.expenseTotal.toFixed(2)} ?`}
         />
       </div>
 
-      {/* MAIN CHARTS AREA */}
+      {/* PAYMENT + PROFIT SNAPSHOTS */}
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* LEFT: Profit trend */}
-        <div className="border rounded-lg p-4 bg-white">
-          <ProfitTrendReport shopId={selectedShopId} />
-        </div>
-
-        {/* RIGHT: Payment method analytics */}
         <div className="border rounded-lg p-4 bg-white">
           <PaymentMethodReport shopId={selectedShopId} />
         </div>
+
+        <div className="border rounded-lg p-4 bg-white">
+          <ProfitTrendReport shopId={selectedShopId} />
+        </div>
       </section>
 
-      {/* SECONDARY ANALYTICS */}
+      {/* INVENTORY & PRODUCT HIGHLIGHTS */}
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Top products */}
         <div className="border rounded-lg p-4 bg-white">
           <TopProductsReport shopId={selectedShopId} />
         </div>
 
-        {/* Low stock */}
         <div className="border rounded-lg p-4 bg-white">
           <LowStockReport shopId={selectedShopId} />
         </div>
       </section>
 
-      {/* DETAILED REPORTS (TABLES + EXPORT) */}
+      {/* DETAILED REPORTS (LISTS ONLY) */}
       <section className="space-y-6">
-        <h2 className="text-xl font-semibold">Detailed Reports</h2>
+        <h2 className="text-xl font-semibold">Detailed Lists</h2>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="border rounded-lg p-4 bg-white">

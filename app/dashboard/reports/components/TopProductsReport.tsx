@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import BarChart from "../charts/BarChart";
 
 type TopProduct = { name: string; qty: number; revenue: number };
 
@@ -26,10 +25,15 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-lg font-bold">Top Selling Products</h2>
+        <div>
+          <h2 className="text-lg font-bold">Top Selling Products</h2>
+          <p className="text-xs text-gray-500">
+            Straightforward table. No graphs.
+          </p>
+        </div>
 
         <select
-          className="border px-2 py-1"
+          className="border px-2 py-1 text-sm"
           defaultValue="10"
           onChange={(e) => load(Number(e.target.value))}
         >
@@ -39,18 +43,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
         </select>
       </div>
 
-      {/* Chart */}
-      <div className="border rounded p-3">
-        <BarChart
-          data={data.map((item) => ({
-            name: item.name,
-            value: item.qty,
-          }))}
-        />
-      </div>
-
-      {/* Table */}
-      <div className="border rounded mt-4">
+      <div className="border rounded">
         <table className="w-full text-sm">
           <thead className="bg-gray-100">
             <tr>

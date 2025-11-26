@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DateRangePicker } from "./DateRangePicker";
-import PieChartComponent from "../charts/PieChart";
 import { QuickDateFilter } from "./QuickDateFilter";
 import { generateCSV } from "@/lib/utils/csv";
 import { downloadFile } from "@/lib/utils/download";
@@ -17,34 +15,28 @@ type CashRow = {
 
 export default function CashbookReport({ shopId }: { shopId: string }) {
   const [items, setItems] = useState<CashRow[]>([]);
-  const [chartData, setChartData] = useState<{ name: string; value: number }[]>(
-    []
-  );
+  const [loading, setLoading] = useState(false);
 
   async function load(from?: string, to?: string) {
-    const params = new URLSearchParams({ shopId });
-    if (from) params.append("from", from);
-    if (to) params.append("to", to);
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ shopId });
+      if (from) params.append("from", from);
+      if (to) params.append("to", to);
 
-    const res = await fetch(`/api/reports/cash?${params.toString()}`);
+      const res = await fetch(`/api/reports/cash?${params.toString()}`);
 
-    const data = await res.json();
-    const rows: CashRow[] = data.rows || [];
+      if (!res.ok) {
+        setItems([]);
+        return;
+      }
 
-    setItems(rows);
-
-    const totalIn = rows
-      .filter((i) => i.entryType === "IN")
-      .reduce((sum, i) => sum + Number(i.amount), 0);
-
-    const totalOut = rows
-      .filter((i) => i.entryType === "OUT")
-      .reduce((sum, i) => sum + Number(i.amount), 0);
-
-    setChartData([
-      { name: "Cash IN", value: totalIn },
-      { name: "Cash OUT", value: totalOut },
-    ]);
+      const data = await res.json();
+      const rows: CashRow[] = data.rows || [];
+      setItems(rows);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -52,31 +44,50 @@ export default function CashbookReport({ shopId }: { shopId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shopId]);
 
+  const totalIn = items
+    .filter((i) => i.entryType === "IN")
+    .reduce((sum, i) => sum + Number(i.amount), 0);
+
+  const totalOut = items
+    .filter((i) => i.entryType === "OUT")
+    .reduce((sum, i) => sum + Number(i.amount), 0);
+
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold">Cashbook Report</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold">Cashbook Report</h2>
+          <p className="text-xs text-gray-500">
+            Instant cash in/out list. No charts to slow you down.
+          </p>
+        </div>
+        <QuickDateFilter onSelect={load} />
+      </div>
 
-      <DateRangePicker onChange={load} />
-      <QuickDateFilter onSelect={load} />
-
-      {/* CSV Export */}
-      <button
-        onClick={() => {
-          const csv = generateCSV(
-            ["id", "entryType", "amount", "reason", "createdAt"],
-            items // ✅ FIXED
-          );
-          downloadFile("cashbook-report.csv", csv);
-        }}
-        className="px-3 py-1 border rounded text-sm"
-      >
-        Export CSV
-      </button>
-
-      {chartData.length > 0 && <PieChartComponent data={chartData} />}
+      <div className="flex flex-wrap gap-4 text-sm font-semibold">
+        <span className="text-green-700">Cash In: {totalIn.toFixed(2)} ?</span>
+        <span className="text-red-700">Cash Out: {totalOut.toFixed(2)} ?</span>
+        <span className="text-blue-700">
+          Balance: {(totalIn - totalOut).toFixed(2)} ?
+        </span>
+        <button
+          onClick={() => {
+            const csv = generateCSV(
+              ["id", "entryType", "amount", "reason", "createdAt"],
+              items // ? FIXED
+            );
+            downloadFile("cashbook-report.csv", csv);
+          }}
+          className="px-3 py-1 border rounded text-sm font-normal"
+        >
+          Export CSV
+        </button>
+      </div>
 
       <div className="border rounded p-3 mt-3 space-y-2">
-        {items.length === 0 ? (
+        {loading ? (
+          <p className="text-sm text-gray-500">Loading...</p>
+        ) : items.length === 0 ? (
           <p className="text-sm text-gray-500">No cash entries found</p>
         ) : (
           items.map((e) => (
@@ -91,7 +102,7 @@ export default function CashbookReport({ shopId }: { shopId: string }) {
                   }`}
                 >
                   {e.entryType === "IN" ? "+" : "-"}
-                  {e.amount} ৳
+                  {e.amount} ?
                 </p>
 
                 {e.reason && (
