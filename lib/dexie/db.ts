@@ -20,6 +20,7 @@ export type LocalSale = {
   shopId: string;
   items: any[];
   paymentMethod: string;
+  customerId?: string | null;
   note: string;
   totalAmount: string;
   createdAt: number;

@@ -1,0 +1,61 @@
+import { getShopsByUser } from "@/app/actions/shops";
+import { getCustomersByShop, getDueSummary } from "@/app/actions/customers";
+import DuePageClient from "./DuePageClient";
+import DueShopSelector from "./ShopSelector";
+
+type DuePageProps = {
+  searchParams?: Promise<{ shopId?: string } | undefined>;
+};
+
+export default async function DuePage({ searchParams }: DuePageProps) {
+  const shops = await getShopsByUser();
+  const resolvedSearch = await searchParams;
+
+  if (!shops || shops.length === 0) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold mb-4">Customer Due</h1>
+        <p>You need to create a shop first.</p>
+      </div>
+    );
+  }
+
+  const selectedShopId =
+    resolvedSearch?.shopId &&
+    shops.some((s) => s.id === resolvedSearch.shopId)
+      ? resolvedSearch.shopId
+      : shops[0].id;
+
+  const selectedShop = shops.find((s) => s.id === selectedShopId)!;
+
+  const [customers, summary] = await Promise.all([
+    getCustomersByShop(selectedShopId),
+    getDueSummary(selectedShopId),
+  ]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Customer Due / Udhar</h1>
+          <p className="text-sm text-gray-600">
+            Shop: <span className="font-semibold">{selectedShop.name}</span>
+          </p>
+          <p className="text-xs text-gray-500">
+            Ultra-simple ledger: add customer, record due sale, take payment,
+            share statement.
+          </p>
+        </div>
+
+        <DueShopSelector shops={shops} selectedShopId={selectedShopId} />
+      </div>
+
+      <DuePageClient
+        shopId={selectedShopId}
+        shopName={selectedShop.name}
+        initialCustomers={customers as any}
+        initialSummary={summary as any}
+      />
+    </div>
+  );
+}

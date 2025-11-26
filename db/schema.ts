@@ -65,6 +65,7 @@ export const sales = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     shopId: uuid("shop_id").notNull(),
+    customerId: uuid("customer_id"),
 
     saleDate: timestamp("sale_date", { withTimezone: true })
       .notNull()
@@ -79,6 +80,7 @@ export const sales = pgTable(
   },
   (table) => ({
     shopIndex: index("idx_sales_shop").on(table.shopId),
+    customerIndex: index("idx_sales_customer").on(table.customerId),
   })
 );
 
@@ -156,5 +158,52 @@ export const cashEntries = pgTable(
   },
   (table) => ({
     shopIndex: index("idx_cash_entries_shop").on(table.shopId),
+  })
+);
+
+// ---------------------------------------
+// 7) CUSTOMERS (for due/udhar)
+// ---------------------------------------
+
+export const customers = pgTable(
+  "customers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    shopId: uuid("shop_id").notNull(),
+    name: text("name").notNull(),
+    phone: text("phone"),
+    address: text("address"),
+    totalDue: numeric("total_due", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0"),
+    lastPaymentAt: timestamp("last_payment_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    shopIndex: index("idx_customers_shop").on(table.shopId),
+    phoneIndex: index("idx_customers_phone").on(table.phone),
+  })
+);
+
+// ---------------------------------------
+// 8) CUSTOMER LEDGER (due & payments)
+// ---------------------------------------
+
+export const customerLedger = pgTable(
+  "customer_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    shopId: uuid("shop_id").notNull(),
+    customerId: uuid("customer_id").notNull(),
+    entryType: text("entry_type").notNull(), // SALE or PAYMENT
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    description: text("description"),
+    entryDate: timestamp("entry_date", { withTimezone: true }).defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    shopIndex: index("idx_customer_ledger_shop").on(table.shopId),
+    customerIndex: index("idx_customer_ledger_customer").on(table.customerId),
+    entryDateIndex: index("idx_customer_ledger_entry_date").on(table.entryDate),
   })
 );

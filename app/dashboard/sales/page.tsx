@@ -69,11 +69,19 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
               key={s.id}
               className="border rounded p-3 flex justify-between items-center"
             >
-              <div>
+              <div className="space-y-1">
                 <p className="font-semibold">Total: {s.totalAmount}</p>
                 <p className="text-sm text-gray-600">
                   Payment: {s.paymentMethod || "cash"}
+                  {s.paymentMethod === "due" && s.customerName
+                    ? ` • Customer: ${s.customerName}`
+                    : ""}
                 </p>
+                {s.itemCount > 0 && (
+                  <p className="text-xs text-gray-500">
+                    Items: {s.itemPreview || `${s.itemCount} item(s)`}
+                  </p>
+                )}
               </div>
               <p className="text-xs text-gray-500">
                 {s.createdAt

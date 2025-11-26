@@ -3,6 +3,7 @@
 import { getShopsByUser } from "@/app/actions/shops";
 import { getActiveProductsByShop } from "@/app/actions/products";
 import { createSale } from "@/app/actions/sales";
+import { getCustomersByShop } from "@/app/actions/customers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PosPageClient } from "../PosPageClient";
@@ -38,12 +39,15 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
   const products = await getActiveProductsByShop(selectedShopId);
+  const customers = await getCustomersByShop(selectedShopId);
 
   async function submitSale(formData: FormData) {
     "use server";
 
     const shopId = formData.get("shopId") as string;
     const paymentMethod = (formData.get("paymentMethod") as string) || "cash";
+    const customerId = (formData.get("customerId") as string) || null;
+    const paidNowStr = formData.get("paidNow") as string;
     const note = (formData.get("note") as string) || "";
     const cartJson = formData.get("cart") as string;
     const totalAmountStr = (formData.get("totalAmount") as string) || "0";
@@ -63,6 +67,8 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       shopId,
       items,
       paymentMethod,
+      customerId,
+      paidNow: paidNowStr ? Number(paidNowStr) : 0,
       note,
     });
 
@@ -72,6 +78,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
   return (
     <PosPageClient
       products={products as any}
+      customers={customers as any}
       shopName={selectedShop.name}
       shopId={selectedShopId}
       submitSale={submitSale}

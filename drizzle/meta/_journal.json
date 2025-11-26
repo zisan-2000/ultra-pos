@@ -8,6 +8,20 @@
       "when": 1763905297005,
       "tag": "0000_conscious_marvel_boy",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1764470400000,
+      "tag": "0001_add_due_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1764556800000,
+      "tag": "0002_add_sales_customer",
+      "breakpoints": true
     }
   ]
 }

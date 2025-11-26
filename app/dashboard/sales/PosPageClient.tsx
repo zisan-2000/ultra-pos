@@ -15,6 +15,13 @@ type PosPageClientProps = {
     id: string;
     name: string;
     sellPrice: string;
+    stockQty?: string | number;
+  }[];
+  customers: {
+    id: string;
+    name: string;
+    phone: string | null;
+    totalDue: string;
   }[];
   shopName: string;
   shopId: string;
@@ -23,12 +30,15 @@ type PosPageClientProps = {
 
 export function PosPageClient({
   products,
+  customers,
   shopName,
   shopId,
   submitSale,
 }: PosPageClientProps) {
   const { items, totalAmount, clear } = useCart();
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [customerId, setCustomerId] = useState<string>("");
+  const [paidNow, setPaidNow] = useState<string>("");
   const [note, setNote] = useState("");
   const online = useOnlineStatus();
 
@@ -37,22 +47,41 @@ export function PosPageClient({
 
     if (items.length === 0) return;
 
-    // Online case → use server action
+    if (paymentMethod === "due" && !customerId) {
+      alert("Select a customer for due sale.");
+      return;
+    }
+
+    const totalVal = totalAmount();
+    const paidNowNumber = Math.min(
+      Math.max(Number(paidNow || 0), 0),
+      totalVal
+    );
+
+    // Online case - use server action
     if (online) {
       const formData = new FormData(e.currentTarget);
 
       formData.set("shopId", shopId);
       formData.set("paymentMethod", paymentMethod);
+      formData.set("customerId", customerId);
+      formData.set("paidNow", paidNowNumber.toString());
       formData.set("note", note);
       formData.set("cart", JSON.stringify(items));
       formData.set("totalAmount", totalAmount().toString());
 
       await submitSale(formData);
       clear();
+      setPaidNow("");
       return;
     }
 
-    // Offline case → save to Dexie + queue
+    if (paymentMethod === "due") {
+      alert("Due sales require internet so ledger stays accurate.");
+      return;
+    }
+
+    // Offline case - save to Dexie + queue
     const salePayload = {
       tempId: crypto.randomUUID(),
       shopId,
@@ -63,6 +92,7 @@ export function PosPageClient({
         qty: i.qty,
       })),
       paymentMethod,
+      customerId: null,
       note,
       totalAmount: totalAmount().toFixed(2),
       createdAt: Date.now(),
@@ -116,7 +146,7 @@ export function PosPageClient({
 
         <div className="space-y-2 mb-4">
           <div className="font-semibold">
-            Total: {totalAmount().toFixed(2)} ৳
+            Total: {totalAmount().toFixed(2)} ?
           </div>
 
           <div className="space-y-1">
@@ -130,8 +160,55 @@ export function PosPageClient({
               <option value="card">Card</option>
               <option value="bkash">bKash</option>
               <option value="nagad">Nagad</option>
+              <option value="due">Due / Udhar</option>
             </select>
           </div>
+
+          {paymentMethod === "due" && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Customer</label>
+              <select
+                className="border px-2 py-1 w-full"
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
+              >
+                <option value="">Select customer</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.phone ? `(${c.phone})` : ""} - Due:{" "}
+                    {Number(c.totalDue || 0).toFixed(2)} ?
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500">
+                Only available online to keep due ledger correct.
+              </p>
+              <a
+                className="text-xs text-blue-600 underline"
+                href={`/dashboard/due?shopId=${shopId}`}
+              >
+                Add / edit customers
+              </a>
+              <div className="space-y-1 mt-2">
+                <label className="text-sm font-medium">
+                  Paid now (optional, for partial)
+                </label>
+                <input
+                  className="border px-2 py-1 w-full text-sm"
+                  type="number"
+                  min="0"
+                  max={totalAmount()}
+                  step="0.01"
+                  value={paidNow}
+                  onChange={(e) => setPaidNow(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-gray-500">
+                  Example: total 80, paid 20 = due will be 60.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1">
             <label className="text-sm font-medium">Note (optional)</label>

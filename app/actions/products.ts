@@ -8,11 +8,13 @@ import { and, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { createServerClientForRoute } from "@/lib/supabase";
 
-// ছোট টাইপ হেল্পার
+// ---------------------------------
+// TYPES
+// ---------------------------------
 type CreateProductInput = {
   shopId: string;
   name: string;
-  sellPrice: string; // numeric ফিল্ডে string পাস করলেই ঠিক আছে
+  sellPrice: string;
   stockQty: string;
   isActive: boolean;
 };
@@ -24,7 +26,9 @@ type UpdateProductInput = {
   isActive?: boolean;
 };
 
-// বর্তমান ইউজার বের করা
+// ---------------------------------
+// AUTH HELPERS
+// ---------------------------------
 async function getCurrentUser() {
   const cookieStore = await cookies();
   const supabase = createServerClientForRoute(cookieStore);
@@ -37,7 +41,6 @@ async function getCurrentUser() {
   return user;
 }
 
-// নিরাপদভাবে শপ check করা (owner মিলছে কিনা)
 async function assertShopBelongsToUser(shopId: string, userId: string) {
   const shop = await db.query.shops.findFirst({
     where: eq(shops.id, shopId),
@@ -50,9 +53,9 @@ async function assertShopBelongsToUser(shopId: string, userId: string) {
   return shop;
 }
 
-// ------------------------------
+// ---------------------------------
 // CREATE PRODUCT
-// ------------------------------
+// ---------------------------------
 export async function createProduct(input: CreateProductInput) {
   const user = await getCurrentUser();
   await assertShopBelongsToUser(input.shopId, user.id);
@@ -68,9 +71,9 @@ export async function createProduct(input: CreateProductInput) {
   return { success: true };
 }
 
-// ------------------------------
-// GET PRODUCTS BY SHOP (owned by user)
-// ------------------------------
+// ---------------------------------
+// GET PRODUCTS BY SHOP
+// ---------------------------------
 export async function getProductsByShop(shopId: string) {
   const user = await getCurrentUser();
   await assertShopBelongsToUser(shopId, user.id);
@@ -83,40 +86,26 @@ export async function getProductsByShop(shopId: string) {
   return rows;
 }
 
-// ------------------------------
-// GET SINGLE PRODUCT (with basic safety)
-// ------------------------------
+// ---------------------------------
+// GET SINGLE PRODUCT
+// ---------------------------------
 export async function getProduct(id: string) {
   const user = await getCurrentUser();
 
-  const product = await db.query.products
-    .findFirst({
-      where: eq(products.id, id),
-      with: {
-        shop: true as any, // এই লাইন কাজ না করলে skip করে শুধু product নিন
-      },
-    })
-    .catch(async () => {
-      // যদি with কাজ না করে, fallback simple query
-      return await db.query.products.findFirst({
-        where: eq(products.id, id),
-      });
-    });
+  const product = await db.query.products.findFirst({
+    where: eq(products.id, id),
+  });
 
   if (!product) throw new Error("Product not found");
 
-  // যদি উপরের with কাজ না করে, তবে আলাদা করে shop check করি
-  // @ts-ignore
-  const shopId = product.shopId ?? product.shop?.id;
-
-  await assertShopBelongsToUser(shopId, user.id);
+  await assertShopBelongsToUser(product.shopId, user.id);
 
   return product;
 }
 
-// ------------------------------
+// ---------------------------------
 // UPDATE PRODUCT
-// ------------------------------
+// ---------------------------------
 export async function updateProduct(id: string, data: UpdateProductInput) {
   const product = await db.query.products.findFirst({
     where: eq(products.id, id),
@@ -132,9 +121,9 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   return { success: true };
 }
 
-// ------------------------------
+// ---------------------------------
 // DELETE PRODUCT
-// ------------------------------
+// ---------------------------------
 export async function deleteProduct(id: string) {
   const product = await db.query.products.findFirst({
     where: eq(products.id, id),
@@ -150,8 +139,9 @@ export async function deleteProduct(id: string) {
   return { success: true };
 }
 
-// app/actions/products.ts এর শেষে বা উপরে কাছাকাছি যোগ করুন
-
+// ---------------------------------
+// ACTIVE PRODUCTS (POS)
+// ---------------------------------
 export async function getActiveProductsByShop(shopId: string) {
   const user = await getCurrentUser();
   await assertShopBelongsToUser(shopId, user.id);

@@ -3,10 +3,17 @@
 "use server";
 
 import { db } from "@/db/client";
-import { sales, saleItems, shops, products } from "@/db/schema";
+import {
+  sales,
+  saleItems,
+  shops,
+  products,
+  customers,
+  customerLedger,
+} from "@/db/schema";
 import { cookies } from "next/headers";
 import { createServerClientForRoute } from "@/lib/supabase";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 type CartItemInput = {
   productId: string;
@@ -20,6 +27,8 @@ type CreateSaleInput = {
   items: CartItemInput[];
   paymentMethod: string;
   note?: string | null;
+  customerId?: string | null;
+  paidNow?: number | null;
 };
 
 async function getCurrentUser() {
@@ -57,6 +66,24 @@ export async function createSale(input: CreateSaleInput) {
     throw new Error("Cart is empty");
   }
 
+  let dueCustomer: { id: string } | null = null;
+  if (input.paymentMethod === "due") {
+    if (!input.customerId) {
+      throw new Error("Select a customer for due sale");
+    }
+
+    const c = await db.query.customers.findFirst({
+      where: eq(customers.id, input.customerId),
+      columns: { id: true, shopId: true },
+    });
+
+    if (!c || c.shopId !== input.shopId) {
+      throw new Error("Customer not found for this shop");
+    }
+
+    dueCustomer = { id: c.id };
+  }
+
   // Product IDs
   const productIds = input.items.map((i) => i.productId);
 
@@ -85,11 +112,6 @@ export async function createSale(input: CreateSaleInput) {
       throw new Error("Inactive product in cart");
     }
 
-    const stock = Number(p.stockQty || "0");
-    if (stock < item.qty) {
-      throw new Error(`Not enough stock for ${item.name}`);
-    }
-
     computedTotal += item.unitPrice * item.qty;
   }
 
@@ -100,6 +122,7 @@ export async function createSale(input: CreateSaleInput) {
     .insert(sales)
     .values({
       shopId: input.shopId,
+      customerId: input.customerId || null,
       totalAmount: totalStr,
       paymentMethod: input.paymentMethod || "cash",
       note: input.note || null,
@@ -135,6 +158,42 @@ export async function createSale(input: CreateSaleInput) {
       .where(eq(products.id, p.id));
   }
 
+  // Record due entry if needed
+  if (dueCustomer) {
+    const total = Number(totalStr);
+    const payNowRaw = Number(input.paidNow || 0);
+    const payNow = Math.min(Math.max(payNowRaw, 0), total); // clamp 0..total
+    const dueAmount = Number((total - payNow).toFixed(2));
+
+    await db.transaction(async (tx) => {
+      await tx.insert(customerLedger).values({
+        shopId: input.shopId,
+        customerId: dueCustomer!.id,
+        entryType: "SALE",
+        amount: totalStr,
+        description: input.note || "Due sale",
+      });
+
+      if (payNow > 0) {
+        await tx.insert(customerLedger).values({
+          shopId: input.shopId,
+          customerId: dueCustomer!.id,
+          entryType: "PAYMENT",
+          amount: payNow.toFixed(2),
+          description: "Partial payment at sale",
+        });
+      }
+
+      await tx
+        .update(customers)
+        .set({
+          totalDue: sql`${customers.totalDue} + ${dueAmount.toFixed(2)}`,
+          lastPaymentAt: payNow > 0 ? new Date() : undefined,
+        })
+        .where(eq(customers.id, dueCustomer!.id));
+    });
+  }
+
   return { success: true, saleId };
 }
 
@@ -147,5 +206,63 @@ export async function getSalesByShop(shopId: string) {
 
   const rows = await db.select().from(sales).where(eq(sales.shopId, shopId));
 
-  return rows;
+  if (rows.length === 0) return [];
+
+  const saleIds = rows.map((r: any) => r.id);
+
+  const items = await db
+    .select({
+      saleId: saleItems.saleId,
+      productName: products.name,
+      qty: saleItems.quantity,
+    })
+    .from(saleItems)
+    .leftJoin(products, eq(products.id, saleItems.productId))
+    .where(inArray(saleItems.saleId, saleIds));
+
+  const itemSummaryMap: Record<
+    string,
+    { count: number; preview: string; names: string[] }
+  > = {};
+
+  for (const it of items as any[]) {
+    const entry = itemSummaryMap[it.saleId] || {
+      count: 0,
+      names: [],
+      preview: "",
+    };
+    entry.count += 1;
+    if (entry.names.length < 3 && it.productName) {
+      entry.names.push(`${it.productName} x${Number(it.qty || 0)}`);
+    }
+    itemSummaryMap[it.saleId] = entry;
+  }
+
+  const customerIds = Array.from(
+    new Set(
+      rows
+        .map((r: any) => r.customerId)
+        .filter((id: any): id is string => Boolean(id))
+    )
+  );
+
+  let customerMap: Record<string, string> = {};
+  if (customerIds.length) {
+    const cs = await db
+      .select({ id: customers.id, name: customers.name })
+      .from(customers)
+      .where(and(eq(customers.shopId, shopId), inArray(customers.id, customerIds)));
+
+    customerMap = Object.fromEntries(cs.map((c: any) => [c.id, c.name]));
+  }
+
+  return rows.map((r: any) => {
+    const summary = itemSummaryMap[r.id] || { count: 0, names: [] };
+    return {
+      ...r,
+      itemCount: summary.count,
+      itemPreview: summary.names.join(", "),
+      customerName: r.customerId ? customerMap[r.customerId] : null,
+    };
+  });
 }

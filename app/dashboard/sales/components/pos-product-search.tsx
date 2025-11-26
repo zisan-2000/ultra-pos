@@ -9,12 +9,14 @@ type PosProductSearchProps = {
     id: string;
     name: string;
     sellPrice: string;
+    stockQty?: string | number;
   }[];
 };
 
 export function PosProductSearch({ products }: PosProductSearchProps) {
   const [query, setQuery] = useState("");
   const add = useCart((s) => s.add);
+  const items = useCart((s) => s.items);
 
   const filtered = products.filter((p) =>
     p.name.toLowerCase().includes(query.toLowerCase())
@@ -35,15 +37,41 @@ export function PosProductSearch({ products }: PosProductSearchProps) {
             key={p.id}
             type="button"
             className="block w-full text-left px-2 py-1 hover:bg-gray-100"
-            onClick={() =>
+            onClick={() => {
+              const stock = Number(p.stockQty ?? 0);
+              const inCart = items.find((i) => i.productId === p.id)?.qty || 0;
+              if (stock <= inCart) {
+                const proceed = window.confirm(
+                  stock <= 0
+                    ? `Stock is 0 for ${p.name}. Sell anyway?`
+                    : `Only ${stock} in stock for ${p.name}. Sell anyway?`
+                );
+                if (!proceed) return;
+              }
+
               add({
                 productId: p.id,
                 name: p.name,
                 unitPrice: Number(p.sellPrice),
-              })
-            }
+              });
+            }}
           >
-            {p.name} — {p.sellPrice}
+            <div className="flex justify-between">
+              <span>
+                {p.name} - {p.sellPrice}
+              </span>
+              <span
+                className={`text-xs ${
+                  Number(p.stockQty ?? 0) <= 0
+                    ? "text-red-600"
+                    : Number(p.stockQty ?? 0) < 3
+                    ? "text-orange-600"
+                    : "text-gray-500"
+                }`}
+              >
+                Stock: {Number(p.stockQty ?? 0).toFixed(0)}
+              </span>
+            </div>
           </button>
         ))}
 
