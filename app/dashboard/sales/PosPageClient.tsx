@@ -109,133 +109,120 @@ export function PosPageClient({
   }
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-screen overflow-hidden">
       {/* Left: Products */}
-      <div className="col-span-2">
-        <div className="mb-3 flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-bold">POS</h1>
-            <p className="text-sm text-gray-600">
-              Shop: <span className="font-semibold">{shopName}</span>
-            </p>
-          </div>
+      <div className="lg:col-span-2 flex flex-col overflow-hidden">
+        <div className="mb-6 pb-4 border-b border-gray-200">
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">নতুন বিক্রি</h1>
+              <p className="text-base text-gray-600 mt-2">
+                দোকান: <span className="font-semibold">{shopName}</span>
+              </p>
+            </div>
 
-          <span
-            className={`text-xs px-2 py-1 rounded ${
-              online ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-            }`}
-          >
-            {online ? "Online" : "Offline"}
-          </span>
+            <span
+              className={`text-sm px-4 py-2 rounded-full font-medium ${
+                online ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+              }`}
+            >
+              {online ? "অনলাইন" : "অফলাইন"}
+            </span>
+          </div>
         </div>
 
-        <PosProductSearch products={products} />
+        <div className="flex-1 overflow-y-auto">
+          <PosProductSearch products={products} />
+        </div>
       </div>
 
       {/* Right: Cart */}
-      <div>
-        <h2 className="text-lg font-bold mb-3">Cart</h2>
+      <div className="lg:col-span-1 bg-gray-50 rounded-lg p-6 flex flex-col overflow-hidden border border-gray-200">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">বর্তমান বিল</h2>
 
-        <div className="max-h-80 overflow-y-auto mb-3">
+        <div className="flex-1 overflow-y-auto mb-6 space-y-3 pr-2">
           {items.length === 0 ? (
-            <p className="text-sm text-gray-500">Cart is empty.</p>
+            <p className="text-center text-gray-500 py-8">বিল খালি আছে</p>
           ) : (
             items.map((i) => <PosCartItem key={i.productId} item={i} />)
           )}
         </div>
 
-        <div className="space-y-2 mb-4">
-          <div className="font-semibold">
-            Total: {totalAmount().toFixed(2)} ?
+        {/* Summary Section */}
+        <div className="border-t border-gray-300 pt-4 space-y-4">
+          <div className="bg-white rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">মোট পরিমাণ</p>
+            <p className="text-3xl font-bold text-gray-900">
+              {totalAmount().toFixed(2)} ৳
+            </p>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Payment method</label>
-            <select
-              className="border px-2 py-1 w-full"
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-            >
-              <option value="cash">Cash</option>
-              <option value="card">Card</option>
-              <option value="bkash">bKash</option>
-              <option value="nagad">Nagad</option>
-              <option value="due">Due / Udhar</option>
-            </select>
+          {/* Payment Method */}
+          <div className="space-y-2">
+            <label className="text-base font-medium text-gray-900">পেমেন্ট পদ্ধতি</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: "cash", label: "ক্যাশ" },
+                { value: "bkash", label: "বিকাশ" },
+                { value: "due", label: "ধার" },
+              ].map((method) => (
+                <button
+                  key={method.value}
+                  onClick={() => setPaymentMethod(method.value)}
+                  className={`py-3 px-3 rounded-lg font-medium text-base transition-colors ${
+                    paymentMethod === method.value
+                      ? "bg-green-600 text-white"
+                      : "bg-white text-gray-900 border border-gray-300 hover:border-gray-400"
+                  }`}
+                >
+                  {method.label}
+                </button>
+              ))}
+            </div>
           </div>
 
+          {/* Customer Selection for Due */}
           {paymentMethod === "due" && (
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Customer</label>
+            <div className="space-y-2">
+              <label className="text-base font-medium text-gray-900">গ্রাহক বাছাই করুন</label>
               <select
-                className="border px-2 py-1 w-full"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base"
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
               >
-                <option value="">Select customer</option>
+                <option value="">-- গ্রাহক বাছাই করুন --</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} {c.phone ? `(${c.phone})` : ""} - Due:{" "}
-                    {Number(c.totalDue || 0).toFixed(2)} ?
+                    {c.name} - বাকি: {Number(c.totalDue || 0).toFixed(2)} ৳
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-gray-500">
-                Only available online to keep due ledger correct.
-              </p>
               <a
-                className="text-xs text-blue-600 underline"
+                className="text-sm text-blue-600 hover:underline"
                 href={`/dashboard/due?shopId=${shopId}`}
               >
-                Add / edit customers
+                নতুন গ্রাহক যোগ করুন
               </a>
-              <div className="space-y-1 mt-2">
-                <label className="text-sm font-medium">
-                  Paid now (optional, for partial)
-                </label>
-                <input
-                  className="border px-2 py-1 w-full text-sm"
-                  type="number"
-                  min="0"
-                  max={totalAmount()}
-                  step="0.01"
-                  value={paidNow}
-                  onChange={(e) => setPaidNow(e.target.value)}
-                  placeholder="0.00"
-                />
-                <p className="text-xs text-gray-500">
-                  Example: total 80, paid 20 = due will be 60.
-                </p>
-              </div>
             </div>
           )}
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Note (optional)</label>
-            <textarea
-              className="border w-full p-2 text-sm"
-              rows={2}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-2">
+        {/* Complete Sale Button */}
+        <form onSubmit={handleSubmit} className="mt-6 space-y-3">
           <button
             type="submit"
             disabled={items.length === 0}
-            className="w-full bg-black text-white p-3 rounded disabled:bg-gray-400"
+            className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold py-4 px-4 rounded-lg text-lg transition-colors"
           >
-            {online ? "Complete Sale" : "Save Sale Offline"}
+            ✓ বিল সম্পন্ন করুন
           </button>
 
           <button
             type="button"
             onClick={() => clear()}
-            className="w-full border p-2 rounded text-sm"
+            className="w-full border border-gray-300 text-gray-900 font-medium py-3 px-4 rounded-lg text-base hover:bg-gray-100 transition-colors"
           >
-            Clear Cart
+            বিল পরিষ্কার করুন
           </button>
         </form>
       </div>

@@ -23,60 +23,66 @@ export function PosProductSearch({ products }: PosProductSearchProps) {
   );
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       <input
-        className="border p-2 w-full"
-        placeholder="Search product..."
+        className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+        placeholder="পণ্য খুঁজুন (নাম/কোড)..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
 
-      <div className="border rounded p-2 max-h-72 overflow-y-auto space-y-1">
-        {filtered.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            className="block w-full text-left px-2 py-1 hover:bg-gray-100"
-            onClick={() => {
-              const stock = Number(p.stockQty ?? 0);
-              const inCart = items.find((i) => i.productId === p.id)?.qty || 0;
-              if (stock <= inCart) {
-                const proceed = window.confirm(
-                  stock <= 0
-                    ? `Stock is 0 for ${p.name}. Sell anyway?`
-                    : `Only ${stock} in stock for ${p.name}. Sell anyway?`
-                );
-                if (!proceed) return;
-              }
+      <div className="space-y-3">
+        {filtered.length === 0 ? (
+          <p className="text-center text-gray-500 py-8">কোনো পণ্য পাওয়া যায়নি</p>
+        ) : (
+          filtered.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="block w-full text-left bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md hover:border-green-300 transition-all"
+              onClick={() => {
+                const stock = Number(p.stockQty ?? 0);
+                const inCart = items.find((i) => i.productId === p.id)?.qty || 0;
+                if (stock <= inCart) {
+                  const proceed = window.confirm(
+                    stock <= 0
+                      ? `${p.name}–এর স্টক নেই। তবুও বিক্রি করবেন?`
+                      : `${p.name}–এর শুধু ${stock} টি স্টক আছে। তবুও বিক্রি করবেন?`
+                  );
+                  if (!proceed) return;
+                }
 
-              add({
-                productId: p.id,
-                name: p.name,
-                unitPrice: Number(p.sellPrice),
-              });
-            }}
-          >
-            <div className="flex justify-between">
-              <span>
-                {p.name} - {p.sellPrice}
-              </span>
-              <span
-                className={`text-xs ${
-                  Number(p.stockQty ?? 0) <= 0
-                    ? "text-red-600"
-                    : Number(p.stockQty ?? 0) < 3
-                    ? "text-orange-600"
-                    : "text-gray-500"
-                }`}
-              >
-                Stock: {Number(p.stockQty ?? 0).toFixed(0)}
-              </span>
-            </div>
-          </button>
-        ))}
-
-        {filtered.length === 0 && (
-          <p className="text-sm text-gray-400">No products found</p>
+                add({
+                  productId: p.id,
+                  name: p.name,
+                  unitPrice: Number(p.sellPrice),
+                });
+              }}
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900 text-base">{p.name}</h3>
+                  <p className="text-lg font-bold text-green-600 mt-1">
+                    দাম: {p.sellPrice} ৳
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span
+                    className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                      Number(p.stockQty ?? 0) <= 0
+                        ? "bg-red-100 text-red-700"
+                        : Number(p.stockQty ?? 0) < 3
+                        ? "bg-orange-100 text-orange-700"
+                        : "bg-green-100 text-green-700"
+                    }`}
+                  >
+                    স্টক: {Number(p.stockQty ?? 0).toFixed(0)}
+                  </span>
+                  <p className="text-sm text-gray-500 mt-2">➕ যোগ করুন</p>
+                </div>
+              </div>
+            </button>
+          ))
         )}
       </div>
     </div>

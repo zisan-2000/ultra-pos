@@ -49,40 +49,40 @@ export default function ProfitTrendReport({ shopId }: { shopId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold">Profit Snapshot</h2>
+          <h2 className="text-lg font-bold text-gray-900">লাভের প্রবণতা</h2>
           <p className="text-xs text-gray-500">
-            Quick table for sales vs expenses. No charts.
+            বিক্রয় বনাম খরচের তুলনা।
           </p>
         </div>
         <QuickDateFilter onSelect={load} />
       </div>
 
-      <p className="text-sm font-semibold">
-        Total Profit: {totalProfit.toFixed(2)} ?
+      <p className="text-sm font-semibold text-gray-900">
+        মোট লাভ: {totalProfit.toFixed(2)} ৳
       </p>
 
-      <div className="border rounded">
+      <div className="border border-gray-200 rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-100">
             <tr>
-              <th className="p-2 text-left">Date</th>
-              <th className="p-2 text-right">Sales (?)</th>
-              <th className="p-2 text-right">Expenses (?)</th>
-              <th className="p-2 text-right">Profit (?)</th>
+              <th className="p-3 text-left text-gray-900">তারিখ</th>
+              <th className="p-3 text-right text-gray-900">বিক্রয় (৳)</th>
+              <th className="p-3 text-right text-gray-900">খরচ (৳)</th>
+              <th className="p-3 text-right text-gray-900">লাভ (৳)</th>
             </tr>
           </thead>
 
           <tbody>
             {loading ? (
               <tr>
-                <td className="p-2 text-center" colSpan={4}>
-                  Loading...
+                <td className="p-3 text-center text-gray-500" colSpan={4}>
+                  লোড হচ্ছে...
                 </td>
               </tr>
             ) : data.length === 0 ? (
               <tr>
-                <td className="p-2 text-center" colSpan={4}>
-                  No profit data
+                <td className="p-3 text-center text-gray-500" colSpan={4}>
+                  কোনো লাভের ডেটা নেই
                 </td>
               </tr>
             ) : (
@@ -90,12 +90,12 @@ export default function ProfitTrendReport({ shopId }: { shopId: string }) {
                 const profit =
                   Number(row.sales || 0) - Number(row.expense || 0);
                 return (
-                  <tr key={`${row.date}-${idx}`} className="border-t">
-                    <td className="p-2">{row.date}</td>
-                    <td className="p-2 text-right">
+                  <tr key={`${row.date}-${idx}`} className="border-t hover:bg-gray-50 transition-colors">
+                    <td className="p-3 text-gray-900">{new Date(row.date).toLocaleDateString("bn-BD")}</td>
+                    <td className="p-3 text-right text-gray-900">
                       {Number(row.sales || 0).toFixed(2)}
                     </td>
-                    <td className="p-2 text-right">
+                    <td className="p-3 text-right text-gray-900">
                       {Number(row.expense || 0).toFixed(2)}
                     </td>
                     <td

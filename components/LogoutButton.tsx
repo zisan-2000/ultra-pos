@@ -13,9 +13,9 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="px-3 py-1 rounded border bg-white text-sm hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
+      className="w-full px-4 py-3 rounded-lg bg-red-600 text-white font-medium text-base hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
     >
-      {pending ? "Signing out..." : "Logout"}
+      {pending ? "লগ আউট হচ্ছে..." : "লগ আউট"}
     </button>
   );
 }

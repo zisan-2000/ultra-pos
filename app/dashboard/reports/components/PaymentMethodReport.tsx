@@ -46,19 +46,19 @@ export default function PaymentMethodReport({ shopId }: { shopId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold">Payment Summary</h2>
+          <h2 className="text-lg font-bold text-gray-900">পেমেন্ট পদ্ধতি</h2>
           <p className="text-xs text-gray-500">
-            Simple list of payment methods. Zero charts.
+            পেমেন্ট পদ্ধতির সারসংক্ষেপ।
           </p>
         </div>
         <QuickDateFilter onSelect={load} />
       </div>
 
-      <div className="border rounded divide-y">
+      <div className="border border-gray-200 rounded-lg divide-y divide-gray-200">
         {loading ? (
-          <p className="p-3 text-sm text-gray-500">Loading...</p>
+          <p className="p-4 text-sm text-gray-500 text-center">লোড হচ্ছে...</p>
         ) : data.length === 0 ? (
-          <p className="p-3 text-sm text-gray-500">No payment data</p>
+          <p className="p-4 text-sm text-gray-500 text-center">কোনো পেমেন্ট ডেটা নেই</p>
         ) : (
           data.map((item, idx) => {
             const percent =
@@ -69,19 +69,19 @@ export default function PaymentMethodReport({ shopId }: { shopId: string }) {
             return (
               <div
                 key={`${item.name}-${idx}`}
-                className="flex items-center justify-between p-3"
+                className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
               >
                 <div>
-                  <p className="font-semibold">{item.name || "Unknown"}</p>
+                  <p className="font-semibold text-gray-900">{item.name || "অজানা"}</p>
                   {typeof item.count === "number" && (
-                    <p className="text-xs text-gray-500">
-                      {item.count} payments
+                    <p className="text-xs text-gray-500 mt-1">
+                      {item.count} টি পেমেন্ট
                     </p>
                   )}
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold">{Number(item.value || 0)} ?</p>
-                  <p className="text-xs text-gray-500">{percent}% of total</p>
+                  <p className="font-semibold text-gray-900">{Number(item.value || 0)} ৳</p>
+                  <p className="text-xs text-gray-500 mt-1">{percent}% মোটের</p>
                 </div>
               </div>
             );

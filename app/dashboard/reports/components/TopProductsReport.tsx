@@ -26,46 +26,46 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-bold">Top Selling Products</h2>
+          <h2 className="text-lg font-bold text-gray-900">সেরা বিক্রিত পণ্য</h2>
           <p className="text-xs text-gray-500">
-            Straightforward table. No graphs.
+            সবচেয়ে বেশি বিক্রিত পণ্যগুলি।
           </p>
         </div>
 
         <select
-          className="border px-2 py-1 text-sm"
+          className="border border-gray-300 px-3 py-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
           defaultValue="10"
           onChange={(e) => load(Number(e.target.value))}
         >
-          <option value="5">Top 5</option>
-          <option value="10">Top 10</option>
-          <option value="20">Top 20</option>
+          <option value="5">শীর্ষ ৫</option>
+          <option value="10">শীর্ষ ১০</option>
+          <option value="20">শীর্ষ ২০</option>
         </select>
       </div>
 
-      <div className="border rounded">
+      <div className="border border-gray-200 rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-100">
             <tr>
-              <th className="p-2 text-left">Product</th>
-              <th className="p-2 text-right">Quantity Sold</th>
-              <th className="p-2 text-right">Revenue (?)</th>
+              <th className="p-3 text-left text-gray-900">পণ্য</th>
+              <th className="p-3 text-right text-gray-900">বিক্রয় সংখ্যা</th>
+              <th className="p-3 text-right text-gray-900">আয় (৳)</th>
             </tr>
           </thead>
 
           <tbody>
             {data.length === 0 ? (
               <tr>
-                <td className="p-2 text-center" colSpan={3}>
-                  No data available
+                <td className="p-3 text-center text-gray-500" colSpan={3}>
+                  কোনো ডেটা পাওয়া যায়নি
                 </td>
               </tr>
             ) : (
               data.map((item, idx) => (
-                <tr key={idx} className="border-t">
-                  <td className="p-2">{item.name}</td>
-                  <td className="p-2 text-right">{item.qty}</td>
-                  <td className="p-2 text-right">{item.revenue.toFixed(2)}</td>
+                <tr key={idx} className="border-t hover:bg-gray-50 transition-colors">
+                  <td className="p-3 text-gray-900">{item.name}</td>
+                  <td className="p-3 text-right text-gray-900">{item.qty}</td>
+                  <td className="p-3 text-right text-gray-900">{item.revenue.toFixed(2)}</td>
                 </tr>
               ))
             )}

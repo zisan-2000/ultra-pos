@@ -15,14 +15,14 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
 
   if (!shops || shops.length === 0) {
     return (
-      <div>
-        <h1 className="text-xl font-bold mb-4">Sales</h1>
-        <p className="mb-4">You don&apos;t have any shop yet.</p>
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-gray-900">বিক্রি তালিকা</h1>
+        <p className="mb-6 text-gray-600">এখনও কোনো দোকান নেই।</p>
         <Link
           href="/dashboard/shops/new"
-          className="px-4 py-2 bg-black text-white rounded"
+          className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
         >
-          Create your first shop
+          প্রথম দোকান তৈরি করুন
         </Link>
       </div>
     );
@@ -40,52 +40,52 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-xl font-bold">Sales</h1>
-          <p className="text-sm text-gray-600">
-            Shop: <span className="font-semibold">{selectedShop.name}</span>
+          <h1 className="text-3xl font-bold text-gray-900">বিক্রি তালিকা</h1>
+          <p className="text-sm text-gray-500 mt-2">
+            দোকান: <span className="font-semibold">{selectedShop.name}</span>
           </p>
         </div>
 
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-3 items-center">
           <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
 
           <Link
             href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-            className="px-4 py-2 bg-black text-white rounded"
+            className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
           >
-            New Sale
+            ➕ নতুন বিক্রি
           </Link>
         </div>
       </div>
 
       {sales.length === 0 ? (
-        <p>No sales yet for this shop.</p>
+        <p className="text-center text-gray-600 py-8">এখনও কোনো বিক্রি নেই।</p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {sales.map((s) => (
             <div
               key={s.id}
-              className="border rounded p-3 flex justify-between items-center"
+              className="bg-white border border-gray-200 rounded-lg p-6 flex justify-between items-center hover:shadow-md transition-shadow"
             >
-              <div className="space-y-1">
-                <p className="font-semibold">Total: {s.totalAmount}</p>
-                <p className="text-sm text-gray-600">
-                  Payment: {s.paymentMethod || "cash"}
+              <div className="space-y-2">
+                <p className="text-2xl font-bold text-gray-900">{s.totalAmount} ৳</p>
+                <p className="text-base text-gray-600">
+                  পেমেন্ট: {s.paymentMethod === "due" ? "ধার" : s.paymentMethod === "cash" ? "ক্যাশ" : s.paymentMethod}
                   {s.paymentMethod === "due" && s.customerName
-                    ? ` • Customer: ${s.customerName}`
+                    ? ` • গ্রাহক: ${s.customerName}`
                     : ""}
                 </p>
                 {s.itemCount > 0 && (
-                  <p className="text-xs text-gray-500">
-                    Items: {s.itemPreview || `${s.itemCount} item(s)`}
+                  <p className="text-sm text-gray-500">
+                    পণ্য: {s.itemPreview || `${s.itemCount} টি`}
                   </p>
                 )}
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-sm text-gray-500">
                 {s.createdAt
-                  ? new Date(s.createdAt as any).toLocaleString()
+                  ? new Date(s.createdAt as any).toLocaleString("bn-BD")
                   : ""}
               </p>
             </div>

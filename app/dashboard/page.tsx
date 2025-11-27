@@ -18,9 +18,9 @@ export default async function DashboardPage() {
 
   if (!shops || shops.length === 0) {
     return (
-      <div className="p-6">
-        <h1 className="text-xl font-bold">Dashboard</h1>
-        <p className="mt-2">First create a shop.</p>
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold text-gray-900">ড্যাশবোর্ড</h1>
+        <p className="mt-4 text-gray-600">প্রথমে একটি দোকান তৈরি করুন।</p>
       </div>
     );
   }
@@ -29,11 +29,13 @@ export default async function DashboardPage() {
   const summary = await fetchSummary(shopId);
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Dashboard Overview</h1>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">ড্যাশবোর্ড</h1>
+      </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Summary Cards - 2x2 Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card
           title="আজকের বিক্রি"
           value={`${(summary?.sales ?? 0).toFixed(2)} ৳`}
@@ -58,6 +60,22 @@ export default async function DashboardPage() {
           color="bg-yellow-500"
         />
       </div>
+
+      {/* Quick Action Buttons */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <a
+          href="/dashboard/sales/new"
+          className="block btn-primary text-center py-4 text-lg"
+        >
+          ➕ নতুন বিক্রি শুরু করুন
+        </a>
+        <a
+          href="/dashboard/due"
+          className="block bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-lg py-4 text-lg text-center transition-colors"
+        >
+          📝 ধার / বাকি লিখে রাখুন
+        </a>
+      </div>
     </div>
   );
 }
@@ -72,9 +90,9 @@ function Card({
   color: string;
 }) {
   return (
-    <div className={`p-4 rounded text-white ${color}`}>
-      <p className="text-sm opacity-90">{title}</p>
-      <h2 className="text-xl font-bold">{value}</h2>
+    <div className={`p-8 rounded-lg text-white ${color} shadow-md hover:shadow-lg transition-shadow`}>
+      <p className="text-base opacity-90 mb-3">{title}</p>
+      <h2 className="text-3xl font-bold">{value}</h2>
     </div>
   );
 }

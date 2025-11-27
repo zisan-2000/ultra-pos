@@ -23,11 +23,11 @@ export function QuickDateFilter({ onSelect }: Props) {
           setActive("today");
           onSelect(format(today), format(today));
         }}
-        className={`px-2 py-1 border rounded text-xs ${
-          active === "today" ? "bg-black text-white" : ""
+        className={`px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
+          active === "today" ? "bg-green-600 text-white border-green-600" : "border-gray-300 text-gray-900 hover:bg-gray-100"
         }`}
       >
-        Today
+        আজ
       </button>
 
       <button
@@ -35,11 +35,11 @@ export function QuickDateFilter({ onSelect }: Props) {
           setActive("month");
           onSelect(format(firstOfMonth), format(today));
         }}
-        className={`px-2 py-1 border rounded text-xs ${
-          active === "month" ? "bg-black text-white" : ""
+        className={`px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
+          active === "month" ? "bg-green-600 text-white border-green-600" : "border-gray-300 text-gray-900 hover:bg-gray-100"
         }`}
       >
-        This Month
+        এই মাস
       </button>
 
       <button
@@ -47,11 +47,11 @@ export function QuickDateFilter({ onSelect }: Props) {
           setActive("all");
           onSelect(undefined, undefined);
         }}
-        className={`px-2 py-1 border rounded text-xs ${
-          active === "all" ? "bg-black text-white" : ""
+        className={`px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
+          active === "all" ? "bg-green-600 text-white border-green-600" : "border-gray-300 text-gray-900 hover:bg-gray-100"
         }`}
       >
-        All Time
+        সব সময়
       </button>
     </div>
   );

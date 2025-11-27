@@ -4,65 +4,79 @@
 import Link from "next/link";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import LogoutButton from "@/components/LogoutButton";
+import { usePathname } from "next/navigation";
 
 export default function DashboardLayout({ children }: any) {
   const online = useOnlineStatus();
+  const pathname = usePathname();
+
+  const navItems = [
+    { href: "/dashboard", label: "ড্যাশবোর্ড" },
+    { href: "/dashboard/shops", label: "দোকান" },
+    { href: "/dashboard/products", label: "পণ্য" },
+    { href: "/dashboard/sales", label: "বিক্রি" },
+    { href: "/dashboard/expenses", label: "খরচ" },
+    { href: "/dashboard/due", label: "ধার / বাকি" },
+    { href: "/dashboard/cash", label: "ক্যাশ খাতা" },
+    { href: "/dashboard/reports", label: "রিপোর্ট" },
+  ];
+
+  const isActive = (href: string) => {
+    if (href === "/dashboard") return pathname === "/dashboard";
+    return pathname.startsWith(href);
+  };
 
   return (
-    <div className="flex">
+    <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
-      <aside className="w-64 h-screen bg-gray-100 p-4 space-y-3">
-        <h2 className="text-lg font-bold">Task</h2>
+      <aside className="w-64 h-screen bg-white border-r border-gray-200 p-6 overflow-y-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">আল্ট্রা পিওএস</h1>
+          <p className="text-sm text-gray-500 mt-1">দোকানের হিসাব</p>
+        </div>
 
-        <nav className="space-y-2">
-          <Link href="/dashboard" className="block p-2">
-            Dashboard
-          </Link>
-          <Link href="/dashboard/shops" className="block p-2">
-            Shops
-          </Link>
-          <Link href="/dashboard/products" className="block p-2">
-            Products
-          </Link>
-          <Link href="/dashboard/sales" className="block p-2">
-            Sales
-          </Link>
-          <Link href="/dashboard/expenses" className="block p-2">
-            Expenses
-          </Link>
-          <Link href="/dashboard/due" className="block p-2">
-            Customer Due
-          </Link>
-          <Link href="/dashboard/cash" className="block p-2">
-            Cashbook
-          </Link>
-          <Link href="/dashboard/reports" className="block p-2">
-            Reports
-          </Link>
+        <nav className="space-y-1">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`block px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                isActive(item.href)
+                  ? "bg-green-50 text-green-700 border-l-4 border-green-600"
+                  : "text-gray-700 hover:bg-gray-100"
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
         </nav>
+
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <LogoutButton />
+        </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 p-6">
-        <header className="border-b pb-4 mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Dashboard</h1>
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">
+          <div></div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <span
-              className={`text-xs px-2 py-1 rounded ${
+              className={`text-sm px-3 py-1 rounded-full font-medium ${
                 online
                   ? "bg-green-100 text-green-700"
                   : "bg-red-100 text-red-700"
               }`}
             >
-              {online ? "Online" : "Offline"}
+              {online ? "অনলাইন" : "অফলাইন"}
             </span>
-
-            <LogoutButton />
           </div>
         </header>
 
-        {children}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-8">{children}</div>
+        </div>
       </main>
     </div>
   );

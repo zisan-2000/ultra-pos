@@ -13,9 +13,9 @@ export default async function DuePage({ searchParams }: DuePageProps) {
 
   if (!shops || shops.length === 0) {
     return (
-      <div>
-        <h1 className="text-2xl font-bold mb-4">Customer Due</h1>
-        <p>You need to create a shop first.</p>
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-gray-900">ধার / বাকি</h1>
+        <p className="text-gray-600">প্রথমে একটি দোকান তৈরি করুন।</p>
       </div>
     );
   }
@@ -34,16 +34,15 @@ export default async function DuePage({ searchParams }: DuePageProps) {
   ]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Customer Due / Udhar</h1>
-          <p className="text-sm text-gray-600">
-            Shop: <span className="font-semibold">{selectedShop.name}</span>
+          <h1 className="text-3xl font-bold text-gray-900">ধার / বাকি</h1>
+          <p className="text-sm text-gray-500 mt-2">
+            দোকান: <span className="font-semibold">{selectedShop.name}</span>
           </p>
-          <p className="text-xs text-gray-500">
-            Ultra-simple ledger: add customer, record due sale, take payment,
-            share statement.
+          <p className="text-base text-gray-600 mt-2">
+            গ্রাহকদের ধার-বাকি লিখে রাখুন এবং পেমেন্ট নিন।
           </p>
         </div>
 

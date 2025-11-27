@@ -56,19 +56,19 @@ export default function CashbookReport({ shopId }: { shopId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold">Cashbook Report</h2>
+          <h2 className="text-lg font-bold text-gray-900">ক্যাশ খাতা রিপোর্ট</h2>
           <p className="text-xs text-gray-500">
-            Instant cash in/out list. No charts to slow you down.
+            দ্রুত ক্যাশ ইন/আউট তালিকা।
           </p>
         </div>
         <QuickDateFilter onSelect={load} />
       </div>
 
       <div className="flex flex-wrap gap-4 text-sm font-semibold">
-        <span className="text-green-700">Cash In: {totalIn.toFixed(2)} ?</span>
-        <span className="text-red-700">Cash Out: {totalOut.toFixed(2)} ?</span>
+        <span className="text-green-700">ক্যাশ ইন: {totalIn.toFixed(2)} ৳</span>
+        <span className="text-red-700">ক্যাশ আউট: {totalOut.toFixed(2)} ৳</span>
         <span className="text-blue-700">
-          Balance: {(totalIn - totalOut).toFixed(2)} ?
+          ব্যালেন্স: {(totalIn - totalOut).toFixed(2)} ৳
         </span>
         <button
           onClick={() => {
@@ -78,22 +78,22 @@ export default function CashbookReport({ shopId }: { shopId: string }) {
             );
             downloadFile("cashbook-report.csv", csv);
           }}
-          className="px-3 py-1 border rounded text-sm font-normal"
+          className="px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-900 hover:bg-gray-100 transition-colors"
         >
-          Export CSV
+          CSV ডাউনলোড করুন
         </button>
       </div>
 
-      <div className="border rounded p-3 mt-3 space-y-2">
+      <div className="border border-gray-200 rounded-lg p-4 mt-3 space-y-2">
         {loading ? (
-          <p className="text-sm text-gray-500">Loading...</p>
+          <p className="text-sm text-gray-500 text-center py-4">লোড হচ্ছে...</p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-gray-500">No cash entries found</p>
+          <p className="text-sm text-gray-500 text-center py-4">কোনো ক্যাশ এন্ট্রি পাওয়া যায়নি</p>
         ) : (
           items.map((e) => (
             <div
               key={e.id}
-              className="border p-2 rounded flex justify-between items-center"
+              className="border border-gray-200 p-3 rounded-lg flex justify-between items-start hover:bg-gray-50 transition-colors"
             >
               <div>
                 <p
@@ -101,17 +101,17 @@ export default function CashbookReport({ shopId }: { shopId: string }) {
                     e.entryType === "IN" ? "text-green-600" : "text-red-600"
                   }`}
                 >
-                  {e.entryType === "IN" ? "+" : "-"}
-                  {e.amount} ?
+                  {e.entryType === "IN" ? "✓ +" : "✗ -"}
+                  {e.amount} ৳
                 </p>
 
                 {e.reason && (
-                  <p className="text-sm text-gray-600">{e.reason}</p>
+                  <p className="text-sm text-gray-600 mt-1">{e.reason}</p>
                 )}
               </div>
 
               <p className="text-xs text-gray-500">
-                {new Date(e.createdAt).toLocaleString()}
+                {new Date(e.createdAt).toLocaleDateString("bn-BD")}
               </p>
             </div>
           ))

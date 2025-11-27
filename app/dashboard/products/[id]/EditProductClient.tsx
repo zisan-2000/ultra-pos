@@ -29,57 +29,100 @@ export default function EditProductClient({ product }: any) {
 
     if (online) {
       await updateProduct(product.id, updatePayload);
+      alert("পণ্য সফলভাবে আপডেট হয়েছে।");
     } else {
       await db.products.put(updatePayload);
       await queueAdd("product", "update", updatePayload);
-      alert("Updated offline. Will sync later.");
+      alert("পণ্য অফলাইনে আপডেট হয়েছে। এটি পরে সিঙ্ক হবে।");
     }
 
     router.push(`/dashboard/products?shopId=${shopId}`);
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
-      <h1 className="text-xl font-bold">Edit Product</h1>
+    <div className="max-w-2xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">পণ্য সম্পাদনা করুন</h1>
+        <p className="text-gray-600 mt-2">পণ্যের তথ্য পরিবর্তন করুন এবং সংরক্ষণ করুন।</p>
+      </div>
 
-      <input
-        name="name"
-        defaultValue={product.name}
-        className="border p-2 w-full"
-        required
-      />
+      <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
+        
+        {/* Product Name */}
+        <div className="space-y-2">
+          <label className="block text-base font-medium text-gray-900">পণ্যের নাম *</label>
+          <input
+            name="name"
+            defaultValue={product.name}
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="যেমন: চাল, ডাল, তেল..."
+            required
+          />
+          <p className="text-sm text-gray-500">পণ্যের সুস্পষ্ট নাম লিখুন।</p>
+        </div>
 
-      <input
-        name="sellPrice"
-        type="number"
-        step="0.01"
-        min="0"
-        defaultValue={product.sellPrice}
-        className="border p-2 w-full"
-        required
-      />
+        {/* Sell Price */}
+        <div className="space-y-2">
+          <label className="block text-base font-medium text-gray-900">বিক্রয় মূল্য (৳) *</label>
+          <input
+            name="sellPrice"
+            type="number"
+            step="0.01"
+            min="0"
+            defaultValue={product.sellPrice}
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="যেমন: 50, 100.50"
+            required
+          />
+          <p className="text-sm text-gray-500">গ্রাহকদের কাছে যে দামে বিক্রি করবেন।</p>
+        </div>
 
-      <input
-        name="stockQty"
-        type="number"
-        step="0.01"
-        min="0"
-        defaultValue={product.stockQty}
-        className="border p-2 w-full"
-      />
+        {/* Stock Quantity */}
+        <div className="space-y-2">
+          <label className="block text-base font-medium text-gray-900">বর্তমান স্টক</label>
+          <input
+            name="stockQty"
+            type="number"
+            step="0.01"
+            min="0"
+            defaultValue={product.stockQty}
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="যেমন: 10, 50"
+          />
+          <p className="text-sm text-gray-500">এখন কতটি পণ্য স্টকে আছে।</p>
+        </div>
 
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          name="isActive"
-          defaultChecked={product.isActive}
-        />
-        Active
-      </label>
+        {/* Active Status */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="isActive"
+              defaultChecked={product.isActive}
+              className="w-5 h-5 border border-gray-300 rounded cursor-pointer"
+            />
+            <span className="text-base font-medium text-gray-900">এই পণ্য সক্রিয় রাখুন</span>
+          </label>
+          <p className="text-sm text-gray-500">অসক্রিয় পণ্য বিক্রয় তালিকায় দেখা যাবে না।</p>
+        </div>
 
-      <button className="px-4 py-2 bg-black text-white rounded">
-        Update Product
-      </button>
-    </form>
+        {/* Buttons */}
+        <div className="flex gap-3 pt-4">
+          <button 
+            type="submit"
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
+          >
+            ✓ পরিবর্তন সংরক্ষণ করুন
+          </button>
+          <button 
+            type="button"
+            onClick={() => router.back()}
+            className="flex-1 border border-gray-300 text-gray-900 font-medium py-4 px-6 rounded-lg text-lg hover:bg-gray-100 transition-colors"
+          >
+            বাতিল করুন
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

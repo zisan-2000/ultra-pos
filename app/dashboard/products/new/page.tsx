@@ -18,9 +18,9 @@ function ProductForm() {
 
   if (!shopId) {
     return (
-      <div>
-        <h1 className="text-xl font-bold mb-4">Create Product</h1>
-        <p>You must select a shop first.</p>
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-gray-900">নতুন পণ্য</h1>
+        <p className="text-gray-600">প্রথমে একটি দোকান বাছাই করুন।</p>
       </div>
     );
   }
@@ -43,55 +43,99 @@ function ProductForm() {
 
     if (online) {
       await createProduct(payload);
+      alert("পণ্য সফলভাবে যোগ হয়েছে।");
     } else {
       await db.products.put(payload);
       await queueAdd("product", "create", payload);
-      alert("Product saved offline. It will sync automatically.");
+      alert("পণ্য অফলাইনে সংরক্ষিত হয়েছে। এটি স্বয়ংক্রিয়ভাবে সিঙ্ক হবে।");
     }
 
     router.push(`/dashboard/products?shopId=${ensuredShopId}`);
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
-      <h1 className="text-xl font-bold">Create Product</h1>
+    <div className="max-w-2xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">নতুন পণ্য যোগ করুন</h1>
+        <p className="text-gray-600 mt-2">পণ্যের বিবরণ লিখুন এবং সংরক্ষণ করুন।</p>
+      </div>
 
-      <input
-        name="name"
-        className="border p-2 w-full"
-        placeholder="Product Name"
-        required
-      />
+      <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
+        
+        {/* Product Name */}
+        <div className="space-y-2">
+          <label className="block text-base font-medium text-gray-900">পণ্যের নাম *</label>
+          <input
+            name="name"
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="যেমন: চাল, ডাল, তেল..."
+            required
+          />
+          <p className="text-sm text-gray-500">পণ্যের সুস্পষ্ট নাম লিখুন।</p>
+        </div>
 
-      <input
-        name="sellPrice"
-        type="number"
-        step="0.01"
-        min="0"
-        className="border p-2 w-full"
-        placeholder="Sell Price"
-        required
-      />
+        {/* Sell Price */}
+        <div className="space-y-2">
+          <label className="block text-base font-medium text-gray-900">বিক্রয় মূল্য (৳) *</label>
+          <input
+            name="sellPrice"
+            type="number"
+            step="0.01"
+            min="0"
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="যেমন: 50, 100.50"
+            required
+          />
+          <p className="text-sm text-gray-500">গ্রাহকদের কাছে যে দামে বিক্রি করবেন।</p>
+        </div>
 
-      <input
-        name="stockQty"
-        type="number"
-        step="0.01"
-        min="0"
-        defaultValue="0"
-        className="border p-2 w-full"
-        placeholder="Initial Stock"
-      />
+        {/* Initial Stock */}
+        <div className="space-y-2">
+          <label className="block text-base font-medium text-gray-900">প্রাথমিক স্টক</label>
+          <input
+            name="stockQty"
+            type="number"
+            step="0.01"
+            min="0"
+            defaultValue="0"
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="যেমন: 10, 50"
+          />
+          <p className="text-sm text-gray-500">এখন কতটি পণ্য স্টকে আছে।</p>
+        </div>
 
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="isActive" defaultChecked />
-        Active
-      </label>
+        {/* Active Status */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input 
+              type="checkbox" 
+              name="isActive" 
+              defaultChecked
+              className="w-5 h-5 border border-gray-300 rounded cursor-pointer"
+            />
+            <span className="text-base font-medium text-gray-900">এই পণ্য সক্রিয় রাখুন</span>
+          </label>
+          <p className="text-sm text-gray-500">অসক্রিয় পণ্য বিক্রয় তালিকায় দেখা যাবে না।</p>
+        </div>
 
-      <button className="px-4 py-2 bg-black text-white rounded">
-        Save Product
-      </button>
-    </form>
+        {/* Buttons */}
+        <div className="flex gap-3 pt-4">
+          <button 
+            type="submit"
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
+          >
+            ✓ পণ্য সংরক্ষণ করুন
+          </button>
+          <button 
+            type="button"
+            onClick={() => router.back()}
+            className="flex-1 border border-gray-300 text-gray-900 font-medium py-4 px-6 rounded-lg text-lg hover:bg-gray-100 transition-colors"
+          >
+            বাতিল করুন
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 

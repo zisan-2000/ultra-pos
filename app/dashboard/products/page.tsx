@@ -8,14 +8,14 @@ export default async function ProductsPage() {
 
   if (!shops || shops.length === 0) {
     return (
-      <div>
-        <h1 className="text-xl font-bold mb-4">Products</h1>
-        <p className="mb-4">You don’t have any shop yet.</p>
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-gray-900">পণ্য তালিকা</h1>
+        <p className="mb-6 text-gray-600">এখনও কোনো দোকান নেই।</p>
         <Link
           href="/dashboard/shops/new"
-          className="px-4 py-2 bg-black text-white rounded"
+          className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
         >
-          Create Shop
+          দোকান তৈরি করুন
         </Link>
       </div>
     );

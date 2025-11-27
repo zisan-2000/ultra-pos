@@ -17,14 +17,14 @@ export default async function ExpensesPage({
 
   if (!shops || shops.length === 0) {
     return (
-      <div>
-        <h1 className="text-xl font-bold mb-4">Expenses</h1>
-        <p className="mb-4">You don&apos;t have any shop yet.</p>
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-gray-900">খরচের তালিকা</h1>
+        <p className="mb-6 text-gray-600">এখনও কোনো দোকান নেই।</p>
         <Link
           href="/dashboard/shops/new"
-          className="px-4 py-2 bg-black text-white rounded"
+          className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
         >
-          Create your first shop
+          প্রথম দোকান তৈরি করুন
         </Link>
       </div>
     );
@@ -42,47 +42,50 @@ export default async function ExpensesPage({
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-xl font-bold">Expenses</h1>
-          <p className="text-sm text-gray-600">
-            Shop: <span className="font-semibold">{selectedShop.name}</span>
+          <h1 className="text-3xl font-bold text-gray-900">খরচের তালিকা</h1>
+          <p className="text-base text-gray-600 mt-2">
+            আজ কী কী খরচ করলেন, লিখে রাখুন।
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            দোকান: <span className="font-semibold">{selectedShop.name}</span>
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
 
           <Link
             href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
-            className="px-4 py-2 bg-black text-white rounded"
+            className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
           >
-            New Expense
+            ➕ নতুন খরচ
           </Link>
         </div>
       </div>
 
       {rows.length === 0 ? (
-        <p>No expenses for this shop yet.</p>
+        <p className="text-center text-gray-600 py-8">এখনও কোনো খরচ নেই।</p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {rows.map((e) => (
             <div
               key={e.id}
-              className="border rounded p-3 flex justify-between items-center"
+              className="bg-white border border-gray-200 rounded-lg p-6 flex justify-between items-center hover:shadow-md transition-shadow"
             >
               <div>
-                <p className="font-semibold">৳ {e.amount}</p>
-                <p className="text-sm text-gray-700">{e.category}</p>
-                <p className="text-xs text-gray-500">{e.expenseDate}</p>
+                <p className="text-2xl font-bold text-gray-900">{e.amount} ৳</p>
+                <p className="text-base text-gray-700 mt-2">{e.category}</p>
+                <p className="text-sm text-gray-500 mt-1">তারিখ: {e.expenseDate}</p>
               </div>
 
               <div className="flex gap-2 items-center">
                 <Link
                   href={`/dashboard/expenses/${e.id}`}
-                  className="px-3 py-1 border rounded"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                 >
-                  Edit
+                  এডিট
                 </Link>
 
                 <form
@@ -94,8 +97,8 @@ export default async function ExpensesPage({
                     await deleteExpense(e.id);
                   }}
                 >
-                  <button className="px-3 py-1 bg-red-500 text-white rounded text-sm">
-                    Delete
+                  <button className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors">
+                    ডিলিট
                   </button>
                 </form>
               </div>

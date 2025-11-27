@@ -44,17 +44,17 @@ export default function ExpenseReport({ shopId }: { shopId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold">Expense Report</h2>
+          <h2 className="text-lg font-bold text-gray-900">খরচ রিপোর্ট</h2>
           <p className="text-xs text-gray-500">
-            Clear list for quick checks. Zero charts.
+            সহজ তালিকা, কোনো চার্ট নেই।
           </p>
         </div>
         <QuickDateFilter onSelect={load} />
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
-        <p className="text-sm font-semibold">
-          Total: {totalAmount.toFixed(2)} ?
+        <p className="text-sm font-semibold text-gray-900">
+          মোট: {totalAmount.toFixed(2)} ৳
         </p>
         <button
           onClick={() => {
@@ -64,31 +64,31 @@ export default function ExpenseReport({ shopId }: { shopId: string }) {
             );
             downloadFile("expenses-report.csv", csv);
           }}
-          className="px-3 py-1 border rounded text-sm"
+          className="px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-900 hover:bg-gray-100 transition-colors"
         >
-          Export CSV
+          CSV ডাউনলোড করুন
         </button>
       </div>
 
-      <div className="border rounded p-3 mt-3 space-y-2">
+      <div className="border border-gray-200 rounded-lg p-4 mt-3 space-y-2">
         {loading ? (
-          <p className="text-sm text-gray-500">Loading...</p>
+          <p className="text-sm text-gray-500 text-center py-4">লোড হচ্ছে...</p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-gray-500">No expenses found</p>
+          <p className="text-sm text-gray-500 text-center py-4">কোনো খরচ পাওয়া যায়নি</p>
         ) : (
           items.map((e) => (
             <div
               key={e.id}
-              className="border p-2 rounded flex justify-between items-center"
+              className="border border-gray-200 p-3 rounded-lg flex justify-between items-start hover:bg-gray-50 transition-colors"
             >
               <div>
-                <p className="font-semibold">{e.amount} ?</p>
-                <p className="text-sm text-gray-700">{e.category}</p>
-                {e.note && <p className="text-xs text-gray-500">{e.note}</p>}
+                <p className="font-semibold text-gray-900">{e.amount} ৳</p>
+                <p className="text-sm text-gray-600">{e.category}</p>
+                {e.note && <p className="text-xs text-gray-500 mt-1">{e.note}</p>}
               </div>
 
               <p className="text-xs text-gray-500">
-                {new Date(e.expenseDate).toLocaleString()}
+                {new Date(e.expenseDate).toLocaleDateString("bn-BD")}
               </p>
             </div>
           ))

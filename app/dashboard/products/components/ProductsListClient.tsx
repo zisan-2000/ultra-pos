@@ -20,50 +20,55 @@ export default function ProductsListClient({ shops, serverProducts }: any) {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-xl font-bold">Products</h1>
-          <p className="text-sm text-gray-600">
-            Manage products for this shop.
+          <h1 className="text-3xl font-bold text-gray-900">পণ্য তালিকা</h1>
+          <p className="text-base text-gray-600 mt-2">
+            এই দোকানের সব পণ্য দেখুন এবং পরিচালনা করুন।
           </p>
         </div>
 
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-3 items-center">
           <ShopSwitcherClient shops={shops} />
           <Link
             href={`/dashboard/products/new?shopId=${shopId}`}
-            className="px-4 py-2 bg-black text-white rounded"
+            className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
           >
-            New Product
+            ➕ নতুন পণ্য
           </Link>
         </div>
       </div>
 
       {products.length === 0 ? (
-        <p>No products available.</p>
+        <p className="text-center text-gray-600 py-8">কোনো পণ্য নেই।</p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {products.map((product: any) => (
             <div
               key={product.id}
-              className="border rounded p-3 flex justify-between"
+              className="bg-white border border-gray-200 rounded-lg p-6 flex justify-between items-center hover:shadow-md transition-shadow"
             >
               <div>
-                <h2 className="font-semibold">{product.name}</h2>
-                <p className="text-sm text-gray-600">
-                  Price: {product.sellPrice} | Stock: {product.stockQty}
+                <h2 className="text-lg font-semibold text-gray-900">{product.name}</h2>
+                <p className="text-base text-gray-600 mt-2">
+                  দাম: {product.sellPrice} ৳ | স্টক: {product.stockQty}
                 </p>
-                <p className="text-xs">
-                  {product.isActive ? "Active" : "Inactive"}
+                <p className="text-sm text-gray-500 mt-1">
+                  অবস্থা: {product.isActive ? "সক্রিয়" : "নিষ্ক্রিয়"}
                 </p>
               </div>
 
-              <Link
-                href={`/dashboard/products/${product.id}`}
-                className="px-3 py-1 border rounded"
-              >
-                Edit
-              </Link>
+              <div className="flex gap-2">
+                <Link
+                  href={`/dashboard/products/${product.id}`}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                >
+                  এডিট
+                </Link>
+                <button className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors">
+                  ডিলিট
+                </button>
+              </div>
             </div>
           ))}
         </div>
