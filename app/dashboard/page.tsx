@@ -39,13 +39,13 @@ export default async function DashboardPage() {
         <Card
           title="আজকের বিক্রি"
           value={`${(summary?.sales ?? 0).toFixed(2)} ৳`}
-          color="bg-green-600"
+          color="bg-emerald-500"
         />
 
         <Card
           title="আজকের খরচ"
           value={`${(summary?.expenses ?? 0).toFixed(2)} ৳`}
-          color="bg-red-600"
+          color="bg-red-500"
         />
 
         <Card
@@ -57,7 +57,7 @@ export default async function DashboardPage() {
         <Card
           title="ক্যাশ ব্যালেন্স"
           value={`${(summary?.balance ?? 0).toFixed(2)} ৳`}
-          color="bg-yellow-500"
+          color="bg-amber-400"
         />
       </div>
 
@@ -65,13 +65,13 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <a
           href="/dashboard/sales/new"
-          className="block btn-primary text-center py-4 text-lg"
+          className="block bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg py-4 text-lg text-center transition-colors"
         >
           ➕ নতুন বিক্রি শুরু করুন
         </a>
         <a
           href="/dashboard/due"
-          className="block bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-lg py-4 text-lg text-center transition-colors"
+          className="block bg-cyan-500 hover:bg-cyan-600 text-white font-bold rounded-lg py-4 text-lg text-center transition-colors"
         >
           📝 ধার / বাকি লিখে রাখুন
         </a>

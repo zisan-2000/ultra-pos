@@ -16,7 +16,7 @@ export default async function ShopsPage() {
         </div>
         <Link
           href="/dashboard/shops/new"
-          className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition-colors text-center"
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition-colors text-center"
         >
           + নতুন দোকান যোগ করুন
         </Link>
@@ -27,7 +27,7 @@ export default async function ShopsPage() {
           <p className="text-gray-600 mb-4">এখনও কোনো দোকান নেই।</p>
           <Link
             href="/dashboard/shops/new"
-            className="inline-block bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+            className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
           >
             প্রথম দোকান তৈরি করুন
           </Link>
@@ -49,7 +49,7 @@ export default async function ShopsPage() {
                 </p>
               </div>
 
-              <div className="flex gap-3 pt-4 border-t border-gray-200">
+              <div className="flex gap-3 pt-4 border-t border-slate-200">
                 <Link
                   href={`/dashboard/shops/${shop.id}`}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-center transition-colors"
@@ -64,7 +64,7 @@ export default async function ShopsPage() {
                   }}
                   className="flex-1"
                 >
-                  <button className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+                  <button className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors">
                     🗑️ মুছে ফেলুন
                   </button>
                 </form>

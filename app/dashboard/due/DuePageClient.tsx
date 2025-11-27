@@ -263,7 +263,7 @@ export default function DuePageClient({
               </div>
               <button 
                 type="submit"
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
               >
                 ✓ গ্রাহক যোগ করুন
               </button>
@@ -319,7 +319,7 @@ export default function DuePageClient({
               <button
                 type="submit"
                 disabled={!paymentForm.customerId || !paymentForm.amount || savingPayment}
-                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
+                className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
               >
                 {savingPayment ? "সংরক্ষণ করছে..." : "✓ পেমেন্ট রেকর্ড করুন"}
               </button>

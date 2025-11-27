@@ -112,18 +112,18 @@ export function PosPageClient({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-screen overflow-hidden">
       {/* Left: Products */}
       <div className="lg:col-span-2 flex flex-col overflow-hidden">
-        <div className="mb-6 pb-4 border-b border-gray-200">
+        <div className="mb-6 pb-4 border-b border-slate-200">
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">নতুন বিক্রি</h1>
-              <p className="text-base text-gray-600 mt-2">
+              <h1 className="text-3xl font-bold text-slate-900">নতুন বিক্রি</h1>
+              <p className="text-base text-slate-600 mt-2">
                 দোকান: <span className="font-semibold">{shopName}</span>
               </p>
             </div>
 
             <span
               className={`text-sm px-4 py-2 rounded-full font-medium ${
-                online ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                online ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
               }`}
             >
               {online ? "অনলাইন" : "অফলাইন"}
@@ -137,29 +137,29 @@ export function PosPageClient({
       </div>
 
       {/* Right: Cart */}
-      <div className="lg:col-span-1 bg-gray-50 rounded-lg p-6 flex flex-col overflow-hidden border border-gray-200">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">বর্তমান বিল</h2>
+      <div className="lg:col-span-1 bg-slate-50 rounded-lg p-6 flex flex-col overflow-hidden border border-slate-200">
+        <h2 className="text-2xl font-bold text-slate-900 mb-6">বর্তমান বিল</h2>
 
         <div className="flex-1 overflow-y-auto mb-6 space-y-3 pr-2">
           {items.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">বিল খালি আছে</p>
+            <p className="text-center text-slate-500 py-8">বিল খালি আছে</p>
           ) : (
             items.map((i) => <PosCartItem key={i.productId} item={i} />)
           )}
         </div>
 
         {/* Summary Section */}
-        <div className="border-t border-gray-300 pt-4 space-y-4">
+        <div className="border-t border-slate-300 pt-4 space-y-4">
           <div className="bg-white rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">মোট পরিমাণ</p>
-            <p className="text-3xl font-bold text-gray-900">
+            <p className="text-sm text-slate-600 mb-1">মোট পরিমাণ</p>
+            <p className="text-3xl font-bold text-slate-900">
               {totalAmount().toFixed(2)} ৳
             </p>
           </div>
 
           {/* Payment Method */}
           <div className="space-y-2">
-            <label className="text-base font-medium text-gray-900">পেমেন্ট পদ্ধতি</label>
+            <label className="text-base font-medium text-slate-900">পেমেন্ট পদ্ধতি</label>
             <div className="grid grid-cols-2 gap-2">
               {[
                 { value: "cash", label: "ক্যাশ" },
@@ -171,8 +171,8 @@ export function PosPageClient({
                   onClick={() => setPaymentMethod(method.value)}
                   className={`py-3 px-3 rounded-lg font-medium text-base transition-colors ${
                     paymentMethod === method.value
-                      ? "bg-green-600 text-white"
-                      : "bg-white text-gray-900 border border-gray-300 hover:border-gray-400"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-slate-900 border border-slate-200 hover:border-slate-300"
                   }`}
                 >
                   {method.label}
@@ -184,9 +184,9 @@ export function PosPageClient({
           {/* Customer Selection for Due */}
           {paymentMethod === "due" && (
             <div className="space-y-2">
-              <label className="text-base font-medium text-gray-900">গ্রাহক বাছাই করুন</label>
+              <label className="text-base font-medium text-slate-900">গ্রাহক বাছাই করুন</label>
               <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-base"
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
               >
@@ -212,7 +212,7 @@ export function PosPageClient({
           <button
             type="submit"
             disabled={items.length === 0}
-            className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold py-4 px-4 rounded-lg text-lg transition-colors"
+            className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-bold py-4 px-4 rounded-lg text-lg transition-colors"
           >
             ✓ বিল সম্পন্ন করুন
           </button>
@@ -220,7 +220,7 @@ export function PosPageClient({
           <button
             type="button"
             onClick={() => clear()}
-            className="w-full border border-gray-300 text-gray-900 font-medium py-3 px-4 rounded-lg text-base hover:bg-gray-100 transition-colors"
+            className="w-full border border-slate-200 text-slate-900 font-medium py-3 px-4 rounded-lg text-base hover:bg-slate-100 transition-colors"
           >
             বিল পরিষ্কার করুন
           </button>

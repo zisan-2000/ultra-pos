@@ -32,7 +32,7 @@ export default function ProductsListClient({ shops, serverProducts }: any) {
           <ShopSwitcherClient shops={shops} />
           <Link
             href={`/dashboard/products/new?shopId=${shopId}`}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
           >
             ➕ নতুন পণ্য
           </Link>
@@ -65,7 +65,7 @@ export default function ProductsListClient({ shops, serverProducts }: any) {
                 >
                   এডিট
                 </Link>
-                <button className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors">
+                <button className="px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors">
                   ডিলিট
                 </button>
               </div>

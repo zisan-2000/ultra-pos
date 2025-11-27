@@ -24,7 +24,7 @@ export function QuickDateFilter({ onSelect }: Props) {
           onSelect(format(today), format(today));
         }}
         className={`px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
-          active === "today" ? "bg-green-600 text-white border-green-600" : "border-gray-300 text-gray-900 hover:bg-gray-100"
+          active === "today" ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 text-slate-900 hover:bg-slate-100"
         }`}
       >
         আজ
@@ -36,7 +36,7 @@ export function QuickDateFilter({ onSelect }: Props) {
           onSelect(format(firstOfMonth), format(today));
         }}
         className={`px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
-          active === "month" ? "bg-green-600 text-white border-green-600" : "border-gray-300 text-gray-900 hover:bg-gray-100"
+          active === "month" ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 text-slate-900 hover:bg-slate-100"
         }`}
       >
         এই মাস
@@ -48,7 +48,7 @@ export function QuickDateFilter({ onSelect }: Props) {
           onSelect(undefined, undefined);
         }}
         className={`px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
-          active === "all" ? "bg-green-600 text-white border-green-600" : "border-gray-300 text-gray-900 hover:bg-gray-100"
+          active === "all" ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 text-slate-900 hover:bg-slate-100"
         }`}
       >
         সব সময়

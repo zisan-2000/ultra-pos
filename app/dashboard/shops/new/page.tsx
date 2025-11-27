@@ -30,7 +30,7 @@ export default function NewShopPage() {
           <label className="block text-base font-medium text-gray-900">দোকানের নাম *</label>
           <input
             name="name"
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-slate-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="যেমন: আমাদের দোকান"
             required
           />
@@ -42,7 +42,7 @@ export default function NewShopPage() {
           <label className="block text-base font-medium text-gray-900">ঠিকানা (ঐচ্ছিক)</label>
           <input
             name="address"
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-slate-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="যেমন: বাজার রোড, ঢাকা"
           />
           <p className="text-sm text-gray-500">দোকানের অবস্থান।</p>
@@ -53,7 +53,7 @@ export default function NewShopPage() {
           <label className="block text-base font-medium text-gray-900">ফোন নম্বর (ঐচ্ছিক)</label>
           <input 
             name="phone" 
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-slate-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="যেমন: 01700000000"
           />
           <p className="text-sm text-gray-500">দোকানের যোগাযোগ নম্বর।</p>
@@ -63,14 +63,14 @@ export default function NewShopPage() {
         <div className="flex gap-3 pt-4">
           <button 
             type="submit"
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
           >
             ✓ দোকান তৈরি করুন
           </button>
           <button 
             type="button"
             onClick={() => window.history.back()}
-            className="flex-1 border border-gray-300 text-gray-900 font-medium py-4 px-6 rounded-lg text-lg hover:bg-gray-100 transition-colors"
+            className="flex-1 border border-slate-300 text-slate-900 font-medium py-4 px-6 rounded-lg text-lg hover:bg-slate-100 transition-colors"
           >
             বাতিল করুন
           </button>

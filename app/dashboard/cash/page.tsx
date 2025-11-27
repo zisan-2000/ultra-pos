@@ -105,7 +105,7 @@ export default async function CashPage({ searchParams }: CashPageProps) {
                     await deleteCashEntry(e.id);
                   }}
                 >
-                  <button className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors">
+                  <button className="px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors">
                     ডিলিট
                   </button>
                 </form>

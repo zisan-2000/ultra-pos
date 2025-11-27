@@ -12,45 +12,63 @@
 
 @layer base {
   :root {
-    /* Base background & text */
-    --background: #ffffff;
-    --foreground: #222222;
+    /* ICONIC POS Color Palette - Light Mode */
+    
+    /* Background & Cards */
+    --background: #F8FAFC;
+    --card: #FFFFFF;
+    --card-foreground: #0F172A;
+    --foreground: #0F172A;
 
-    /* Primary (Blue) */
-    --primary: #0057ff;
-    --primary-foreground: #ffffff;
+    /* Primary Blue (Trust, Focus, Speed) */
+    --primary: #2563EB;
+    --primary-hover: #1D4ED8;
+    --primary-foreground: #FFFFFF;
 
-    /* Cards & muted areas */
-    --card: #f5f5f5;
-    --card-foreground: #222222;
+    /* Accent Colors */
+    --accent-sky: #0EA5E9;
+    --success: #10B981;
+    --destructive: #EF4444;
+    --warning: #FBBF24;
+    --info: #06B6D4;
+    --highlight: #8B5CF6;
 
-    --muted: #f5f5f5;
-    --muted-foreground: #666666;
+    /* Neutral Colors */
+    --header-gray: #F1F5F9;
+    --border: #E2E8F0;
+    --text-medium: #475569;
+    --text-muted: #94A3B8;
 
-    /* Borders */
-    --border: #e4e4e4;
-
-    /* Status colors */
-    --success: #1abc9c;
-    --warning: #ff9f43;
-    --destructive: #e74c3c;
+    /* Legacy support */
+    --muted: #F1F5F9;
+    --muted-foreground: #475569;
   }
 
-  /* optional dark mode (will be useful later) */
+  /* Dark Mode - Optional but recommended for night POS counters */
   .dark {
-    --background: #0a0a0a;
-    --foreground: #ffffff;
+    --background: #0F172A;
+    --card: #1E293B;
+    --card-foreground: #F8FAFC;
+    --foreground: #F8FAFC;
 
-    --card: #111111;
-    --card-foreground: #ffffff;
+    --primary: #2563EB;
+    --primary-hover: #1D4ED8;
+    --primary-foreground: #FFFFFF;
 
-    --muted: #1a1a1a;
-    --muted-foreground: #cccccc;
+    --accent-sky: #0EA5E9;
+    --success: #10B981;
+    --destructive: #EF4444;
+    --warning: #FBBF24;
+    --info: #06B6D4;
+    --highlight: #8B5CF6;
 
-    --border: #333333;
+    --header-gray: #334155;
+    --border: #334155;
+    --text-medium: #CBD5E1;
+    --text-muted: #94A3B8;
 
-    --primary: #0057ff;
-    --primary-foreground: #ffffff;
+    --muted: #1E293B;
+    --muted-foreground: #CBD5E1;
   }
 }
 
@@ -109,17 +127,21 @@ p, span, label, button {
   line-height: 1.5;
 }
 
-/* Button Styles */
+/* Button Styles - ICONIC POS Palette */
 .btn-primary {
-  @apply px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors text-base;
+  @apply px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors text-base;
 }
 
 .btn-secondary {
-  @apply px-6 py-3 bg-gray-200 text-gray-900 font-medium rounded-lg hover:bg-gray-300 transition-colors text-base;
+  @apply px-6 py-3 bg-slate-100 text-slate-900 font-medium rounded-lg hover:bg-slate-200 transition-colors text-base;
 }
 
 .btn-danger {
-  @apply px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors text-base;
+  @apply px-6 py-3 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition-colors text-base;
+}
+
+.btn-success {
+  @apply px-6 py-3 bg-emerald-500 text-white font-medium rounded-lg hover:bg-emerald-600 transition-colors text-base;
 }
 
 .btn-small {
@@ -128,5 +150,5 @@ p, span, label, button {
 
 /* Card Styles */
 .card {
-  @apply bg-white rounded-lg border border-gray-200 p-6 shadow-sm;
+  @apply bg-white rounded-lg border border-slate-200 p-6 shadow-sm;
 }
