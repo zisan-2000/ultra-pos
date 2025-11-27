@@ -34,6 +34,9 @@ function ProductForm() {
       id: crypto.randomUUID(),
       shopId: ensuredShopId,
       name: form.get("name") as string,
+      category:
+        ((form.get("category") as string) || "Uncategorized").trim() ||
+        "Uncategorized",
       sellPrice: form.get("sellPrice") as string,
       stockQty: form.get("stockQty") as string,
       isActive: form.get("isActive") === "on",
@@ -72,6 +75,32 @@ function ProductForm() {
             required
           />
           <p className="text-sm text-gray-500">পণ্যের সুস্পষ্ট নাম লিখুন।</p>
+        </div>
+
+
+        {/* Category */}
+        <div className="space-y-2">
+          <label className="block text-base font-medium text-gray-900">Category *</label>
+          <input
+            name="category"
+            list="category-suggestions"
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="e.g., Vegetables, Dairy, Snacks, Drinks"
+            required
+          />
+          <datalist id="category-suggestions">
+            <option value="Vegetables" />
+            <option value="Fruits" />
+            <option value="Dairy" />
+            <option value="Rice & Staples" />
+            <option value="Beverages" />
+            <option value="Snacks" />
+            <option value="Household" />
+            <option value="Personal Care" />
+          </datalist>
+          <p className="text-sm text-gray-500">
+            Product category is saved to the database so POS filters don't rely on guesses.
+          </p>
         </div>
 
         {/* Sell Price */}

@@ -14,6 +14,7 @@ import { createServerClientForRoute } from "@/lib/supabase";
 type CreateProductInput = {
   shopId: string;
   name: string;
+  category: string;
   sellPrice: string;
   stockQty: string;
   isActive: boolean;
@@ -21,6 +22,7 @@ type CreateProductInput = {
 
 type UpdateProductInput = {
   name?: string;
+  category?: string;
   sellPrice?: string;
   stockQty?: string;
   isActive?: boolean;
@@ -63,6 +65,7 @@ export async function createProduct(input: CreateProductInput) {
   await db.insert(products).values({
     shopId: input.shopId,
     name: input.name,
+    category: input.category || "Uncategorized",
     sellPrice: input.sellPrice,
     stockQty: input.stockQty,
     isActive: input.isActive,

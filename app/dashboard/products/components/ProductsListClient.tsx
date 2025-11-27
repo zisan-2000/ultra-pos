@@ -13,6 +13,7 @@ type Shop = { id: string; name: string };
 type Product = {
   id: string;
   name: string;
+  category: string;
   sellPrice: string;
   stockQty: string;
   isActive: boolean;
@@ -82,6 +83,7 @@ export default function ProductsListClient({ shops, activeShopId, serverProducts
             >
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{product.name}</h2>
+                <p className="text-sm text-gray-500 mt-1">Category: {product.category || "Uncategorized"}</p>
                 <p className="text-base text-gray-600 mt-2">
                   দাম: {product.sellPrice} ৳ | স্টক: {product.stockQty}
                 </p>

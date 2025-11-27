@@ -8,6 +8,7 @@ export type LocalProduct = {
   id: string;
   shopId: string;
   name: string;
+  category: string;
   sellPrice: string;
   stockQty: string;
   isActive: boolean;

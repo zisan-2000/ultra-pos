@@ -16,6 +16,7 @@ type PosPageClientProps = {
     name: string;
     sellPrice: string;
     stockQty?: string | number;
+    category?: string | null;
   }[];
   customers: {
     id: string;

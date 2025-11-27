@@ -42,6 +42,7 @@ export const products = pgTable(
     shopId: uuid("shop_id").notNull(), // references shops(id)
 
     name: text("name").notNull(),
+    category: text("category").notNull().default("Uncategorized"),
     sellPrice: numeric("sell_price", { precision: 12, scale: 2 }).notNull(),
     stockQty: numeric("stock_qty", { precision: 12, scale: 2 })
       .notNull()

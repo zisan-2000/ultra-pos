@@ -11,6 +11,7 @@ type PosProductSearchProps = {
     name: string;
     sellPrice: string;
     stockQty?: string | number;
+    category?: string | null;
   }[];
 };
 
@@ -27,28 +28,12 @@ type SpeechRecognitionInstance = {
   onerror: ((event: any) => void) | null;
   onend: (() => void) | null;
 };
-type CategoryPreset = { key: string; label: string; keywords?: string[] };
-
-const CATEGORY_PRESETS: CategoryPreset[] = [
-  { key: "vegetables", label: "Vegetables", keywords: ["alu", "potato", "onion", "tomato", "veg", "bean", "pepper", "spinach"] },
-  { key: "fruits", label: "Fruits", keywords: ["apple", "banana", "mango", "orange", "lemon", "berry", "fruit"] },
-  { key: "dairy", label: "Dairy", keywords: ["milk", "ghee", "cheese", "butter", "curd"] },
-  { key: "staples", label: "Rice & Staples", keywords: ["rice", "chal", "atta", "flour", "oil", "dal", "lentil", "salt", "sugar"] },
-  { key: "beverages", label: "Drinks", keywords: ["tea", "coffee", "juice", "water", "drink", "soft", "soda"] },
-  { key: "snacks", label: "Snacks", keywords: ["biscuit", "chips", "chocolate", "cake", "snack", "chanachur", "muri"] },
-  { key: "household", label: "Household", keywords: ["soap", "detergent", "cleaner", "toothpaste", "brush", "shampoo"] },
-  { key: "other", label: "Others" },
-];
 
 const QUICK_LIMIT = 12;
 
-function deriveCategory(name: string) {
-  const lower = name.toLowerCase();
-  const matched = CATEGORY_PRESETS.find(
-    (preset) => preset.key !== "other" && preset.keywords?.some((kw) => lower.includes(kw))
-  );
-
-  return matched?.key || "other";
+function normalizeCategory(raw?: string | null) {
+  const trimmed = (raw || "").trim();
+  return trimmed || "Uncategorized";
 }
 
 function toNumber(val: string | number | undefined) {
@@ -125,7 +110,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   };
 
   const productsWithCategory = useMemo<EnrichedProduct[]>(
-    () => products.map((p) => ({ ...p, category: deriveCategory(p.name) })),
+    () => products.map((p) => ({ ...p, category: normalizeCategory(p.category) })),
     [products]
   );
 
@@ -135,16 +120,16 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
       counts[p.category] = (counts[p.category] ?? 0) + 1;
     });
 
-    const visiblePresets = CATEGORY_PRESETS.filter(
-      (preset) => preset.key === "other" || counts[preset.key]
+    const sortedCategories = Object.entries(counts).sort(
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
     );
 
     return [
       { key: "all", label: "All", count: productsWithCategory.length },
-      ...visiblePresets.map((preset) => ({
-        key: preset.key,
-        label: preset.label,
-        count: counts[preset.key] ?? 0,
+      ...sortedCategories.map(([key, count]) => ({
+        key,
+        label: key,
+        count,
       })),
     ];
   }, [productsWithCategory]);
@@ -358,7 +343,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
               Stock: {stock.toFixed(0)}
             </span>
             <p className="text-xs text-slate-400 mt-2 capitalize">
-              {product.category.replace("&", "and")}
+              {(product.category || "Uncategorized").replace("&", "and")}
             </p>
           </div>
         </div>
