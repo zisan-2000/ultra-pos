@@ -57,6 +57,24 @@ export default function DuePageClient({
     description: "",
   });
 
+  // Reset all client state when shop changes to avoid leaking data across shops
+  useEffect(() => {
+    setCustomers(initialCustomers || []);
+    setSummary(initialSummary || { totalDue: 0, topDue: [] });
+    const firstId = initialCustomers?.[0]?.id || "";
+    setSelectedCustomerId(firstId);
+    setPaymentForm({
+      customerId: firstId,
+      amount: "",
+      description: "",
+    });
+    setStatement([]);
+    if (firstId) {
+      loadStatement(firstId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId, initialCustomers, initialSummary]);
+
   useEffect(() => {
     if (!selectedCustomerId && customers.length > 0) {
       setSelectedCustomerId(customers[0].id);

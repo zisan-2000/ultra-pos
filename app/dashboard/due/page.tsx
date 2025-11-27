@@ -50,6 +50,7 @@ export default async function DuePage({ searchParams }: DuePageProps) {
       </div>
 
       <DuePageClient
+        key={selectedShopId}
         shopId={selectedShopId}
         shopName={selectedShop.name}
         initialCustomers={customers as any}
