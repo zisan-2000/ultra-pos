@@ -2,6 +2,7 @@
 import { create } from "zustand";
 
 export type CartItem = {
+  shopId: string;
   productId: string;
   name: string;
   unitPrice: number;
@@ -10,8 +11,10 @@ export type CartItem = {
 };
 
 type CartState = {
+  currentShopId: string | null;
   items: CartItem[];
-  add: (item: { productId: string; name: string; unitPrice: number }) => void;
+  setShop: (shopId: string) => void;
+  add: (item: { shopId: string; productId: string; name: string; unitPrice: number }) => void;
   remove: (productId: string) => void;
   increase: (productId: string) => void;
   decrease: (productId: string) => void;
@@ -20,14 +23,41 @@ type CartState = {
 };
 
 export const useCart = create<CartState>((set, get) => ({
+  currentShopId: null,
   items: [],
 
+  setShop: (shopId) =>
+    set((state) =>
+      state.currentShopId === shopId
+        ? state
+        : {
+            currentShopId: shopId,
+            items: [], // reset cart when switching shops
+          }
+    ),
+
   add: (item) => {
-    const existing = get().items.find((i) => i.productId === item.productId);
+    const { currentShopId, items } = get();
+
+    // If shop changed (or not set yet), reset cart to this shop before adding
+    if (!currentShopId || currentShopId !== item.shopId) {
+      return set({
+        currentShopId: item.shopId,
+        items: [
+          {
+            ...item,
+            qty: 1,
+            total: item.unitPrice,
+          },
+        ],
+      });
+    }
+
+    const existing = items.find((i) => i.productId === item.productId);
 
     if (existing) {
       return set({
-        items: get().items.map((i) =>
+        items: items.map((i) =>
           i.productId === item.productId
             ? {
                 ...i,
@@ -41,7 +71,7 @@ export const useCart = create<CartState>((set, get) => ({
 
     set({
       items: [
-        ...get().items,
+        ...items,
         {
           ...item,
           qty: 1,

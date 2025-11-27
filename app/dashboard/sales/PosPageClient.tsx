@@ -1,7 +1,7 @@
 // app/dashboard/sales/PosPageClient.tsx
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
 import { useCart } from "@/hooks/use-cart";
@@ -35,12 +35,25 @@ export function PosPageClient({
   shopId,
   submitSale,
 }: PosPageClientProps) {
-  const { items, totalAmount, clear } = useCart();
+  const { totalAmount, clear, setShop: setCartShop } = useCart();
+  const cartItems = useCart((s) => s.items);
+  const cartShopId = useCart((s) => s.currentShopId);
+  const items = cartShopId === shopId ? cartItems : [];
+  const safeTotalAmount =
+    cartShopId === shopId
+      ? totalAmount
+      : () => items.reduce((sum, i) => sum + i.total, 0);
+
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [customerId, setCustomerId] = useState<string>("");
   const [paidNow, setPaidNow] = useState<string>("");
   const [note, setNote] = useState("");
   const online = useOnlineStatus();
+
+  // Keep cart tied to the currently selected shop; reset when shop changes
+  useEffect(() => {
+    setCartShop(shopId);
+  }, [shopId, setCartShop]);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -52,7 +65,7 @@ export function PosPageClient({
       return;
     }
 
-    const totalVal = totalAmount();
+    const totalVal = safeTotalAmount();
     const paidNowNumber = Math.min(
       Math.max(Number(paidNow || 0), 0),
       totalVal
@@ -68,7 +81,7 @@ export function PosPageClient({
       formData.set("paidNow", paidNowNumber.toString());
       formData.set("note", note);
       formData.set("cart", JSON.stringify(items));
-      formData.set("totalAmount", totalAmount().toString());
+      formData.set("totalAmount", safeTotalAmount().toString());
 
       await submitSale(formData);
       clear();
@@ -94,7 +107,7 @@ export function PosPageClient({
       paymentMethod,
       customerId: null,
       note,
-      totalAmount: totalAmount().toFixed(2),
+      totalAmount: safeTotalAmount().toFixed(2),
       createdAt: Date.now(),
       syncStatus: "new" as const,
     };
@@ -132,7 +145,7 @@ export function PosPageClient({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <PosProductSearch products={products} />
+          <PosProductSearch products={products} shopId={shopId} />
         </div>
       </div>
 
@@ -142,7 +155,7 @@ export function PosPageClient({
 
         <div className="flex-1 overflow-y-auto mb-6 space-y-3 pr-2">
           {items.length === 0 ? (
-            <p className="text-center text-slate-500 py-8">বিল খালি আছে</p>
+            <p className="text-center text-slate-500 py-8">কিছু যোগ করা হয়নি</p>
           ) : (
             items.map((i) => <PosCartItem key={i.productId} item={i} />)
           )}
@@ -153,7 +166,7 @@ export function PosPageClient({
           <div className="bg-white rounded-lg p-4">
             <p className="text-sm text-slate-600 mb-1">মোট পরিমাণ</p>
             <p className="text-3xl font-bold text-slate-900">
-              {totalAmount().toFixed(2)} ৳
+              {safeTotalAmount().toFixed(2)} ৳
             </p>
           </div>
 
@@ -184,16 +197,16 @@ export function PosPageClient({
           {/* Customer Selection for Due */}
           {paymentMethod === "due" && (
             <div className="space-y-2">
-              <label className="text-base font-medium text-slate-900">গ্রাহক বাছাই করুন</label>
+              <label className="text-base font-medium text-slate-900">গ্রাহক নির্বাচন করুন</label>
               <select
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-base"
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
               >
-                <option value="">-- গ্রাহক বাছাই করুন --</option>
+                <option value="">-- একজন গ্রাহক নির্বাচন করুন --</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} - বাকি: {Number(c.totalDue || 0).toFixed(2)} ৳
+                    {c.name} - বকেয়া: {Number(c.totalDue || 0).toFixed(2)} ৳
                   </option>
                 ))}
               </select>
@@ -222,7 +235,7 @@ export function PosPageClient({
             onClick={() => clear()}
             className="w-full border border-slate-200 text-slate-900 font-medium py-3 px-4 rounded-lg text-base hover:bg-slate-100 transition-colors"
           >
-            বিল পরিষ্কার করুন
+            কার্ট পরিষ্কার করুন
           </button>
         </form>
       </div>

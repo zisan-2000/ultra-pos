@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useCart } from "@/hooks/use-cart";
 
 type PosProductSearchProps = {
+  shopId: string;
   products: {
     id: string;
     name: string;
@@ -13,7 +14,7 @@ type PosProductSearchProps = {
   }[];
 };
 
-export function PosProductSearch({ products }: PosProductSearchProps) {
+export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   const [query, setQuery] = useState("");
   const add = useCart((s) => s.add);
   const items = useCart((s) => s.items);
@@ -33,7 +34,7 @@ export function PosProductSearch({ products }: PosProductSearchProps) {
 
       <div className="space-y-3">
         {filtered.length === 0 ? (
-          <p className="text-center text-gray-500 py-8">কোনো পণ্য পাওয়া যায়নি</p>
+          <p className="text-center text-gray-500 py-8">এই নামে কোনো পণ্য নেই</p>
         ) : (
           filtered.map((p) => (
             <button
@@ -46,13 +47,14 @@ export function PosProductSearch({ products }: PosProductSearchProps) {
                 if (stock <= inCart) {
                   const proceed = window.confirm(
                     stock <= 0
-                      ? `${p.name}–এর স্টক নেই। তবুও বিক্রি করবেন?`
-                      : `${p.name}–এর শুধু ${stock} টি স্টক আছে। তবুও বিক্রি করবেন?`
+                      ? `${p.name}-এর স্টক নেই। তবুও যোগ করবেন?`
+                      : `${p.name}-এর স্টক ${stock} টি আছে। তবুও যোগ করবেন?`
                   );
                   if (!proceed) return;
                 }
 
                 add({
+                  shopId,
                   productId: p.id,
                   name: p.name,
                   unitPrice: Number(p.sellPrice),
@@ -78,7 +80,7 @@ export function PosProductSearch({ products }: PosProductSearchProps) {
                   >
                     স্টক: {Number(p.stockQty ?? 0).toFixed(0)}
                   </span>
-                  <p className="text-sm text-gray-500 mt-2">➕ যোগ করুন</p>
+                  <p className="text-sm text-gray-500 mt-2">+ যোগ করতে ট্যাপ করুন</p>
                 </div>
               </div>
             </button>
