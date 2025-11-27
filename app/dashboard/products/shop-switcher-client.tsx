@@ -11,15 +11,17 @@ type Shop = {
   name: string;
 };
 
-export function ShopSwitcherClient({ shops }: { shops: Shop[] }) {
+type Props = { shops: Shop[]; activeShopId: string };
+
+export function ShopSwitcherClient({ shops, activeShopId }: Props) {
   const router = useRouter();
   const { shopId, setShop } = useCurrentShop();
 
-  const currentId = shopId || shops[0].id;
+  const currentId = shopId || activeShopId || shops[0].id;
 
   function handleChange(id: string) {
     setShop(id);
-    router.refresh(); // reload current server component with new shop
+    router.push(`/dashboard/products?shopId=${id}`);
   }
 
   return (
