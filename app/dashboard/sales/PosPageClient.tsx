@@ -49,11 +49,27 @@ export function PosPageClient({
   const [paidNow, setPaidNow] = useState<string>("");
   const [note, setNote] = useState("");
   const online = useOnlineStatus();
+  const isDue = paymentMethod === "due";
+  const paymentOptions = [
+    { value: "cash", label: "ক্যাশ" },
+    { value: "bkash", label: "বিকাশ" },
+    { value: "nagad", label: "নগদ" },
+    { value: "card", label: "কার্ড" },
+    { value: "bank_transfer", label: "ব্যাংক ট্রান্সফার" },
+    { value: "due", label: "ধার" },
+  ];
 
   // Keep cart tied to the currently selected shop; reset when shop changes
   useEffect(() => {
     setCartShop(shopId);
   }, [shopId, setCartShop]);
+
+  // Clear partial payment when switching away from due
+  useEffect(() => {
+    if (!isDue) {
+      setPaidNow("");
+    }
+  }, [isDue]);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -66,10 +82,9 @@ export function PosPageClient({
     }
 
     const totalVal = safeTotalAmount();
-    const paidNowNumber = Math.min(
-      Math.max(Number(paidNow || 0), 0),
-      totalVal
-    );
+    const paidNowNumber = isDue
+      ? Math.min(Math.max(Number(paidNow || 0), 0), totalVal)
+      : 0;
 
     // Online case - use server action
     if (online) {
@@ -173,29 +188,21 @@ export function PosPageClient({
           {/* Payment Method */}
           <div className="space-y-2">
             <label className="text-base font-medium text-slate-900">পেমেন্ট পদ্ধতি</label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { value: "cash", label: "ক্যাশ" },
-                { value: "bkash", label: "বিকাশ" },
-                { value: "due", label: "ধার" },
-              ].map((method) => (
-                <button
-                  key={method.value}
-                  onClick={() => setPaymentMethod(method.value)}
-                  className={`py-3 px-3 rounded-lg font-medium text-base transition-colors ${
-                    paymentMethod === method.value
-                      ? "bg-blue-600 text-white"
-                      : "bg-white text-slate-900 border border-slate-200 hover:border-slate-300"
-                  }`}
-                >
+            <select
+              className="w-full border border-slate-200 rounded-lg px-3 py-3 text-base"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+            >
+              {paymentOptions.map((method) => (
+                <option key={method.value} value={method.value}>
                   {method.label}
-                </button>
+                </option>
               ))}
-            </div>
+            </select>
           </div>
 
           {/* Customer Selection for Due */}
-          {paymentMethod === "due" && (
+          {isDue && (
             <div className="space-y-2">
               <label className="text-base font-medium text-slate-900">গ্রাহক নির্বাচন করুন</label>
               <select
@@ -218,6 +225,40 @@ export function PosPageClient({
               </a>
             </div>
           )}
+
+          {/* Partial payment - only for due */}
+          {isDue && (
+            <div className="space-y-2">
+              <label className="text-base font-medium text-slate-900">
+                এখন পরিশোধ (আংশিক হলে)
+              </label>
+              <input
+                type="number"
+                min="0"
+                max={safeTotalAmount()}
+                step="0.01"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-base"
+                placeholder="যেমন: 100 (আংশিক পরিশোধের জন্য)"
+                value={paidNow}
+                onChange={(e) => setPaidNow(e.target.value)}
+              />
+              <p className="text-sm text-slate-500">
+                মোট {safeTotalAmount().toFixed(2)} ৳ | আংশিক দিলে বাকি ধার হিসেবে থাকবে।
+              </p>
+            </div>
+          )}
+
+          {/* Note */}
+          <div className="space-y-2">
+            <label className="text-base font-medium text-slate-900">নোট (ঐচ্ছিক)</label>
+            <textarea
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-base"
+              rows={3}
+              placeholder="অতিরিক্ত তথ্য লিখুন..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
         </div>
 
         {/* Complete Sale Button */}
