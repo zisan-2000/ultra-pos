@@ -4,7 +4,7 @@
 
 import { db } from "@/db/client";
 import { products, shops } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { createServerClientForRoute } from "@/lib/supabase";
 
@@ -69,6 +69,13 @@ async function assertShopBelongsToUser(shopId: string, userId: string) {
   }
 
   return shop;
+}
+
+// TEMP: ensure new columns exist in case migration hasn't been applied yet.
+async function ensureTrackStockColumn() {
+  await db.execute(
+    sql`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "track_stock" boolean NOT NULL DEFAULT false`
+  );
 }
 
 // ---------------------------------
@@ -160,6 +167,8 @@ function normalizeUnitUpdate(
 // CREATE PRODUCT
 // ---------------------------------
 export async function createProduct(input: CreateProductInput) {
+  await ensureTrackStockColumn();
+
   const user = await getCurrentUser();
   await assertShopBelongsToUser(input.shopId, user.id);
 
@@ -171,7 +180,8 @@ export async function createProduct(input: CreateProductInput) {
     defaultValue: "0",
     field: "Stock quantity",
   });
-  const stockQty = input.trackStock === false ? "0" : normalizedStock;
+  const trackStock = input.trackStock === undefined ? false : Boolean(input.trackStock);
+  const stockQty = trackStock ? normalizedStock : "0";
   const units = normalizeUnitCreate({
     baseUnit: input.baseUnit,
     displayUnit: input.displayUnit,
@@ -189,6 +199,7 @@ export async function createProduct(input: CreateProductInput) {
     sellPrice,
     stockQty,
     isActive: input.isActive,
+    trackStock,
   });
 
   return { success: true };
@@ -198,6 +209,8 @@ export async function createProduct(input: CreateProductInput) {
 // GET PRODUCTS BY SHOP
 // ---------------------------------
 export async function getProductsByShop(shopId: string) {
+  await ensureTrackStockColumn();
+
   const user = await getCurrentUser();
   await assertShopBelongsToUser(shopId, user.id);
 
@@ -213,6 +226,8 @@ export async function getProductsByShop(shopId: string) {
 // GET SINGLE PRODUCT
 // ---------------------------------
 export async function getProduct(id: string) {
+  await ensureTrackStockColumn();
+
   const user = await getCurrentUser();
 
   const product = await db.query.products.findFirst({
@@ -230,6 +245,8 @@ export async function getProduct(id: string) {
 // UPDATE PRODUCT
 // ---------------------------------
 export async function updateProduct(id: string, data: UpdateProductInput) {
+  await ensureTrackStockColumn();
+
   const product = await db.query.products.findFirst({
     where: eq(products.id, id),
   });
@@ -251,10 +268,11 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
           field: "Stock quantity",
         })
       : undefined;
-  const resolvedStockQty =
-    data.trackStock === false
-      ? "0"
-      : stockQty;
+  const trackStockFlag =
+    data.trackStock !== undefined
+      ? data.trackStock
+      : product.trackStock ?? false;
+  const resolvedStockQty = trackStockFlag ? stockQty : "0";
   const unitPatch = normalizeUnitUpdate(
     {
       baseUnit: data.baseUnit,
@@ -263,13 +281,18 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
     },
     { conversion: product.conversion }
   );
-  const payload = {
-    ...data,
+  const { trackStock, ...rest } = data;
+  const payload: any = {
+    ...rest,
     ...(buyPrice !== undefined ? { buyPrice } : {}),
     ...(sellPrice !== undefined ? { sellPrice } : {}),
     ...(resolvedStockQty !== undefined ? { stockQty: resolvedStockQty } : {}),
     ...unitPatch,
   };
+
+  if (trackStock !== undefined) {
+    payload.trackStock = trackStock;
+  }
 
   await db.update(products).set(payload).where(eq(products.id, id));
 
@@ -280,6 +303,8 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
 // DELETE PRODUCT
 // ---------------------------------
 export async function deleteProduct(id: string) {
+  await ensureTrackStockColumn();
+
   const product = await db.query.products.findFirst({
     where: eq(products.id, id),
   });
@@ -298,6 +323,8 @@ export async function deleteProduct(id: string) {
 // ACTIVE PRODUCTS (POS)
 // ---------------------------------
 export async function getActiveProductsByShop(shopId: string) {
+  await ensureTrackStockColumn();
+
   const user = await getCurrentUser();
   await assertShopBelongsToUser(shopId, user.id);
 

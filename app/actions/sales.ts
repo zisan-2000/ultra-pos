@@ -55,10 +55,19 @@ async function assertShopBelongsToUser(shopId: string, userId: string) {
   return shop;
 }
 
+// TEMP: ensure new columns exist in case migration hasn't been applied yet.
+async function ensureTrackStockColumn() {
+  await db.execute(
+    sql`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "track_stock" boolean NOT NULL DEFAULT false`
+  );
+}
+
 // ------------------------------
 // CREATE SALE
 // ------------------------------
 export async function createSale(input: CreateSaleInput) {
+  await ensureTrackStockColumn();
+
   const user = await getCurrentUser();
   await assertShopBelongsToUser(input.shopId, user.id);
 
@@ -148,6 +157,9 @@ export async function createSale(input: CreateSaleInput) {
       .reduce((sum, i) => sum + i.qty, 0);
 
     if (soldQty === 0) continue;
+
+    // Only update stock when this product is tracking inventory
+    if (p.trackStock === false) continue;
 
     const currentStock = Number(p.stockQty || "0");
     const newStock = currentStock - soldQty;

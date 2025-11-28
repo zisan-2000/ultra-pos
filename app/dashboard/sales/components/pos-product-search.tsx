@@ -12,6 +12,7 @@ type PosProductSearchProps = {
     sellPrice: string;
     stockQty?: string | number;
     category?: string | null;
+    trackStock?: boolean | null;
   }[];
 };
 
@@ -219,8 +220,9 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   const handleAddToCart = (product: EnrichedProduct) => {
     const stock = toNumber(product.stockQty);
     const inCart = items.find((i) => i.productId === product.id)?.qty || 0;
+    const tracksStock = product.trackStock === true;
 
-    if (stock <= inCart) {
+    if (tracksStock && stock <= inCart) {
       const proceed = window.confirm(
         stock <= 0
           ? `${product.name} is out of stock. Add anyway?`
