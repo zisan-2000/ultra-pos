@@ -1,5 +1,8 @@
+// app/layout.tsx
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import ServiceWorkerRegister from "@/components/service-worker-register";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,9 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ultra POS System",
-  description: "Modern POS System with Royal Blue Theme",
-  viewport: "width=device-width, initial-scale=1",
+  title: "আল্ট্রা পিওএস - দোকানের হিসাব",
+  description: "ছোট দোকানের জন্য সহজ বিক্রি ও হিসাব ব্যবস্থাপনা",
 };
 
 export default function RootLayout({
@@ -24,10 +26,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="bn">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} bg-background text-foreground antialiased transition-colors duration-300`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-background text-foreground`}
+        style={{ fontFamily: "'SutonnyMJ', 'Noto Sans Bengali', sans-serif" }}
       >
+        <ServiceWorkerRegister />
         {children}
       </body>
     </html>

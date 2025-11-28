@@ -8,6 +8,27 @@
       "when": 1763962730379,
       "tag": "0000_square_metal_master",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1764470400000,
+      "tag": "0001_add_due_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1764556800000,
+      "tag": "0002_add_sales_customer",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1765000000000,
+      "tag": "0003_add_product_category",
+      "breakpoints": true
     }
   ]
 }
