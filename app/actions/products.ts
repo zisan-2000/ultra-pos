@@ -15,6 +15,9 @@ type CreateProductInput = {
   shopId: string;
   name: string;
   category: string;
+  baseUnit?: string;
+  displayUnit?: string | null;
+  conversion?: string | number;
   buyPrice?: string | number | null;
   sellPrice: string;
   stockQty: string;
@@ -24,6 +27,9 @@ type CreateProductInput = {
 type UpdateProductInput = {
   name?: string;
   category?: string;
+  baseUnit?: string;
+  displayUnit?: string | null;
+  conversion?: string | number;
   buyPrice?: string | number | null;
   sellPrice?: string;
   stockQty?: string;
@@ -68,6 +74,60 @@ function normalizeMoneyInput(value?: string | number | null) {
   return Number.isFinite(parsed) ? str : null;
 }
 
+function normalizeUnitCreate(input: {
+  baseUnit?: string;
+  displayUnit?: string | null;
+  conversion?: string | number;
+}) {
+  const baseUnit =
+    input.baseUnit?.toString().trim().toLowerCase() || "pcs";
+
+  const displayUnit =
+    input.displayUnit === undefined
+      ? null
+      : input.displayUnit === null
+      ? null
+      : input.displayUnit.toString().trim().toLowerCase() || null;
+
+  const convNum = Number(input.conversion);
+  const conversion =
+    Number.isFinite(convNum) && convNum > 0 ? convNum.toString() : "1";
+
+  return { baseUnit, displayUnit, conversion };
+}
+
+function normalizeUnitUpdate(
+  input: {
+    baseUnit?: string;
+    displayUnit?: string | null;
+    conversion?: string | number;
+  },
+  existing: { conversion?: string | null }
+) {
+  const patch: any = {};
+
+  if (input.baseUnit !== undefined) {
+    patch.baseUnit = input.baseUnit.toString().trim().toLowerCase() || "pcs";
+  }
+
+  if (input.displayUnit !== undefined) {
+    patch.displayUnit =
+      input.displayUnit === null
+        ? null
+        : input.displayUnit.toString().trim().toLowerCase() || null;
+  }
+
+  if (input.conversion !== undefined) {
+    const convNum = Number(input.conversion);
+    patch.conversion =
+      Number.isFinite(convNum) && convNum > 0
+        ? convNum.toString()
+        : existing.conversion ?? "1";
+  }
+
+  return patch;
+}
+
 // ---------------------------------
 // CREATE PRODUCT
 // ---------------------------------
@@ -76,11 +136,19 @@ export async function createProduct(input: CreateProductInput) {
   await assertShopBelongsToUser(input.shopId, user.id);
 
   const buyPrice = normalizeMoneyInput(input.buyPrice);
+  const units = normalizeUnitCreate({
+    baseUnit: input.baseUnit,
+    displayUnit: input.displayUnit,
+    conversion: input.conversion,
+  });
 
   await db.insert(products).values({
     shopId: input.shopId,
     name: input.name,
     category: input.category || "Uncategorized",
+    baseUnit: units.baseUnit,
+    displayUnit: units.displayUnit,
+    conversion: units.conversion,
     buyPrice,
     sellPrice: input.sellPrice,
     stockQty: input.stockQty,
@@ -136,9 +204,18 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   await assertShopBelongsToUser(product.shopId, user.id);
 
   const buyPrice = normalizeMoneyInput(data.buyPrice);
+  const unitPatch = normalizeUnitUpdate(
+    {
+      baseUnit: data.baseUnit,
+      displayUnit: data.displayUnit,
+      conversion: data.conversion,
+    },
+    { conversion: product.conversion }
+  );
   const payload = {
     ...data,
     ...(buyPrice !== undefined ? { buyPrice } : {}),
+    ...unitPatch,
   };
 
   await db.update(products).set(payload).where(eq(products.id, id));

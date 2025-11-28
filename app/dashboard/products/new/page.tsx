@@ -2,7 +2,7 @@
 
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
@@ -13,6 +13,13 @@ function ProductForm() {
   const router = useRouter();
   const params = useSearchParams();
   const online = useOnlineStatus();
+
+  const presetUnits = useMemo(
+    () => ["pcs", "packet", "box", "dozen", "kg", "gm", "liter", "ml", "ft", "plate", "cup"],
+    []
+  );
+  const [unitOptions, setUnitOptions] = useState<string[]>(presetUnits);
+  const [selectedUnit, setSelectedUnit] = useState("pcs");
 
   const shopId = params.get("shopId");
 
@@ -25,6 +32,37 @@ function ProductForm() {
     );
   }
   const ensuredShopId = shopId;
+
+  useEffect(() => {
+    if (!ensuredShopId) return;
+    try {
+      const stored = localStorage.getItem(`customUnits:${ensuredShopId}`);
+      const parsed = stored ? (JSON.parse(stored) as string[]) : [];
+      const custom = Array.isArray(parsed) ? parsed : [];
+      const merged = Array.from(new Set([...presetUnits, ...custom]));
+      setUnitOptions(merged);
+      setSelectedUnit((prev) => (merged.includes(prev) ? prev : "pcs"));
+    } catch (err) {
+      console.error("Failed to load custom units", err);
+      setUnitOptions(presetUnits);
+      setSelectedUnit("pcs");
+    }
+  }, [ensuredShopId, presetUnits]);
+
+  function handleAddCustomUnit() {
+    const input = prompt("Enter custom unit name");
+    if (!input) return;
+    const value = input.toString().trim().toLowerCase();
+    if (!value) return;
+
+    const merged = Array.from(new Set([...unitOptions, value]));
+    setUnitOptions(merged);
+    setSelectedUnit(value);
+
+    // store only custom units (non-preset) for this shop
+    const customOnly = merged.filter((u) => !presetUnits.includes(u));
+    localStorage.setItem(`customUnits:${ensuredShopId}`, JSON.stringify(customOnly));
+  }
 
   async function handleSubmit(e: any) {
     e.preventDefault();
@@ -43,6 +81,7 @@ function ProductForm() {
       category:
         ((form.get("category") as string) || "Uncategorized").trim() ||
         "Uncategorized",
+      baseUnit: selectedUnit,
       buyPrice,
       sellPrice: form.get("sellPrice") as string,
       stockQty: form.get("stockQty") as string,
@@ -107,6 +146,35 @@ function ProductForm() {
           </datalist>
           <p className="text-sm text-gray-500">
             Product category is saved to the database so POS filters don't rely on guesses.
+          </p>
+        </div>
+
+        {/* Unit (optional, default pcs) */}
+        <div className="space-y-2">
+          <label className="block text-base font-medium text-gray-900">Unit (optional)</label>
+          <div className="flex gap-3">
+            <select
+              name="baseUnit"
+              value={selectedUnit}
+              onChange={(e) => setSelectedUnit(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              {unitOptions.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleAddCustomUnit}
+              className="shrink-0 px-4 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-900 hover:bg-gray-100 transition-colors"
+            >
+              + Add custom
+            </button>
+          </div>
+          <p className="text-sm text-gray-500">
+            Default stays pcs for fastest entry. Add or pick custom units only when needed.
           </p>
         </div>
 
