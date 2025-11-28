@@ -74,6 +74,26 @@ function normalizeMoneyInput(value?: string | number | null) {
   return Number.isFinite(parsed) ? str : null;
 }
 
+function normalizeNumberInput(
+  value: string | number | null | undefined,
+  options?: { defaultValue?: string; field?: string }
+) {
+  const str =
+    value === undefined || value === null ? "" : value.toString().trim();
+
+  if (!str) {
+    if (options?.defaultValue !== undefined) return options.defaultValue;
+    throw new Error(`${options?.field ?? "Value"} is required`);
+  }
+
+  const parsed = Number(str);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${options?.field ?? "Value"} must be a valid number`);
+  }
+
+  return parsed.toString();
+}
+
 function normalizeUnitCreate(input: {
   baseUnit?: string;
   displayUnit?: string | null;
@@ -136,6 +156,13 @@ export async function createProduct(input: CreateProductInput) {
   await assertShopBelongsToUser(input.shopId, user.id);
 
   const buyPrice = normalizeMoneyInput(input.buyPrice);
+  const sellPrice = normalizeNumberInput(input.sellPrice, {
+    field: "Sell price",
+  });
+  const stockQty = normalizeNumberInput(input.stockQty, {
+    defaultValue: "0",
+    field: "Stock quantity",
+  });
   const units = normalizeUnitCreate({
     baseUnit: input.baseUnit,
     displayUnit: input.displayUnit,
@@ -150,8 +177,8 @@ export async function createProduct(input: CreateProductInput) {
     displayUnit: units.displayUnit,
     conversion: units.conversion,
     buyPrice,
-    sellPrice: input.sellPrice,
-    stockQty: input.stockQty,
+    sellPrice,
+    stockQty,
     isActive: input.isActive,
   });
 
@@ -204,6 +231,17 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   await assertShopBelongsToUser(product.shopId, user.id);
 
   const buyPrice = normalizeMoneyInput(data.buyPrice);
+  const sellPrice =
+    data.sellPrice !== undefined
+      ? normalizeNumberInput(data.sellPrice, { field: "Sell price" })
+      : undefined;
+  const stockQty =
+    data.stockQty !== undefined
+      ? normalizeNumberInput(data.stockQty, {
+          defaultValue: "0",
+          field: "Stock quantity",
+        })
+      : undefined;
   const unitPatch = normalizeUnitUpdate(
     {
       baseUnit: data.baseUnit,
@@ -215,6 +253,8 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   const payload = {
     ...data,
     ...(buyPrice !== undefined ? { buyPrice } : {}),
+    ...(sellPrice !== undefined ? { sellPrice } : {}),
+    ...(stockQty !== undefined ? { stockQty } : {}),
     ...unitPatch,
   };
 
