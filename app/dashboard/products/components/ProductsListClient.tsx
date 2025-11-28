@@ -14,6 +14,7 @@ type Product = {
   id: string;
   name: string;
   category: string;
+  buyPrice?: string | null;
   sellPrice: string;
   stockQty: string;
   isActive: boolean;

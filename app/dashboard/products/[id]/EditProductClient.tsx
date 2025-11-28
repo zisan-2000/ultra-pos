@@ -17,9 +17,16 @@ export default function EditProductClient({ product }: any) {
 
     const form = new FormData(e.target);
 
+    const buyPriceRaw = form.get("buyPrice") as string;
+    const buyPrice =
+      buyPriceRaw && buyPriceRaw.toString().trim() !== ""
+        ? (buyPriceRaw as string)
+        : null;
+
     const updatePayload = {
       ...product,
       name: form.get("name") as string,
+      buyPrice,
       sellPrice: form.get("sellPrice") as string,
       stockQty: form.get("stockQty") as string,
       isActive: form.get("isActive") === "on",
@@ -76,6 +83,28 @@ export default function EditProductClient({ product }: any) {
           />
           <p className="text-sm text-gray-500">গ্রাহকদের কাছে যে দামে বিক্রি করবেন।</p>
         </div>
+
+        {/* Advanced (optional) */}
+        <details className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+          <summary className="cursor-pointer text-base font-semibold text-gray-900">
+            Advanced (optional)
+          </summary>
+          <div className="mt-4 space-y-2">
+            <label className="block text-base font-medium text-gray-900">Buy Price (optional)</label>
+            <input
+              name="buyPrice"
+              type="number"
+              step="0.01"
+              min="0"
+              defaultValue={product.buyPrice ?? ""}
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+              placeholder="e.g., 80.00"
+            />
+            <p className="text-sm text-gray-500">
+              Keep empty if you don't track it. Filling later unlocks profit and purchase insights.
+            </p>
+          </div>
+        </details>
 
         {/* Stock Quantity */}
         <div className="space-y-2">

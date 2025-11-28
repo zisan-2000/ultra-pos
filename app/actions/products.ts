@@ -15,6 +15,7 @@ type CreateProductInput = {
   shopId: string;
   name: string;
   category: string;
+  buyPrice?: string | number | null;
   sellPrice: string;
   stockQty: string;
   isActive: boolean;
@@ -23,6 +24,7 @@ type CreateProductInput = {
 type UpdateProductInput = {
   name?: string;
   category?: string;
+  buyPrice?: string | number | null;
   sellPrice?: string;
   stockQty?: string;
   isActive?: boolean;
@@ -56,16 +58,30 @@ async function assertShopBelongsToUser(shopId: string, userId: string) {
 }
 
 // ---------------------------------
+// HELPERS
+// ---------------------------------
+function normalizeMoneyInput(value?: string | number | null) {
+  if (value === undefined) return undefined;
+  const str = value === null ? "" : value.toString().trim();
+  if (!str) return null;
+  const parsed = Number(str);
+  return Number.isFinite(parsed) ? str : null;
+}
+
+// ---------------------------------
 // CREATE PRODUCT
 // ---------------------------------
 export async function createProduct(input: CreateProductInput) {
   const user = await getCurrentUser();
   await assertShopBelongsToUser(input.shopId, user.id);
 
+  const buyPrice = normalizeMoneyInput(input.buyPrice);
+
   await db.insert(products).values({
     shopId: input.shopId,
     name: input.name,
     category: input.category || "Uncategorized",
+    buyPrice,
     sellPrice: input.sellPrice,
     stockQty: input.stockQty,
     isActive: input.isActive,
@@ -119,7 +135,13 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   const user = await getCurrentUser();
   await assertShopBelongsToUser(product.shopId, user.id);
 
-  await db.update(products).set(data).where(eq(products.id, id));
+  const buyPrice = normalizeMoneyInput(data.buyPrice);
+  const payload = {
+    ...data,
+    ...(buyPrice !== undefined ? { buyPrice } : {}),
+  };
+
+  await db.update(products).set(payload).where(eq(products.id, id));
 
   return { success: true };
 }
