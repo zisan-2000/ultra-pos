@@ -1,7 +1,14 @@
 "use server";
 
 import { db } from "@/db/client";
-import { sales, expenses, cashEntries } from "@/db/schema";
+import {
+  sales,
+  expenses,
+  cashEntries,
+  saleItems,
+  products,
+  shops,
+} from "@/db/schema";
 import { and, eq, gte, lte } from "drizzle-orm";
 
 /* --------------------------------------------------
@@ -20,6 +27,88 @@ function parseTimestampRange(from?: string, to?: string) {
   if (end) end.setUTCHours(23, 59, 59, 999);
 
   return { start, end };
+}
+
+const SHOP_TYPES_WITH_COGS = new Set([
+  "mini_grocery",
+  "pharmacy",
+  "clothing",
+  "cosmetics_gift",
+  "mini_wholesale",
+]);
+
+async function shopNeedsCogs(shopId: string) {
+  const shop = await db.query.shops.findFirst({
+    where: eq(shops.id, shopId),
+  });
+  if (!shop) return false;
+  return SHOP_TYPES_WITH_COGS.has((shop as any).businessType);
+}
+
+function sumCogs(rows: { qty: any; buyPrice: any }[]) {
+  return rows.reduce((sum, r) => {
+    const qty = Number(r.qty ?? 0);
+    const buy = Number(r.buyPrice ?? 0);
+    if (!Number.isFinite(qty) || !Number.isFinite(buy)) return sum;
+    return sum + qty * buy;
+  }, 0);
+}
+
+export async function getCogsTotal(
+  shopId: string,
+  from?: Date,
+  to?: Date
+) {
+  const rows = await db
+    .select({
+      qty: saleItems.quantity,
+      buyPrice: products.buyPrice,
+    })
+    .from(saleItems)
+    .innerJoin(sales, eq(saleItems.saleId, sales.id))
+    .innerJoin(products, eq(saleItems.productId, products.id))
+    .where(
+      and(
+        eq(sales.shopId, shopId),
+        from ? gte(sales.saleDate, from) : undefined,
+        to ? lte(sales.saleDate, to) : undefined
+      )
+    );
+
+  return sumCogs(rows as any);
+}
+
+export async function getCogsByDay(
+  shopId: string,
+  from?: Date,
+  to?: Date
+) {
+  const rows = await db
+    .select({
+      qty: saleItems.quantity,
+      buyPrice: products.buyPrice,
+      saleDate: sales.saleDate,
+    })
+    .from(saleItems)
+    .innerJoin(sales, eq(saleItems.saleId, sales.id))
+    .innerJoin(products, eq(saleItems.productId, products.id))
+    .where(
+      and(
+        eq(sales.shopId, shopId),
+        from ? gte(sales.saleDate, from) : undefined,
+        to ? lte(sales.saleDate, to) : undefined
+      )
+    );
+
+  const byDay: Record<string, number> = {};
+  rows.forEach((r: any) => {
+    const day = new Date(r.saleDate).toISOString().split("T")[0];
+    const qty = Number(r.qty ?? 0);
+    const buy = Number(r.buyPrice ?? 0);
+    if (!Number.isFinite(qty) || !Number.isFinite(buy)) return;
+    byDay[day] = (byDay[day] || 0) + qty * buy;
+  });
+  return byDay;
 }
 
 function parseDateRange(from?: string, to?: string) {
@@ -171,12 +260,16 @@ export async function getCashSummary(shopId: string) {
 export async function getProfitSummary(shopId: string) {
   const salesData = await getSalesSummary(shopId);
   const expenseData = await getExpenseSummary(shopId);
+  const needsCogs = await shopNeedsCogs(shopId);
+  const cogs = needsCogs ? await getCogsTotal(shopId) : 0;
 
-  const profit = salesData.totalAmount - expenseData.totalAmount;
+  const totalExpense = expenseData.totalAmount + cogs;
+  const profit = salesData.totalAmount - totalExpense;
 
   return {
     salesTotal: salesData.totalAmount,
-    expenseTotal: expenseData.totalAmount,
+    expenseTotal: totalExpense,
     profit,
+    cogs,
   };
 }

@@ -16,6 +16,10 @@ export type LocalProduct = {
   sellPrice: string;
   stockQty: string;
   isActive: boolean;
+  trackStock?: boolean;
+  businessType?: string;
+  expiryDate?: string | null;
+  size?: string | null;
   updatedAt: number; // timestamp for sync
   syncStatus: "new" | "updated" | "deleted" | "synced";
 };

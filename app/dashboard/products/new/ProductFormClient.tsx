@@ -1,21 +1,23 @@
+// app/dashboard/products/new/ProductFormClient.tsx
+
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
-import { db } from "@/lib/dexie/db";
-import { updateProduct } from "@/app/actions/products";
+import { db, type LocalProduct } from "@/lib/dexie/db";
+import { createProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType } from "@/lib/productFormConfig";
 
-type Props = { product: any; shop: { id: string; name: string; businessType?: string | null } };
+type Props = {
+  shop: { id: string; name: string; businessType?: string | null };
+};
 
-export default function EditProductClient({ product, shop }: Props) {
-  const online = useOnlineStatus();
+function ProductForm({ shop }: Props) {
   const router = useRouter();
-
-  const shopId = product.shopId;
+  const online = useOnlineStatus();
   const businessType = (shop.businessType as BusinessType) || "tea_stall";
 
   const presetCategories = useMemo(
@@ -56,40 +58,43 @@ export default function EditProductClient({ product, shop }: Props) {
   );
 
   const [categoryOptions, setCategoryOptions] = useState<string[]>(presetCategories);
-  const [selectedCategory, setSelectedCategory] = useState(
-    (product.category as string) || "অন্যান্য"
-  );
+  const [selectedCategory, setSelectedCategory] = useState("অন্যান্য");
   const [unitOptions, setUnitOptions] = useState<string[]>(configUnits);
-  const [selectedUnit, setSelectedUnit] = useState(
-    (product.baseUnit as string) || configUnits[0] || "pcs"
-  );
-  const [stockEnabled, setStockEnabled] = useState(
-    product.trackStock ?? defaultStockOn
-  );
+  const [selectedUnit, setSelectedUnit] = useState(configUnits[0] || "pcs");
+  const [stockEnabled, setStockEnabled] = useState(defaultStockOn);
+
+  const ensuredShopId = shop.id;
+
+  // Reset stock/unit when business type changes
+  useEffect(() => {
+    setStockEnabled(defaultStockOn);
+    setUnitOptions(configUnits);
+    setSelectedUnit(configUnits[0] || "pcs");
+  }, [businessType]);
 
   useEffect(() => {
-    if (!shopId) return;
+    if (!ensuredShopId) return;
     try {
-      const stored = localStorage.getItem(`customCategories:${shopId}`);
+      const stored = localStorage.getItem(`customCategories:${ensuredShopId}`);
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
       const custom = Array.isArray(parsed) ? parsed : [];
-      const merged = Array.from(new Set([...presetCategories, ...custom, selectedCategory]));
+      const merged = Array.from(new Set([...presetCategories, ...custom]));
       setCategoryOptions(merged);
-      setSelectedCategory((prev) => (merged.includes(prev) ? prev : "???????????"));
+      setSelectedCategory((prev) => (merged.includes(prev) ? prev : "অন্যান্য"));
     } catch (err) {
       console.error("Failed to load custom categories", err);
       setCategoryOptions(presetCategories);
-      setSelectedCategory("???????????");
+      setSelectedCategory("অন্যান্য");
     }
-  }, [shopId, presetCategories, selectedCategory]);
+  }, [ensuredShopId, presetCategories]);
 
   useEffect(() => {
-    if (!shopId) return;
+    if (!ensuredShopId) return;
     try {
-      const stored = localStorage.getItem(`customUnits:${shopId}`);
+      const stored = localStorage.getItem(`customUnits:${ensuredShopId}`);
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
       const custom = Array.isArray(parsed) ? parsed : [];
-      const merged = Array.from(new Set([...configUnits, ...custom, selectedUnit]));
+      const merged = Array.from(new Set([...configUnits, ...custom]));
       setUnitOptions(merged);
       setSelectedUnit((prev) => (merged.includes(prev) ? prev : merged[0] || "pcs"));
     } catch (err) {
@@ -97,14 +102,10 @@ export default function EditProductClient({ product, shop }: Props) {
       setUnitOptions(configUnits);
       setSelectedUnit(configUnits[0] || "pcs");
     }
-  }, [shopId, configUnits, selectedUnit]);
-
-  useEffect(() => {
-    setStockEnabled(product.trackStock ?? defaultStockOn);
-  }, [product.trackStock, defaultStockOn, businessType]);
+  }, [ensuredShopId, configUnits]);
 
   function handleAddCustomCategory() {
-    const input = prompt("Enter custom category name");
+    const input = prompt("নতুন ক্যাটাগরির নাম লিখুন");
     if (!input) return;
     const value = input.toString().trim();
     if (!value) return;
@@ -114,11 +115,11 @@ export default function EditProductClient({ product, shop }: Props) {
     setSelectedCategory(value);
 
     const customOnly = merged.filter((c) => !presetCategories.includes(c));
-    localStorage.setItem(`customCategories:${shopId}`, JSON.stringify(customOnly));
+    localStorage.setItem(`customCategories:${ensuredShopId}`, JSON.stringify(customOnly));
   }
 
   function handleAddCustomUnit() {
-    const input = prompt("Enter custom unit name");
+    const input = prompt("নতুন এককের নাম লিখুন");
     if (!input) return;
     const value = input.toString().trim().toLowerCase();
     if (!value) return;
@@ -128,12 +129,11 @@ export default function EditProductClient({ product, shop }: Props) {
     setSelectedUnit(value);
 
     const customOnly = merged.filter((u) => !configUnits.includes(u));
-    localStorage.setItem(`customUnits:${shopId}`, JSON.stringify(customOnly));
+    localStorage.setItem(`customUnits:${ensuredShopId}`, JSON.stringify(customOnly));
   }
 
   async function handleSubmit(e: any) {
     e.preventDefault();
-
     const form = new FormData(e.target);
 
     const buyPriceRaw = form.get("buyPrice") as string;
@@ -159,10 +159,11 @@ export default function EditProductClient({ product, shop }: Props) {
       ? ((form.get("size") as string) || "").toString().trim() || null
       : null;
 
-    const updatePayload = {
-      ...product,
+    const payload: LocalProduct = {
+      id: crypto.randomUUID(),
+      shopId: ensuredShopId,
       name: form.get("name") as string,
-      category: selectedCategory || "???????????",
+      category: selectedCategory || "অন্যান্য",
       baseUnit,
       buyPrice,
       sellPrice: form.get("sellPrice") as string,
@@ -173,27 +174,26 @@ export default function EditProductClient({ product, shop }: Props) {
       expiryDate,
       size,
       updatedAt: Date.now(),
-      syncStatus: "updated",
+      syncStatus: "new",
     };
 
     if (online) {
-      await updateProduct(product.id, updatePayload);
-      alert("???? ??????? ????? ???????");
+      await createProduct(payload);
+      alert("পণ্য সফলভাবে যুক্ত হয়েছে");
     } else {
-      await db.products.put(updatePayload);
-      await queueAdd("product", "update", updatePayload);
-      alert("???? ??????? ????? ??????? ??? ??? ????? ????");
+      await db.products.put(payload);
+      await queueAdd("product", "create", payload);
+      alert("পণ্য অফলাইনে সংরক্ষণ হয়েছে; সংযোগ হলে সিঙ্ক হবে।");
     }
 
-    router.push(`/dashboard/products?shopId=${shopId}`);
+    router.push(`/dashboard/products?shopId=${ensuredShopId}`);
   }
 
   return (
     <div className="max-w-2xl mx-auto">
-      
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">পণ্য তথ্য সম্পাদনা</h1>
-        <p className="text-gray-600 mt-2">এই দোকানের জন্য পণ্যের তথ্য আপডেট করুন।</p>
+        <h1 className="text-3xl font-bold text-gray-900">নতুন পণ্য যোগ করুন</h1>
+        <p className="text-gray-600 mt-2">এই দোকানের জন্য প্রয়োজনীয় তথ্য দিয়ে পণ্য যোগ করুন।</p>
         <p className="text-sm text-gray-500 mt-1">দোকান: {shop.name}</p>
       </div>
 
@@ -204,12 +204,26 @@ export default function EditProductClient({ product, shop }: Props) {
           <label className="block text-base font-medium text-gray-900">পণ্যের নাম *</label>
           <input
             name="name"
-            defaultValue={product.name}
             className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
             placeholder="যেমন: চা, ডিম, কলম..."
             required={isFieldRequired("name")}
           />
           <p className="text-sm text-gray-500">সহজে চিনতে পারে এমন নাম লিখুন।</p>
+        </div>
+
+        {/* Sell Price */}
+        <div className="space-y-2">
+          <label className="block text-base font-medium text-gray-900">বিক্রয় মূল্য (৳) *</label>
+          <input
+            name="sellPrice"
+            type="number"
+            step="0.01"
+            min="0"
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="যেমন: ২৫, ৯৯.৫০"
+            required={isFieldRequired("sellPrice")}
+          />
+          <p className="text-sm text-gray-500">দশমিকসহ দাম লিখতে পারবেন।</p>
         </div>
 
         {/* Category (optional with custom) */}
@@ -274,27 +288,11 @@ export default function EditProductClient({ product, shop }: Props) {
           </div>
         )}
 
-        {/* Sell Price */}
-        <div className="space-y-2">
-          <label className="block text-base font-medium text-gray-900">বিক্রয় মূল্য (৳) *</label>
-          <input
-            name="sellPrice"
-            type="number"
-            step="0.01"
-            min="0"
-            defaultValue={product.sellPrice}
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-            placeholder="যেমন: ২৫, ৯৯.৫০"
-            required={isFieldRequired("sellPrice")}
-          />
-          <p className="text-sm text-gray-500">দশমিকসহ দাম লিখতে পারবেন।</p>
-        </div>
-
         {/* Stock toggle & qty */}
         <div className="space-y-2">
           <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
+            <input 
+              type="checkbox" 
               checked={stockEnabled}
               onChange={(e) => setStockEnabled(e.target.checked)}
               className="w-5 h-5 border border-gray-300 rounded cursor-pointer"
@@ -308,7 +306,7 @@ export default function EditProductClient({ product, shop }: Props) {
               type="number"
               step="0.01"
               min="0"
-              defaultValue={product.stockQty}
+              defaultValue="0"
               required={stockEnabled && isFieldRequired("stock")}
               disabled={!stockEnabled}
               className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100 disabled:text-gray-500"
@@ -331,7 +329,6 @@ export default function EditProductClient({ product, shop }: Props) {
                   type="number"
                   step="0.01"
                   min="0"
-                  defaultValue={product.buyPrice ?? ""}
                   required={isFieldRequired("buyPrice")}
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="যেমন: 55.00"
@@ -348,7 +345,6 @@ export default function EditProductClient({ product, shop }: Props) {
                 <input
                   name="expiryDate"
                   type="date"
-                  defaultValue={product.expiryDate ?? ""}
                   required={isFieldRequired("expiry")}
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
@@ -361,7 +357,6 @@ export default function EditProductClient({ product, shop }: Props) {
                 <input
                   name="size"
                   type="text"
-                  defaultValue={product.size ?? ""}
                   required={isFieldRequired("size")}
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="যেমন: L, XL, 100ml"
@@ -374,10 +369,10 @@ export default function EditProductClient({ product, shop }: Props) {
         {/* Active Status */}
         <div className="space-y-2">
           <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              name="isActive"
-              defaultChecked={product.isActive}
+            <input 
+              type="checkbox" 
+              name="isActive" 
+              defaultChecked
               className="w-5 h-5 border border-gray-300 rounded cursor-pointer"
             />
             <span className="text-base font-medium text-gray-900">পণ্য সক্রিয় রাখুন</span>
@@ -385,13 +380,13 @@ export default function EditProductClient({ product, shop }: Props) {
           <p className="text-sm text-gray-500">বন্ধ করলে পণ্য লিস্ট/সেলে দেখাবে না।</p>
         </div>
 
-{/* Buttons */}
+        {/* Buttons */}
         <div className="flex gap-3 pt-4">
           <button 
             type="submit"
             className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
           >
-            ✔ পরিবর্তন সংরক্ষণ করুন
+            ✔ পণ্য সংরক্ষণ করুন
           </button>
           <button 
             type="button"
@@ -403,5 +398,13 @@ export default function EditProductClient({ product, shop }: Props) {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function ProductFormClient(props: Props) {
+  return (
+    <Suspense fallback={<div>Loading form...</div>}>
+      <ProductForm {...props} />
+    </Suspense>
   );
 }

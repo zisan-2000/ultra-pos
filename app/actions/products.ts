@@ -22,6 +22,10 @@ type CreateProductInput = {
   sellPrice: string;
   stockQty: string;
   isActive: boolean;
+  trackStock?: boolean;
+  businessType?: string;
+  expiryDate?: string | null;
+  size?: string | null;
 };
 
 type UpdateProductInput = {
@@ -34,6 +38,10 @@ type UpdateProductInput = {
   sellPrice?: string;
   stockQty?: string;
   isActive?: boolean;
+  trackStock?: boolean;
+  businessType?: string;
+  expiryDate?: string | null;
+  size?: string | null;
 };
 
 // ---------------------------------
@@ -159,10 +167,11 @@ export async function createProduct(input: CreateProductInput) {
   const sellPrice = normalizeNumberInput(input.sellPrice, {
     field: "Sell price",
   });
-  const stockQty = normalizeNumberInput(input.stockQty, {
+  const normalizedStock = normalizeNumberInput(input.stockQty, {
     defaultValue: "0",
     field: "Stock quantity",
   });
+  const stockQty = input.trackStock === false ? "0" : normalizedStock;
   const units = normalizeUnitCreate({
     baseUnit: input.baseUnit,
     displayUnit: input.displayUnit,
@@ -242,6 +251,10 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
           field: "Stock quantity",
         })
       : undefined;
+  const resolvedStockQty =
+    data.trackStock === false
+      ? "0"
+      : stockQty;
   const unitPatch = normalizeUnitUpdate(
     {
       baseUnit: data.baseUnit,
@@ -254,7 +267,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
     ...data,
     ...(buyPrice !== undefined ? { buyPrice } : {}),
     ...(sellPrice !== undefined ? { sellPrice } : {}),
-    ...(stockQty !== undefined ? { stockQty } : {}),
+    ...(resolvedStockQty !== undefined ? { stockQty: resolvedStockQty } : {}),
     ...unitPatch,
   };
 

@@ -1,8 +1,8 @@
 // app/dashboard/shops/page.tsx
 
 import Link from "next/link";
-import { getShopsByUser } from "@/app/actions/shops";
-import { deleteShop } from "@/app/actions/shops";
+import { getShopsByUser, deleteShop } from "@/app/actions/shops";
+import { revalidatePath } from "next/cache";
 
 export default async function ShopsPage() {
   const data = await getShopsByUser();
@@ -11,25 +11,25 @@ export default async function ShopsPage() {
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">আমার দোকান</h1>
-          <p className="text-gray-600 mt-2">সব দোকান দেখুন এবং পরিচালনা করুন।</p>
+          <h1 className="text-3xl font-bold text-gray-900">Your Shops</h1>
+          <p className="text-gray-600 mt-2">Manage all your shops from one place.</p>
         </div>
         <Link
           href="/dashboard/shops/new"
           className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition-colors text-center"
         >
-          + নতুন দোকান যোগ করুন
+          + Add New Shop
         </Link>
       </div>
 
       {data.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <p className="text-gray-600 mb-4">এখনও কোনো দোকান নেই।</p>
+          <p className="text-gray-600 mb-4">No shops found.</p>
           <Link
             href="/dashboard/shops/new"
             className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
           >
-            প্রথম দোকান তৈরি করুন
+            Create your first shop
           </Link>
         </div>
       ) : (
@@ -42,10 +42,10 @@ export default async function ShopsPage() {
               <div className="mb-4">
                 <h2 className="text-xl font-bold text-gray-900">{shop.name}</h2>
                 <p className="text-sm text-gray-600 mt-2">
-                  📍 {shop.address || "ঠিকানা নেই"}
+                  📍 {shop.address || "No address"}
                 </p>
                 <p className="text-sm text-gray-600 mt-1">
-                  📞 {shop.phone || "ফোন নেই"}
+                  📞 {shop.phone || "No phone"}
                 </p>
               </div>
 
@@ -54,18 +54,19 @@ export default async function ShopsPage() {
                   href={`/dashboard/shops/${shop.id}`}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-center transition-colors"
                 >
-                  ✏️ সম্পাদনা করুন
+                  Edit shop
                 </Link>
 
                 <form
                   action={async () => {
                     "use server";
                     await deleteShop(shop.id);
+                    revalidatePath("/dashboard/shops");
                   }}
                   className="flex-1"
                 >
                   <button className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors">
-                    🗑️ মুছে ফেলুন
+                    Delete
                   </button>
                 </form>
               </div>

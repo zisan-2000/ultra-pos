@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { sales, expenses, cashEntries } from "@/db/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, lte } from "drizzle-orm";
+import { getCogsTotal } from "@/app/actions/reports";
+import { shops } from "@/db/schema";
 
 function startOfTodayUtc() {
   const d = new Date();
   d.setUTCHours(0, 0, 0, 0);
   return d;
 }
+
+const SHOP_TYPES_WITH_COGS = new Set([
+  "mini_grocery",
+  "pharmacy",
+  "clothing",
+  "cosmetics_gift",
+  "mini_wholesale",
+]);
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -19,6 +29,15 @@ export async function GET(req: Request) {
 
   const todayStart = startOfTodayUtc();
   const todayDate = todayStart.toISOString().slice(0, 10);
+  const todayEnd = new Date(todayStart);
+  todayEnd.setUTCHours(23, 59, 59, 999);
+
+  const shop = await db.query.shops.findFirst({
+    where: eq(shops.id, shopId),
+  });
+  const needsCogs = shop
+    ? SHOP_TYPES_WITH_COGS.has((shop as any).businessType)
+    : false;
 
   // Sales
   const salesRows = await db
@@ -44,6 +63,10 @@ export async function GET(req: Request) {
     0
   );
 
+  const cogsTotal = needsCogs
+    ? await getCogsTotal(shopId, todayStart, todayEnd)
+    : 0;
+
   // Cashbook
   const cashRows = await db
     .select()
@@ -61,11 +84,13 @@ export async function GET(req: Request) {
     .reduce((sum, c) => sum + Number(c.amount || 0), 0);
 
   const balance = totalIn - totalOut;
+  const totalExpense = expenseTotal + cogsTotal;
 
   return NextResponse.json({
     sales: Number(salesTotal.toFixed(2)) || 0,
-    expenses: Number(expenseTotal.toFixed(2)) || 0,
-    profit: Number((salesTotal - expenseTotal).toFixed(2)) || 0,
+    expenses: Number(totalExpense.toFixed(2)) || 0,
+    cogs: Number(cogsTotal.toFixed(2)) || 0,
+    profit: Number((salesTotal - totalExpense).toFixed(2)) || 0,
     balance: Number(balance.toFixed(2)) || 0,
   });
 }

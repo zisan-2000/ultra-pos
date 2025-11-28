@@ -23,6 +23,7 @@ export const shops = pgTable(
     name: text("name").notNull(),
     address: text("address"),
     phone: text("phone"),
+    businessType: text("business_type").notNull().default("tea_stall"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
