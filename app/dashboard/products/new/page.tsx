@@ -1,3 +1,5 @@
+// app/dashboard/products/new/page.tsx
+
 import { getShopsByUser } from "@/app/actions/shops";
 import ProductFormClient from "./ProductFormClient";
 import { redirect } from "next/navigation";
