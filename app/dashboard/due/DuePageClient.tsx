@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Customer = {
   id: string;
@@ -24,6 +24,34 @@ type StatementRow = {
   entryDate: string;
 };
 
+type SpeechRecognitionInstance = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  start: () => void;
+  stop: () => void;
+  abort?: () => void;
+  onresult: ((event: any) => void) | null;
+  onerror: ((event: any) => void) | null;
+  onend: (() => void) | null;
+};
+
+type CustomerTemplate = {
+  name: string;
+  phone?: string;
+  address?: string;
+  count: number;
+  lastUsed: number;
+};
+
+type PaymentTemplate = {
+  customerId?: string;
+  amount: string;
+  description?: string;
+  count: number;
+  lastUsed: number;
+};
+
 type Props = {
   shopId: string;
   shopName: string;
@@ -37,6 +65,14 @@ export default function DuePageClient({
   initialCustomers,
   initialSummary,
 }: Props) {
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const [voiceReady, setVoiceReady] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  const customerTemplateKey = useMemo(() => `due:customerTemplates:${shopId}`, [shopId]);
+  const paymentTemplateKey = useMemo(() => `due:paymentTemplates:${shopId}`, [shopId]);
+
   const [activeTab, setActiveTab] = useState<"summary" | "add" | "payment" | "list">("summary");
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers || []);
   const [summary, setSummary] = useState<Summary>(
@@ -56,6 +92,89 @@ export default function DuePageClient({
     amount: "",
     description: "",
   });
+  const [customerTemplates, setCustomerTemplates] = useState<CustomerTemplate[]>([]);
+  const [paymentTemplates, setPaymentTemplates] = useState<PaymentTemplate[]>([]);
+
+  function parseAmount(text: string) {
+    const match = text.match(/(\d+(?:[.,]\d+)?)/);
+    return match ? match[1].replace(",", "") : "";
+  }
+
+  function parsePhone(text: string) {
+    const digits = text.replace(/\D/g, "");
+    return digits ? digits.slice(0, 15) : "";
+  }
+
+  function dedupe(values: string[]) {
+    return Array.from(new Set(values.filter(Boolean)));
+  }
+
+  function mergeCustomerTemplates(existing: CustomerTemplate[], incoming: CustomerTemplate) {
+    const idx = existing.findIndex((t) => t.name.toLowerCase() === incoming.name.toLowerCase());
+    const next = [...existing];
+    if (idx >= 0) {
+      const current = next[idx];
+      next[idx] = {
+        ...current,
+        phone: incoming.phone || current.phone,
+        address: incoming.address || current.address,
+        count: current.count + 1,
+        lastUsed: incoming.lastUsed,
+      };
+    } else {
+      next.unshift(incoming);
+    }
+    return next.sort((a, b) => b.count - a.count || b.lastUsed - a.lastUsed).slice(0, 50);
+  }
+
+  function mergePaymentTemplates(existing: PaymentTemplate[], incoming: PaymentTemplate) {
+    const keyMatch = (t: PaymentTemplate) =>
+      (t.customerId || "") === (incoming.customerId || "") && (t.description || "") === (incoming.description || "");
+    const idx = existing.findIndex(keyMatch);
+    const next = [...existing];
+    if (idx >= 0) {
+      const current = next[idx];
+      next[idx] = {
+        ...current,
+        amount: incoming.amount || current.amount,
+        description: incoming.description || current.description,
+        customerId: incoming.customerId || current.customerId,
+        count: current.count + 1,
+        lastUsed: incoming.lastUsed,
+      };
+    } else {
+      next.unshift(incoming);
+    }
+    return next.sort((a, b) => b.count - a.count || b.lastUsed - a.lastUsed).slice(0, 50);
+  }
+
+  useEffect(() => {
+    const SpeechRecognitionImpl =
+      typeof window !== "undefined"
+        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        : null;
+    setVoiceReady(Boolean(SpeechRecognitionImpl));
+    return () => recognitionRef.current?.stop?.();
+  }, []);
+
+  useEffect(() => {
+    const storedCustomers = localStorage.getItem(customerTemplateKey);
+    if (storedCustomers) {
+      try {
+        setCustomerTemplates(JSON.parse(storedCustomers) as CustomerTemplate[]);
+      } catch {
+        setCustomerTemplates([]);
+      }
+    }
+    const storedPayments = localStorage.getItem(paymentTemplateKey);
+    if (storedPayments) {
+      try {
+        setPaymentTemplates(JSON.parse(storedPayments) as PaymentTemplate[]);
+      } catch {
+        setPaymentTemplates([]);
+      }
+    }
+  }, [customerTemplateKey, paymentTemplateKey]);
 
   // Reset all client state when shop changes to avoid leaking data across shops
   useEffect(() => {
@@ -123,6 +242,17 @@ export default function DuePageClient({
       }),
     });
 
+    const template: CustomerTemplate = {
+      name: newCustomer.name.trim(),
+      phone: newCustomer.phone.trim() || undefined,
+      address: newCustomer.address.trim() || undefined,
+      count: 1,
+      lastUsed: Date.now(),
+    };
+    const merged = mergeCustomerTemplates(customerTemplates, template);
+    setCustomerTemplates(merged);
+    localStorage.setItem(customerTemplateKey, JSON.stringify(merged));
+
     setNewCustomer({ name: "", phone: "", address: "" });
     await refreshData();
   }
@@ -144,6 +274,17 @@ export default function DuePageClient({
         }),
       });
 
+      const template: PaymentTemplate = {
+        customerId: paymentForm.customerId,
+        amount: paymentForm.amount || "0",
+        description: paymentForm.description || "",
+        count: 1,
+        lastUsed: Date.now(),
+      };
+      const merged = mergePaymentTemplates(paymentTemplates, template);
+      setPaymentTemplates(merged);
+      localStorage.setItem(paymentTemplateKey, JSON.stringify(merged));
+
       setPaymentForm({ customerId: paymentForm.customerId, amount: "", description: "" });
       await refreshData();
       await loadStatement(paymentForm.customerId);
@@ -160,6 +301,80 @@ export default function DuePageClient({
       return { ...row, running: balance };
     });
   }, [statement]);
+
+  const customerSuggestions = useMemo(() => {
+    const recent = customerTemplates.slice(0, 6).map((t) => t.name);
+    const topDue = summary.topDue?.slice(0, 4).map((c) => c.name) || [];
+    const existing = customers.slice(0, 6).map((c) => c.name);
+    return dedupe([...recent, ...topDue, ...existing]).slice(0, 8);
+  }, [customerTemplates, summary.topDue, customers]);
+
+  const amountSuggestions = useMemo(() => {
+    const fromTemplates = paymentTemplates.map((t) => t.amount);
+    return dedupe(fromTemplates).slice(0, 6);
+  }, [paymentTemplates]);
+
+  function startVoice(field: "customerName" | "customerPhone" | "customerAddress" | "paymentAmount" | "paymentDescription") {
+    if (listening) return;
+    const SpeechRecognitionImpl =
+      typeof window !== "undefined"
+        ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
+        : null;
+
+    if (!SpeechRecognitionImpl) {
+      setVoiceReady(false);
+      setVoiceError("ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না");
+      return;
+    }
+
+    const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
+    recognition.lang = "bn-BD";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.onerror = () => {
+      setListening(false);
+      setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
+    };
+    recognition.onend = () => setListening(false);
+    recognition.onresult = (event: any) => {
+      const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
+      if (spoken) {
+        if (field === "customerName") {
+          const phone = parsePhone(spoken);
+          const name = phone ? spoken.replace(phone, "").trim() : spoken;
+          setNewCustomer((p) => ({ ...p, name }));
+          if (phone && !newCustomer.phone) setNewCustomer((p) => ({ ...p, phone }));
+        } else if (field === "customerPhone") {
+          const phone = parsePhone(spoken);
+          if (phone) setNewCustomer((p) => ({ ...p, phone }));
+        } else if (field === "customerAddress") {
+          setNewCustomer((p) => ({ ...p, address: spoken }));
+        } else if (field === "paymentAmount") {
+          const amt = parseAmount(spoken);
+          if (amt) setPaymentForm((p) => ({ ...p, amount: amt }));
+          const leftover = amt ? spoken.replace(amt, "").trim() : spoken;
+          if (leftover && !paymentForm.description) {
+            setPaymentForm((p) => ({ ...p, description: leftover }));
+          }
+        } else if (field === "paymentDescription") {
+          setPaymentForm((p) => ({ ...p, description: p.description ? `${p.description} ${spoken}` : spoken }));
+          const amt = parseAmount(spoken);
+          if (amt && !paymentForm.amount) setPaymentForm((p) => ({ ...p, amount: amt }));
+        }
+      }
+      setListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    setVoiceError(null);
+    setListening(true);
+    recognition.start();
+  }
+
+  function stopVoice() {
+    recognitionRef.current?.stop?.();
+    setListening(false);
+  }
 
   return (
     <div className="space-y-6">
@@ -253,31 +468,88 @@ export default function DuePageClient({
               <h3 className="text-lg font-bold text-gray-900">নতুন গ্রাহক যোগ করুন</h3>
               <div className="space-y-2">
                 <label className="block text-base font-medium text-gray-900">গ্রাহকের নাম *</label>
-                <input
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="যেমন: করিম সাহেব"
-                  value={newCustomer.name}
-                  onChange={(e) => setNewCustomer((p) => ({ ...p, name: e.target.value }))}
-                  required
-                />
+                <div className="flex gap-3">
+                  <input
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="যেমন: করিম সাহেব"
+                    value={newCustomer.name}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, name: e.target.value }))}
+                    required
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    onClick={listening ? stopVoice : () => startVoice("customerName")}
+                    disabled={!voiceReady}
+                    className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                      listening
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                    } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                  >
+                    {listening ? "থামান" : "ভয়েস"}
+                  </button>
+                </div>
+                {customerSuggestions.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {customerSuggestions.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setNewCustomer((p) => ({ ...p, name: n }))}
+                        className="px-3 py-2 rounded-full border border-emerald-200 text-emerald-800 bg-emerald-50 text-sm hover:border-emerald-300"
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="block text-base font-medium text-gray-900">ফোন নম্বর (ঐচ্ছিক)</label>
-                <input
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="যেমন: 01700000000"
-                  value={newCustomer.phone}
-                  onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))}
-                />
+                <div className="flex gap-3">
+                  <input
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="যেমন: 01700000000"
+                    value={newCustomer.phone}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    onClick={listening ? stopVoice : () => startVoice("customerPhone")}
+                    disabled={!voiceReady}
+                    className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                      listening
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                    } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                  >
+                    {listening ? "থামান" : "ভয়েস"}
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="block text-base font-medium text-gray-900">ঠিকানা (ঐচ্ছিক)</label>
-                <input
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="যেমন: বাজার রোড, ঢাকা"
-                  value={newCustomer.address}
-                  onChange={(e) => setNewCustomer((p) => ({ ...p, address: e.target.value }))}
-                />
+                <div className="flex gap-3">
+                  <input
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="যেমন: বাজার রোড, ঢাকা"
+                    value={newCustomer.address}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, address: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    onClick={listening ? stopVoice : () => startVoice("customerAddress")}
+                    disabled={!voiceReady}
+                    className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                      listening
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                    } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                  >
+                    {listening ? "থামান" : "ভয়েস"}
+                  </button>
+                </div>
               </div>
               <button 
                 type="submit"
@@ -314,25 +586,67 @@ export default function DuePageClient({
               </div>
               <div className="space-y-2">
                 <label className="block text-base font-medium text-gray-900">পেমেন্টের পরিমাণ (৳) *</label>
-                <input
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="যেমন: 500, 1000"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={paymentForm.amount}
-                  onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))}
-                  required
-                />
+                <div className="flex gap-3">
+                  <input
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="যেমন: 500, 1000"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={paymentForm.amount}
+                    onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={listening ? stopVoice : () => startVoice("paymentAmount")}
+                    disabled={!voiceReady}
+                    className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                      listening
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                    } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                  >
+                    {listening ? "থামান" : "ভয়েস"}
+                  </button>
+                </div>
+                {amountSuggestions.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {amountSuggestions.map((a) => (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => setPaymentForm((p) => ({ ...p, amount: a }))}
+                        className="px-3 py-2 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm hover:border-emerald-300"
+                      >
+                        ৳ {a}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="block text-base font-medium text-gray-900">বিবরণ (ঐচ্ছিক)</label>
-                <input
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="যেমন: নগদ পেমেন্ট"
-                  value={paymentForm.description}
-                  onChange={(e) => setPaymentForm((p) => ({ ...p, description: e.target.value }))}
-                />
+                <div className="flex gap-3">
+                  <input
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="যেমন: নগদ পেমেন্ট"
+                    value={paymentForm.description}
+                    onChange={(e) => setPaymentForm((p) => ({ ...p, description: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    onClick={listening ? stopVoice : () => startVoice("paymentDescription")}
+                    disabled={!voiceReady}
+                    className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                      listening
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                    } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                  >
+                    {listening ? "থামান" : "ভয়েস"}
+                  </button>
+                </div>
               </div>
               <button
                 type="submit"

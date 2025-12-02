@@ -1,8 +1,8 @@
 // app/dashboard/expenses/[id]/page.tsx
 
 import { getExpense, updateExpense } from "@/app/actions/expenses";
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import ExpenseFormClient from "../new/ExpenseFormClient";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -13,13 +13,15 @@ export default async function EditExpensePage({ params }: PageProps) {
   if (!expense) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">খরচ পাওয়া যায়নি</h1>
+        <h1 className="text-2xl font-bold mb-4 text-gray-900">খরচ পাওয়া যায়নি</h1>
         <p className="text-gray-600">তালিকা থেকে আবার চেষ্টা করুন</p>
       </div>
     );
   }
+
   const expenseShopId = expense.shopId;
   const backHref = `/dashboard/expenses?shopId=${expenseShopId}`;
+  const expenseDateDefault = expense.expenseDate || "";
 
   async function handleUpdate(formData: FormData) {
     "use server";
@@ -27,9 +29,9 @@ export default async function EditExpensePage({ params }: PageProps) {
     await updateExpense(id, {
       shopId: expenseShopId,
       amount: formData.get("amount") as string,
-      category: formData.get("category") as string,
-      expenseDate: formData.get("expenseDate") as string,
-      note: formData.get("note") as string,
+      category: (formData.get("category") as string) || "অন্যান্য",
+      expenseDate: (formData.get("expenseDate") as string) || expenseDateDefault,
+      note: (formData.get("note") as string) || "",
     });
 
     redirect(`/dashboard/expenses?shopId=${expenseShopId}`);
@@ -42,86 +44,18 @@ export default async function EditExpensePage({ params }: PageProps) {
         <p className="text-gray-600 mt-2">পরিমাণ ও ক্যাটাগরি ঠিক করে সংরক্ষণ করুন</p>
       </div>
 
-      <form action={handleUpdate} className="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
-        
-        {/* Amount */}
-        <div className="space-y-2">
-          <label className="block text-base font-medium text-gray-900">টাকার পরিমাণ (৳) *</label>
-          <input
-            name="amount"
-            type="number"
-            step="0.01"
-            min="0"
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-            defaultValue={expense.amount}
-            required
-          />
-          <p className="text-sm text-gray-500">শূন্যের কম মান গ্রহণযোগ্য নয়</p>
-        </div>
-
-        {/* Category */}
-        <div className="space-y-2">
-          <label className="block text-base font-medium text-gray-900">খরচের ক্যাটাগরি *</label>
-          <select
-            name="category"
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-            defaultValue={expense.category}
-            required
-          >
-            <option value="">-- একটি ক্যাটাগরি নির্বাচন করুন --</option>
-            <option value="ভাড়া">ভাড়া</option>
-            <option value="বেতন">বেতন</option>
-            <option value="বিল">বিল</option>
-            <option value="পরিবহন">পরিবহন</option>
-            <option value="মার্কেটিং">মার্কেটিং</option>
-            <option value="রক্ষণাবেক্ষণ">রক্ষণাবেক্ষণ</option>
-            <option value="অন্যান্য">অন্যান্য</option>
-          </select>
-          <p className="text-sm text-gray-500">উপযুক্ত ক্যাটাগরি বেছে নিন</p>
-        </div>
-
-        {/* Expense Date */}
-        <div className="space-y-2">
-          <label className="block text-base font-medium text-gray-900">খরচের তারিখ *</label>
-          <input
-            name="expenseDate"
-            type="date"
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-            defaultValue={expense.expenseDate || ""}
-            required
-          />
-          <p className="text-sm text-gray-500">তারিখ নির্বাচন করুন</p>
-        </div>
-
-        {/* Note */}
-        <div className="space-y-2">
-          <label className="block text-base font-medium text-gray-900">নোট (ঐচ্ছিক)</label>
-          <textarea
-            name="note"
-            placeholder="যেমন: মার্চ মাসের বিদ্যুৎ বিল..."
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-            rows={4}
-            defaultValue={expense.note || ""}
-          />
-          <p className="text-sm text-gray-500">প্রয়োজনে সংক্ষিপ্ত নোট লিখতে পারেন</p>
-        </div>
-
-        {/* Buttons */}
-        <div className="flex gap-3 pt-4">
-          <button 
-            type="submit"
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
-          >
-            পরিবর্তন সংরক্ষণ করুন
-          </button>
-          <Link 
-            href={backHref}
-            className="flex-1 border border-gray-300 text-gray-900 font-medium py-4 px-6 rounded-lg text-lg hover:bg-gray-100 transition-colors text-center"
-          >
-            বাতিল
-          </Link>
-        </div>
-      </form>
+      <ExpenseFormClient
+        shopId={expenseShopId}
+        backHref={backHref}
+        action={handleUpdate}
+        initialValues={{
+          amount: expense.amount?.toString?.() || "",
+          category: expense.category || "",
+          note: expense.note || "",
+          expenseDate: expense.expenseDate || "",
+        }}
+        submitLabel="✓ খরচ আপডেট করুন"
+      />
     </div>
   );
 }

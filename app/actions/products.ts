@@ -15,9 +15,6 @@ type CreateProductInput = {
   shopId: string;
   name: string;
   category: string;
-  baseUnit?: string;
-  displayUnit?: string | null;
-  conversion?: string | number;
   buyPrice?: string | number | null;
   sellPrice: string;
   stockQty: string;
@@ -31,9 +28,6 @@ type CreateProductInput = {
 type UpdateProductInput = {
   name?: string;
   category?: string;
-  baseUnit?: string;
-  displayUnit?: string | null;
-  conversion?: string | number;
   buyPrice?: string | number | null;
   sellPrice?: string;
   stockQty?: string;
@@ -182,19 +176,11 @@ export async function createProduct(input: CreateProductInput) {
   });
   const trackStock = input.trackStock === undefined ? false : Boolean(input.trackStock);
   const stockQty = trackStock ? normalizedStock : "0";
-  const units = normalizeUnitCreate({
-    baseUnit: input.baseUnit,
-    displayUnit: input.displayUnit,
-    conversion: input.conversion,
-  });
 
   await db.insert(products).values({
     shopId: input.shopId,
     name: input.name,
     category: input.category || "Uncategorized",
-    baseUnit: units.baseUnit,
-    displayUnit: units.displayUnit,
-    conversion: units.conversion,
     buyPrice,
     sellPrice,
     stockQty,
@@ -273,21 +259,12 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
       ? data.trackStock
       : product.trackStock ?? false;
   const resolvedStockQty = trackStockFlag ? stockQty : "0";
-  const unitPatch = normalizeUnitUpdate(
-    {
-      baseUnit: data.baseUnit,
-      displayUnit: data.displayUnit,
-      conversion: data.conversion,
-    },
-    { conversion: product.conversion }
-  );
   const { trackStock, ...rest } = data;
   const payload: any = {
     ...rest,
     ...(buyPrice !== undefined ? { buyPrice } : {}),
     ...(sellPrice !== undefined ? { sellPrice } : {}),
     ...(resolvedStockQty !== undefined ? { stockQty: resolvedStockQty } : {}),
-    ...unitPatch,
   };
 
   if (trackStock !== undefined) {

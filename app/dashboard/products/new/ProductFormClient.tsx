@@ -738,7 +738,7 @@ function ProductForm({ shop }: Props) {
               >
                 {unitOptions.map((u) => (
                   <option key={u} value={u}>
-                    {unitLabels[u] || u}
+                    {unitLabels[u as keyof typeof unitLabels] || u}
                   </option>
                 ))}
               </select>
@@ -758,7 +758,7 @@ function ProductForm({ shop }: Props) {
                   onClick={() => setSelectedUnit(u)}
                   className="px-3 py-2 rounded-full border border-orange-200 text-orange-700 bg-orange-50 text-sm hover:border-orange-300"
                 >
-                  {unitLabels[u] || u}
+                  {unitLabels[u as keyof typeof unitLabels] || u}
                 </button>
               ))}
             </div>
