@@ -7,11 +7,11 @@ export function PosCartItem({ item }: { item: CartItem }) {
   const { increase, decrease, remove } = useCart();
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+    <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
       <div className="flex justify-between items-start">
         <div className="flex-1">
-          <h3 className="font-semibold text-gray-900 text-base">{item.name}</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <h3 className="font-semibold text-gray-900 text-sm leading-snug">{item.name}</h3>
+          <p className="text-xs text-gray-600 mt-1">
             {item.unitPrice} ৳ × {item.qty} = <span className="font-bold text-gray-900">{item.total} ৳</span>
           </p>
         </div>
@@ -32,7 +32,7 @@ export function PosCartItem({ item }: { item: CartItem }) {
         >
           −
         </button>
-        <span className="w-8 text-center font-bold text-gray-900">{item.qty}</span>
+        <span className="w-8 text-center font-bold text-gray-900 text-sm">{item.qty}</span>
         <button
           type="button"
           onClick={() => increase(item.productId)}

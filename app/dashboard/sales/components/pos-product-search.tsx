@@ -48,6 +48,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
 
   const add = useCart((s) => s.add);
   const items = useCart((s) => s.items);
@@ -238,6 +239,8 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
       unitPrice: Number(product.sellPrice),
     });
     bumpUsage(product.id);
+    setRecentlyAdded(product.id);
+    setTimeout(() => setRecentlyAdded(null), 450);
   };
 
   const startVoice = () => {
@@ -282,73 +285,38 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
     setListening(false);
   };
 
-  const renderProductButton = (product: EnrichedProduct, compact: boolean = true) => {
+  const renderProductButton = (product: EnrichedProduct) => {
     const stock = toNumber(product.stockQty);
+    const stockStyle =
+      stock <= 0
+        ? "bg-red-100 text-red-700"
+        : stock < 3
+        ? "bg-orange-100 text-orange-700"
+        : "bg-emerald-100 text-emerald-700";
+
     return (
       <button
         key={product.id}
         type="button"
-        className={`w-full text-left rounded-xl border transition-all ${
-          compact
-            ? "bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm p-3"
-            : "bg-white border-slate-200 hover:border-emerald-300 hover:shadow-md p-4"
-        }`}
+        className={`w-full h-full text-left rounded-xl border bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm transition-all p-3 ${
+          recentlyAdded === product.id ? "ring-2 ring-emerald-200" : ""
+        } ${stock <= 0 ? "opacity-80" : ""}`}
         onClick={() => handleAddToCart(product)}
       >
-        <div className="flex justify-between items-start gap-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-slate-900 text-sm sm:text-base truncate">
-                {product.name}
-              </h3>
-              <span
-                role="button"
-                tabIndex={0}
-                className={`text-[11px] px-2 py-1 rounded-full border cursor-pointer select-none ${
-                  usage[product.id]?.favorite
-                    ? "bg-amber-100 border-amber-300 text-amber-800"
-                    : "border-slate-200 text-slate-500 hover:border-amber-300"
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFavorite(product.id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleFavorite(product.id);
-                  }
-                }}
-                aria-label="Toggle favorite"
-              >
-                {usage[product.id]?.favorite ? "⭐" : "Pin"}
-              </span>
-            </div>
-            <p className="text-base sm:text-lg font-bold text-emerald-600 mt-1">৳ {product.sellPrice}</p>
-            {!compact && (
-              <p className="text-xs text-slate-500 mt-1">
-                ট্যাপ করলে কার্টে যোগ হবে (স্মার্ট তালিকা)
-              </p>
-            )}
-          </div>
-          <div className="text-right space-y-1">
-            <span
-              className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold ${
-                stock <= 0
-                  ? "bg-red-100 text-red-700"
-                  : stock < 3
-                  ? "bg-orange-100 text-orange-700"
-                  : "bg-emerald-100 text-emerald-700"
-              }`}
-            >
-              স্টক: {stock.toFixed(0)}
-            </span>
-            <p className="text-[11px] text-slate-400 mt-1 capitalize">
-              {(product.category || "Uncategorized").replace("&", "and")}
-            </p>
-          </div>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="flex-1 font-semibold text-slate-900 text-sm sm:text-base leading-snug line-clamp-2">
+            {product.name}
+          </h3>
+          <span
+            className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${stockStyle}`}
+          >
+            {stock.toFixed(0)}
+          </span>
         </div>
+        <p className="text-base sm:text-lg font-bold text-emerald-600 mt-1">৳ {product.sellPrice}</p>
+        <p className="text-[11px] text-slate-500 mt-1 capitalize">
+          {(product.category || "Uncategorized").replace("&", "and")}
+        </p>
       </button>
     );
   };
@@ -395,7 +363,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="sticky top-2 z-20 bg-gray-50/80 backdrop-blur border border-slate-200 rounded-xl p-3 flex flex-wrap gap-2">
         {availableCategories.map((cat) => (
           <button
             key={cat.key}
@@ -423,8 +391,8 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
               Pinned for quick tap
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {favoriteProducts.slice(0, QUICK_LIMIT).map((p) => renderProductButton(p, true))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {favoriteProducts.slice(0, QUICK_LIMIT).map((p) => renderProductButton(p))}
           </div>
         </div>
       )}
@@ -432,14 +400,14 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
-            দ্রুত বিক্রি (কুইক বাটন)
+            ⚡ দ্রুত বিক্রি (কুইক বাটন)
           </h3>
           <span className="text-xs text-slate-500">
             শেষ ব্যবহৃত ও ফ্রিকোয়েন্সি অনুযায়ী সাজানো
           </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
-          {quickPicks.map((p) => renderProductButton(p, true))}
+          {quickPicks.map((p) => renderProductButton(p))}
         </div>
       </div>
 
@@ -455,8 +423,8 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
         {smartSuggestions.length === 0 ? (
           <p className="text-sm text-slate-500">কোনো সাজেশন নেই।</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {smartSuggestions.map((p) => renderProductButton(p, true))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {smartSuggestions.map((p) => renderProductButton(p))}
           </div>
         )}
       </div>
@@ -465,13 +433,13 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
         <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
           সব পণ্য (অটো সাজানো)
         </h3>
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           {sortedResults.length === 0 ? (
-            <p className="text-center text-slate-500 py-8">
+            <p className="text-center text-slate-500 py-8 col-span-full">
               আপনার ফিল্টারে কোনো পণ্য নেই।
             </p>
           ) : (
-            sortedResults.map((p) => renderProductButton(p, true))
+            sortedResults.map((p) => renderProductButton(p))
           )}
         </div>
       </div>

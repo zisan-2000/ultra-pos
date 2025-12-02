@@ -43,6 +43,7 @@ export function PosPageClient({
   const cartShopId = useCart((s) => s.currentShopId);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const cartPanelRef = useRef<HTMLDivElement | null>(null);
+  const submitButtonRef = useRef<HTMLButtonElement | null>(null);
   const items = cartShopId === shopId ? cartItems : [];
   const safeTotalAmount =
     cartShopId === shopId
@@ -147,6 +148,15 @@ export function PosPageClient({
     if (cartPanelRef.current) {
       cartPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+  };
+
+  const handleSellFromBar = () => {
+    submitButtonRef.current?.click();
+  };
+
+  const handleClearFromBar = () => {
+    clear();
+    setPaidNow("");
   };
 
   return (
@@ -282,6 +292,7 @@ export function PosPageClient({
           <button
             type="submit"
             disabled={items.length === 0}
+            ref={submitButtonRef}
             className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-bold py-4 px-4 rounded-lg text-lg transition-colors"
           >
             ✓ বিল সম্পন্ন করুন
@@ -298,34 +309,45 @@ export function PosPageClient({
       </div>
       {/* Sticky mini-bill for mobile */}
       {items.length > 0 && (
-        <div className="lg:hidden fixed bottom-16 inset-x-0 z-30 px-4">
-          <div className="bg-white border border-slate-200 shadow-lg rounded-full px-4 py-3 flex items-center gap-3">
+        <div className="lg:hidden fixed bottom-16 inset-x-0 z-40 px-4">
+          <div className="bg-white rounded-2xl border-t border-slate-200 shadow-[0_-6px_24px_rgba(15,23,42,0.12)] px-4 py-3 flex items-center gap-3">
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-slate-300" />
             <div className="flex-1">
-              <p className="text-xs text-slate-500">মোট বিল</p>
-              <p className="text-base font-semibold text-slate-900">
-                {safeTotalAmount().toFixed(2)} ৳ • {itemCount} আইটেম
+              <div className="inline-flex items-center gap-1 text-[11px] text-slate-500 leading-tight">
+                <span>মোট বিল</span>
+                <button
+                  type="button"
+                  aria-label="বিল বিস্তারিত দেখুন"
+                  className="text-slate-400 hover:text-slate-600"
+                  onClick={scrollToCart}
+                >
+                  ▼
+                </button>
+              </div>
+              <p className="text-base font-semibold text-slate-900 leading-tight">
+                {safeTotalAmount().toFixed(2)} ৳ — {itemCount} আইটেম
               </p>
             </div>
             <button
               type="button"
-              onClick={() => setDrawerOpen(true)}
-              className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold"
+              onClick={handleClearFromBar}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700"
             >
-              বিল খুলুন
+              পরিষ্কার
             </button>
             <button
               type="button"
-              onClick={scrollToCart}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700"
+              onClick={handleSellFromBar}
+              className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold min-w-[140px]"
             >
-              বিস্তারিত
+              বিল সম্পন্ন
             </button>
           </div>
         </div>
       )}
 
       {drawerOpen && (
-        <div className="lg:hidden fixed inset-0 z-40">
+        <div className="lg:hidden fixed inset-0 z-50">
           <div
             className="absolute inset-0 bg-black/40"
             onClick={() => setDrawerOpen(false)}
