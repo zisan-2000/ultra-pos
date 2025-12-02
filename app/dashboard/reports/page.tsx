@@ -52,15 +52,15 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     ]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 section-gap">
       {/* HEADER + SHOP SELECTOR */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">সব রিপোর্ট এক জায়গায়</h1>
-          <p className="text-sm text-gray-500 mt-2">
+          <h1 className="text-3xl font-bold text-gray-900 leading-tight">সব রিপোর্ট এক জায়গায়</h1>
+          <p className="text-sm text-gray-500 mt-2 leading-snug">
             দোকান: <span className="font-semibold">{selectedShop.name}</span>
           </p>
-          <p className="text-base text-gray-600 mt-2">
+          <p className="text-base text-gray-600 mt-2 leading-snug">
             দিন, মাস বা পুরা সময়ের হিসাব দেখুন।
           </p>
         </div>
@@ -75,11 +75,13 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
             title="মোট বিক্রি"
             value={`${salesSummary.totalAmount.toFixed(2)} ৳`}
             subtitle={`${salesSummary.count} টি বিল`}
+            icon="💰"
           />
           <StatCard
             title="মোট খরচ"
             value={`${expenseSummary.totalAmount.toFixed(2)} ৳`}
             subtitle={`${expenseSummary.count} টি রেকর্ড`}
+            icon="💸"
           />
           <StatCard
             title="ক্যাশ ব্যালেন্স"
@@ -87,6 +89,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
             subtitle={`ঢুকেছে: ${cashSummary.totalIn.toFixed(
               2
             )} ৳ | বের হয়েছে: ${cashSummary.totalOut.toFixed(2)} ৳`}
+            icon="🏦"
           />
           <StatCard
             title="মোট লাভ"
@@ -94,6 +97,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
             subtitle={`বিক্রি: ${profitSummary.salesTotal.toFixed(
               2
             )} ৳ | খরচ: ${profitSummary.expenseTotal.toFixed(2)} ৳`}
+            icon="📈"
           />
         </div>
       </div>

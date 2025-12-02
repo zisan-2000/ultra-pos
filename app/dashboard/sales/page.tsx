@@ -39,11 +39,14 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   const sales = await getSalesByShop(selectedShopId);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 section-gap">
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">বিক্রি তালিকা</h1>
-          <p className="text-sm text-gray-500 mt-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-700">🧾</span>
+            <h1 className="text-3xl font-bold text-gray-900 leading-tight">বিক্রি তালিকা</h1>
+          </div>
+          <p className="text-sm text-gray-500 mt-2 leading-snug">
             দোকান: <span className="font-semibold">{selectedShop.name}</span>
           </p>
         </div>
@@ -53,7 +56,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
 
           <Link
             href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-            className="w-full lg:w-auto px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-center"
+            className="w-full lg:w-auto px-6 py-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg font-semibold hover:border-blue-300 hover:bg-blue-100 transition-colors text-center"
           >
             ➕ নতুন বিক্রি
           </Link>
@@ -69,7 +72,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
           sales.map((s) => (
             <div
               key={s.id}
-              className="bg-white border border-gray-200 rounded-lg p-6 flex justify-between items-center hover:shadow-md transition-shadow"
+              className="bg-white border border-gray-200 rounded-xl p-5 flex justify-between items-center shadow-sm hover:shadow-md card-lift"
             >
               <div className="space-y-2">
                 <p className="text-2xl font-bold text-gray-900">{s.totalAmount} ৳</p>

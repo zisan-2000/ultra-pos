@@ -81,7 +81,7 @@ export default function ProductsListClient({ shops, activeShopId, serverProducts
           {products.map((product) => (
             <div
               key={product.id}
-              className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-center hover:shadow-md transition-shadow"
+              className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-center hover:shadow-md card-lift"
             >
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{product.name}</h2>

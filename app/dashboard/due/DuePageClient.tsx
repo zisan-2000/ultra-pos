@@ -379,21 +379,21 @@ export default function DuePageClient({
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <p className="text-sm text-gray-600 mb-2">মোট বাকি</p>
-          <p className="text-4xl font-bold text-gray-900">{summary.totalDue.toFixed(2)} ৳</p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <p className="text-sm text-gray-600 mb-2">গ্রাহক সংখ্যা</p>
-          <p className="text-4xl font-bold text-gray-900">{customers.length}</p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <p className="text-sm text-gray-600 mb-2">সর্বোচ্চ বাকি</p>
-          {summary.topDue?.length === 0 ? (
-            <p className="text-sm text-gray-500">কোনো বাকি নেই</p>
-          ) : (
-            <div className="space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
+            <p className="text-sm text-gray-600 mb-2">মোট বাকি</p>
+            <p className="text-4xl font-bold text-gray-900">{summary.totalDue.toFixed(2)} ৳</p>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
+            <p className="text-sm text-gray-600 mb-2">গ্রাহক সংখ্যা</p>
+            <p className="text-4xl font-bold text-gray-900">{customers.length}</p>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
+            <p className="text-sm text-gray-600 mb-2">সর্বোচ্চ বাকি</p>
+            {summary.topDue?.length === 0 ? (
+              <p className="text-sm text-gray-500">কোনো বাকি নেই</p>
+            ) : (
+              <div className="space-y-2">
               {summary.topDue?.slice(0, 2).map((c) => (
                 <p key={c.id} className="text-sm font-medium text-gray-900">
                   {c.name}: {c.totalDue.toFixed(2)} ৳
@@ -438,7 +438,7 @@ export default function DuePageClient({
                   <p className="text-center text-gray-500 py-8">এখনও কোনো গ্রাহক নেই।</p>
                 ) : (
                   customers.map((c) => (
-                    <div key={c.id} className="bg-gray-50 rounded-lg p-4 flex justify-between items-start">
+                    <div key={c.id} className="bg-gray-50 rounded-lg p-4 flex justify-between items-start card-lift">
                       <div>
                         <h4 className="font-semibold text-gray-900">{c.name}</h4>
                         <p className="text-sm text-gray-600 mt-1">
@@ -735,12 +735,12 @@ export default function DuePageClient({
                     </table>
                   </div>
 
-                  <div className="space-y-3 md:hidden">
-                    {loadingStatement ? (
-                      <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
-                        লোড হচ্ছে...
-                      </p>
-                    ) : statementWithBalance.length === 0 ? (
+              <div className="space-y-3 md:hidden">
+                {loadingStatement ? (
+                  <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
+                    লোড হচ্ছে...
+                  </p>
+                ) : statementWithBalance.length === 0 ? (
                       <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
                         কোনো লেনদেন নেই
                       </p>
@@ -752,7 +752,7 @@ export default function DuePageClient({
                         return (
                           <div
                             key={row.id}
-                            className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm"
+                            className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm card-lift"
                           >
                             <div className="flex items-center justify-between">
                               <div>

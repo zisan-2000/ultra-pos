@@ -301,7 +301,7 @@ export function PosPageClient({
             type="submit"
             disabled={items.length === 0}
             ref={submitButtonRef}
-            className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-bold py-4 px-4 rounded-lg text-lg transition-colors"
+            className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-semibold py-4 px-4 rounded-lg text-lg transition-colors hover:border-emerald-300 hover:bg-emerald-100 disabled:bg-slate-200 disabled:text-slate-500"
           >
             ✓ বিল সম্পন্ন করুন
           </button>
@@ -361,10 +361,10 @@ export function PosPageClient({
       {drawerOpen && (
         <div className="lg:hidden fixed inset-0 z-50">
           <div
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-black/40 animate-fade-in"
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div className="absolute inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl p-4 space-y-4 max-h-[70vh] overflow-y-auto animate-slide-up">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-slate-500">বর্তমান বিল</p>

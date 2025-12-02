@@ -33,13 +33,19 @@ export default async function ProductsPage({ searchParams }: PageProps) {
   const onlineProducts = await getProductsByShop(activeShopId);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 section-gap">
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-        <ProductsListClient
-          shops={shops}
-          activeShopId={activeShopId}
-          serverProducts={onlineProducts}
-        />
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-700">📦</span>
+            <h1 className="text-3xl font-bold text-gray-900 leading-tight">পণ্য তালিকা</h1>
+          </div>
+          <ProductsListClient
+            shops={shops}
+            activeShopId={activeShopId}
+            serverProducts={onlineProducts}
+          />
+        </div>
       </div>
     </div>
   );

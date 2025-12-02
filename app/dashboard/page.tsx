@@ -29,12 +29,12 @@ export default async function DashboardPage() {
   const summary = await fetchSummary(shopId);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 section-gap">
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">ড্যাশবোর্ড</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <h1 className="text-3xl font-bold text-gray-900 leading-tight">ড্যাশবোর্ড</h1>
+            <p className="text-sm text-gray-500 mt-1 leading-snug">
               আজকের সারসংক্ষেপ, বিক্রি ও খরচ
             </p>
           </div>
@@ -47,42 +47,52 @@ export default async function DashboardPage() {
             title="আজকের বিক্রি"
             value={`${(summary?.sales ?? 0).toFixed(2)} ৳`}
             color="bg-emerald-500"
+            icon="💰"
           />
 
           <Card
             title="আজকের খরচ"
             value={`${(summary?.expenses ?? 0).toFixed(2)} ৳`}
             color="bg-red-500"
+            icon="💸"
           />
 
           <Card
             title="আজকের লাভ"
             value={`${(summary?.profit ?? 0).toFixed(2)} ৳`}
             color="bg-blue-600"
+            icon="📈"
           />
 
           <Card
             title="ক্যাশ ব্যালেন্স"
             value={`${(summary?.balance ?? 0).toFixed(2)} ৳`}
             color="bg-amber-400"
+            icon="🏦"
           />
         </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900 mb-3">দ্রুত কাজ</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
           <a
             href="/dashboard/sales/new"
-            className="block bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg py-4 text-lg text-center transition-colors"
+            className="block bg-blue-50 border border-blue-100 text-blue-800 font-semibold rounded-lg py-4 px-3 text-base text-center transition-colors hover:border-blue-200 hover:bg-blue-100 pressable card-lift h-full"
           >
-            ➕ নতুন বিক্রি শুরু করুন
+            <span className="flex flex-col items-center gap-1">
+              <span className="text-xl">⚡</span>
+              <span>নতুন বিক্রি শুরু করুন</span>
+            </span>
           </a>
           <a
             href="/dashboard/due"
-            className="block bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg py-4 text-lg text-center transition-colors"
+            className="block bg-emerald-50 border border-emerald-100 text-emerald-800 font-semibold rounded-lg py-4 px-3 text-base text-center transition-colors hover:border-emerald-200 hover:bg-emerald-100 pressable card-lift h-full"
           >
-            📝 ধার / বাকি লিখে রাখুন
+            <span className="flex flex-col items-center gap-1">
+              <span className="text-xl">🧾</span>
+              <span>ধার / বাকি লিখে রাখুন</span>
+            </span>
           </a>
         </div>
       </div>
@@ -94,15 +104,45 @@ function Card({
   title,
   value,
   color,
+  icon,
 }: {
   title: string;
   value: string;
   color: string;
+  icon?: string;
 }) {
+  const styles: Record<string, string> = {
+    "bg-emerald-500": "bg-emerald-50 text-emerald-900",
+    "bg-red-500": "bg-red-50 text-red-900",
+    "bg-blue-600": "bg-blue-50 text-blue-900",
+    "bg-amber-400": "bg-amber-50 text-amber-900",
+  };
+  const iconBg: Record<string, string> = {
+    "bg-emerald-500": "bg-emerald-100 text-emerald-700",
+    "bg-red-500": "bg-red-100 text-red-700",
+    "bg-blue-600": "bg-blue-100 text-blue-700",
+    "bg-amber-400": "bg-amber-100 text-amber-700",
+  };
+
   return (
-    <div className={`p-8 rounded-lg text-white ${color} shadow-md hover:shadow-lg transition-shadow`}>
-      <p className="text-base opacity-90 mb-3">{title}</p>
-      <h2 className="text-3xl font-bold">{value}</h2>
+    <div
+      className={`p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all pressable ${
+        styles[color] ?? "bg-white text-slate-900"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        {icon ? (
+          <span
+            className={`inline-flex items-center justify-center h-9 w-9 rounded-full ${iconBg[color] ?? "bg-slate-100 text-slate-700"}`}
+          >
+            {icon}
+          </span>
+        ) : null}
+        <div>
+          <p className="text-sm font-semibold opacity-80 mb-1">{title}</p>
+          <h2 className="text-2xl font-bold leading-tight">{value}</h2>
+        </div>
+      </div>
     </div>
   );
 }

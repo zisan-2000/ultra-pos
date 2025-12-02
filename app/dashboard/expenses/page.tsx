@@ -41,15 +41,18 @@ export default async function ExpensesPage({
   const rows = await getExpensesByShop(selectedShopId);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 section-gap">
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-gray-900">খরচের তালিকা</h1>
-            <p className="text-base text-gray-600 mt-2">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">💸</span>
+              <h1 className="text-3xl font-bold text-gray-900 leading-tight">খরচের তালিকা</h1>
+            </div>
+            <p className="text-base text-gray-600 mt-1 leading-snug">
               আজ কী কী খরচ করলেন, লিখে রাখুন।
             </p>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 leading-snug">
               দোকান: <span className="font-semibold">{selectedShop.name}</span>
             </p>
           </div>
@@ -59,7 +62,7 @@ export default async function ExpensesPage({
 
             <Link
               href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
-              className="w-full sm:w-auto px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-center"
+              className="w-full sm:w-auto px-6 py-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg font-semibold hover:border-emerald-300 hover:bg-emerald-100 transition-colors text-center pressable"
             >
               ➕ নতুন খরচ
             </Link>
@@ -76,7 +79,7 @@ export default async function ExpensesPage({
           rows.map((e) => (
             <div
               key={e.id}
-              className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-center hover:shadow-md transition-shadow"
+              className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col gap-4 md:flex-row md:justify-between md:items-center shadow-sm hover:shadow-md card-lift"
             >
               <div>
                 <p className="text-2xl font-bold text-gray-900">{e.amount} ৳</p>
@@ -87,7 +90,7 @@ export default async function ExpensesPage({
               <div className="w-full md:w-auto grid grid-cols-2 gap-2 md:flex md:gap-2 md:items-center">
                 <Link
                   href={`/dashboard/expenses/${e.id}`}
-                  className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-center"
+                  className="w-full md:w-auto px-4 py-2 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg font-semibold hover:border-blue-300 hover:bg-blue-100 transition-colors text-center"
                 >
                   এডিট
                 </Link>
@@ -101,7 +104,7 @@ export default async function ExpensesPage({
                     await deleteExpense(e.id);
                   }}
                 >
-                  <button className="w-full md:w-auto px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors">
+                  <button className="w-full md:w-auto px-4 py-2 bg-red-50 border border-red-200 text-red-800 rounded-lg font-semibold hover:border-red-300 hover:bg-red-100 transition-colors">
                     ডিলিট
                   </button>
                 </form>
