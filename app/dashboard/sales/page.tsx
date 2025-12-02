@@ -39,8 +39,8 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   const sales = await getSalesByShop(selectedShopId);
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-8">
+    <div className="space-y-6">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">বিক্রি তালিকা</h1>
           <p className="text-sm text-gray-500 mt-2">
@@ -48,23 +48,25 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
           </p>
         </div>
 
-        <div className="flex gap-3 items-center">
+        <div className="flex gap-3 items-center w-full lg:w-auto">
           <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
 
           <Link
             href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+            className="w-full lg:w-auto px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-center"
           >
             ➕ নতুন বিক্রি
           </Link>
         </div>
       </div>
 
-      {sales.length === 0 ? (
-        <p className="text-center text-gray-600 py-8">এখনও কোনো বিক্রি নেই।</p>
-      ) : (
-        <div className="space-y-4">
-          {sales.map((s) => (
+      <div className="space-y-4">
+        {sales.length === 0 ? (
+          <p className="text-center text-gray-600 py-8 bg-white border border-slate-200 rounded-xl">
+            এখনও কোনো বিক্রি নেই।
+          </p>
+        ) : (
+          sales.map((s) => (
             <div
               key={s.id}
               className="bg-white border border-gray-200 rounded-lg p-6 flex justify-between items-center hover:shadow-md transition-shadow"
@@ -89,9 +91,9 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                   : ""}
               </p>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }
