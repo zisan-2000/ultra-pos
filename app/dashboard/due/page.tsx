@@ -34,8 +34,8 @@ export default async function DuePage({ searchParams }: DuePageProps) {
   ]);
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="space-y-6">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">ধার / বাকি</h1>
           <p className="text-sm text-gray-500 mt-2">
@@ -49,13 +49,15 @@ export default async function DuePage({ searchParams }: DuePageProps) {
         <DueShopSelector shops={shops} selectedShopId={selectedShopId} />
       </div>
 
-      <DuePageClient
-        key={selectedShopId}
-        shopId={selectedShopId}
-        shopName={selectedShop.name}
-        initialCustomers={customers as any}
-        initialSummary={summary as any}
-      />
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <DuePageClient
+          key={selectedShopId}
+          shopId={selectedShopId}
+          shopName={selectedShop.name}
+          initialCustomers={customers as any}
+          initialSummary={summary as any}
+        />
+      </div>
     </div>
   );
 }

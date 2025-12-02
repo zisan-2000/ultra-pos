@@ -52,9 +52,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     ]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* HEADER + SHOP SELECTOR */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">সব রিপোর্ট এক জায়গায়</h1>
           <p className="text-sm text-gray-500 mt-2">
@@ -69,70 +69,71 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       </div>
 
       {/* TOP SUMMARY CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <StatCard
-          title="মোট বিক্রি"
-          value={`${salesSummary.totalAmount.toFixed(2)} ৳`}
-          subtitle={`${salesSummary.count} টি বিল`}
-        />
-        <StatCard
-          title="মোট খরচ"
-          value={`${expenseSummary.totalAmount.toFixed(2)} ৳`}
-          subtitle={`${expenseSummary.count} টি রেকর্ড`}
-        />
-        <StatCard
-          title="ক্যাশ ব্যালেন্স"
-          value={`${cashSummary.balance.toFixed(2)} ৳`}
-          subtitle={`ঢুকেছে: ${cashSummary.totalIn.toFixed(
-            2
-          )} ৳ | বের হয়েছে: ${cashSummary.totalOut.toFixed(2)} ৳`}
-        />
-        <StatCard
-          title="মোট লাভ"
-          value={`${profitSummary.profit.toFixed(2)} ৳`}
-          subtitle={`বিক্রি: ${profitSummary.salesTotal.toFixed(
-            2
-          )} ৳ | খরচ: ${profitSummary.expenseTotal.toFixed(2)} ৳`}
-        />
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <StatCard
+            title="মোট বিক্রি"
+            value={`${salesSummary.totalAmount.toFixed(2)} ৳`}
+            subtitle={`${salesSummary.count} টি বিল`}
+          />
+          <StatCard
+            title="মোট খরচ"
+            value={`${expenseSummary.totalAmount.toFixed(2)} ৳`}
+            subtitle={`${expenseSummary.count} টি রেকর্ড`}
+          />
+          <StatCard
+            title="ক্যাশ ব্যালেন্স"
+            value={`${cashSummary.balance.toFixed(2)} ৳`}
+            subtitle={`ঢুকেছে: ${cashSummary.totalIn.toFixed(
+              2
+            )} ৳ | বের হয়েছে: ${cashSummary.totalOut.toFixed(2)} ৳`}
+          />
+          <StatCard
+            title="মোট লাভ"
+            value={`${profitSummary.profit.toFixed(2)} ৳`}
+            subtitle={`বিক্রি: ${profitSummary.salesTotal.toFixed(
+              2
+            )} ৳ | খরচ: ${profitSummary.expenseTotal.toFixed(2)} ৳`}
+          />
+        </div>
       </div>
 
       {/* DETAILED REPORTS - 7 REPORTS */}
-      <section className="space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900">সব রিপোর্ট</h2>
+      <section className="space-y-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <h2 className="text-2xl font-bold text-gray-900">সব রিপোর্ট</h2>
+        </div>
 
-        {/* Row 1: 3 Reports */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="border border-gray-200 rounded-lg p-6 bg-white">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
             <SalesReport shopId={selectedShopId} />
           </div>
 
-          <div className="border border-gray-200 rounded-lg p-6 bg-white">
+          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
             <ExpenseReport shopId={selectedShopId} />
           </div>
 
-          <div className="border border-gray-200 rounded-lg p-6 bg-white">
+          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
             <CashbookReport shopId={selectedShopId} />
           </div>
         </div>
 
-        {/* Row 2: 2 Reports */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="border border-gray-200 rounded-lg p-6 bg-white">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
             <PaymentMethodReport shopId={selectedShopId} />
           </div>
 
-          <div className="border border-gray-200 rounded-lg p-6 bg-white">
+          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
             <ProfitTrendReport shopId={selectedShopId} />
           </div>
         </div>
 
-        {/* Row 3: 2 Reports */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="border border-gray-200 rounded-lg p-6 bg-white">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
             <TopProductsReport shopId={selectedShopId} />
           </div>
 
-          <div className="border border-gray-200 rounded-lg p-6 bg-white">
+          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
             <LowStockReport shopId={selectedShopId} />
           </div>
         </div>

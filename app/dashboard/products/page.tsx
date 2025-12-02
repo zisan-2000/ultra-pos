@@ -33,10 +33,14 @@ export default async function ProductsPage({ searchParams }: PageProps) {
   const onlineProducts = await getProductsByShop(activeShopId);
 
   return (
-    <ProductsListClient
-      shops={shops}
-      activeShopId={activeShopId}
-      serverProducts={onlineProducts}
-    />
+    <div className="space-y-6">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <ProductsListClient
+          shops={shops}
+          activeShopId={activeShopId}
+          serverProducts={onlineProducts}
+        />
+      </div>
+    </div>
   );
 }

@@ -29,52 +29,62 @@ export default async function DashboardPage() {
   const summary = await fetchSummary(shopId);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">ড্যাশবোর্ড</h1>
+    <div className="space-y-6">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">ড্যাশবোর্ড</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              আজকের সারসংক্ষেপ, বিক্রি ও খরচ
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Summary Cards - 2x2 Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card
-          title="আজকের বিক্রি"
-          value={`${(summary?.sales ?? 0).toFixed(2)} ৳`}
-          color="bg-emerald-500"
-        />
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card
+            title="আজকের বিক্রি"
+            value={`${(summary?.sales ?? 0).toFixed(2)} ৳`}
+            color="bg-emerald-500"
+          />
 
-        <Card
-          title="আজকের খরচ"
-          value={`${(summary?.expenses ?? 0).toFixed(2)} ৳`}
-          color="bg-red-500"
-        />
+          <Card
+            title="আজকের খরচ"
+            value={`${(summary?.expenses ?? 0).toFixed(2)} ৳`}
+            color="bg-red-500"
+          />
 
-        <Card
-          title="আজকের লাভ"
-          value={`${(summary?.profit ?? 0).toFixed(2)} ৳`}
-          color="bg-blue-600"
-        />
+          <Card
+            title="আজকের লাভ"
+            value={`${(summary?.profit ?? 0).toFixed(2)} ৳`}
+            color="bg-blue-600"
+          />
 
-        <Card
-          title="ক্যাশ ব্যালেন্স"
-          value={`${(summary?.balance ?? 0).toFixed(2)} ৳`}
-          color="bg-amber-400"
-        />
+          <Card
+            title="ক্যাশ ব্যালেন্স"
+            value={`${(summary?.balance ?? 0).toFixed(2)} ৳`}
+            color="bg-amber-400"
+          />
+        </div>
       </div>
 
-      {/* Quick Action Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <a
-          href="/dashboard/sales/new"
-          className="block bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg py-4 text-lg text-center transition-colors"
-        >
-          ➕ নতুন বিক্রি শুরু করুন
-        </a>
-        <a
-          href="/dashboard/due"
-          className="block bg-cyan-500 hover:bg-cyan-600 text-white font-bold rounded-lg py-4 text-lg text-center transition-colors"
-        >
-          📝 ধার / বাকি লিখে রাখুন
-        </a>
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900 mb-3">দ্রুত কাজ</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <a
+            href="/dashboard/sales/new"
+            className="block bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg py-4 text-lg text-center transition-colors"
+          >
+            ➕ নতুন বিক্রি শুরু করুন
+          </a>
+          <a
+            href="/dashboard/due"
+            className="block bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg py-4 text-lg text-center transition-colors"
+          >
+            📝 ধার / বাকি লিখে রাখুন
+          </a>
+        </div>
       </div>
     </div>
   );

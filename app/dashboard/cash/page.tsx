@@ -44,37 +44,41 @@ export default async function CashPage({ searchParams }: CashPageProps) {
   }, 0);
 
   return (
-    <div>
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900">ক্যাশ খাতা</h1>
-          <p className="text-sm text-gray-500 mt-2">
-            দোকান: <b>{selectedShop.name}</b>
-          </p>
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
-            <p className="text-lg text-gray-600">
-              বর্তমান ব্যালেন্স: <span className="text-2xl font-bold text-green-700">{balance.toFixed(2)} ৳</span>
+    <div className="space-y-6">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold text-gray-900">ক্যাশ খাতা</h1>
+            <p className="text-sm text-gray-500 mt-2">
+              দোকান: <b>{selectedShop.name}</b>
             </p>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-3">
+              <p className="text-lg text-gray-600">
+                বর্তমান ব্যালেন্স: <span className="text-2xl font-bold text-green-700">{balance.toFixed(2)} ৳</span>
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="w-full lg:w-auto flex flex-col sm:flex-row sm:items-center gap-3">
-          <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
+          <div className="w-full lg:w-auto flex flex-col sm:flex-row sm:items-center gap-3">
+            <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
 
-          <Link
-            href={`/dashboard/cash/new?shopId=${selectedShopId}`}
-            className="w-full sm:w-auto px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-center"
-          >
-            ➕ নতুন এন্ট্রি
-          </Link>
+            <Link
+              href={`/dashboard/cash/new?shopId=${selectedShopId}`}
+              className="w-full sm:w-auto px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-center"
+            >
+              ➕ নতুন এন্ট্রি
+            </Link>
+          </div>
         </div>
       </div>
 
-      {rows.length === 0 ? (
-        <p className="text-center text-gray-600 py-8">এখনও কোনো এন্ট্রি নেই।</p>
-      ) : (
-        <div className="space-y-4">
-          {rows.map((e) => (
+      <div className="space-y-4">
+        {rows.length === 0 ? (
+          <p className="text-center text-gray-600 py-8 bg-white border border-slate-200 rounded-xl">
+            এখনও কোনো এন্ট্রি নেই।
+          </p>
+        ) : (
+          rows.map((e) => (
             <div
               key={e.id}
               className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-center hover:shadow-md transition-shadow"
@@ -111,9 +115,9 @@ export default async function CashPage({ searchParams }: CashPageProps) {
                 </form>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }
