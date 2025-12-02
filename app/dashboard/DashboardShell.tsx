@@ -21,11 +21,11 @@ const navItems = [
 ];
 
 const bottomNav = [
-  { href: "/dashboard", label: "ড্যাশ", icon: "⌂" },
-  { href: "/dashboard/sales", label: "বিক্রি", icon: "৳" },
-  { href: "/dashboard/products", label: "পণ্য", icon: "▢" },
-  { href: "/dashboard/expenses", label: "খরচ", icon: "−" },
-  { href: "/dashboard/reports", label: "রিপোর্ট", icon: "≣" }
+  { href: "/dashboard", label: "ড্যাশ", icon: "🏠" },
+  { href: "/dashboard/sales", label: "বিক্রি", icon: "🛒" },
+  { href: "/dashboard/products", label: "পণ্য", icon: "🗃️" },
+  { href: "/dashboard/expenses", label: "খরচ", icon: "💸" },
+  { href: "/dashboard/reports", label: "রিপোর্ট", icon: "📊" }
 ];
 
 const fabByRoute: Record<string, { href: string; label: string } | null> = {
@@ -199,13 +199,13 @@ export function DashboardShell({
       </div>
 
       {/* Bottom nav for mobile */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 lg:hidden px-3 pb-2">
-        <div className="grid grid-cols-5 rounded-t-2xl bg-white/90 backdrop-blur border border-slate-200 shadow-[0_-8px_30px_rgba(15,23,42,0.15)] px-2">
+      <nav className="fixed bottom-0 inset-x-0 z-30 lg:hidden px-3 pb-3">
+        <div className="relative grid grid-cols-5 rounded-t-2xl bg-white/90 backdrop-blur-sm border border-slate-200 shadow-[0_-4px_18px_rgba(15,23,42,0.12)] px-3 pt-4 pb-3">
           {bottomNav.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center py-3 text-[11px] font-semibold gap-1 ${
+              className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 ${
                 isActive(item.href) ? "text-blue-700" : "text-gray-500"
               }`}
             >
@@ -221,10 +221,9 @@ export function DashboardShell({
         <Link
           href={`${fabConfig.href}?shopId=${safeShopId}`}
           aria-label={fabConfig.label}
-          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 lg:hidden inline-flex items-center justify-center h-14 rounded-full bg-blue-600 text-white shadow-[0_10px_30px_rgba(59,130,246,0.35)] hover:bg-blue-700 transition-colors pressable px-5 gap-2"
+          className="fixed bottom-[100px] left-1/2 -translate-x-1/2 z-40 lg:hidden inline-flex items-center justify-center h-[52px] w-[52px] rounded-full bg-blue-500 text-white shadow-[0_6px_14px_rgba(0,0,0,0.12)] hover:bg-blue-600 transition-colors fab-tap"
         >
-          <span className="text-2xl leading-none">＋</span>
-          <span className="font-semibold text-sm hidden sm:inline">{fabConfig.label}</span>
+          <span className="text-lg leading-none">＋</span>
         </Link>
       ) : null}
     </div>

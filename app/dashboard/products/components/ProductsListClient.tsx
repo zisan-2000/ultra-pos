@@ -67,9 +67,10 @@ export default function ProductsListClient({ shops, activeShopId, serverProducts
           <ShopSwitcherClient shops={shops} activeShopId={activeShopId} />
           <Link
             href={`/dashboard/products/new?shopId=${activeShopId}`}
-            className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-center"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg font-semibold hover:border-blue-300 hover:bg-blue-100 transition-colors text-center pressable"
           >
-            + নতুন পণ্য
+            <span aria-hidden="true">＋</span>
+            <span>নতুন পণ্য</span>
           </Link>
         </div>
       </div>
@@ -97,12 +98,14 @@ export default function ProductsListClient({ shops, activeShopId, serverProducts
               <div className="w-full md:w-auto grid grid-cols-2 gap-2 md:flex md:gap-2">
                 <Link
                   href={`/dashboard/products/${product.id}`}
-                  className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-center"
+                  className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg font-semibold hover:border-blue-300 hover:bg-blue-100 transition-colors text-center pressable"
                 >
-                  এডিট
+                  <span aria-hidden="true">🖉</span>
+                  <span>এডিট</span>
                 </Link>
-                <button className="w-full md:w-auto px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors">
-                  ডিলিট
+                <button className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-50 border border-red-200 text-red-800 rounded-lg font-semibold hover:border-red-300 hover:bg-red-100 transition-colors pressable">
+                  <span aria-hidden="true">🗑️</span>
+                  <span>ডিলিট</span>
                 </button>
               </div>
             </div>

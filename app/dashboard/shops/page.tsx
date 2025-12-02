@@ -21,9 +21,10 @@ export default async function ShopsPage() {
         </div>
         <Link
           href="/dashboard/shops/new"
-          className="w-full md:w-auto bg-blue-50 border border-blue-200 text-blue-800 font-bold py-3 px-6 rounded-lg text-lg transition-colors text-center hover:border-blue-300 hover:bg-blue-100"
+          className="w-full md:w-auto inline-flex items-center justify-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 font-bold py-3 px-6 rounded-lg text-lg transition-colors text-center hover:border-blue-300 hover:bg-blue-100 pressable"
         >
-          + নতুন দোকান
+          <span aria-hidden="true">＋</span>
+          <span>নতুন দোকান</span>
         </Link>
       </div>
 
@@ -32,9 +33,10 @@ export default async function ShopsPage() {
           <p className="text-gray-600 mb-4">কোনো দোকান নেই</p>
           <Link
             href="/dashboard/shops/new"
-            className="inline-block bg-blue-50 border border-blue-200 text-blue-800 font-bold py-3 px-6 rounded-lg transition-colors hover:border-blue-300 hover:bg-blue-100"
+            className="inline-flex items-center justify-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 font-bold py-3 px-6 rounded-lg transition-colors hover:border-blue-300 hover:bg-blue-100 pressable"
           >
-            প্রথম দোকান তৈরি করুন
+            <span aria-hidden="true">＋</span>
+            <span>প্রথম দোকান তৈরি করুন</span>
           </Link>
         </div>
       ) : (
@@ -57,9 +59,10 @@ export default async function ShopsPage() {
               <div className="w-full grid grid-cols-2 gap-3 pt-4 border-t border-slate-200">
                 <Link
                   href={`/dashboard/shops/${shop.id}`}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg text-center transition-colors"
+                  className="w-full inline-flex items-center justify-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 font-semibold py-3 px-4 rounded-lg text-center transition-colors hover:border-blue-300 hover:bg-blue-100 pressable"
                 >
-                  দোকান দেখুন / সম্পাদনা
+                  <span aria-hidden="true">🖉</span>
+                  <span>দোকান দেখুন / সম্পাদনা</span>
                 </Link>
 
                 <form
@@ -70,8 +73,9 @@ export default async function ShopsPage() {
                   }}
                   className="w-full"
                 >
-                  <button className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-3 px-4 rounded-lg transition-colors">
-                    মুছুন
+                  <button className="w-full inline-flex items-center justify-center gap-2 bg-red-50 border border-red-200 text-red-800 font-semibold py-3 px-4 rounded-lg transition-colors hover:border-red-300 hover:bg-red-100 pressable">
+                    <span aria-hidden="true">🗑️</span>
+                    <span>মুছুন</span>
                   </button>
                 </form>
               </div>
