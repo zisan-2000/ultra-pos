@@ -298,12 +298,12 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
       <button
         key={product.id}
         type="button"
-        className={`w-full h-full text-left rounded-xl border bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm transition-all p-3 ${
+        className={`w-full h-full text-left rounded-xl border bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm transition-all p-3 pressable ${
           recentlyAdded === product.id ? "ring-2 ring-emerald-200" : ""
         } ${stock <= 0 ? "opacity-80" : ""}`}
         onClick={() => handleAddToCart(product)}
       >
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start justify-between gap-2 relative">
           <h3 className="flex-1 font-semibold text-slate-900 text-sm sm:text-base leading-snug line-clamp-2">
             {product.name}
           </h3>
@@ -312,6 +312,11 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
           >
             {stock.toFixed(0)}
           </span>
+          {recentlyAdded === product.id && (
+            <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
+              +1
+            </span>
+          )}
         </div>
         <p className="text-base sm:text-lg font-bold text-emerald-600 mt-1">৳ {product.sellPrice}</p>
         <p className="text-[11px] text-slate-500 mt-1 capitalize">
@@ -382,7 +387,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
       </div>
 
       {favoriteProducts.length > 0 && (
-        <div className="space-y-3">
+        <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
               Favorite items
@@ -397,7 +402,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
             ⚡ দ্রুত বিক্রি (কুইক বাটন)
@@ -411,7 +416,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
             Smart suggestions
@@ -429,7 +434,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
         )}
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
         <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
           সব পণ্য (অটো সাজানো)
         </h3>

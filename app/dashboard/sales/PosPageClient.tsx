@@ -42,6 +42,7 @@ export function PosPageClient({
   const cartItems = useCart((s) => s.items);
   const cartShopId = useCart((s) => s.currentShopId);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [barFlash, setBarFlash] = useState(false);
   const cartPanelRef = useRef<HTMLDivElement | null>(null);
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
   const items = cartShopId === shopId ? cartItems : [];
@@ -158,6 +159,13 @@ export function PosPageClient({
     clear();
     setPaidNow("");
   };
+
+  useEffect(() => {
+    if (items.length === 0) return;
+    setBarFlash(true);
+    const t = setTimeout(() => setBarFlash(false), 240);
+    return () => clearTimeout(t);
+  }, [items.length, safeTotalAmount()]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -310,7 +318,11 @@ export function PosPageClient({
       {/* Sticky mini-bill for mobile */}
       {items.length > 0 && (
         <div className="lg:hidden fixed bottom-16 inset-x-0 z-40 px-4">
-          <div className="bg-white rounded-2xl border-t border-slate-200 shadow-[0_-6px_24px_rgba(15,23,42,0.12)] px-4 py-3 flex items-center gap-3">
+          <div
+            className={`relative bg-white rounded-2xl border-t border-slate-200 shadow-[0_-6px_24px_rgba(15,23,42,0.12)] px-4 py-3 flex items-center gap-3 ${
+              barFlash ? "flash-bar" : ""
+            }`}
+          >
             <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-slate-300" />
             <div className="flex-1">
               <div className="inline-flex items-center gap-1 text-[11px] text-slate-500 leading-tight">
