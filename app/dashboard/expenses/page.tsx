@@ -42,8 +42,8 @@ export default async function ExpensesPage({
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
-        <div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8">
+        <div className="space-y-2">
           <h1 className="text-3xl font-bold text-gray-900">খরচের তালিকা</h1>
           <p className="text-base text-gray-600 mt-2">
             আজ কী কী খরচ করলেন, লিখে রাখুন।
@@ -53,12 +53,12 @@ export default async function ExpensesPage({
           </p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="w-full lg:w-auto flex flex-col sm:flex-row sm:items-center gap-3">
           <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
 
           <Link
             href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+            className="w-full sm:w-auto px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-center"
           >
             ➕ নতুন খরচ
           </Link>
@@ -72,7 +72,7 @@ export default async function ExpensesPage({
           {rows.map((e) => (
             <div
               key={e.id}
-              className="bg-white border border-gray-200 rounded-lg p-6 flex justify-between items-center hover:shadow-md transition-shadow"
+              className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-center hover:shadow-md transition-shadow"
             >
               <div>
                 <p className="text-2xl font-bold text-gray-900">{e.amount} ৳</p>
@@ -80,10 +80,10 @@ export default async function ExpensesPage({
                 <p className="text-sm text-gray-500 mt-1">তারিখ: {e.expenseDate}</p>
               </div>
 
-              <div className="flex gap-2 items-center">
+              <div className="w-full md:w-auto grid grid-cols-2 gap-2 md:flex md:gap-2 md:items-center">
                 <Link
                   href={`/dashboard/expenses/${e.id}`}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                  className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-center"
                 >
                   এডিট
                 </Link>
@@ -97,7 +97,7 @@ export default async function ExpensesPage({
                     await deleteExpense(e.id);
                   }}
                 >
-                  <button className="px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors">
+                  <button className="w-full md:w-auto px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors">
                     ডিলিট
                   </button>
                 </form>

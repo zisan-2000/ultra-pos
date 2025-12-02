@@ -9,6 +9,7 @@ import { useCart } from "@/hooks/use-cart";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
+import { useMemo, useRef } from "react";
 
 type PosPageClientProps = {
   products: {
@@ -40,6 +41,8 @@ export function PosPageClient({
   const { totalAmount, clear, setShop: setCartShop } = useCart();
   const cartItems = useCart((s) => s.items);
   const cartShopId = useCart((s) => s.currentShopId);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const cartPanelRef = useRef<HTMLDivElement | null>(null);
   const items = cartShopId === shopId ? cartItems : [];
   const safeTotalAmount =
     cartShopId === shopId
@@ -138,10 +141,18 @@ export function PosPageClient({
     clear();
   }
 
+  const itemCount = useMemo(() => items.reduce((sum, i) => sum + i.qty, 0), [items]);
+
+  const scrollToCart = () => {
+    if (cartPanelRef.current) {
+      cartPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-screen overflow-hidden">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Left: Products */}
-      <div className="lg:col-span-2 flex flex-col overflow-hidden">
+      <div className="lg:col-span-2 flex flex-col gap-6">
         <div className="mb-6 pb-4 border-b border-slate-200">
           <div className="flex justify-between items-start">
             <div>
@@ -161,16 +172,19 @@ export function PosPageClient({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1">
           <PosProductSearch products={products} shopId={shopId} />
         </div>
       </div>
 
       {/* Right: Cart */}
-      <div className="lg:col-span-1 bg-slate-50 rounded-lg p-6 flex flex-col overflow-hidden border border-slate-200">
+      <div
+        ref={cartPanelRef}
+        className="lg:col-span-1 bg-slate-50 rounded-lg p-6 flex flex-col gap-4 border border-slate-200"
+      >
         <h2 className="text-2xl font-bold text-slate-900 mb-6">বর্তমান বিল</h2>
 
-        <div className="flex-1 overflow-y-auto mb-6 space-y-3 pr-2">
+        <div className="mb-6 space-y-3">
           {items.length === 0 ? (
             <p className="text-center text-slate-500 py-8">কিছু যোগ করা হয়নি</p>
           ) : (
@@ -282,6 +296,86 @@ export function PosPageClient({
           </button>
         </form>
       </div>
+      {/* Sticky mini-bill for mobile */}
+      {items.length > 0 && (
+        <div className="lg:hidden fixed bottom-16 inset-x-0 z-30 px-4">
+          <div className="bg-white border border-slate-200 shadow-lg rounded-full px-4 py-3 flex items-center gap-3">
+            <div className="flex-1">
+              <p className="text-xs text-slate-500">মোট বিল</p>
+              <p className="text-base font-semibold text-slate-900">
+                {safeTotalAmount().toFixed(2)} ৳ • {itemCount} আইটেম
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold"
+            >
+              বিল খুলুন
+            </button>
+            <button
+              type="button"
+              onClick={scrollToCart}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700"
+            >
+              বিস্তারিত
+            </button>
+          </div>
+        </div>
+      )}
+
+      {drawerOpen && (
+        <div className="lg:hidden fixed inset-0 z-40">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setDrawerOpen(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-slate-500">বর্তমান বিল</p>
+                <p className="text-lg font-semibold text-slate-900">
+                  {safeTotalAmount().toFixed(2)} ৳ • {itemCount} আইটেম
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700"
+              >
+                বন্ধ
+              </button>
+            </div>
+
+            {items.length === 0 ? (
+              <p className="text-center text-slate-500 py-6">কার্ট খালি</p>
+            ) : (
+              <div className="space-y-3">
+                {items.map((i) => (
+                  <PosCartItem key={i.productId} item={i} />
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={scrollToCart}
+                className="flex-1 rounded-lg border border-slate-200 py-3 text-sm font-semibold text-slate-800"
+              >
+                পূর্ণ বিল ফর্ম দেখুন
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                className="px-4 py-3 rounded-lg bg-emerald-600 text-white text-sm font-semibold"
+              >
+                ঠিক আছে
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

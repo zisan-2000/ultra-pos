@@ -684,7 +684,7 @@ export default function DuePageClient({
               {selectedCustomerId && (
                 <div className="mt-6 space-y-4">
                   <h4 className="font-bold text-gray-900">লেনদেনের বিবরণ</h4>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto hidden md:block">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-100">
                         <tr>
@@ -733,6 +733,67 @@ export default function DuePageClient({
                         )}
                       </tbody>
                     </table>
+                  </div>
+
+                  <div className="space-y-3 md:hidden">
+                    {loadingStatement ? (
+                      <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
+                        লোড হচ্ছে...
+                      </p>
+                    ) : statementWithBalance.length === 0 ? (
+                      <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
+                        কোনো লেনদেন নেই
+                      </p>
+                    ) : (
+                      statementWithBalance.map((row) => {
+                        const sale = row.entryType === "SALE";
+                        const amount = Number(row.amount || 0).toFixed(2);
+                        const running = Number((row as any).running || 0).toFixed(2);
+                        return (
+                          <div
+                            key={row.id}
+                            className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(row.entryDate).toLocaleDateString("bn-BD")}
+                                </p>
+                                <p className="text-base font-semibold text-gray-900 mt-1">
+                                  {row.description || "-"}
+                                </p>
+                              </div>
+                              <span
+                                className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                  sale
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-blue-100 text-blue-700"
+                                }`}
+                              >
+                                {sale ? "বিক্রি" : "পরিশোধ"}
+                              </span>
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-gray-600">
+                              <div className="bg-gray-50 rounded-lg p-3">
+                                <p className="text-xs text-gray-500">
+                                  {sale ? "বিক্রির পরিমাণ" : "পরিশোধিত পরিমাণ"}
+                                </p>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {amount} ৳
+                                </p>
+                              </div>
+                              <div className="bg-gray-50 rounded-lg p-3">
+                                <p className="text-xs text-gray-500">চলতি বকেয়া</p>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {running} ৳
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               )}

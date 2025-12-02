@@ -30,7 +30,6 @@ export default function ProfitTrendReport({ shopId }: { shopId: string }) {
     }
   }
 
-  // Load all time by default
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -39,7 +38,8 @@ export default function ProfitTrendReport({ shopId }: { shopId: string }) {
   const totalProfit = useMemo(
     () =>
       data.reduce(
-        (sum, row) => sum + Number(row.sales || 0) - Number(row.expense || 0),
+        (sum, row) =>
+          sum + Number(row.sales || 0) - Number(row.expense || 0),
         0
       ),
     [data]
@@ -49,24 +49,22 @@ export default function ProfitTrendReport({ shopId }: { shopId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">লাভের প্রবণতা</h2>
-          <p className="text-xs text-gray-500">
-            বিক্রয় বনাম খরচের তুলনা।
-          </p>
+          <h2 className="text-lg font-bold text-gray-900">লাভের ধারাবাহিকতা</h2>
+          <p className="text-xs text-gray-500">নির্বাচিত তারিখের সারাংশ</p>
         </div>
         <QuickDateFilter onSelect={load} />
       </div>
 
       <p className="text-sm font-semibold text-gray-900">
-        মোট লাভ: {totalProfit.toFixed(2)} ৳
+        মোট লাভ: {totalProfit.toFixed(2)} ?
       </p>
 
-      <div className="border border-gray-200 rounded-lg overflow-x-auto">
+      <div className="border border-gray-200 rounded-lg overflow-x-auto hidden md:block">
         <table className="w-full text-sm">
           <thead className="bg-gray-100">
             <tr>
               <th className="p-3 text-left text-gray-900">তারিখ</th>
-              <th className="p-3 text-right text-gray-900">বিক্রয় (৳)</th>
+              <th className="p-3 text-right text-gray-900">বিক্রি (৳)</th>
               <th className="p-3 text-right text-gray-900">খরচ (৳)</th>
               <th className="p-3 text-right text-gray-900">লাভ (৳)</th>
             </tr>
@@ -82,7 +80,7 @@ export default function ProfitTrendReport({ shopId }: { shopId: string }) {
             ) : data.length === 0 ? (
               <tr>
                 <td className="p-3 text-center text-gray-500" colSpan={4}>
-                  কোনো লাভের ডেটা নেই
+                  কোনো ডেটা পাওয়া যায়নি
                 </td>
               </tr>
             ) : (
@@ -90,8 +88,13 @@ export default function ProfitTrendReport({ shopId }: { shopId: string }) {
                 const profit =
                   Number(row.sales || 0) - Number(row.expense || 0);
                 return (
-                  <tr key={`${row.date}-${idx}`} className="border-t hover:bg-gray-50 transition-colors">
-                    <td className="p-3 text-gray-900">{new Date(row.date).toLocaleDateString("bn-BD")}</td>
+                  <tr
+                    key={`${row.date}-${idx}`}
+                    className="border-t hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="p-3 text-gray-900">
+                      {new Date(row.date).toLocaleDateString("bn-BD")}
+                    </td>
                     <td className="p-3 text-right text-gray-900">
                       {Number(row.sales || 0).toFixed(2)}
                     </td>
@@ -111,6 +114,74 @@ export default function ProfitTrendReport({ shopId }: { shopId: string }) {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="space-y-3 md:hidden">
+        {loading ? (
+          <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
+            লোড হচ্ছে...
+          </p>
+        ) : data.length === 0 ? (
+          <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
+            কোনো ডেটা পাওয়া যায়নি
+          </p>
+        ) : (
+          data.map((row, idx) => {
+            const profit =
+              Number(row.sales || 0) - Number(row.expense || 0);
+            const positive = profit >= 0;
+            return (
+              <div
+                key={`${row.date}-${idx}`}
+                className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500">#{idx + 1}</p>
+                    <h3 className="text-base font-semibold text-gray-900 mt-1">
+                      {new Date(row.date).toLocaleDateString("bn-BD")}
+                    </h3>
+                  </div>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      positive
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {positive ? "লাভ" : "ক্ষতি"}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-gray-600">
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">বিক্রি</p>
+                    <p className="text-base font-semibold text-gray-900">
+                      {Number(row.sales || 0).toFixed(2)} ?
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">খরচ</p>
+                    <p className="text-base font-semibold text-gray-900">
+                      {Number(row.expense || 0).toFixed(2)} ?
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
+                  <span>লাভ</span>
+                  <span
+                    className={`font-semibold ${
+                      positive ? "text-emerald-700" : "text-red-700"
+                    }`}
+                  >
+                    {profit.toFixed(2)} ?
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

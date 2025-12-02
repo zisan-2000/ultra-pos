@@ -52,8 +52,8 @@ export default function ProductsListClient({ shops, activeShopId, serverProducts
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
-        <div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8">
+        <div className="space-y-2">
           <h1 className="text-3xl font-bold text-gray-900">পণ্যের তালিকা</h1>
           <p className="text-base text-gray-600 mt-2">
             এই দোকানের সব পণ্য দেখুন এবং পরিচালনা করুন।
@@ -63,11 +63,11 @@ export default function ProductsListClient({ shops, activeShopId, serverProducts
           </p>
         </div>
 
-        <div className="flex gap-3 items-center">
+        <div className="w-full lg:w-auto flex flex-col sm:flex-row sm:items-center gap-3">
           <ShopSwitcherClient shops={shops} activeShopId={activeShopId} />
           <Link
             href={`/dashboard/products/new?shopId=${activeShopId}`}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-center"
           >
             + নতুন পণ্য
           </Link>
@@ -81,7 +81,7 @@ export default function ProductsListClient({ shops, activeShopId, serverProducts
           {products.map((product) => (
             <div
               key={product.id}
-              className="bg-white border border-gray-200 rounded-lg p-6 flex justify-between items-center hover:shadow-md transition-shadow"
+              className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-center hover:shadow-md transition-shadow"
             >
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{product.name}</h2>
@@ -94,14 +94,14 @@ export default function ProductsListClient({ shops, activeShopId, serverProducts
                 </p>
               </div>
 
-              <div className="flex gap-2">
+              <div className="w-full md:w-auto grid grid-cols-2 gap-2 md:flex md:gap-2">
                 <Link
                   href={`/dashboard/products/${product.id}`}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                  className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-center"
                 >
                   এডিট
                 </Link>
-                <button className="px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors">
+                <button className="w-full md:w-auto px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors">
                   ডিলিট
                 </button>
               </div>
