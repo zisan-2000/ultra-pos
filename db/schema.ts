@@ -1,3 +1,5 @@
+// db/schema.ts
+
 import {
   pgTable,
   uuid,

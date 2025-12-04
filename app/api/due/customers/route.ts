@@ -1,3 +1,5 @@
+// app/api/due/customers/route.ts
+
 import { NextResponse } from "next/server";
 import { createCustomer, getCustomersByShop } from "@/app/actions/customers";
 

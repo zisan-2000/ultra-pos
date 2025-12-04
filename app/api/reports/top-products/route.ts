@@ -1,3 +1,5 @@
+// app/api/reports/top-products/route.ts
+
 import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { saleItems, products, sales } from "@/db/schema";

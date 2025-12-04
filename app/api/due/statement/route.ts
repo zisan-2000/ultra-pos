@@ -1,3 +1,5 @@
+// app/api/due/statement/route.ts
+
 import { NextResponse } from "next/server";
 import { getCustomerStatement } from "@/app/actions/customers";
 

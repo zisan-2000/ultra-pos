@@ -1,3 +1,5 @@
+// app/api/due/payment/route.ts
+
 import { NextResponse } from "next/server";
 import { recordCustomerPayment } from "@/app/actions/customers";
 

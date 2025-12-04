@@ -1,3 +1,5 @@
+// app/api/reports/sales/route.ts
+
 import { NextResponse } from "next/server";
 import { getSalesWithFilter } from "@/app/actions/reports";
 

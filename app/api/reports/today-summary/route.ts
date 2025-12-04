@@ -1,3 +1,5 @@
+// app/api/reports/today-summary/route.ts
+
 import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { sales, expenses, cashEntries } from "@/db/schema";
@@ -72,7 +74,10 @@ export async function GET(req: Request) {
     .select()
     .from(cashEntries)
     .where(
-      and(eq(cashEntries.shopId, shopId), gte(cashEntries.createdAt, todayStart))
+      and(
+        eq(cashEntries.shopId, shopId),
+        gte(cashEntries.createdAt, todayStart)
+      )
     );
 
   const totalIn = cashRows

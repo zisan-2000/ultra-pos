@@ -1,3 +1,5 @@
+// app/api/reports/profit-trend/route.ts
+
 import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { sales, expenses, shops } from "@/db/schema";
@@ -76,7 +78,11 @@ export async function GET(req: Request) {
     ]).has((shop as any).businessType);
 
   if (needsCogs) {
-    const cogsByDay = await getCogsByDay(shopId, start ?? undefined, end ?? undefined);
+    const cogsByDay = await getCogsByDay(
+      shopId,
+      start ?? undefined,
+      end ?? undefined
+    );
     Object.entries(cogsByDay).forEach(([day, cogs]) => {
       if (!map[day]) map[day] = { sales: 0, expense: 0 };
       map[day].expense += cogs;

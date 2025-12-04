@@ -1,3 +1,5 @@
+// app/api/reports/today-mini/route.ts
+
 import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { sales, expenses, cashEntries } from "@/db/schema";
@@ -45,7 +47,10 @@ export async function GET(req: Request) {
     .select()
     .from(cashEntries)
     .where(
-      and(eq(cashEntries.shopId, shopId), gte(cashEntries.createdAt, todayStart))
+      and(
+        eq(cashEntries.shopId, shopId),
+        gte(cashEntries.createdAt, todayStart)
+      )
     );
 
   return NextResponse.json({

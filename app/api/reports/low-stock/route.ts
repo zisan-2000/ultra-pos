@@ -1,3 +1,5 @@
+// app/api/reports/low-stock/route.ts
+
 import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { products } from "@/db/schema";
@@ -10,7 +12,10 @@ export async function GET(req: Request) {
   const threshold = Number(searchParams.get("limit") || 10); // stock threshold
 
   if (!shopId) {
-    return NextResponse.json({ data: [], error: "shopId missing" }, { status: 400 });
+    return NextResponse.json(
+      { data: [], error: "shopId missing" },
+      { status: 400 }
+    );
   }
 
   // guard: non-number threshold -> default 10

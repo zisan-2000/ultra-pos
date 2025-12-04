@@ -1,11 +1,9 @@
+// app/actions/customers.ts
+
 "use server";
 
 import { db } from "@/db/client";
-import {
-  customers,
-  customerLedger,
-  shops,
-} from "@/db/schema";
+import { customers, customerLedger, shops } from "@/db/schema";
 import { cookies } from "next/headers";
 import { createServerClientForRoute } from "@/lib/supabase";
 import { and, desc, eq, sql } from "drizzle-orm";
@@ -175,10 +173,7 @@ export async function recordCustomerPayment(input: PaymentInput) {
 /* --------------------------------------------------
    CUSTOMER STATEMENT
 -------------------------------------------------- */
-export async function getCustomerStatement(
-  shopId: string,
-  customerId: string
-) {
+export async function getCustomerStatement(shopId: string, customerId: string) {
   const user = await getCurrentUser();
   await assertShopBelongsToUser(shopId, user.id);
   await assertCustomerInShop(customerId, shopId);

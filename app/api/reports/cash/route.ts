@@ -1,3 +1,5 @@
+// app/api/reports/cash/route.ts
+
 import { NextResponse } from "next/server";
 import { getCashWithFilter } from "@/app/actions/reports";
 

@@ -1,3 +1,5 @@
+// app/actions/reports.ts
+
 "use server";
 
 import { db } from "@/db/client";
@@ -20,8 +22,7 @@ function parseTimestampRange(from?: string, to?: string) {
 
   const start =
     startDate && !Number.isNaN(startDate.getTime()) ? startDate : undefined;
-  const end =
-    endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
+  const end = endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
 
   if (start) start.setUTCHours(0, 0, 0, 0);
   if (end) end.setUTCHours(23, 59, 59, 999);
@@ -54,11 +55,7 @@ function sumCogs(rows: { qty: any; buyPrice: any }[]) {
   }, 0);
 }
 
-export async function getCogsTotal(
-  shopId: string,
-  from?: Date,
-  to?: Date
-) {
+export async function getCogsTotal(shopId: string, from?: Date, to?: Date) {
   const rows = await db
     .select({
       qty: saleItems.quantity,
@@ -78,11 +75,7 @@ export async function getCogsTotal(
   return sumCogs(rows as any);
 }
 
-export async function getCogsByDay(
-  shopId: string,
-  from?: Date,
-  to?: Date
-) {
+export async function getCogsByDay(shopId: string, from?: Date, to?: Date) {
   const rows = await db
     .select({
       qty: saleItems.quantity,
@@ -117,8 +110,7 @@ function parseDateRange(from?: string, to?: string) {
 
   const start =
     startDate && !Number.isNaN(startDate.getTime()) ? startDate : undefined;
-  const end =
-    endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
+  const end = endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
 
   const toDateString = (d?: Date) =>
     d ? d.toISOString().split("T")[0] : undefined;
