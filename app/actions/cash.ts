@@ -2,100 +2,106 @@
 
 "use server";
 
-import { db } from "@/db/client";
-import { cashEntries, shops } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { cookies } from "next/headers";
-import { createServerClientForRoute } from "@/lib/supabase";
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth/session";
 import { cashSchema } from "@/lib/validators/cash";
 
-async function getCurrentUser() {
-  const cookieStore = await cookies();
-  const supabase = createServerClientForRoute(cookieStore);
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("Not authenticated");
-  return user;
-}
-
+// ----------------------------------------------
+// HELPERS
+// ----------------------------------------------
 async function assertShopBelongsToUser(shopId: string, userId: string) {
-  const shop = await db.query.shops.findFirst({
-    where: eq(shops.id, shopId),
+  const shop = await prisma.shops.findUnique({
+    where: { id: shopId },
   });
 
-  if (!shop || shop.ownerId !== userId) {
-    throw new Error("Unauthorized access");
+  if (!shop || shop.owner_id !== userId) {
+    throw new Error("Unauthorized");
   }
 
   return shop;
 }
 
-// -------------------------------------------------
+// ----------------------------------------------
 // CREATE CASH ENTRY
-// -------------------------------------------------
+// ----------------------------------------------
 export async function createCashEntry(input: any) {
   const parsed = cashSchema.parse(input);
 
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(parsed.shopId, user.id);
 
-  await db.insert(cashEntries).values({
-    shopId: parsed.shopId,
-    entryType: parsed.entryType,
-    amount: parsed.amount,
-    reason: parsed.reason || "",
+  await prisma.cash_entries.create({
+    data: {
+      shop_id: parsed.shopId,
+      entry_type: parsed.entryType,
+      amount: parsed.amount,
+      reason: parsed.reason || "",
+    },
   });
 
   return { success: true };
 }
 
-// -------------------------------------------------
+// ----------------------------------------------
 // UPDATE CASH ENTRY
-// -------------------------------------------------
+// ----------------------------------------------
 export async function updateCashEntry(id: string, input: any) {
   const parsed = cashSchema.parse(input);
 
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(parsed.shopId, user.id);
 
-  await db
-    .update(cashEntries)
-    .set({
-      entryType: parsed.entryType,
+  await prisma.cash_entries.update({
+    where: { id },
+    data: {
+      entry_type: parsed.entryType,
       amount: parsed.amount,
       reason: parsed.reason || "",
-    })
-    .where(eq(cashEntries.id, id));
+    },
+  });
 
   return { success: true };
 }
 
-// -------------------------------------------------
+// ----------------------------------------------
 // GET ALL CASH ENTRIES FOR SHOP
-// -------------------------------------------------
+// ----------------------------------------------
 export async function getCashByShop(shopId: string) {
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(shopId, user.id);
 
-  return db.select().from(cashEntries).where(eq(cashEntries.shopId, shopId));
-}
-
-// -------------------------------------------------
-// GET SINGLE ENTRY
-// -------------------------------------------------
-export async function getCashEntry(id: string) {
-  return db.query.cashEntries.findFirst({
-    where: eq(cashEntries.id, id),
+  return prisma.cash_entries.findMany({
+    where: { shop_id: shopId },
+    orderBy: { created_at: "desc" },
   });
 }
 
-// -------------------------------------------------
+// ----------------------------------------------
+// GET SINGLE ENTRY
+// ----------------------------------------------
+export async function getCashEntry(id: string) {
+  return prisma.cash_entries.findUnique({
+    where: { id },
+  });
+}
+
+// ----------------------------------------------
 // DELETE ENTRY
-// -------------------------------------------------
+// ----------------------------------------------
 export async function deleteCashEntry(id: string) {
-  await db.delete(cashEntries).where(eq(cashEntries.id, id));
+  // Must check ownership first
+  const entry = await prisma.cash_entries.findUnique({
+    where: { id },
+  });
+
+  if (!entry) throw new Error("Cash entry not found");
+
+  const user = await requireUser();
+  await assertShopBelongsToUser(entry.shop_id, user.id);
+
+  await prisma.cash_entries.delete({
+    where: { id },
+  });
+
   return { success: true };
 }

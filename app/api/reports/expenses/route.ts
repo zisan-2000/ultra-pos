@@ -1,16 +1,19 @@
-// app/api/reports/expenses/route.ts
+// app/api/reports/cash/route.ts
 
 import { NextResponse } from "next/server";
 import { getExpensesWithFilter } from "@/app/actions/reports";
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
+  const params = new URL(req.url).searchParams;
 
-  const shopId = searchParams.get("shopId")!;
-  const from = searchParams.get("from") || undefined;
-  const to = searchParams.get("to") || undefined;
+  const shopId = params.get("shopId");
+  const from = params.get("from") || undefined;
+  const to = params.get("to") || undefined;
+
+  if (!shopId) {
+    return NextResponse.json({ error: "shopId is required" }, { status: 400 });
+  }
 
   const rows = await getExpensesWithFilter(shopId, from, to);
-
   return NextResponse.json({ rows });
 }

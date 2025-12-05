@@ -1,55 +1,26 @@
-// app/(auth)/login/page.tsx
-
 "use client";
-import { useState } from "react";
-import { createClient } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+
+import { useActionState } from "react";
+import { loginAction } from "@/app/actions/auth";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const supabase = createClient();
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  async function handleLogin(e: any) {
-    e.preventDefault();
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (!error) {
-      router.push("/dashboard");
-    } else {
-      alert(error.message);
-    }
-  }
+  const [state, formAction] = useActionState(loginAction, { error: "" });
 
   return (
-    <div className="flex items-center justify-center h-screen">
-      <form
-        onSubmit={handleLogin}
-        className="p-6 w-96 border rounded space-y-3"
-      >
-        <h1 className="text-xl font-bold">Login</h1>
+    <form action={formAction} className="p-6 w-96 space-y-3">
+      <h1>Login</h1>
 
-        <input
-          className="border p-2 w-full"
-          placeholder="Email"
-          onChange={(e) => setEmail(e.target.value)}
-        />
+      {state.error && <p className="text-red-600">{state.error}</p>}
 
-        <input
-          className="border p-2 w-full"
-          placeholder="Password"
-          type="password"
-          onChange={(e) => setPassword(e.target.value)}
-        />
+      <input name="email" type="email" className="border p-2 w-full" required />
+      <input
+        name="password"
+        type="password"
+        className="border p-2 w-full"
+        required
+      />
 
-        <button className="bg-black text-white p-2 w-full">Login</button>
-      </form>
-    </div>
+      <button className="bg-black text-white p-2 w-full">Login</button>
+    </form>
   );
 }

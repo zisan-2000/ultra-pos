@@ -4,8 +4,7 @@ import { NextResponse } from "next/server";
 import { createCustomer, getCustomersByShop } from "@/app/actions/customers";
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const shopId = searchParams.get("shopId");
+  const shopId = new URL(req.url).searchParams.get("shopId");
 
   if (!shopId) {
     return NextResponse.json({ error: "shopId is required" }, { status: 400 });
@@ -16,8 +15,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { shopId, name, phone, address } = body || {};
+  const { shopId, name, phone, address } = await req.json();
 
   if (!shopId || !name) {
     return NextResponse.json(
@@ -26,12 +24,6 @@ export async function POST(req: Request) {
     );
   }
 
-  const result = await createCustomer({
-    shopId,
-    name,
-    phone,
-    address,
-  });
-
+  const result = await createCustomer({ shopId, name, phone, address });
   return NextResponse.json({ success: true, id: result.id });
 }

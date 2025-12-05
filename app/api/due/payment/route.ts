@@ -4,12 +4,11 @@ import { NextResponse } from "next/server";
 import { recordCustomerPayment } from "@/app/actions/customers";
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { shopId, customerId, amount, description } = body || {};
+  const { shopId, customerId, amount, description } = await req.json();
 
   if (!shopId || !customerId || !amount) {
     return NextResponse.json(
-      { error: "shopId, customerId and amount are required" },
+      { error: "shopId, customerId, amount are required" },
       { status: 400 }
     );
   }

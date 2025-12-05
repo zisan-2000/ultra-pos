@@ -2,12 +2,12 @@
 
 "use server";
 
-import { db } from "@/db/client";
-import { customers, customerLedger, shops } from "@/db/schema";
-import { cookies } from "next/headers";
-import { createServerClientForRoute } from "@/lib/supabase";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth/session";
 
+// ----------------------------------------------
+// TYPES
+// ----------------------------------------------
 type CreateCustomerInput = {
   shopId: string;
   name: string;
@@ -22,200 +22,188 @@ type PaymentInput = {
   description?: string | null;
 };
 
-/* --------------------------------------------------
-   AUTH HELPERS
--------------------------------------------------- */
-async function getCurrentUser() {
-  const cookieStore = await cookies();
-  const supabase = createServerClientForRoute(cookieStore);
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("Not authenticated");
-  return user;
-}
-
+// ----------------------------------------------
+// HELPERS
+// ----------------------------------------------
 async function assertShopBelongsToUser(shopId: string, userId: string) {
-  const shop = await db.query.shops.findFirst({
-    where: eq(shops.id, shopId),
+  const shop = await prisma.shops.findUnique({
+    where: { id: shopId },
   });
 
-  if (!shop || shop.ownerId !== userId) {
-    throw new Error("Unauthorized access to this shop");
+  if (!shop || shop.owner_id !== userId) {
+    throw new Error("Unauthorized");
   }
 
   return shop;
 }
 
 async function assertCustomerInShop(customerId: string, shopId: string) {
-  const row = await db.query.customers.findFirst({
-    where: and(eq(customers.id, customerId), eq(customers.shopId, shopId)),
+  const customer = await prisma.customers.findFirst({
+    where: {
+      id: customerId,
+      shop_id: shopId,
+    },
   });
 
-  if (!row) {
+  if (!customer) {
     throw new Error("Customer not found in this shop");
   }
 
-  return row;
+  return customer;
 }
 
-/* --------------------------------------------------
-   CREATE CUSTOMER
--------------------------------------------------- */
+// ----------------------------------------------
+// CREATE CUSTOMER
+// ----------------------------------------------
 export async function createCustomer(input: CreateCustomerInput) {
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(input.shopId, user.id);
 
   const name = input.name?.trim();
   if (!name) throw new Error("Name is required");
 
-  const inserted = await db
-    .insert(customers)
-    .values({
-      shopId: input.shopId,
+  const result = await prisma.customers.create({
+    data: {
+      shop_id: input.shopId,
       name,
       phone: input.phone?.trim() || null,
       address: input.address?.trim() || null,
-    })
-    .returning({ id: customers.id });
+    },
+    select: { id: true },
+  });
 
-  return { id: inserted[0].id };
+  return { id: result.id };
 }
 
-/* --------------------------------------------------
-   LIST CUSTOMERS (WITH DUE)
--------------------------------------------------- */
+// ----------------------------------------------
+// LIST CUSTOMERS (ORDER BY DUE)
+// ----------------------------------------------
 export async function getCustomersByShop(shopId: string) {
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(shopId, user.id);
 
-  const rows = await db
-    .select()
-    .from(customers)
-    .where(eq(customers.shopId, shopId))
-    .orderBy(desc(customers.totalDue));
-
-  return rows;
+  return prisma.customers.findMany({
+    where: { shop_id: shopId },
+    orderBy: { total_due: "desc" },
+  });
 }
 
-/* --------------------------------------------------
-   ADD DUE (SALE) ENTRY
--------------------------------------------------- */
+// ----------------------------------------------
+// ADD DUE ENTRY (SALE)
+// ----------------------------------------------
 export async function addDueSaleEntry(input: {
   shopId: string;
   customerId: string;
   amount: number;
   description?: string | null;
 }) {
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(input.shopId, user.id);
+
   const customer = await assertCustomerInShop(input.customerId, input.shopId);
 
-  const amount = Number(input.amount || 0);
+  const amount = Number(input.amount);
   if (!amount || amount <= 0) throw new Error("Amount must be positive");
 
-  await db.transaction(async (tx) => {
-    await tx.insert(customerLedger).values({
-      shopId: input.shopId,
-      customerId: input.customerId,
-      entryType: "SALE",
-      amount: amount.toFixed(2),
-      description: input.description || "Due sale",
+  await prisma.$transaction(async (tx) => {
+    await tx.customer_ledger.create({
+      data: {
+        shop_id: input.shopId,
+        customer_id: input.customerId,
+        entry_type: "SALE",
+        amount,
+        description: input.description || "Due sale",
+      },
     });
 
-    await tx
-      .update(customers)
-      .set({
-        totalDue: sql`${customers.totalDue} + ${amount.toFixed(2)}`,
-      })
-      .where(eq(customers.id, customer.id));
+    await tx.customers.update({
+      where: { id: customer.id },
+      data: {
+        total_due: customer.total_due + amount,
+      },
+    });
   });
 
   return { success: true };
 }
 
-/* --------------------------------------------------
-   RECORD PAYMENT
--------------------------------------------------- */
+// ----------------------------------------------
+// RECORD PAYMENT
+// ----------------------------------------------
 export async function recordCustomerPayment(input: PaymentInput) {
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(input.shopId, user.id);
+
   const customer = await assertCustomerInShop(input.customerId, input.shopId);
 
-  const amount = Number(input.amount || 0);
+  const amount = Number(input.amount);
   if (!amount || amount <= 0) throw new Error("Amount must be positive");
 
-  await db.transaction(async (tx) => {
-    await tx.insert(customerLedger).values({
-      shopId: input.shopId,
-      customerId: input.customerId,
-      entryType: "PAYMENT",
-      amount: amount.toFixed(2),
-      description: input.description || "Payment",
+  await prisma.$transaction(async (tx) => {
+    await tx.customer_ledger.create({
+      data: {
+        shop_id: input.shopId,
+        customer_id: input.customerId,
+        entry_type: "PAYMENT",
+        amount,
+        description: input.description || "Payment",
+      },
     });
 
-    const newDue = Math.max(0, Number(customer.totalDue || 0) - amount);
+    const newDue = Math.max(0, Number(customer.total_due) - amount);
 
-    await tx
-      .update(customers)
-      .set({
-        totalDue: newDue.toFixed(2),
-        lastPaymentAt: new Date(),
-      })
-      .where(eq(customers.id, customer.id));
+    await tx.customers.update({
+      where: { id: customer.id },
+      data: {
+        total_due: newDue,
+        last_payment_at: new Date(),
+      },
+    });
   });
 
   return { success: true };
 }
 
-/* --------------------------------------------------
-   CUSTOMER STATEMENT
--------------------------------------------------- */
+// ----------------------------------------------
+// CUSTOMER STATEMENT
+// ----------------------------------------------
 export async function getCustomerStatement(shopId: string, customerId: string) {
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(shopId, user.id);
   await assertCustomerInShop(customerId, shopId);
 
-  const rows = await db
-    .select()
-    .from(customerLedger)
-    .where(
-      and(
-        eq(customerLedger.shopId, shopId),
-        eq(customerLedger.customerId, customerId)
-      )
-    )
-    .orderBy(customerLedger.entryDate);
-
-  return rows;
+  return prisma.customer_ledger.findMany({
+    where: {
+      shop_id: shopId,
+      customer_id: customerId,
+    },
+    orderBy: { entry_date: "asc" },
+  });
 }
 
-/* --------------------------------------------------
-   DUE SUMMARY (SHOP)
--------------------------------------------------- */
+// ----------------------------------------------
+// DUE SUMMARY
+// ----------------------------------------------
 export async function getDueSummary(shopId: string) {
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(shopId, user.id);
 
-  const rows = await db
-    .select()
-    .from(customers)
-    .where(eq(customers.shopId, shopId))
-    .orderBy(desc(customers.totalDue));
+  const customersList = await prisma.customers.findMany({
+    where: { shop_id: shopId },
+    orderBy: { total_due: "desc" },
+  });
 
-  const totalDue = rows.reduce(
-    (sum, c: any) => sum + Number(c.totalDue || 0),
+  const totalDue = customersList.reduce(
+    (sum, c) => sum + Number(c.total_due || 0),
     0
   );
 
-  const topDue = rows.slice(0, 5).map((c) => ({
+  const topDue = customersList.slice(0, 5).map((c) => ({
     id: c.id,
     name: c.name,
-    totalDue: Number(c.totalDue || 0),
+    totalDue: Number(c.total_due),
     phone: c.phone,
   }));
 
-  return { totalDue, topDue, customers: rows };
+  return { totalDue, topDue, customers: customersList };
 }

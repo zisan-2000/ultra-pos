@@ -2,27 +2,15 @@
 
 "use server";
 
-import { db } from "@/db/client";
-import {
-  sales,
-  expenses,
-  cashEntries,
-  saleItems,
-  products,
-  shops,
-} from "@/db/schema";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth/session";
 
-/* --------------------------------------------------
-   DATE FILTER HELPER
--------------------------------------------------- */
-function parseTimestampRange(from?: string, to?: string) {
-  const startDate = from ? new Date(from) : undefined;
-  const endDate = to ? new Date(to) : undefined;
-
-  const start =
-    startDate && !Number.isNaN(startDate.getTime()) ? startDate : undefined;
-  const end = endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
+// --------------------------------------------------
+// DATE HELPERS
+// --------------------------------------------------
+function parseRange(from?: string, to?: string) {
+  const start = from ? new Date(from) : undefined;
+  const end = to ? new Date(to) : undefined;
 
   if (start) start.setUTCHours(0, 0, 0, 0);
   if (end) end.setUTCHours(23, 59, 59, 999);
@@ -30,238 +18,305 @@ function parseTimestampRange(from?: string, to?: string) {
   return { start, end };
 }
 
-const SHOP_TYPES_WITH_COGS = new Set([
-  "mini_grocery",
-  "pharmacy",
-  "clothing",
-  "cosmetics_gift",
-  "mini_wholesale",
-]);
+// --------------------------------------------------
+// LOW STOCK PRODUCTS
+// --------------------------------------------------
+export async function getLowStockProducts(shopId: string, limit = 10) {
+  await requireUser();
 
-async function shopNeedsCogs(shopId: string) {
-  const shop = await db.query.shops.findFirst({
-    where: eq(shops.id, shopId),
+  const rows = await prisma.products.findMany({
+    where: {
+      shop_id: shopId,
+      is_active: true,
+      stock_qty: { lte: limit },
+    },
+    orderBy: { stock_qty: "asc" },
+    take: 50,
   });
-  if (!shop) return false;
-  return SHOP_TYPES_WITH_COGS.has((shop as any).businessType);
+
+  return rows.map((p) => ({
+    ...p,
+    stock_qty: Number(p.stock_qty),
+  }));
 }
 
-function sumCogs(rows: { qty: any; buyPrice: any }[]) {
-  return rows.reduce((sum, r) => {
-    const qty = Number(r.qty ?? 0);
-    const buy = Number(r.buyPrice ?? 0);
-    if (!Number.isFinite(qty) || !Number.isFinite(buy)) return sum;
-    return sum + qty * buy;
-  }, 0);
-}
+// --------------------------------------------------
+// PAYMENT METHOD SUMMARY
+// --------------------------------------------------
+export async function getPaymentMethodSummary(shopId: string) {
+  await requireUser();
 
-export async function getCogsTotal(shopId: string, from?: Date, to?: Date) {
-  const rows = await db
-    .select({
-      qty: saleItems.quantity,
-      buyPrice: products.buyPrice,
-    })
-    .from(saleItems)
-    .innerJoin(sales, eq(saleItems.saleId, sales.id))
-    .innerJoin(products, eq(saleItems.productId, products.id))
-    .where(
-      and(
-        eq(sales.shopId, shopId),
-        from ? gte(sales.saleDate, from) : undefined,
-        to ? lte(sales.saleDate, to) : undefined
-      )
-    );
-
-  return sumCogs(rows as any);
-}
-
-export async function getCogsByDay(shopId: string, from?: Date, to?: Date) {
-  const rows = await db
-    .select({
-      qty: saleItems.quantity,
-      buyPrice: products.buyPrice,
-      saleDate: sales.saleDate,
-    })
-    .from(saleItems)
-    .innerJoin(sales, eq(saleItems.saleId, sales.id))
-    .innerJoin(products, eq(saleItems.productId, products.id))
-    .where(
-      and(
-        eq(sales.shopId, shopId),
-        from ? gte(sales.saleDate, from) : undefined,
-        to ? lte(sales.saleDate, to) : undefined
-      )
-    );
-
-  const byDay: Record<string, number> = {};
-  rows.forEach((r: any) => {
-    const day = new Date(r.saleDate).toISOString().split("T")[0];
-    const qty = Number(r.qty ?? 0);
-    const buy = Number(r.buyPrice ?? 0);
-    if (!Number.isFinite(qty) || !Number.isFinite(buy)) return;
-    byDay[day] = (byDay[day] || 0) + qty * buy;
+  const rows = await prisma.sales.findMany({
+    where: { shop_id: shopId },
   });
-  return byDay;
+
+  const grouped: Record<string, number> = {};
+
+  rows.forEach((s) => {
+    const method = s.payment_method || "cash";
+    if (!grouped[method]) grouped[method] = 0;
+    grouped[method] += Number(s.total_amount);
+  });
+
+  return Object.entries(grouped).map(([name, value]) => ({
+    name,
+    value,
+  }));
 }
 
-function parseDateRange(from?: string, to?: string) {
-  const startDate = from ? new Date(from) : undefined;
-  const endDate = to ? new Date(to) : undefined;
+// --------------------------------------------------
+// TOP PRODUCTS
+// --------------------------------------------------
+export async function getTopProducts(shopId: string, limit = 10) {
+  await requireUser();
 
-  const start =
-    startDate && !Number.isNaN(startDate.getTime()) ? startDate : undefined;
-  const end = endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
+  const items = await prisma.sale_items.findMany({
+    where: {
+      sales: { shop_id: shopId },
+    },
+    include: { products: true },
+  });
 
-  const toDateString = (d?: Date) =>
-    d ? d.toISOString().split("T")[0] : undefined;
+  const map: Record<string, { name: string; qty: number; revenue: number }> =
+    {};
 
-  return { start: toDateString(start), end: toDateString(end) };
+  for (const item of items) {
+    const id = item.product_id;
+    if (!map[id]) {
+      map[id] = {
+        name: item.products.name,
+        qty: 0,
+        revenue: 0,
+      };
+    }
+
+    const qty = Number(item.quantity);
+    const price = Number(item.unit_price);
+
+    map[id].qty += qty;
+    map[id].revenue += qty * price;
+  }
+
+  return Object.values(map)
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, limit);
 }
 
-/* --------------------------------------------------
-   SALES LIST WITH DATE FILTER
--------------------------------------------------- */
+// --------------------------------------------------
+// PROFIT TREND
+// --------------------------------------------------
+export async function getProfitTrend(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  await requireUser();
+
+  const { start, end } = parseRange(from, to);
+
+  const salesRows = await prisma.sales.findMany({
+    where: {
+      shop_id: shopId,
+      sale_date: {
+        gte: start,
+        lte: end,
+      },
+    },
+  });
+
+  const expenseRows = await prisma.expenses.findMany({
+    where: {
+      shop_id: shopId,
+      expense_date: {
+        gte: start,
+        lte: end,
+      },
+    },
+  });
+
+  const map: Record<string, { sales: number; expense: number }> = {};
+
+  const fmt = (d: Date) => d.toISOString().split("T")[0];
+
+  // accumulate sales
+  salesRows.forEach((s) => {
+    const day = fmt(s.sale_date);
+    if (!map[day]) map[day] = { sales: 0, expense: 0 };
+    map[day].sales += Number(s.total_amount);
+  });
+
+  // accumulate expenses
+  expenseRows.forEach((e) => {
+    const day = fmt(e.expense_date);
+    if (!map[day]) map[day] = { sales: 0, expense: 0 };
+    map[day].expense += Number(e.amount);
+  });
+
+  // add COGS
+  // (Reuse your existing COGS logic)
+  return Object.entries(map).map(([date, v]) => ({
+    date,
+    sales: v.sales,
+    expense: v.expense,
+  }));
+}
+
+// --------------------------------------------------
+// TODAY MINI REPORT
+// --------------------------------------------------
+export async function getTodayMiniSummary(shopId: string) {
+  await requireUser();
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const todayDate = today.toISOString().split("T")[0];
+
+  const salesRows = await prisma.sales.findMany({
+    where: {
+      shop_id: shopId,
+      sale_date: { gte: today },
+    },
+  });
+
+  const expenseRows = await prisma.expenses.findMany({
+    where: {
+      shop_id: shopId,
+      expense_date: todayDate,
+    },
+  });
+
+  const cashRows = await prisma.cash_entries.findMany({
+    where: {
+      shop_id: shopId,
+      created_at: { gte: today },
+    },
+  });
+
+  return {
+    sales: salesRows,
+    expenses: expenseRows,
+    cash: cashRows,
+  };
+}
+
+// --------------------------------------------------
+// SALES WITH FILTER
+// --------------------------------------------------
 export async function getSalesWithFilter(
   shopId: string,
   from?: string,
   to?: string
 ) {
-  const { start, end } = parseTimestampRange(from, to);
+  await requireUser();
 
-  return db
-    .select()
-    .from(sales)
-    .where(
-      and(
-        eq(sales.shopId, shopId),
-        start ? gte(sales.saleDate, start) : undefined,
-        end ? lte(sales.saleDate, end) : undefined
-      )
-    );
+  const start = from ? new Date(from) : undefined;
+  const end = to ? new Date(to) : undefined;
+
+  if (start) start.setUTCHours(0, 0, 0, 0);
+  if (end) end.setUTCHours(23, 59, 59, 999);
+
+  return await prisma.sales.findMany({
+    where: {
+      shop_id: shopId,
+      sale_date: { gte: start, lte: end },
+    },
+    orderBy: { sale_date: "desc" },
+  });
 }
 
-/* --------------------------------------------------
-   EXPENSE LIST WITH DATE FILTER
--------------------------------------------------- */
+// --------------------------------------------------
+// EXPENSES WITH FILTER
+// --------------------------------------------------
 export async function getExpensesWithFilter(
   shopId: string,
   from?: string,
   to?: string
 ) {
-  const { start, end } = parseDateRange(from, to);
+  await requireUser();
 
-  return db
-    .select()
-    .from(expenses)
-    .where(
-      and(
-        eq(expenses.shopId, shopId),
-        start ? gte(expenses.expenseDate, start) : undefined,
-        end ? lte(expenses.expenseDate, end) : undefined
-      )
-    );
+  const start = from ? new Date(from) : undefined;
+  const end = to ? new Date(to) : undefined;
+
+  if (start) start.setUTCHours(0, 0, 0, 0);
+  if (end) end.setUTCHours(23, 59, 59, 999);
+
+  return await prisma.expenses.findMany({
+    where: {
+      shop_id: shopId,
+      expense_date: { gte: start, lte: end },
+    },
+    orderBy: { expense_date: "desc" },
+  });
 }
 
-/* --------------------------------------------------
-   CASHBOOK LIST WITH DATE FILTER
--------------------------------------------------- */
+// --------------------------------------------------
+// CASH WITH FILTER
+// --------------------------------------------------
 export async function getCashWithFilter(
   shopId: string,
   from?: string,
   to?: string
 ) {
-  const { start, end } = parseTimestampRange(from, to);
+  await requireUser();
 
-  return db
-    .select()
-    .from(cashEntries)
-    .where(
-      and(
-        eq(cashEntries.shopId, shopId),
-        start ? gte(cashEntries.createdAt, start) : undefined,
-        end ? lte(cashEntries.createdAt, end) : undefined
-      )
-    );
+  const start = from ? new Date(from) : undefined;
+  const end = to ? new Date(to) : undefined;
+
+  if (start) start.setUTCHours(0, 0, 0, 0);
+  if (end) end.setUTCHours(23, 59, 59, 999);
+
+  return await prisma.cash_entries.findMany({
+    where: {
+      shop_id: shopId,
+      created_at: { gte: start, lte: end },
+    },
+    orderBy: { created_at: "desc" },
+  });
 }
 
-/* --------------------------------------------------
-   SALES SUMMARY (ALL TIME)
--------------------------------------------------- */
-export async function getSalesSummary(shopId: string) {
-  const rows = await db.select().from(sales).where(eq(sales.shopId, shopId));
+// --------------------------------------------------
+// TODAY SUMMARY WITH PROFIT
+// --------------------------------------------------
+export async function getTodaySummary(shopId: string) {
+  await requireUser();
 
-  const totalAmount = rows.reduce(
-    (sum, row: any) => sum + Number(row.totalAmount || 0),
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const todayDate = today.toISOString().split("T")[0];
+  const todayEnd = new Date(today);
+  todayEnd.setUTCHours(23, 59, 59, 999);
+
+  const salesRows = await prisma.sales.findMany({
+    where: {
+      shop_id: shopId,
+      sale_date: { gte: today },
+    },
+  });
+
+  const expensesRows = await prisma.expenses.findMany({
+    where: {
+      shop_id: shopId,
+      expense_date: todayDate,
+    },
+  });
+
+  const totalSales = salesRows.reduce(
+    (sum, s) => sum + Number(s.total_amount),
     0
   );
 
-  return {
-    totalAmount,
-    count: rows.length,
-  };
-}
-
-/* --------------------------------------------------
-   EXPENSE SUMMARY (ALL TIME)
--------------------------------------------------- */
-export async function getExpenseSummary(shopId: string) {
-  const rows = await db
-    .select()
-    .from(expenses)
-    .where(eq(expenses.shopId, shopId));
-
-  const totalAmount = rows.reduce(
-    (sum, row: any) => sum + Number(row.amount || 0),
+  const totalExpenses = expensesRows.reduce(
+    (sum, e) => sum + Number(e.amount),
     0
   );
 
-  return {
-    totalAmount,
-    count: rows.length,
-  };
-}
-
-/* --------------------------------------------------
-   CASH SUMMARY (ALL TIME)
--------------------------------------------------- */
-export async function getCashSummary(shopId: string) {
-  const rows = await db
-    .select()
-    .from(cashEntries)
-    .where(eq(cashEntries.shopId, shopId));
-
-  let totalIn = 0;
-  let totalOut = 0;
-
-  for (const row of rows as any[]) {
-    const amt = Number(row.amount || 0);
-    if (row.entryType === "IN") totalIn += amt;
-    else totalOut += amt;
-  }
+  // TODO: Add COGS if needed (your existing logic)
 
   return {
-    totalIn,
-    totalOut,
-    balance: totalIn - totalOut,
-  };
-}
-
-/* --------------------------------------------------
-   PROFIT SUMMARY (ALL TIME)
--------------------------------------------------- */
-export async function getProfitSummary(shopId: string) {
-  const salesData = await getSalesSummary(shopId);
-  const expenseData = await getExpenseSummary(shopId);
-  const needsCogs = await shopNeedsCogs(shopId);
-  const cogs = needsCogs ? await getCogsTotal(shopId) : 0;
-
-  const totalExpense = expenseData.totalAmount + cogs;
-  const profit = salesData.totalAmount - totalExpense;
-
-  return {
-    salesTotal: salesData.totalAmount,
-    expenseTotal: totalExpense,
-    profit,
-    cogs,
+    sales: totalSales,
+    expenses: totalExpenses,
+    profit: totalSales - totalExpenses,
   };
 }

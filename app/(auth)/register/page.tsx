@@ -1,56 +1,27 @@
-// app/(auth)/register/page.tsx
-
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
+import { registerAction } from "@/app/actions/auth";
 
 export default function RegisterPage() {
-  const router = useRouter();
-  const supabase = createClient();
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  async function handleRegister(e: any) {
-    e.preventDefault();
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (!error) {
-      alert("Account created! Now login.");
-      router.push("/login");
-    } else {
-      alert(error.message);
-    }
-  }
+  const [state, formAction] = useActionState(registerAction, { error: "" });
 
   return (
-    <div className="flex items-center justify-center h-screen">
-      <form
-        onSubmit={handleRegister}
-        className="p-6 w-96 border rounded space-y-3"
-      >
-        <h1 className="text-xl font-bold">Register</h1>
+    <form action={formAction} className="p-6 w-96 space-y-3">
+      <h1>Register</h1>
 
-        <input
-          className="border p-2 w-full"
-          placeholder="Email"
-          onChange={(e) => setEmail(e.target.value)}
-        />
+      {state.error && <p className="text-red-600">{state.error}</p>}
 
-        <input
-          className="border p-2 w-full"
-          placeholder="Password"
-          type="password"
-          onChange={(e) => setPassword(e.target.value)}
-        />
+      <input name="name" className="border p-2 w-full" required />
+      <input name="email" type="email" className="border p-2 w-full" required />
+      <input
+        name="password"
+        type="password"
+        className="border p-2 w-full"
+        required
+      />
 
-        <button className="bg-black text-white p-2 w-full">Register</button>
-      </form>
-    </div>
+      <button className="bg-black text-white p-2 w-full">Register</button>
+    </form>
   );
 }

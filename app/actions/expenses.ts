@@ -2,32 +2,20 @@
 
 "use server";
 
-import { db } from "@/db/client";
-import { expenses, shops } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { cookies } from "next/headers";
-import { createServerClientForRoute } from "@/lib/supabase";
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth/session";
 import { expenseSchema } from "@/lib/validators/expense";
 
-async function getCurrentUser() {
-  const cookieStore = await cookies();
-  const supabase = createServerClientForRoute(cookieStore);
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("Not authenticated");
-  return user;
-}
-
+// -------------------------------------------------
+// HELPERS
+// -------------------------------------------------
 async function assertShopBelongsToUser(shopId: string, userId: string) {
-  const shop = await db.query.shops.findFirst({
-    where: eq(shops.id, shopId),
+  const shop = await prisma.shops.findUnique({
+    where: { id: shopId },
   });
 
-  if (!shop || shop.ownerId !== userId) {
-    throw new Error("Unauthorized access to this shop");
+  if (!shop || shop.owner_id !== userId) {
+    throw new Error("Unauthorized");
   }
 
   return shop;
@@ -39,15 +27,19 @@ async function assertShopBelongsToUser(shopId: string, userId: string) {
 export async function createExpense(input: any) {
   const parsed = expenseSchema.parse(input);
 
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(parsed.shopId, user.id);
 
-  await db.insert(expenses).values({
-    shopId: parsed.shopId,
-    amount: parsed.amount,
-    category: parsed.category,
-    expenseDate: parsed.expenseDate || new Date().toISOString().slice(0, 10),
-    note: parsed.note || "",
+  await prisma.expenses.create({
+    data: {
+      shop_id: parsed.shopId,
+      amount: parsed.amount,
+      category: parsed.category,
+      expense_date: parsed.expenseDate
+        ? new Date(parsed.expenseDate)
+        : new Date(),
+      note: parsed.note || "",
+    },
   });
 
   return { success: true };
@@ -59,18 +51,20 @@ export async function createExpense(input: any) {
 export async function updateExpense(id: string, input: any) {
   const parsed = expenseSchema.parse(input);
 
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(parsed.shopId, user.id);
 
-  await db
-    .update(expenses)
-    .set({
+  await prisma.expenses.update({
+    where: { id },
+    data: {
       amount: parsed.amount,
       category: parsed.category,
       note: parsed.note || "",
-      expenseDate: parsed.expenseDate || new Date().toISOString().slice(0, 10),
-    })
-    .where(eq(expenses.id, id));
+      expense_date: parsed.expenseDate
+        ? new Date(parsed.expenseDate)
+        : new Date(),
+    },
+  });
 
   return { success: true };
 }
@@ -79,18 +73,21 @@ export async function updateExpense(id: string, input: any) {
 // GET EXPENSES BY SHOP
 // -------------------------------------------------
 export async function getExpensesByShop(shopId: string) {
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(shopId, user.id);
 
-  return db.select().from(expenses).where(eq(expenses.shopId, shopId));
+  return prisma.expenses.findMany({
+    where: { shop_id: shopId },
+    orderBy: { expense_date: "desc" },
+  });
 }
 
 // -------------------------------------------------
 // GET SINGLE EXPENSE
 // -------------------------------------------------
 export async function getExpense(id: string) {
-  return db.query.expenses.findFirst({
-    where: eq(expenses.id, id),
+  return prisma.expenses.findUnique({
+    where: { id },
   });
 }
 
@@ -98,6 +95,18 @@ export async function getExpense(id: string) {
 // DELETE EXPENSE
 // -------------------------------------------------
 export async function deleteExpense(id: string) {
-  await db.delete(expenses).where(eq(expenses.id, id));
+  const expense = await prisma.expenses.findUnique({
+    where: { id },
+  });
+
+  if (!expense) throw new Error("Expense not found");
+
+  const user = await requireUser();
+  await assertShopBelongsToUser(expense.shop_id, user.id);
+
+  await prisma.expenses.delete({
+    where: { id },
+  });
+
   return { success: true };
 }
