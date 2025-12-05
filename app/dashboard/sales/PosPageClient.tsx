@@ -1,7 +1,7 @@
 // app/dashboard/sales/PosPageClient.tsx
 "use client";
 
-import { useState, FormEvent, useEffect } from "react";
+import { useState, FormEvent, useEffect, useCallback, useMemo, useRef } from "react";
 import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
 import { useCart } from "@/hooks/use-cart";
@@ -9,7 +9,6 @@ import { useCart } from "@/hooks/use-cart";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
-import { useMemo, useRef } from "react";
 
 type PosPageClientProps = {
   products: {
@@ -45,11 +44,17 @@ export function PosPageClient({
   const [barFlash, setBarFlash] = useState(false);
   const cartPanelRef = useRef<HTMLDivElement | null>(null);
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
-  const items = cartShopId === shopId ? cartItems : [];
-  const safeTotalAmount =
-    cartShopId === shopId
-      ? totalAmount
-      : () => items.reduce((sum, i) => sum + i.total, 0);
+  const items = useMemo(
+    () => (cartShopId === shopId ? cartItems : []),
+    [cartItems, cartShopId, shopId]
+  );
+  const safeTotalAmount = useCallback(
+    () =>
+      cartShopId === shopId
+        ? totalAmount
+        : items.reduce((sum, i) => sum + i.total, 0),
+    [cartShopId, shopId, totalAmount, items]
+  );
 
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [customerId, setCustomerId] = useState<string>("");
@@ -165,7 +170,7 @@ export function PosPageClient({
     setBarFlash(true);
     const t = setTimeout(() => setBarFlash(false), 240);
     return () => clearTimeout(t);
-  }, [items.length, safeTotalAmount()]);
+  }, [items.length, safeTotalAmount]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

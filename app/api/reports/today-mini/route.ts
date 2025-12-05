@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/db/client";
-import { sales, expenses, cashEntries } from "@/db/schema";
-import { and, eq, gte } from "drizzle-orm";
+import { prisma } from "@/lib/prisma";
 
 function startOfTodayUtc() {
   const d = new Date();
@@ -20,33 +18,17 @@ export async function GET(req: Request) {
   const todayStart = startOfTodayUtc();
   const todayDate = todayStart.toISOString().slice(0, 10);
 
-  // -------------------------------
-  // SALES (Today)
-  // -------------------------------
-  const salesRows = await db
-    .select()
-    .from(sales)
-    .where(and(eq(sales.shopId, shopId), gte(sales.saleDate, todayStart)));
+  const salesRows = await prisma.sale.findMany({
+    where: { shopId, saleDate: { gte: todayStart } },
+  });
 
-  // -------------------------------
-  // EXPENSES (Today)
-  // -------------------------------
-  const expenseRows = await db
-    .select()
-    .from(expenses)
-    .where(
-      and(eq(expenses.shopId, shopId), gte(expenses.expenseDate, todayDate))
-    );
+  const expenseRows = await prisma.expense.findMany({
+    where: { shopId, expenseDate: { gte: todayDate } },
+  });
 
-  // -------------------------------
-  // CASHBOOK (Today)
-  // -------------------------------
-  const cashRows = await db
-    .select()
-    .from(cashEntries)
-    .where(
-      and(eq(cashEntries.shopId, shopId), gte(cashEntries.createdAt, todayStart))
-    );
+  const cashRows = await prisma.cashEntry.findMany({
+    where: { shopId, createdAt: { gte: todayStart } },
+  });
 
   return NextResponse.json({
     sales: salesRows,

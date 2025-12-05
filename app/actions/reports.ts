@@ -1,15 +1,7 @@
 "use server";
 
-import { db } from "@/db/client";
-import {
-  sales,
-  expenses,
-  cashEntries,
-  saleItems,
-  products,
-  shops,
-} from "@/db/schema";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
 /* --------------------------------------------------
    DATE FILTER HELPER
@@ -38,9 +30,7 @@ const SHOP_TYPES_WITH_COGS = new Set([
 ]);
 
 async function shopNeedsCogs(shopId: string) {
-  const shop = await db.query.shops.findFirst({
-    where: eq(shops.id, shopId),
-  });
+  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
   if (!shop) return false;
   return SHOP_TYPES_WITH_COGS.has((shop as any).businessType);
 }
@@ -59,23 +49,28 @@ export async function getCogsTotal(
   from?: Date,
   to?: Date
 ) {
-  const rows = await db
-    .select({
-      qty: saleItems.quantity,
-      buyPrice: products.buyPrice,
-    })
-    .from(saleItems)
-    .innerJoin(sales, eq(saleItems.saleId, sales.id))
-    .innerJoin(products, eq(saleItems.productId, products.id))
-    .where(
-      and(
-        eq(sales.shopId, shopId),
-        from ? gte(sales.saleDate, from) : undefined,
-        to ? lte(sales.saleDate, to) : undefined
-      )
-    );
+  const rows = await prisma.saleItem.findMany({
+    where: {
+      sale: {
+        shopId,
+        saleDate: {
+          gte: from,
+          lte: to,
+        },
+      },
+    },
+    select: {
+      quantity: true,
+      product: { select: { buyPrice: true } },
+    },
+  });
 
-  return sumCogs(rows as any);
+  const mapped = rows.map((r) => ({
+    qty: r.quantity,
+    buyPrice: r.product?.buyPrice,
+  }));
+
+  return sumCogs(mapped as any);
 }
 
 export async function getCogsByDay(
@@ -83,28 +78,28 @@ export async function getCogsByDay(
   from?: Date,
   to?: Date
 ) {
-  const rows = await db
-    .select({
-      qty: saleItems.quantity,
-      buyPrice: products.buyPrice,
-      saleDate: sales.saleDate,
-    })
-    .from(saleItems)
-    .innerJoin(sales, eq(saleItems.saleId, sales.id))
-    .innerJoin(products, eq(saleItems.productId, products.id))
-    .where(
-      and(
-        eq(sales.shopId, shopId),
-        from ? gte(sales.saleDate, from) : undefined,
-        to ? lte(sales.saleDate, to) : undefined
-      )
-    );
+  const rows = await prisma.saleItem.findMany({
+    where: {
+      sale: {
+        shopId,
+        saleDate: {
+          gte: from,
+          lte: to,
+        },
+      },
+    },
+    select: {
+      quantity: true,
+      sale: { select: { saleDate: true } },
+      product: { select: { buyPrice: true } },
+    },
+  });
 
   const byDay: Record<string, number> = {};
   rows.forEach((r: any) => {
-    const day = new Date(r.saleDate).toISOString().split("T")[0];
-    const qty = Number(r.qty ?? 0);
-    const buy = Number(r.buyPrice ?? 0);
+    const day = new Date(r.sale!.saleDate).toISOString().split("T")[0];
+    const qty = Number(r.quantity ?? 0);
+    const buy = Number(r.product?.buyPrice ?? 0);
     if (!Number.isFinite(qty) || !Number.isFinite(buy)) return;
     byDay[day] = (byDay[day] || 0) + qty * buy;
   });
@@ -136,16 +131,15 @@ export async function getSalesWithFilter(
 ) {
   const { start, end } = parseTimestampRange(from, to);
 
-  return db
-    .select()
-    .from(sales)
-    .where(
-      and(
-        eq(sales.shopId, shopId),
-        start ? gte(sales.saleDate, start) : undefined,
-        end ? lte(sales.saleDate, end) : undefined
-      )
-    );
+  return prisma.sale.findMany({
+    where: {
+      shopId,
+      saleDate: {
+        gte: start ?? undefined,
+        lte: end ?? undefined,
+      },
+    },
+  });
 }
 
 /* --------------------------------------------------
@@ -158,16 +152,15 @@ export async function getExpensesWithFilter(
 ) {
   const { start, end } = parseDateRange(from, to);
 
-  return db
-    .select()
-    .from(expenses)
-    .where(
-      and(
-        eq(expenses.shopId, shopId),
-        start ? gte(expenses.expenseDate, start) : undefined,
-        end ? lte(expenses.expenseDate, end) : undefined
-      )
-    );
+  return prisma.expense.findMany({
+    where: {
+      shopId,
+      expenseDate: {
+        gte: start ?? undefined,
+        lte: end ?? undefined,
+      },
+    },
+  });
 }
 
 /* --------------------------------------------------
@@ -180,23 +173,22 @@ export async function getCashWithFilter(
 ) {
   const { start, end } = parseTimestampRange(from, to);
 
-  return db
-    .select()
-    .from(cashEntries)
-    .where(
-      and(
-        eq(cashEntries.shopId, shopId),
-        start ? gte(cashEntries.createdAt, start) : undefined,
-        end ? lte(cashEntries.createdAt, end) : undefined
-      )
-    );
+  return prisma.cashEntry.findMany({
+    where: {
+      shopId,
+      createdAt: {
+        gte: start ?? undefined,
+        lte: end ?? undefined,
+      },
+    },
+  });
 }
 
 /* --------------------------------------------------
    SALES SUMMARY (ALL TIME)
 -------------------------------------------------- */
 export async function getSalesSummary(shopId: string) {
-  const rows = await db.select().from(sales).where(eq(sales.shopId, shopId));
+  const rows = await prisma.sale.findMany({ where: { shopId } });
 
   const totalAmount = rows.reduce(
     (sum, row: any) => sum + Number(row.totalAmount || 0),
@@ -213,10 +205,7 @@ export async function getSalesSummary(shopId: string) {
    EXPENSE SUMMARY (ALL TIME)
 -------------------------------------------------- */
 export async function getExpenseSummary(shopId: string) {
-  const rows = await db
-    .select()
-    .from(expenses)
-    .where(eq(expenses.shopId, shopId));
+  const rows = await prisma.expense.findMany({ where: { shopId } });
 
   const totalAmount = rows.reduce(
     (sum, row: any) => sum + Number(row.amount || 0),
@@ -233,10 +222,7 @@ export async function getExpenseSummary(shopId: string) {
    CASH SUMMARY (ALL TIME)
 -------------------------------------------------- */
 export async function getCashSummary(shopId: string) {
-  const rows = await db
-    .select()
-    .from(cashEntries)
-    .where(eq(cashEntries.shopId, shopId));
+  const rows = await prisma.cashEntry.findMany({ where: { shopId } });
 
   let totalIn = 0;
   let totalOut = 0;

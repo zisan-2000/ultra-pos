@@ -1,9 +1,7 @@
 // app/api/sync/products/route.ts
 
 import { NextResponse } from "next/server";
-import { db } from "@/db/client";
-import { products } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
   try {
@@ -13,17 +11,21 @@ export async function POST(req: Request) {
 
     // Insert new
     if (newItems.length > 0) {
-      await db.insert(products).values(newItems);
+      await prisma.product.createMany({ data: newItems });
     }
 
     // Update
     for (const item of updatedItems) {
-      await db.update(products).set(item).where(eq(products.id, item.id));
+      const { id, ...rest } = item;
+      await prisma.product.update({
+        where: { id },
+        data: rest,
+      });
     }
 
     // Delete
     if (deletedIds.length > 0) {
-      await db.delete(products).where(inArray(products.id, deletedIds));
+      await prisma.product.deleteMany({ where: { id: { in: deletedIds } } });
     }
 
     return NextResponse.json({ success: true });

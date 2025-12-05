@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
-import { db } from "@/db/client";
-import { sales, expenses, cashEntries } from "@/db/schema";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { prisma } from "@/lib/prisma";
 import { getCogsTotal } from "@/app/actions/reports";
-import { shops } from "@/db/schema";
 
 function startOfTodayUtc() {
   const d = new Date();
@@ -32,18 +29,14 @@ export async function GET(req: Request) {
   const todayEnd = new Date(todayStart);
   todayEnd.setUTCHours(23, 59, 59, 999);
 
-  const shop = await db.query.shops.findFirst({
-    where: eq(shops.id, shopId),
-  });
+  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
   const needsCogs = shop
     ? SHOP_TYPES_WITH_COGS.has((shop as any).businessType)
     : false;
 
-  // Sales
-  const salesRows = await db
-    .select()
-    .from(sales)
-    .where(and(eq(sales.shopId, shopId), gte(sales.saleDate, todayStart)));
+  const salesRows = await prisma.sale.findMany({
+    where: { shopId, saleDate: { gte: todayStart } },
+  });
 
   const salesTotal = salesRows.reduce(
     (sum, s) => sum + Number(s.totalAmount || 0),
@@ -51,12 +44,9 @@ export async function GET(req: Request) {
   );
 
   // Expenses
-  const expenseRows = await db
-    .select()
-    .from(expenses)
-    .where(
-      and(eq(expenses.shopId, shopId), gte(expenses.expenseDate, todayDate))
-    );
+  const expenseRows = await prisma.expense.findMany({
+    where: { shopId, expenseDate: { gte: todayDate } },
+  });
 
   const expenseTotal = expenseRows.reduce(
     (sum, e) => sum + Number(e.amount || 0),
@@ -68,12 +58,9 @@ export async function GET(req: Request) {
     : 0;
 
   // Cashbook
-  const cashRows = await db
-    .select()
-    .from(cashEntries)
-    .where(
-      and(eq(cashEntries.shopId, shopId), gte(cashEntries.createdAt, todayStart))
-    );
+  const cashRows = await prisma.cashEntry.findMany({
+    where: { shopId, createdAt: { gte: todayStart } },
+  });
 
   const totalIn = cashRows
     .filter((c) => c.entryType === "IN")

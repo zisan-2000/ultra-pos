@@ -2,18 +2,9 @@
 
 "use server";
 
-import { db } from "@/db/client";
-import {
-  sales,
-  saleItems,
-  shops,
-  products,
-  customers,
-  customerLedger,
-} from "@/db/schema";
-import { cookies } from "next/headers";
-import { createServerClientForRoute } from "@/lib/supabase";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth-session";
 
 type CartItemInput = {
   productId: string;
@@ -31,22 +22,8 @@ type CreateSaleInput = {
   paidNow?: number | null;
 };
 
-async function getCurrentUser() {
-  const cookieStore = await cookies();
-  const supabase = createServerClientForRoute(cookieStore);
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("Not authenticated");
-  return user;
-}
-
 async function assertShopBelongsToUser(shopId: string, userId: string) {
-  const shop = await db.query.shops.findFirst({
-    where: eq(shops.id, shopId),
-  });
+  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
 
   if (!shop || shop.ownerId !== userId) {
     throw new Error("Unauthorized access to this shop");
@@ -55,20 +32,11 @@ async function assertShopBelongsToUser(shopId: string, userId: string) {
   return shop;
 }
 
-// TEMP: ensure new columns exist in case migration hasn't been applied yet.
-async function ensureTrackStockColumn() {
-  await db.execute(
-    sql`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "track_stock" boolean NOT NULL DEFAULT false`
-  );
-}
-
 // ------------------------------
 // CREATE SALE
 // ------------------------------
 export async function createSale(input: CreateSaleInput) {
-  await ensureTrackStockColumn();
-
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(input.shopId, user.id);
 
   if (!input.items || input.items.length === 0) {
@@ -81,9 +49,9 @@ export async function createSale(input: CreateSaleInput) {
       throw new Error("Select a customer for due sale");
     }
 
-    const c = await db.query.customers.findFirst({
-      where: eq(customers.id, input.customerId),
-      columns: { id: true, shopId: true },
+    const c = await prisma.customer.findFirst({
+      where: { id: input.customerId },
+      select: { id: true, shopId: true },
     });
 
     if (!c || c.shopId !== input.shopId) {
@@ -96,10 +64,9 @@ export async function createSale(input: CreateSaleInput) {
   // Product IDs
   const productIds = input.items.map((i) => i.productId);
 
-  const dbProducts = await db
-    .select()
-    .from(products)
-    .where(inArray(products.id, productIds));
+  const dbProducts = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+  });
 
   if (dbProducts.length !== productIds.length) {
     throw new Error("Some products not found");
@@ -127,18 +94,18 @@ export async function createSale(input: CreateSaleInput) {
   const totalStr = computedTotal.toFixed(2); // numeric as string
 
   // Insert sale
-  const inserted = await db
-    .insert(sales)
-    .values({
+  const inserted = await prisma.sale.create({
+    data: {
       shopId: input.shopId,
       customerId: input.customerId || null,
       totalAmount: totalStr,
       paymentMethod: input.paymentMethod || "cash",
       note: input.note || null,
-    })
-    .returning({ id: sales.id });
+    },
+    select: { id: true },
+  });
 
-  const saleId = inserted[0].id;
+  const saleId = inserted.id;
 
   // Insert sale items
   const saleItemRows = input.items.map((item) => ({
@@ -148,7 +115,7 @@ export async function createSale(input: CreateSaleInput) {
     unitPrice: item.unitPrice.toFixed(2),
   }));
 
-  await db.insert(saleItems).values(saleItemRows);
+  await prisma.saleItem.createMany({ data: saleItemRows });
 
   // Update stock
   for (const p of dbProducts) {
@@ -164,10 +131,10 @@ export async function createSale(input: CreateSaleInput) {
     const currentStock = Number(p.stockQty || "0");
     const newStock = currentStock - soldQty;
 
-    await db
-      .update(products)
-      .set({ stockQty: newStock.toFixed(2) })
-      .where(eq(products.id, p.id));
+    await prisma.product.update({
+      where: { id: p.id },
+      data: { stockQty: newStock.toFixed(2) },
+    });
   }
 
   // Record due entry if needed
@@ -177,32 +144,43 @@ export async function createSale(input: CreateSaleInput) {
     const payNow = Math.min(Math.max(payNowRaw, 0), total); // clamp 0..total
     const dueAmount = Number((total - payNow).toFixed(2));
 
-    await db.transaction(async (tx) => {
-      await tx.insert(customerLedger).values({
-        shopId: input.shopId,
-        customerId: dueCustomer!.id,
-        entryType: "SALE",
-        amount: totalStr,
-        description: input.note || "Due sale",
+    await prisma.$transaction(async (tx) => {
+      await tx.customerLedger.create({
+        data: {
+          shopId: input.shopId,
+          customerId: dueCustomer!.id,
+          entryType: "SALE",
+          amount: totalStr,
+          description: input.note || "Due sale",
+        },
       });
 
       if (payNow > 0) {
-        await tx.insert(customerLedger).values({
-          shopId: input.shopId,
-          customerId: dueCustomer!.id,
-          entryType: "PAYMENT",
-          amount: payNow.toFixed(2),
-          description: "Partial payment at sale",
+        await tx.customerLedger.create({
+          data: {
+            shopId: input.shopId,
+            customerId: dueCustomer!.id,
+            entryType: "PAYMENT",
+            amount: payNow.toFixed(2),
+            description: "Partial payment at sale",
+          },
         });
       }
 
-      await tx
-        .update(customers)
-        .set({
-          totalDue: sql`${customers.totalDue} + ${dueAmount.toFixed(2)}`,
-          lastPaymentAt: payNow > 0 ? new Date() : undefined,
-        })
-        .where(eq(customers.id, dueCustomer!.id));
+      const current = await tx.customer.findUnique({
+        where: { id: dueCustomer!.id },
+        select: { totalDue: true },
+      });
+      const currentDue = new Prisma.Decimal(current?.totalDue ?? 0);
+      const newDue = currentDue.add(new Prisma.Decimal(dueAmount));
+
+      await tx.customer.update({
+        where: { id: dueCustomer!.id },
+        data: {
+          totalDue: newDue.toFixed(2),
+          lastPaymentAt: payNow > 0 ? new Date() : null,
+        },
+      });
     });
   }
 
@@ -213,62 +191,58 @@ export async function createSale(input: CreateSaleInput) {
 // GET SALES BY SHOP
 // ------------------------------
 export async function getSalesByShop(shopId: string) {
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(shopId, user.id);
 
-  const rows = await db.select().from(sales).where(eq(sales.shopId, shopId));
+  const rows = await prisma.sale.findMany({
+    where: { shopId },
+  });
 
   if (rows.length === 0) return [];
 
-  const saleIds = rows.map((r: any) => r.id);
+  const saleIds = rows.map((r) => r.id);
 
-  const items = await db
-    .select({
-      saleId: saleItems.saleId,
-      productName: products.name,
-      qty: saleItems.quantity,
-    })
-    .from(saleItems)
-    .leftJoin(products, eq(products.id, saleItems.productId))
-    .where(inArray(saleItems.saleId, saleIds));
+  const items = await prisma.saleItem.findMany({
+    where: { saleId: { in: saleIds } },
+    select: {
+      saleId: true,
+      quantity: true,
+      product: {
+        select: { name: true },
+      },
+    },
+  });
 
   const itemSummaryMap: Record<
     string,
-    { count: number; preview: string; names: string[] }
+    { count: number; names: string[] }
   > = {};
 
-  for (const it of items as any[]) {
-    const entry = itemSummaryMap[it.saleId] || {
-      count: 0,
-      names: [],
-      preview: "",
-    };
+  for (const it of items) {
+    const entry = itemSummaryMap[it.saleId] || { count: 0, names: [] };
     entry.count += 1;
-    if (entry.names.length < 3 && it.productName) {
-      entry.names.push(`${it.productName} x${Number(it.qty || 0)}`);
+    if (entry.names.length < 3 && it.product?.name) {
+      entry.names.push(
+        `${it.product.name} x${Number(it.quantity || 0)}`
+      );
     }
     itemSummaryMap[it.saleId] = entry;
   }
 
   const customerIds = Array.from(
-    new Set(
-      rows
-        .map((r: any) => r.customerId)
-        .filter((id: any): id is string => Boolean(id))
-    )
+    new Set(rows.map((r) => r.customerId).filter(Boolean) as string[])
   );
 
   let customerMap: Record<string, string> = {};
   if (customerIds.length) {
-    const cs = await db
-      .select({ id: customers.id, name: customers.name })
-      .from(customers)
-      .where(and(eq(customers.shopId, shopId), inArray(customers.id, customerIds)));
-
-    customerMap = Object.fromEntries(cs.map((c: any) => [c.id, c.name]));
+    const cs = await prisma.customer.findMany({
+      where: { shopId, id: { in: customerIds } },
+      select: { id: true, name: true },
+    });
+    customerMap = Object.fromEntries(cs.map((c) => [c.id, c.name || ""]));
   }
 
-  return rows.map((r: any) => {
+  return rows.map((r) => {
     const summary = itemSummaryMap[r.id] || { count: 0, names: [] };
     return {
       ...r,

@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/db/client";
-import { sales, expenses, shops } from "@/db/schema";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { prisma } from "@/lib/prisma";
 import { getCogsByDay } from "@/app/actions/reports";
 
 function parseRange(from?: string | null, to?: string | null) {
@@ -24,27 +22,25 @@ export async function GET(req: Request) {
   const startDateOnly = start ? start.toISOString().split("T")[0] : undefined;
   const endDateOnly = end ? end.toISOString().split("T")[0] : undefined;
 
-  const salesRows = await db
-    .select()
-    .from(sales)
-    .where(
-      and(
-        eq(sales.shopId, shopId),
-        start ? gte(sales.saleDate, start) : undefined,
-        end ? lte(sales.saleDate, end) : undefined
-      )
-    );
+  const salesRows = await prisma.sale.findMany({
+    where: {
+      shopId,
+      saleDate: {
+        gte: start ?? undefined,
+        lte: end ?? undefined,
+      },
+    },
+  });
 
-  const expenseRows = await db
-    .select()
-    .from(expenses)
-    .where(
-      and(
-        eq(expenses.shopId, shopId),
-        startDateOnly ? gte(expenses.expenseDate, startDateOnly) : undefined,
-        endDateOnly ? lte(expenses.expenseDate, endDateOnly) : undefined
-      )
-    );
+  const expenseRows = await prisma.expense.findMany({
+    where: {
+      shopId,
+      expenseDate: {
+        gte: startDateOnly ?? undefined,
+        lte: endDateOnly ?? undefined,
+      },
+    },
+  });
 
   const format = (d: string | Date) => new Date(d).toISOString().split("T")[0];
 
@@ -62,9 +58,7 @@ export async function GET(req: Request) {
     map[day].expense += Number(e.amount);
   });
 
-  const shop = await db.query.shops.findFirst({
-    where: eq(shops.id, shopId),
-  });
+  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
   const needsCogs =
     shop &&
     new Set([

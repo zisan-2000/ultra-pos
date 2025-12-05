@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------
+// BetterAuth core models
+// -----------------------
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String?   @unique
+  emailVerified Boolean   @default(false)
+  passwordHash  String?   @map("password_hash")
+  name          String?
+  image         String?
+  createdAt     DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime  @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  accounts      Account[]
+  sessions      Session[]
+  verifications Verification[]
+
+  @@map("users")
+}
+
+model Account {
+  id             String    @id @default(uuid()) @db.Uuid
+  providerId     String    @map("provider_id")
+  providerUserId String    @map("provider_user_id")
+  userId         String    @map("user_id") @db.Uuid
+  accessToken    String?   @map("access_token")
+  refreshToken   String?   @map("refresh_token")
+  idToken        String?   @map("id_token")
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz(6)
+  scope          String?
+  password       String?
+  profile        Json?
+  createdAt      DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([providerId, providerUserId])
+  @@map("accounts")
+}
+
+model Session {
+  token         String   @id @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz(6)
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  impersonatedBy String? @map("impersonated_by") @db.Uuid
+  createdAt     DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("sessions")
+}
+
+model Verification {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  token      String   @unique
+  identifier String
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  type       String
+  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("verifications")
+}
+
+model Shop {
+  id           String   @id @default(uuid()) @db.Uuid
+  ownerId      String   @map("owner_id") @db.Uuid
+  name         String
+  address      String?
+  phone        String?
+  businessType String   @map("business_type") @default("tea_stall")
+  createdAt    DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  products       Product[]
+  sales          Sale[]
+  expenses       Expense[]
+  cashEntries    CashEntry[]
+  customers      Customer[]
+  customerLedger CustomerLedger[]
+
+  @@index([ownerId], map: "idx_shops_owner_id")
+  @@map("shops")
+}
+
+model Product {
+  id         String   @id @default(uuid()) @db.Uuid
+  shopId     String   @map("shop_id") @db.Uuid
+  name       String
+  category   String   @default("Uncategorized")
+  buyPrice   Decimal? @map("buy_price") @db.Decimal(12, 2)
+  sellPrice  Decimal  @map("sell_price") @db.Decimal(12, 2)
+  stockQty   Decimal  @map("stock_qty") @default("0") @db.Decimal(12, 2)
+  trackStock Boolean  @map("track_stock") @default(false)
+  isActive   Boolean  @map("is_active") @default(true)
+  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  shop      Shop      @relation(fields: [shopId], references: [id])
+  saleItems SaleItem[]
+
+  @@index([shopId], map: "idx_products_shop")
+  @@index([shopId, isActive], map: "idx_products_active")
+  @@map("products")
+}
+
+model Sale {
+  id           String    @id @default(uuid()) @db.Uuid
+  shopId       String    @map("shop_id") @db.Uuid
+  customerId   String?   @map("customer_id") @db.Uuid
+  saleDate     DateTime  @map("sale_date") @default(now()) @db.Timestamptz(6)
+  totalAmount  Decimal   @map("total_amount") @db.Decimal(12, 2)
+  paymentMethod String   @map("payment_method") @default("cash")
+  note         String?
+  createdAt    DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  shop      Shop      @relation(fields: [shopId], references: [id])
+  customer  Customer? @relation(fields: [customerId], references: [id])
+  saleItems SaleItem[]
+
+  @@index([shopId], map: "idx_sales_shop")
+  @@index([customerId], map: "idx_sales_customer")
+  @@map("sales")
+}
+
+model SaleItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  saleId    String   @map("sale_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  quantity  Decimal  @db.Decimal(12, 2)
+  unitPrice Decimal  @map("unit_price") @db.Decimal(12, 2)
+  // Prisma doesn't have a first-class generated column annotation; we'll add
+  // the `generated always as (quantity * unit_price) stored` via SQL migration.
+  lineTotal Decimal  @map("line_total") @db.Decimal(12, 2)
+
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([saleId], map: "idx_sale_items_sale")
+  @@index([productId], map: "idx_sale_items_product")
+  @@map("sale_items")
+}
+
+model Expense {
+  id          String    @id @default(uuid()) @db.Uuid
+  shopId      String    @map("shop_id") @db.Uuid
+  amount      Decimal   @db.Decimal(12, 2)
+  category    String
+  expenseDate DateTime  @map("expense_date") @default(now()) @db.Date
+  note        String?
+  createdAt   DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, expenseDate], map: "idx_expenses_shop_date")
+  @@map("expenses")
+}
+
+model CashEntry {
+  id        String   @id @default(uuid()) @db.Uuid
+  shopId    String   @map("shop_id") @db.Uuid
+  entryType String   @map("entry_type")
+  amount    Decimal  @db.Decimal(12, 2)
+  reason    String?
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId], map: "idx_cash_entries_shop")
+  @@map("cash_entries")
+}
+
+model Customer {
+  id           String    @id @default(uuid()) @db.Uuid
+  shopId       String    @map("shop_id") @db.Uuid
+  name         String
+  phone        String?
+  address      String?
+  totalDue     Decimal   @map("total_due") @default("0") @db.Decimal(12, 2)
+  lastPaymentAt DateTime? @map("last_payment_at") @db.Timestamptz(6)
+  createdAt    DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  shop      Shop      @relation(fields: [shopId], references: [id])
+  sales     Sale[]
+  ledger    CustomerLedger[]
+
+  @@index([shopId], map: "idx_customers_shop")
+  @@index([phone], map: "idx_customers_phone")
+  @@map("customers")
+}
+
+model CustomerLedger {
+  id          String   @id @default(uuid()) @db.Uuid
+  shopId      String   @map("shop_id") @db.Uuid
+  customerId  String   @map("customer_id") @db.Uuid
+  entryType   String   @map("entry_type")
+  amount      Decimal  @db.Decimal(12, 2)
+  description String?
+  entryDate   DateTime @map("entry_date") @default(now()) @db.Timestamptz(6)
+  createdAt   DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  shop     Shop     @relation(fields: [shopId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([shopId], map: "idx_customer_ledger_shop")
+  @@index([customerId], map: "idx_customer_ledger_customer")
+  @@index([entryDate], map: "idx_customer_ledger_entry_date")
+  @@map("customer_ledger")
+}

@@ -1,46 +1,51 @@
 // middleware.ts
+import { NextResponse, type NextRequest } from "next/server";
 
-import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-
-export async function middleware(req: any) {
-  const res = NextResponse.next();
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return req.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          res.cookies.set(name, value, options);
-        },
-        remove(name: string, options: any) {
-          res.cookies.set(name, "", options);
-        },
+async function getSession(req: NextRequest) {
+  try {
+    const sessionRes = await fetch(new URL("/api/auth/get-session", req.url), {
+      method: "GET",
+      headers: {
+        cookie: req.headers.get("cookie") ?? "",
       },
-    }
-  );
+      cache: "no-store",
+    });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const setCookie = sessionRes.headers.get("set-cookie");
+    const data = sessionRes.ok ? await sessionRes.json() : null;
 
+    return {
+      session: data?.session || null,
+      setCookie,
+    };
+  } catch (error) {
+    console.error("BetterAuth get-session failed in middleware", error);
+    return { session: null, setCookie: null };
+  }
+}
+
+export async function middleware(req: NextRequest) {
+  const { session, setCookie } = await getSession(req);
   const isAuthPage =
     req.nextUrl.pathname.startsWith("/login") ||
     req.nextUrl.pathname.startsWith("/register");
 
-  if (!user && !isAuthPage) {
-    return NextResponse.redirect(new URL("/login", req.url));
+  const makeResponse = (res: NextResponse) => {
+    if (setCookie) {
+      res.headers.append("set-cookie", setCookie);
+    }
+    return res;
+  };
+
+  if (!session && !isAuthPage) {
+    return makeResponse(NextResponse.redirect(new URL("/login", req.url)));
   }
 
-  if (user && isAuthPage) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+  if (session && isAuthPage) {
+    return makeResponse(NextResponse.redirect(new URL("/dashboard", req.url)));
   }
 
-  return res;
+  return makeResponse(NextResponse.next());
 }
 
 export const config = {

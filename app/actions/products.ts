@@ -2,11 +2,8 @@
 
 "use server";
 
-import { db } from "@/db/client";
-import { products, shops } from "@/db/schema";
-import { and, eq, sql } from "drizzle-orm";
-import { cookies } from "next/headers";
-import { createServerClientForRoute } from "@/lib/supabase";
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth-session";
 
 // ---------------------------------
 // TYPES
@@ -41,21 +38,9 @@ type UpdateProductInput = {
 // ---------------------------------
 // AUTH HELPERS
 // ---------------------------------
-async function getCurrentUser() {
-  const cookieStore = await cookies();
-  const supabase = createServerClientForRoute(cookieStore);
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("Not authenticated");
-  return user;
-}
-
 async function assertShopBelongsToUser(shopId: string, userId: string) {
-  const shop = await db.query.shops.findFirst({
-    where: eq(shops.id, shopId),
+  const shop = await prisma.shop.findUnique({
+    where: { id: shopId },
   });
 
   if (!shop || shop.ownerId !== userId) {
@@ -63,13 +48,6 @@ async function assertShopBelongsToUser(shopId: string, userId: string) {
   }
 
   return shop;
-}
-
-// TEMP: ensure new columns exist in case migration hasn't been applied yet.
-async function ensureTrackStockColumn() {
-  await db.execute(
-    sql`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "track_stock" boolean NOT NULL DEFAULT false`
-  );
 }
 
 // ---------------------------------
@@ -161,9 +139,7 @@ function normalizeUnitUpdate(
 // CREATE PRODUCT
 // ---------------------------------
 export async function createProduct(input: CreateProductInput) {
-  await ensureTrackStockColumn();
-
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(input.shopId, user.id);
 
   const buyPrice = normalizeMoneyInput(input.buyPrice);
@@ -177,15 +153,17 @@ export async function createProduct(input: CreateProductInput) {
   const trackStock = input.trackStock === undefined ? false : Boolean(input.trackStock);
   const stockQty = trackStock ? normalizedStock : "0";
 
-  await db.insert(products).values({
-    shopId: input.shopId,
-    name: input.name,
-    category: input.category || "Uncategorized",
-    buyPrice,
-    sellPrice,
-    stockQty,
-    isActive: input.isActive,
-    trackStock,
+  await prisma.product.create({
+    data: {
+      shopId: input.shopId,
+      name: input.name,
+      category: input.category || "Uncategorized",
+      buyPrice: buyPrice === null ? null : buyPrice ?? undefined,
+      sellPrice,
+      stockQty,
+      isActive: input.isActive,
+      trackStock,
+    },
   });
 
   return { success: true };
@@ -195,29 +173,22 @@ export async function createProduct(input: CreateProductInput) {
 // GET PRODUCTS BY SHOP
 // ---------------------------------
 export async function getProductsByShop(shopId: string) {
-  await ensureTrackStockColumn();
-
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(shopId, user.id);
 
-  const rows = await db
-    .select()
-    .from(products)
-    .where(eq(products.shopId, shopId));
-
-  return rows;
+  return prisma.product.findMany({
+    where: { shopId },
+  });
 }
 
 // ---------------------------------
 // GET SINGLE PRODUCT
 // ---------------------------------
 export async function getProduct(id: string) {
-  await ensureTrackStockColumn();
+  const user = await requireUser();
 
-  const user = await getCurrentUser();
-
-  const product = await db.query.products.findFirst({
-    where: eq(products.id, id),
+  const product = await prisma.product.findUnique({
+    where: { id },
   });
 
   if (!product) throw new Error("Product not found");
@@ -231,15 +202,13 @@ export async function getProduct(id: string) {
 // UPDATE PRODUCT
 // ---------------------------------
 export async function updateProduct(id: string, data: UpdateProductInput) {
-  await ensureTrackStockColumn();
-
-  const product = await db.query.products.findFirst({
-    where: eq(products.id, id),
+  const product = await prisma.product.findUnique({
+    where: { id },
   });
 
   if (!product) throw new Error("Product not found");
 
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(product.shopId, user.id);
 
   const buyPrice = normalizeMoneyInput(data.buyPrice);
@@ -271,7 +240,10 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
     payload.trackStock = trackStock;
   }
 
-  await db.update(products).set(payload).where(eq(products.id, id));
+  await prisma.product.update({
+    where: { id },
+    data: payload,
+  });
 
   return { success: true };
 }
@@ -280,18 +252,16 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
 // DELETE PRODUCT
 // ---------------------------------
 export async function deleteProduct(id: string) {
-  await ensureTrackStockColumn();
-
-  const product = await db.query.products.findFirst({
-    where: eq(products.id, id),
+  const product = await prisma.product.findUnique({
+    where: { id },
   });
 
   if (!product) throw new Error("Product not found");
 
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(product.shopId, user.id);
 
-  await db.delete(products).where(eq(products.id, id));
+  await prisma.product.delete({ where: { id } });
 
   return { success: true };
 }
@@ -300,17 +270,10 @@ export async function deleteProduct(id: string) {
 // ACTIVE PRODUCTS (POS)
 // ---------------------------------
 export async function getActiveProductsByShop(shopId: string) {
-  await ensureTrackStockColumn();
-
-  const user = await getCurrentUser();
+  const user = await requireUser();
   await assertShopBelongsToUser(shopId, user.id);
 
-  const rows = await db
-    .select()
-    .from(products)
-    .where(
-      and(eq(products.shopId, shopId), eq(products.isActive, true as any))
-    );
-
-  return rows;
+  return prisma.product.findMany({
+    where: { shopId, isActive: true },
+  });
 }

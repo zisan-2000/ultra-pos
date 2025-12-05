@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/db/client";
-import { sales } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -10,8 +8,15 @@ export async function GET(req: Request) {
   const from = searchParams.get("from") || undefined;
   const to = searchParams.get("to") || undefined;
 
-  // fetch sales for this shop (no date filter yet, optional)
-  const rows = await db.select().from(sales).where(eq(sales.shopId, shopId));
+  const rows = await prisma.sale.findMany({
+    where: {
+      shopId,
+      saleDate: {
+        gte: from ? new Date(from) : undefined,
+        lte: to ? new Date(to) : undefined,
+      },
+    },
+  });
 
   // payment method grouping
   const grouped: Record<string, number> = {};
