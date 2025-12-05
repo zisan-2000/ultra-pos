@@ -11,7 +11,7 @@ datasource db {
 // BetterAuth core models
 // -----------------------
 model User {
-  id            String    @id @default(uuid()) @db.Uuid
+  id            String    @id @default(cuid())
   email         String?   @unique
   emailVerified Boolean   @default(false)
   passwordHash  String?   @map("password_hash")
@@ -28,10 +28,11 @@ model User {
 }
 
 model Account {
-  id             String    @id @default(uuid()) @db.Uuid
+  id             String    @id @default(cuid())
+  accountId      String?   @map("account_id")
   providerId     String    @map("provider_id")
-  providerUserId String    @map("provider_user_id")
-  userId         String    @map("user_id") @db.Uuid
+  providerUserId String    @map("provider_user_id") @default("")
+  userId         String    @map("user_id")
   accessToken    String?   @map("access_token")
   refreshToken   String?   @map("refresh_token")
   idToken        String?   @map("id_token")
@@ -49,12 +50,13 @@ model Account {
 }
 
 model Session {
-  token         String   @id @db.Uuid
-  userId        String   @map("user_id") @db.Uuid
+  id            String   @id @default(cuid())
+  token         String   @unique
+  userId        String   @map("user_id")
   expiresAt     DateTime @map("expires_at") @db.Timestamptz(6)
   ipAddress     String?  @map("ip_address")
   userAgent     String?  @map("user_agent")
-  impersonatedBy String? @map("impersonated_by") @db.Uuid
+  impersonatedBy String? @map("impersonated_by")
   createdAt     DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime @map("updated_at") @updatedAt @db.Timestamptz(6)
 
@@ -64,8 +66,8 @@ model Session {
 }
 
 model Verification {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String?  @map("user_id") @db.Uuid
+  id         String   @id @default(cuid())
+  userId     String?  @map("user_id")
   token      String   @unique
   identifier String
   expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
