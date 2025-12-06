@@ -90,7 +90,7 @@ export default async function CashPage({ searchParams }: CashPageProps) {
                 <p className={`text-2xl font-bold ${
                   e.entryType === "IN" ? "text-emerald-700" : "text-red-600"
                 }`}>
-                  {e.entryType === "IN" ? "+" : "-"}{e.amount} ৳
+                  {e.entryType === "IN" ? "+" : "-"}{Number(e.amount)} ৳
                 </p>
                 <p className="text-base text-gray-700 mt-2">{e.reason}</p>
               </div>

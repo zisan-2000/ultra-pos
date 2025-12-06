@@ -50,6 +50,8 @@ export function DashboardShell({
   const { shopId, setShop } = useCurrentShop();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  
   const safeShopId = useMemo(() => {
     if (!shops || shops.length === 0) return null;
     if (shopId && shops.some((s) => s.id === shopId)) return shopId;
@@ -68,7 +70,12 @@ export function DashboardShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [safeShopId]);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const isActive = (href: string) => {
+    if (!mounted) return false;
     if (href === "/dashboard") return pathname === "/dashboard";
     return pathname.startsWith(href);
   };
@@ -87,7 +94,7 @@ export function DashboardShell({
     ] || null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen overflow-hidden bg-gray-50">
       {/* Overlay for drawer on mobile */}
       {drawerOpen && (
         <button
@@ -97,7 +104,7 @@ export function DashboardShell({
         />
       )}
 
-      <div className="flex min-h-screen">
+      <div className="flex h-full">
         {/* Sidebar / Drawer */}
         <aside
           className={`fixed z-40 inset-y-0 left-0 w-72 bg-white border-r border-gray-200 p-6 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
@@ -129,8 +136,12 @@ export function DashboardShell({
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={() => setDrawerOpen(false)}
-                  className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors ${
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setDrawerOpen(false);
+                    router.push(item.href);
+                  }}
+                  className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
                     isActive(item.href)
                       ? "bg-green-50 text-green-700 border border-green-100"
                       : "text-gray-700 hover:bg-gray-100"
@@ -151,7 +162,7 @@ export function DashboardShell({
         </aside>
 
         {/* Main content */}
-        <div className="flex-1 flex flex-col min-h-screen lg:pl-0">
+        <div className="flex-1 flex flex-col h-full lg:pl-0 overflow-hidden">
           <header className="sticky top-0 z-20 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 shadow-sm">
             <div className="flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-3">
               <button
@@ -192,7 +203,7 @@ export function DashboardShell({
             </div>
           </header>
 
-          <main className="flex-1 pb-24 lg:pb-10">
+          <main className="flex-1 pb-24 lg:pb-10 overflow-y-auto">
             <div className="px-4 sm:px-6 lg:px-8 py-6">{children}</div>
           </main>
         </div>

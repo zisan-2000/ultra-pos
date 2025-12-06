@@ -7,6 +7,7 @@ import { authClient } from "@/lib/auth-client";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +19,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     const { error } = await authClient.signUp.email({
+      name,
       email,
       password,
       fetchOptions: { credentials: "include" },
@@ -41,6 +43,15 @@ export default function RegisterPage() {
         className="p-6 w-96 border rounded space-y-3"
       >
         <h1 className="text-xl font-bold">Register</h1>
+
+        <input
+          className="border p-2 w-full"
+          placeholder="Full Name"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
 
         <input
           className="border p-2 w-full"

@@ -30,13 +30,13 @@ export default function LoginPage() {
       return;
     }
 
-    // Ensure session is present; fallback to fetching session before redirect.
-    const session = data?.session || (await authClient.getSession()).data?.session;
-    if (!session) {
+    // Check if user is authenticated
+    if (!data?.user) {
       setError("Login failed");
       return;
     }
 
+    // Redirect to dashboard
     router.push("/dashboard");
   }
 
