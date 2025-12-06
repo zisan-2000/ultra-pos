@@ -32,6 +32,14 @@ export default async function ProductsPage({ searchParams }: PageProps) {
 
   const onlineProducts = await getProductsByShop(activeShopId);
 
+  // Convert Decimal objects to strings for client component
+  const serializedProducts = onlineProducts.map((product) => ({
+    ...product,
+    buyPrice: product.buyPrice ? String(product.buyPrice) : null,
+    sellPrice: String(product.sellPrice),
+    stockQty: String(product.stockQty),
+  }));
+
   return (
     <div className="space-y-6 section-gap">
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
@@ -43,7 +51,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
           <ProductsListClient
             shops={shops}
             activeShopId={activeShopId}
-            serverProducts={onlineProducts}
+            serverProducts={serializedProducts}
           />
         </div>
       </div>

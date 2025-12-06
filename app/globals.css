@@ -115,7 +115,8 @@ body {
 }
 
 .pressable {
-  transition: transform 80ms ease, box-shadow 120ms ease;
+  transition: transform 80ms ease;
+  will-change: transform;
 }
 .pressable:active {
   transform: scale(0.97);
@@ -157,19 +158,19 @@ body {
 }
 
 .card-lift {
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition: transform 120ms ease;
+  will-change: transform;
 }
 .card-lift:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
 }
 
 .fab-tap {
-  transition: transform 140ms ease, box-shadow 200ms ease;
+  transition: transform 140ms ease;
+  will-change: transform;
 }
 .fab-tap:active {
   transform: scale(0.95);
-  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.3);
 }
 
 /* Bangla Typography */

@@ -49,6 +49,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
+  const [lastAddedTime, setLastAddedTime] = useState(0);
 
   const add = useCart((s) => s.add);
   const items = useCart((s) => s.items);
@@ -219,6 +220,11 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   }, [query, quickPickSource, quickPicks, sortedResults, usage]);
 
   const handleAddToCart = (product: EnrichedProduct) => {
+    // Prevent double clicks within 300ms
+    const now = Date.now();
+    if (now - lastAddedTime < 300) return;
+    setLastAddedTime(now);
+
     const stock = toNumber(product.stockQty);
     const inCart = items.find((i) => i.productId === product.id)?.qty || 0;
     const tracksStock = product.trackStock === true;

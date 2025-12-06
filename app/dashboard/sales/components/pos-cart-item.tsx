@@ -1,10 +1,33 @@
 // app/dashboard/sales/components/PosCartItem.tsx
 "use client";
 
+import { useState } from "react";
 import { useCart, CartItem } from "@/hooks/use-cart";
 
 export function PosCartItem({ item }: { item: CartItem }) {
   const { increase, decrease, remove } = useCart();
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleIncrease = () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    increase(item.productId);
+    setTimeout(() => setIsProcessing(false), 100);
+  };
+
+  const handleDecrease = () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    decrease(item.productId);
+    setTimeout(() => setIsProcessing(false), 100);
+  };
+
+  const handleRemove = () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    remove(item.productId);
+    setTimeout(() => setIsProcessing(false), 100);
+  };
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
@@ -17,8 +40,9 @@ export function PosCartItem({ item }: { item: CartItem }) {
         </div>
         <button
           type="button"
-          onClick={() => remove(item.productId)}
-          className="text-red-600 hover:text-red-800 font-bold text-lg"
+          onClick={handleRemove}
+          disabled={isProcessing}
+          className="text-red-600 hover:text-red-800 font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
           ✕
         </button>
@@ -27,16 +51,18 @@ export function PosCartItem({ item }: { item: CartItem }) {
       <div className="flex gap-2 items-center justify-center bg-gray-100 rounded-lg p-2">
         <button
           type="button"
-          onClick={() => decrease(item.productId)}
-          className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded hover:bg-gray-50 font-bold"
+          onClick={handleDecrease}
+          disabled={isProcessing}
+          className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded hover:bg-gray-50 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
         >
           −
         </button>
         <span className="w-8 text-center font-bold text-gray-900 text-sm">{item.qty}</span>
         <button
           type="button"
-          onClick={() => increase(item.productId)}
-          className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded hover:bg-gray-50 font-bold"
+          onClick={handleIncrease}
+          disabled={isProcessing}
+          className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded hover:bg-gray-50 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
         >
           +
         </button>

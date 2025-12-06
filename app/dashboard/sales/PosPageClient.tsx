@@ -48,10 +48,10 @@ export function PosPageClient({
     () => (cartShopId === shopId ? cartItems : []),
     [cartItems, cartShopId, shopId]
   );
-  const safeTotalAmount = useCallback(
+  const safeTotalAmount = useMemo(
     () =>
       cartShopId === shopId
-        ? totalAmount
+        ? totalAmount()
         : items.reduce((sum, i) => sum + i.total, 0),
     [cartShopId, shopId, totalAmount, items]
   );
@@ -93,7 +93,7 @@ export function PosPageClient({
       return;
     }
 
-    const totalVal = safeTotalAmount();
+    const totalVal = safeTotalAmount as number;
     const paidNowNumber = isDue
       ? Math.min(Math.max(Number(paidNow || 0), 0), totalVal)
       : 0;
@@ -108,7 +108,7 @@ export function PosPageClient({
       formData.set("paidNow", paidNowNumber.toString());
       formData.set("note", note);
       formData.set("cart", JSON.stringify(items));
-      formData.set("totalAmount", safeTotalAmount().toString());
+      formData.set("totalAmount", safeTotalAmount.toString());
 
       await submitSale(formData);
       clear();
@@ -134,7 +134,7 @@ export function PosPageClient({
       paymentMethod,
       customerId: null,
       note,
-      totalAmount: safeTotalAmount().toFixed(2),
+      totalAmount: safeTotalAmount.toFixed(2),
       createdAt: Date.now(),
       syncStatus: "new" as const,
     };
@@ -170,7 +170,7 @@ export function PosPageClient({
     setBarFlash(true);
     const t = setTimeout(() => setBarFlash(false), 240);
     return () => clearTimeout(t);
-  }, [items.length, safeTotalAmount]);
+  }, [items.length]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -220,7 +220,7 @@ export function PosPageClient({
           <div className="bg-white rounded-lg p-4">
             <p className="text-sm text-slate-600 mb-1">মোট পরিমাণ</p>
             <p className="text-3xl font-bold text-slate-900">
-              {safeTotalAmount().toFixed(2)} ৳
+              {(safeTotalAmount as number).toFixed(2)} ৳
             </p>
           </div>
 
@@ -274,7 +274,7 @@ export function PosPageClient({
               <input
                 type="number"
                 min="0"
-                max={safeTotalAmount()}
+                max={safeTotalAmount}
                 step="0.01"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-base"
                 placeholder="যেমন: 100 (আংশিক পরিশোধের জন্য)"
@@ -282,7 +282,7 @@ export function PosPageClient({
                 onChange={(e) => setPaidNow(e.target.value)}
               />
               <p className="text-sm text-slate-500">
-                মোট {safeTotalAmount().toFixed(2)} ৳ | আংশিক দিলে বাকি ধার হিসেবে থাকবে।
+                মোট {safeTotalAmount.toFixed(2)} ৳ | আংশিক দিলে বাকি ধার হিসেবে থাকবে।
               </p>
             </div>
           )}
@@ -342,7 +342,7 @@ export function PosPageClient({
                 </button>
               </div>
               <p className="text-base font-semibold text-slate-900 leading-tight">
-                {safeTotalAmount().toFixed(2)} ৳ — {itemCount} আইটেম
+                {safeTotalAmount.toFixed(2)} ৳ — {itemCount} আইটেম
               </p>
             </div>
             <button
@@ -374,7 +374,7 @@ export function PosPageClient({
               <div>
                 <p className="text-xs text-slate-500">বর্তমান বিল</p>
                 <p className="text-lg font-semibold text-slate-900">
-                  {safeTotalAmount().toFixed(2)} ৳ • {itemCount} আইটেম
+                  {safeTotalAmount.toFixed(2)} ৳ • {itemCount} আইটেম
                 </p>
               </div>
               <button
