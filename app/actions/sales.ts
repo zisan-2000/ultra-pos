@@ -113,6 +113,7 @@ export async function createSale(input: CreateSaleInput) {
     productId: item.productId,
     quantity: item.qty.toString(),
     unitPrice: item.unitPrice.toFixed(2),
+    lineTotal: (item.qty * item.unitPrice).toFixed(2),
   }));
 
   await prisma.saleItem.createMany({ data: saleItemRows });

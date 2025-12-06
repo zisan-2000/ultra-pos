@@ -16,6 +16,19 @@ async function assertShopBelongsToUser(shopId: string, userId: string) {
   return shop;
 }
 
+function normalizeExpenseDate(raw?: string | null) {
+  const trimmed = raw?.trim();
+  const date = trimmed ? new Date(trimmed) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    // fallback to today's date if parsing fails
+    const fallback = new Date();
+    fallback.setUTCHours(0, 0, 0, 0);
+    return fallback;
+  }
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+}
+
 // -------------------------------------------------
 // CREATE EXPENSE
 // -------------------------------------------------
@@ -30,7 +43,7 @@ export async function createExpense(input: any) {
       shopId: parsed.shopId,
       amount: parsed.amount,
       category: parsed.category,
-      expenseDate: parsed.expenseDate || new Date().toISOString().slice(0, 10),
+      expenseDate: normalizeExpenseDate(parsed.expenseDate),
       note: parsed.note || "",
     },
   });
@@ -53,7 +66,7 @@ export async function updateExpense(id: string, input: any) {
       amount: parsed.amount,
       category: parsed.category,
       note: parsed.note || "",
-      expenseDate: parsed.expenseDate || new Date().toISOString().slice(0, 10),
+      expenseDate: normalizeExpenseDate(parsed.expenseDate),
     },
   });
 

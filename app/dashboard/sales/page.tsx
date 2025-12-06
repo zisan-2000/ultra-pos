@@ -69,13 +69,22 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
             এখনও কোনো বিক্রি নেই।
           </p>
         ) : (
-          sales.map((s) => (
+          sales.map((s) => {
+            const totalNum = Number(s.totalAmount ?? 0);
+            const totalStr = Number.isFinite(totalNum)
+              ? totalNum.toFixed(2)
+              : s.totalAmount?.toString?.() ?? "0.00";
+            const createdAtStr = s.createdAt
+              ? new Date(s.createdAt as any).toLocaleString("bn-BD")
+              : "";
+
+            return (
             <div
               key={s.id}
               className="bg-white border border-gray-200 rounded-xl p-5 flex justify-between items-center shadow-sm hover:shadow-md card-lift"
             >
               <div className="space-y-2">
-                <p className="text-2xl font-bold text-gray-900">{s.totalAmount} ৳</p>
+                <p className="text-2xl font-bold text-gray-900">{totalStr} ৳</p>
                 <p className="text-base text-gray-600">
                   পেমেন্ট: {s.paymentMethod === "due" ? "ধার" : s.paymentMethod === "cash" ? "ক্যাশ" : s.paymentMethod}
                   {s.paymentMethod === "due" && s.customerName
@@ -89,12 +98,11 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                 )}
               </div>
               <p className="text-sm text-gray-500">
-                {s.createdAt
-                  ? new Date(s.createdAt as any).toLocaleString("bn-BD")
-                  : ""}
+                {createdAtStr}
               </p>
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

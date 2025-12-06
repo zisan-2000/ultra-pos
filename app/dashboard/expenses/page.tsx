@@ -76,41 +76,51 @@ export default async function ExpensesPage({
             এখনও কোনো খরচ নেই।
           </p>
         ) : (
-          rows.map((e) => (
-            <div
-              key={e.id}
-              className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col gap-4 md:flex-row md:justify-between md:items-center shadow-sm hover:shadow-md card-lift"
-            >
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{e.amount} ৳</p>
-                <p className="text-base text-gray-700 mt-2">{e.category}</p>
-                <p className="text-sm text-gray-500 mt-1">তারিখ: {e.expenseDate}</p>
-              </div>
+          rows.map((e) => {
+            const amountNum = Number(e.amount ?? 0);
+            const formattedAmount = Number.isFinite(amountNum)
+              ? amountNum.toFixed(2)
+              : e.amount?.toString?.() ?? "0.00";
+            const expenseDateStr = e.expenseDate
+              ? new Date(e.expenseDate as any).toISOString().slice(0, 10)
+              : "-";
 
-              <div className="w-full md:w-auto grid grid-cols-2 gap-2 md:flex md:gap-2 md:items-center">
-                <Link
-                  href={`/dashboard/expenses/${e.id}`}
-                  className="w-full md:w-auto px-4 py-2 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg font-semibold hover:border-blue-300 hover:bg-blue-100 transition-colors text-center"
-                >
-                  এডিট
-                </Link>
+            return (
+              <div
+                key={e.id}
+                className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col gap-4 md:flex-row md:justify-between md:items-center shadow-sm hover:shadow-md card-lift"
+              >
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">{formattedAmount} ৳</p>
+                  <p className="text-base text-gray-700 mt-2">{e.category}</p>
+                  <p className="text-sm text-gray-500 mt-1">তারিখ: {expenseDateStr}</p>
+                </div>
 
-                <form
-                  action={async () => {
-                    "use server";
-                    const { deleteExpense } = await import(
-                      "@/app/actions/expenses"
-                    );
-                    await deleteExpense(e.id);
-                  }}
-                >
-                  <button className="w-full md:w-auto px-4 py-2 bg-red-50 border border-red-200 text-red-800 rounded-lg font-semibold hover:border-red-300 hover:bg-red-100 transition-colors">
-                    ডিলিট
-                  </button>
-                </form>
+                <div className="w-full md:w-auto grid grid-cols-2 gap-2 md:flex md:gap-2 md:items-center">
+                  <Link
+                    href={`/dashboard/expenses/${e.id}`}
+                    className="w-full md:w-auto px-4 py-2 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg font-semibold hover:border-blue-300 hover:bg-blue-100 transition-colors text-center"
+                  >
+                    এডিট
+                  </Link>
+
+                  <form
+                    action={async () => {
+                      "use server";
+                      const { deleteExpense } = await import(
+                        "@/app/actions/expenses"
+                      );
+                      await deleteExpense(e.id);
+                    }}
+                  >
+                    <button className="w-full md:w-auto px-4 py-2 bg-red-50 border border-red-200 text-red-800 rounded-lg font-semibold hover:border-red-300 hover:bg-red-100 transition-colors">
+                      ডিলিট
+                    </button>
+                  </form>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

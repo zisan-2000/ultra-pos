@@ -115,10 +115,10 @@ function parseDateRange(from?: string, to?: string) {
   const end =
     endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
 
-  const toDateString = (d?: Date) =>
-    d ? d.toISOString().split("T")[0] : undefined;
+  if (start) start.setUTCHours(0, 0, 0, 0);
+  if (end) end.setUTCHours(23, 59, 59, 999);
 
-  return { start: toDateString(start), end: toDateString(end) };
+  return { start, end };
 }
 
 /* --------------------------------------------------

@@ -19,8 +19,6 @@ export async function GET(req: Request) {
   const to = searchParams.get("to");
 
   const { start, end } = parseRange(from, to);
-  const startDateOnly = start ? start.toISOString().split("T")[0] : undefined;
-  const endDateOnly = end ? end.toISOString().split("T")[0] : undefined;
 
   const salesRows = await prisma.sale.findMany({
     where: {
@@ -36,8 +34,8 @@ export async function GET(req: Request) {
     where: {
       shopId,
       expenseDate: {
-        gte: startDateOnly ?? undefined,
-        lte: endDateOnly ?? undefined,
+        gte: start ?? undefined,
+        lte: end ?? undefined,
       },
     },
   });

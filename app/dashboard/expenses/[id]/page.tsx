@@ -21,7 +21,9 @@ export default async function EditExpensePage({ params }: PageProps) {
 
   const expenseShopId = expense.shopId;
   const backHref = `/dashboard/expenses?shopId=${expenseShopId}`;
-  const expenseDateDefault = expense.expenseDate || "";
+  const expenseDateDefault = expense.expenseDate
+    ? new Date(expense.expenseDate).toISOString().slice(0, 10)
+    : "";
 
   async function handleUpdate(formData: FormData) {
     "use server";
@@ -52,7 +54,7 @@ export default async function EditExpensePage({ params }: PageProps) {
           amount: expense.amount?.toString?.() || "",
           category: expense.category || "",
           note: expense.note || "",
-          expenseDate: expense.expenseDate || "",
+          expenseDate: expenseDateDefault,
         }}
         submitLabel="✓ খরচ আপডেট করুন"
       />
