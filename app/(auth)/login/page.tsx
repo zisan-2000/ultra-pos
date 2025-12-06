@@ -30,11 +30,14 @@ export default function LoginPage() {
       return;
     }
 
-    if (data?.session) {
-      router.push("/dashboard");
-    } else {
+    // Ensure session is present; fallback to fetching session before redirect.
+    const session = data?.session || (await authClient.getSession()).data?.session;
+    if (!session) {
       setError("Login failed");
+      return;
     }
+
+    router.push("/dashboard");
   }
 
   return (

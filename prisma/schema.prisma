@@ -82,7 +82,7 @@ model Verification {
 
 model Shop {
   id           String   @id @default(uuid()) @db.Uuid
-  ownerId      String   @map("owner_id") @db.Uuid
+  ownerId      String   @map("owner_id")
   name         String
   address      String?
   phone        String?
