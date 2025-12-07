@@ -2,18 +2,10 @@
 // Basic offline support + precaching key assets for the POS app.
 
 const CACHE_PREFIX = "pos-cache-";
-const CACHE_NAME = `${CACHE_PREFIX}v2`;
+// Bump this when deploying so clients drop old Next.js bundles & action IDs.
+const CACHE_NAME = `${CACHE_PREFIX}v4`;
 
 const PRECACHE_URLS = [
-  "/",
-  "/dashboard",
-  "/dashboard/sales",
-  "/dashboard/products",
-  "/dashboard/reports",
-  "/dashboard/expenses",
-  "/dashboard/due",
-  "/dashboard/cash",
-  "/dashboard/shops",
   "/offline",
   "/manifest.webmanifest",
   "/icons/icon-192x192.png",
@@ -73,17 +65,15 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
-  // Navigation requests: prefer network, fallback to offline page.
+  // Navigation requests: go to network; if offline, fall back to offline page.
   if (request.mode === "navigate") {
-    event.respondWith(
-      networkFirstNavigation(request)
-    );
+    event.respondWith(handleNavigation(request));
     return;
   }
 
-  // Next.js static assets (CSS/JS/chunks/etc.)
-  if (url.pathname.includes("/_next/")) {
-    event.respondWith(cacheFirstStatic(request, url));
+  // Next.js build assets: always prefer network so we don't serve stale bundles or action manifests.
+  if (url.pathname.startsWith("/_next/")) {
+    event.respondWith(networkFirstStatic(request, url));
     return;
   }
 
@@ -99,24 +89,15 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-async function networkFirstNavigation(request) {
+async function handleNavigation(request) {
   const cache = await caches.open(CACHE_NAME);
-  const url = new URL(request.url);
 
   try {
-    const networkResponse = await fetch(request);
-    cache.put(request, networkResponse.clone());
-    return networkResponse;
+    return await fetch(request);
   } catch (error) {
-    if (url.pathname.startsWith("/dashboard/")) {
-      const dashboardCache = await cache.match("/dashboard");
-      if (dashboardCache) return dashboardCache;
-    }
-
-    const cached = await cache.match(request);
-    if (cached) return cached;
-
-    return cache.match("/offline");
+    const offline = await cache.match("/offline");
+    if (offline) return offline;
+    throw error;
   }
 }
 
@@ -164,5 +145,31 @@ async function cacheFirstStatic(request, url) {
     return networkResponse;
   } catch (error) {
     return cached || Response.error();
+  }
+}
+
+async function networkFirstStatic(request, url) {
+  const cache = await caches.open(CACHE_NAME);
+  const cleanUrl = url.origin + url.pathname;
+  const cacheKey = new Request(cleanUrl, {
+    method: "GET",
+    headers: request.headers,
+    credentials: request.credentials,
+    mode: "same-origin",
+  });
+
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse && networkResponse.ok) {
+      cache.put(cacheKey, networkResponse.clone());
+    }
+    return networkResponse;
+  } catch (error) {
+    const cached =
+      (await cache.match(cleanUrl)) ||
+      (await cache.match(cacheKey)) ||
+      (await cache.match(request));
+    if (cached) return cached;
+    throw error;
   }
 }

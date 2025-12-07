@@ -8,8 +8,7 @@ async function getSession(req: NextRequest) {
       headers: {
         cookie: req.headers.get("cookie") ?? "",
       },
-      cache: "force-cache",
-      next: { revalidate: 60 }
+      cache: "no-store",
     });
 
     const setCookie = sessionRes.headers.get("set-cookie");
