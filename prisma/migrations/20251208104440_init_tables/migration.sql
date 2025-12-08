@@ -1,6 +1,32 @@
 -- CreateTable
+CREATE TABLE "Role" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+
+    CONSTRAINT "Role_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Permission" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+
+    CONSTRAINT "Permission_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RolePermission" (
+    "roleId" TEXT NOT NULL,
+    "permissionId" TEXT NOT NULL,
+
+    CONSTRAINT "RolePermission_pkey" PRIMARY KEY ("roleId","permissionId")
+);
+
+-- CreateTable
 CREATE TABLE "users" (
-    "id" UUID NOT NULL,
+    "id" TEXT NOT NULL,
     "email" TEXT,
     "emailVerified" BOOLEAN NOT NULL DEFAULT false,
     "password_hash" TEXT,
@@ -14,10 +40,11 @@ CREATE TABLE "users" (
 
 -- CreateTable
 CREATE TABLE "accounts" (
-    "id" UUID NOT NULL,
+    "id" TEXT NOT NULL,
+    "account_id" TEXT,
     "provider_id" TEXT NOT NULL,
-    "provider_user_id" TEXT NOT NULL,
-    "user_id" UUID NOT NULL,
+    "provider_user_id" TEXT NOT NULL DEFAULT '',
+    "user_id" TEXT NOT NULL,
     "access_token" TEXT,
     "refresh_token" TEXT,
     "id_token" TEXT,
@@ -33,22 +60,23 @@ CREATE TABLE "accounts" (
 
 -- CreateTable
 CREATE TABLE "sessions" (
-    "token" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
+    "id" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "user_id" TEXT NOT NULL,
     "expires_at" TIMESTAMPTZ(6) NOT NULL,
     "ip_address" TEXT,
     "user_agent" TEXT,
-    "impersonated_by" UUID,
+    "impersonated_by" TEXT,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT "sessions_pkey" PRIMARY KEY ("token")
+    CONSTRAINT "sessions_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "verifications" (
-    "id" UUID NOT NULL,
-    "user_id" UUID,
+    "id" TEXT NOT NULL,
+    "user_id" TEXT,
     "token" TEXT NOT NULL,
     "identifier" TEXT NOT NULL,
     "expires_at" TIMESTAMPTZ(6) NOT NULL,
@@ -62,7 +90,7 @@ CREATE TABLE "verifications" (
 -- CreateTable
 CREATE TABLE "shops" (
     "id" UUID NOT NULL,
-    "owner_id" UUID NOT NULL,
+    "owner_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "address" TEXT,
     "phone" TEXT,
@@ -167,11 +195,28 @@ CREATE TABLE "customer_ledger" (
     CONSTRAINT "customer_ledger_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "_UserRoles" (
+    "A" TEXT NOT NULL,
+    "B" TEXT NOT NULL,
+
+    CONSTRAINT "_UserRoles_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Role_name_key" ON "Role"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Permission_name_key" ON "Permission"("name");
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "accounts_provider_id_provider_user_id_key" ON "accounts"("provider_id", "provider_user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "sessions_token_key" ON "sessions"("token");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "verifications_token_key" ON "verifications"("token");
@@ -218,6 +263,15 @@ CREATE INDEX "idx_customer_ledger_customer" ON "customer_ledger"("customer_id");
 -- CreateIndex
 CREATE INDEX "idx_customer_ledger_entry_date" ON "customer_ledger"("entry_date");
 
+-- CreateIndex
+CREATE INDEX "_UserRoles_B_index" ON "_UserRoles"("B");
+
+-- AddForeignKey
+ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_permissionId_fkey" FOREIGN KEY ("permissionId") REFERENCES "Permission"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
 -- AddForeignKey
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -256,3 +310,9 @@ ALTER TABLE "customer_ledger" ADD CONSTRAINT "customer_ledger_shop_id_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "customer_ledger" ADD CONSTRAINT "customer_ledger_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "customers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_UserRoles" ADD CONSTRAINT "_UserRoles_A_fkey" FOREIGN KEY ("A") REFERENCES "Role"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_UserRoles" ADD CONSTRAINT "_UserRoles_B_fkey" FOREIGN KEY ("B") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

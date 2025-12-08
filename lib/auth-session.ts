@@ -1,3 +1,5 @@
+// lib/auth-session.ts
+
 import { cookies } from "next/headers";
 
 type SessionPayload = {

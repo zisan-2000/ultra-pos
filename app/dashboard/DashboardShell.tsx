@@ -1,3 +1,5 @@
+// app/dashboard/DashboardShell.tsx
+
 "use client";
 
 import Link from "next/link";
@@ -25,14 +27,23 @@ const bottomNav = [
   { href: "/dashboard/sales", label: "বিক্রি", icon: "🛒" },
   { href: "/dashboard/products", label: "পণ্য", icon: "🗃️" },
   { href: "/dashboard/expenses", label: "খরচ", icon: "💸" },
-  { href: "/dashboard/reports", label: "রিপোর্ট", icon: "📊" }
+  { href: "/dashboard/reports", label: "রিপোর্ট", icon: "📊" },
 ];
 
 const fabByRoute: Record<string, { href: string; label: string } | null> = {
   "/dashboard": { href: "/dashboard/sales/new", label: "নতুন বিক্রি যোগ করুন" },
-  "/dashboard/sales": { href: "/dashboard/sales/new", label: "নতুন বিক্রি যোগ করুন" },
-  "/dashboard/products": { href: "/dashboard/products/new", label: "+ নতুন পণ্য" },
-  "/dashboard/expenses": { href: "/dashboard/expenses/new", label: "+ নতুন খরচ" },
+  "/dashboard/sales": {
+    href: "/dashboard/sales/new",
+    label: "নতুন বিক্রি যোগ করুন",
+  },
+  "/dashboard/products": {
+    href: "/dashboard/products/new",
+    label: "+ নতুন পণ্য",
+  },
+  "/dashboard/expenses": {
+    href: "/dashboard/expenses/new",
+    label: "+ নতুন খরচ",
+  },
   "/dashboard/cash": { href: "/dashboard/cash/new", label: "+ নতুন এন্ট্রি" },
 };
 
@@ -51,7 +62,7 @@ export function DashboardShell({
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  
+
   const safeShopId = useMemo(() => {
     if (!shops || shops.length === 0) return null;
     if (shopId && shops.some((s) => s.id === shopId)) return shopId;
@@ -60,7 +71,9 @@ export function DashboardShell({
 
   const currentShopName = useMemo(() => {
     if (!safeShopId) return "দোকান নির্বাচন করুন";
-    return shops.find((s) => s.id === safeShopId)?.name || "দোকান নির্বাচন করুন";
+    return (
+      shops.find((s) => s.id === safeShopId)?.name || "দোকান নির্বাচন করুন"
+    );
   }, [safeShopId, shops]);
 
   useEffect(() => {
@@ -113,7 +126,9 @@ export function DashboardShell({
         >
           <div className="mb-8 flex items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">আল্ট্রা মাইক্রো</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                আল্ট্রা মাইক্রো
+              </h1>
               <p className="text-sm text-gray-500 mt-1">POS সিস্টেম</p>
             </div>
             <span

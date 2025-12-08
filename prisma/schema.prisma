@@ -7,6 +7,35 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ======================
+// BEST ROLES SYSTEM
+// ======================
+model Role {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  description     String?
+  users           User[]           @relation("UserRoles")
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  description     String?
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+
 // -----------------------
 // BetterAuth core models
 // -----------------------
@@ -23,6 +52,9 @@ model User {
   accounts      Account[]
   sessions      Session[]
   verifications Verification[]
+
+  roles         Role[]    @relation("UserRoles") // <-- BEST WAY
+
 
   @@map("users")
 }

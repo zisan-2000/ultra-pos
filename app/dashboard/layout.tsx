@@ -1,3 +1,5 @@
+// app/dashboard/layout.tsx
+
 import type { ReactNode } from "react";
 import { getShopsByUser } from "@/app/actions/shops";
 import { DashboardShell } from "./DashboardShell";

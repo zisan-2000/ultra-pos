@@ -1,3 +1,5 @@
+// lib/auth.ts
+
 import { randomUUID } from "crypto";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
