@@ -5,6 +5,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { expenseSchema } from "@/lib/validators/expense";
+import { requirePermission } from "@/lib/rbac";
 
 async function assertShopBelongsToUser(shopId: string, userId: string) {
   const shop = await prisma.shop.findUnique({ where: { id: shopId } });
@@ -36,6 +37,7 @@ export async function createExpense(input: any) {
   const parsed = expenseSchema.parse(input);
 
   const user = await requireUser();
+  requirePermission(user, "create_expense");
   await assertShopBelongsToUser(parsed.shopId, user.id);
 
   await prisma.expense.create({
@@ -58,6 +60,7 @@ export async function updateExpense(id: string, input: any) {
   const parsed = expenseSchema.parse(input);
 
   const user = await requireUser();
+  requirePermission(user, "update_expense");
   await assertShopBelongsToUser(parsed.shopId, user.id);
 
   await prisma.expense.update({
@@ -78,6 +81,7 @@ export async function updateExpense(id: string, input: any) {
 // -------------------------------------------------
 export async function getExpensesByShop(shopId: string) {
   const user = await requireUser();
+  requirePermission(user, "view_expenses");
   await assertShopBelongsToUser(shopId, user.id);
 
   return prisma.expense.findMany({
@@ -89,15 +93,20 @@ export async function getExpensesByShop(shopId: string) {
 // GET SINGLE EXPENSE
 // -------------------------------------------------
 export async function getExpense(id: string) {
-  return prisma.expense.findUnique({
+  const expense = await prisma.expense.findUnique({
     where: { id },
   });
+
+  return expense;
 }
 
 // -------------------------------------------------
 // DELETE EXPENSE
 // -------------------------------------------------
 export async function deleteExpense(id: string) {
+  const user = await requireUser();
+  requirePermission(user, "delete_expense");
+
   await prisma.expense.delete({ where: { id } });
   return { success: true };
 }

@@ -11,6 +11,14 @@ import { useCurrentShop } from "@/hooks/use-current-shop";
 
 type Shop = { id: string; name: string };
 
+type RbacUser = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  roles: string[];
+  permissions: string[];
+} | null;
+
 const navItems = [
   { href: "/dashboard", label: "ড্যাশবোর্ড" },
   { href: "/dashboard/shops", label: "দোকান" },
@@ -59,9 +67,10 @@ export function DashboardShell({
   const searchParams = useSearchParams();
   const router = useRouter();
   const { shopId, setShop } = useCurrentShop();
-
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [rbacUser, setRbacUser] = useState<RbacUser>(null);
+  const [rbacLoaded, setRbacLoaded] = useState(false);
 
   const safeShopId = useMemo(() => {
     if (!shops || shops.length === 0) return null;
@@ -86,6 +95,62 @@ export function DashboardShell({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRbac() {
+      try {
+        const res = await fetch("/api/rbac/me", { credentials: "include" });
+        if (!res.ok) {
+          if (!cancelled) {
+            setRbacUser(null);
+            setRbacLoaded(true);
+          }
+          return;
+        }
+        const data = await res.json();
+        if (!cancelled) {
+          setRbacUser(data.user ?? null);
+          setRbacLoaded(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setRbacUser(null);
+          setRbacLoaded(true);
+        }
+      }
+    }
+
+    loadRbac();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isSuperAdmin = rbacUser?.roles?.includes("super_admin") ?? false;
+
+  const hasPermission = (permission: string | null | undefined) => {
+    if (!permission) return true;
+    if (!rbacLoaded) return false;
+    if (isSuperAdmin) return true;
+    const perms = rbacUser?.permissions ?? [];
+    return perms.includes(permission);
+  };
+
+  const canAccessRbacAdmin = hasPermission("access_rbac_admin");
+
+  const routePermissionMap: Record<string, string> = {
+    "/dashboard": "view_dashboard_summary",
+    "/dashboard/shops": "view_shops",
+    "/dashboard/products": "view_products",
+    "/dashboard/sales": "view_sales",
+    "/dashboard/expenses": "view_expenses",
+    "/dashboard/due": "view_due_summary",
+    "/dashboard/cash": "view_cashbook",
+    "/dashboard/reports": "view_reports",
+  };
 
   const isActive = (href: string) => {
     if (!mounted) return false;
@@ -147,29 +212,57 @@ export function DashboardShell({
               প্রধান মেনু
             </div>
             <div className="flex flex-col gap-1">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setDrawerOpen(false);
-                    router.push(item.href);
-                  }}
-                  className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
-                    isActive(item.href)
-                      ? "bg-green-50 text-green-700 border border-green-100"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  <span>{item.label}</span>
-                  {isActive(item.href) ? (
-                    <span className="text-xs text-green-600">চলমান</span>
-                  ) : null}
-                </Link>
-              ))}
+              {navItems
+                .filter((item) => hasPermission(routePermissionMap[item.href]))
+                .map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setDrawerOpen(false);
+                      router.push(item.href);
+                    }}
+                    className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
+                      isActive(item.href)
+                        ? "bg-green-50 text-green-700 border border-green-100"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    {isActive(item.href) ? (
+                      <span className="text-xs text-green-600">চলমান</span>
+                    ) : null}
+                  </Link>
+                ))}
             </div>
           </div>
+
+          {canAccessRbacAdmin && (
+            <div className="mt-6 space-y-2">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                অ্যাডমিন
+              </div>
+              <Link
+                href="/dashboard/admin/rbac"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setDrawerOpen(false);
+                  router.push("/dashboard/admin/rbac");
+                }}
+                className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
+                  isActive("/dashboard/admin/rbac")
+                    ? "bg-green-50 text-green-700 border border-green-100"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                <span>RBAC ব্যবস্থাপনা</span>
+                {isActive("/dashboard/admin/rbac") ? (
+                  <span className="text-xs text-green-600">চলমান</span>
+                ) : null}
+              </Link>
+            </div>
+          )}
 
           <div className="mt-8 pt-6 border-t border-gray-200">
             <LogoutButton />
@@ -227,18 +320,20 @@ export function DashboardShell({
       {/* Bottom nav for mobile */}
       <nav className="fixed bottom-0 inset-x-0 z-30 lg:hidden px-3 pb-3">
         <div className="relative grid grid-cols-5 rounded-t-2xl bg-white/90 backdrop-blur-sm border border-slate-200 shadow-[0_-4px_18px_rgba(15,23,42,0.12)] px-3 pt-4 pb-3">
-          {bottomNav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 ${
-                isActive(item.href) ? "text-blue-700" : "text-gray-500"
-              }`}
-            >
-              <span className="text-base leading-none">{item.icon}</span>
-              <span className="leading-none">{item.label}</span>
-            </Link>
-          ))}
+          {bottomNav
+            .filter((item) => hasPermission(routePermissionMap[item.href]))
+            .map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 ${
+                  isActive(item.href) ? "text-blue-700" : "text-gray-500"
+                }`}
+              >
+                <span className="text-base leading-none">{item.icon}</span>
+                <span className="leading-none">{item.label}</span>
+              </Link>
+            ))}
         </div>
       </nav>
 

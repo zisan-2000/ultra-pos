@@ -1,3 +1,5 @@
+// app/dashbaord/page.tsx
+
 import { getShopsByUser } from "@/app/actions/shops";
 
 async function fetchSummary(shopId: string) {

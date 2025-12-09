@@ -5,6 +5,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
+import { requirePermission } from "@/lib/rbac";
 
 type CartItemInput = {
   productId: string;
@@ -37,6 +38,7 @@ async function assertShopBelongsToUser(shopId: string, userId: string) {
 // ------------------------------
 export async function createSale(input: CreateSaleInput) {
   const user = await requireUser();
+  requirePermission(user, "create_sale");
   await assertShopBelongsToUser(input.shopId, user.id);
 
   if (!input.items || input.items.length === 0) {
@@ -45,6 +47,7 @@ export async function createSale(input: CreateSaleInput) {
 
   let dueCustomer: { id: string } | null = null;
   if (input.paymentMethod === "due") {
+    requirePermission(user, "create_due_sale");
     if (!input.customerId) {
       throw new Error("Select a customer for due sale");
     }
@@ -190,6 +193,7 @@ export async function createSale(input: CreateSaleInput) {
 // ------------------------------
 export async function getSalesByShop(shopId: string) {
   const user = await requireUser();
+  requirePermission(user, "view_sales");
   await assertShopBelongsToUser(shopId, user.id);
 
   const rows = await prisma.sale.findMany({

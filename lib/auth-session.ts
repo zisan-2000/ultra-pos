@@ -1,6 +1,7 @@
 // lib/auth-session.ts
 
 import { cookies } from "next/headers";
+import { getUserWithRolesAndPermissions, type UserContext } from "./rbac";
 
 type SessionPayload = {
   session: { userId: string } | null;
@@ -30,12 +31,16 @@ async function fetchSession(): Promise<SessionPayload | null> {
   return data as SessionPayload;
 }
 
-export async function getCurrentUser() {
+export async function getCurrentUser(): Promise<UserContext | null> {
   const payload = await fetchSession();
-  return payload?.user ?? null;
+  const userId = payload?.session?.userId;
+  if (!userId) return null;
+
+  const ctx = await getUserWithRolesAndPermissions(userId);
+  return ctx;
 }
 
-export async function requireUser() {
+export async function requireUser(): Promise<UserContext> {
   const user = await getCurrentUser();
   if (!user) {
     throw new Error("Not authenticated");

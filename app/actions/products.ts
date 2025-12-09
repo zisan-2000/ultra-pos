@@ -4,6 +4,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
+import { requirePermission } from "@/lib/rbac";
 
 // ---------------------------------
 // TYPES
@@ -140,6 +141,7 @@ function normalizeUnitUpdate(
 // ---------------------------------
 export async function createProduct(input: CreateProductInput) {
   const user = await requireUser();
+  requirePermission(user, "create_product");
   await assertShopBelongsToUser(input.shopId, user.id);
 
   const buyPrice = normalizeMoneyInput(input.buyPrice);
@@ -174,6 +176,7 @@ export async function createProduct(input: CreateProductInput) {
 // ---------------------------------
 export async function getProductsByShop(shopId: string) {
   const user = await requireUser();
+  requirePermission(user, "view_products");
   await assertShopBelongsToUser(shopId, user.id);
 
   return prisma.product.findMany({
@@ -193,6 +196,7 @@ export async function getProduct(id: string) {
 
   if (!product) throw new Error("Product not found");
 
+  requirePermission(user, "view_products");
   await assertShopBelongsToUser(product.shopId, user.id);
 
   return product;
@@ -207,8 +211,8 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   });
 
   if (!product) throw new Error("Product not found");
-
   const user = await requireUser();
+  requirePermission(user, "update_product");
   await assertShopBelongsToUser(product.shopId, user.id);
 
   const buyPrice = normalizeMoneyInput(data.buyPrice);
@@ -259,6 +263,7 @@ export async function deleteProduct(id: string) {
   if (!product) throw new Error("Product not found");
 
   const user = await requireUser();
+  requirePermission(user, "delete_product");
   await assertShopBelongsToUser(product.shopId, user.id);
 
   await prisma.product.delete({ where: { id } });
@@ -271,6 +276,7 @@ export async function deleteProduct(id: string) {
 // ---------------------------------
 export async function getActiveProductsByShop(shopId: string) {
   const user = await requireUser();
+  requirePermission(user, "view_products");
   await assertShopBelongsToUser(shopId, user.id);
 
   return prisma.product.findMany({

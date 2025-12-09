@@ -1,3 +1,5 @@
+// prisma/seed.ts
+
 import crypto from "crypto";
 import {
   Prisma,
@@ -6,6 +8,8 @@ import {
   type Product,
   type Shop,
   type User,
+  type Role,
+  type Permission,
 } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -28,6 +32,145 @@ type LedgerEntry = {
 type ShopMap = Record<string, Shop>;
 type ProductMap = Record<string, Record<string, Product>>;
 type CustomerMap = Record<string, Record<string, Customer>>;
+
+/**
+ * ========= RBAC CONSTANTS =========
+ */
+
+const ROLE_NAMES = [
+  "super_admin",
+  "admin",
+  "agent",
+  "owner",
+  "staff",
+] as const;
+
+type RoleName = (typeof ROLE_NAMES)[number];
+
+const PERMISSION_NAMES: string[] = [
+  // Shops
+  "view_shops",
+  "create_shop",
+  "update_shop",
+  "delete_shop",
+  "switch_shop",
+
+  // Products
+  "view_products",
+  "create_product",
+  "update_product",
+  "delete_product",
+  "update_product_stock",
+  "update_product_price",
+  "manage_product_status",
+  "import_products",
+
+  // Sales
+  "view_sales",
+  "view_sale_details",
+  "create_sale",
+  "update_sale",
+  "cancel_sale",
+  "create_due_sale",
+  "take_due_payment_from_sale",
+
+  // Customers / Due
+  "view_customers",
+  "create_customer",
+  "update_customer",
+  "delete_customer",
+  "view_due_summary",
+  "view_customer_due",
+  "create_due_entry",
+  "take_due_payment",
+  "writeoff_due",
+
+  // Expenses
+  "view_expenses",
+  "create_expense",
+  "update_expense",
+  "delete_expense",
+
+  // Cashbook
+  "view_cashbook",
+  "create_cash_entry",
+  "update_cash_entry",
+  "delete_cash_entry",
+  "adjust_cash_balance",
+
+  // Reports
+  "view_reports",
+  "view_sales_report",
+  "view_expense_report",
+  "view_cashbook_report",
+  "view_profit_report",
+  "view_payment_method_report",
+  "view_top_products_report",
+  "view_low_stock_report",
+  "export_reports",
+
+  // Users / Roles (future)
+  "view_users",
+  "create_user",
+  "update_user",
+  "delete_user",
+  "view_roles",
+  "create_role",
+  "update_role",
+  "delete_role",
+  "assign_role_to_user",
+  "revoke_role_from_user",
+
+  // RBAC Admin access
+  "access_rbac_admin",
+
+  // Settings
+  "view_settings",
+  "update_settings",
+
+  // Meta / Dashboard
+  "view_dashboard_summary",
+  "use_offline_pos",
+  "sync_offline_data",
+];
+
+const DEMO_USERS: { role: RoleName; name: string; email: string; password: string }[] =
+  [
+    {
+      role: "super_admin",
+      name: "Super Admin (Demo)",
+      email: "superadmin@pos.test",
+      password: "Admin123!",
+    },
+    {
+      role: "admin",
+      name: "Admin Manager (Demo)",
+      email: "admin@pos.test",
+      password: "Admin123!",
+    },
+    {
+      role: "agent",
+      name: "Sales Agent (Demo)",
+      email: "agent@pos.test",
+      password: "Agent123!",
+    },
+    {
+      role: "owner",
+      name: "Shop Owner (Demo)",
+      email: "owner@pos.test",
+      password: "Owner123!",
+    },
+    {
+      role: "staff",
+      name: "Staff Member (Demo)",
+      email: "staff@pos.test",
+      password: "Staff123!",
+    },
+  ];
+
+/**
+ * ========= UTILS =========
+ */
 
 function hashPassword(password: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -79,7 +222,12 @@ function summarizeLedger(entries: LedgerEntry[]) {
   return { due: toMoney(due), lastPaymentAt };
 }
 
+/**
+ * ========= RESET DB =========
+ */
+
 async function resetDatabase() {
+  // POS data
   await prisma.saleItem.deleteMany();
   await prisma.sale.deleteMany();
   await prisma.expense.deleteMany();
@@ -88,41 +236,105 @@ async function resetDatabase() {
   await prisma.customer.deleteMany();
   await prisma.product.deleteMany();
   await prisma.shop.deleteMany();
+
+  // Auth / BetterAuth
   await prisma.session.deleteMany();
   await prisma.verification.deleteMany();
   await prisma.account.deleteMany();
+
+  // RBAC mappings
+  await prisma.rolePermission.deleteMany();
+  await prisma.role.deleteMany();
+  await prisma.permission.deleteMany();
+
+  // Users last (cascade clears many-to-many join table)
   await prisma.user.deleteMany();
 }
 
-async function seedUser(): Promise<{ user: User; password: string }> {
-  const userId = crypto.randomUUID();
-  const password = "Demo1234!";
-  const passwordHash = await hashPassword(password);
+/**
+ * ========= RBAC SEEDING =========
+ */
 
-  const user = await prisma.user.create({
-    data: {
-      id: userId,
-      name: "Demo Owner",
-      email: "demo@posapp.test",
-      emailVerified: true,
-      passwordHash,
-    },
+async function seedRBACAndUsers(prismaClient: PrismaClient): Promise<{
+  rolesByName: Record<RoleName, Role>;
+  permissionsByName: Record<string, Permission>;
+  usersByRole: Record<RoleName, User>;
+}> {
+  // 1) Permissions
+  const permissionsByName: Record<string, Permission> = {};
+  for (const name of PERMISSION_NAMES) {
+    const perm = await prismaClient.permission.create({
+      data: {
+        name,
+        description: name.replace(/_/g, " "),
+      },
+    });
+    permissionsByName[name] = perm;
+  }
+
+  // 2) Roles
+  const rolesByName = {} as Record<RoleName, Role>;
+  for (const roleName of ROLE_NAMES) {
+    const role = await prismaClient.role.create({
+      data: {
+        name: roleName,
+        description: `${roleName} role`,
+      },
+    });
+    rolesByName[roleName] = role;
+  }
+
+  // 3) RolePermission → super_admin gets ALL permissions
+  const superAdminRole = rolesByName.super_admin;
+  await prismaClient.rolePermission.createMany({
+    data: Object.values(permissionsByName).map((perm) => ({
+      roleId: superAdminRole.id,
+      permissionId: perm.id,
+    })),
+    skipDuplicates: true,
   });
 
-  await prisma.account.create({
-    data: {
-      id: crypto.randomUUID(),
-      userId,
-      providerId: "credential",
-      providerUserId: userId,
-      accountId: userId,
-      password: passwordHash,
-      scope: "email:password",
-    },
-  });
+  // 4) Demo Users for each Role
+  const usersByRole = {} as Record<RoleName, User>;
 
-  return { user, password };
+  for (const demo of DEMO_USERS) {
+    const passwordHash = await hashPassword(demo.password);
+
+    const user = await prismaClient.user.create({
+      data: {
+        name: demo.name,
+        email: demo.email,
+        emailVerified: true,
+        passwordHash,
+        roles: {
+          connect: { id: rolesByName[demo.role].id },
+        },
+      },
+    });
+
+    await prismaClient.account.create({
+      data: {
+        userId: user.id,
+        providerId: "credential",
+        providerUserId: user.id,
+        accountId: user.id,
+        password: passwordHash,
+        scope: "email:password",
+      },
+    });
+
+    usersByRole[demo.role] = user;
+  }
+
+  return { rolesByName, permissionsByName, usersByRole };
 }
+
+// ========= এখানে পর্যন্ত Part–1 =========
+// নিচে POS seeding helper functions (seedShops, seedProducts, ইত্যাদি) Part–2 তে আসবে।
+
+/**
+ * ========= POS SEEDING HELPERS =========
+ */
 
 async function seedShops(userId: string): Promise<ShopMap> {
   const shopsSeed = [
@@ -147,7 +359,7 @@ async function seedShops(userId: string): Promise<ShopMap> {
     const row = await prisma.shop.create({
       data: {
         id: crypto.randomUUID(),
-        ownerId: userId,
+        ownerId: userId, // owner user
         name: shop.name,
         address: shop.address,
         phone: shop.phone,
@@ -156,7 +368,6 @@ async function seedShops(userId: string): Promise<ShopMap> {
     });
     shops[shop.key] = row;
   }
-
   return shops;
 }
 
@@ -267,16 +478,17 @@ async function seedProducts(shops: ShopMap): Promise<ProductMap> {
   };
 
   const products: ProductMap = {};
+
   for (const [shopKey, entries] of Object.entries(productSeed)) {
     products[shopKey] = {};
+
     for (const product of entries) {
       const row = await prisma.product.create({
         data: {
           shopId: shops[shopKey].id,
           name: product.name,
           category: product.category,
-          buyPrice:
-            product.buyPrice === null ? null : toMoney(product.buyPrice),
+          buyPrice: product.buyPrice === null ? null : toMoney(product.buyPrice),
           sellPrice: toMoney(product.sellPrice),
           stockQty: toMoney(product.stockQty),
           trackStock: product.trackStock,
@@ -376,10 +588,13 @@ async function seedCustomers(shops: ShopMap): Promise<CustomerMap> {
   };
 
   const customers: CustomerMap = {};
+
   for (const [shopKey, entries] of Object.entries(customerSeed)) {
     customers[shopKey] = {};
+
     for (const customer of entries) {
       const summary = summarizeLedger(customer.ledger);
+
       const created = await prisma.customer.create({
         data: {
           id: crypto.randomUUID(),
@@ -488,7 +703,6 @@ async function seedSales(
 
   for (const sale of salesSeed) {
     const shop = shops[sale.shopKey];
-    if (!shop) throw new Error(`Shop not found for key ${sale.shopKey}`);
 
     const customerId =
       sale.customerKey && customers[sale.shopKey]?.[sale.customerKey]
@@ -497,14 +711,11 @@ async function seedSales(
 
     const items = sale.items.map((item) => {
       const product = products[sale.shopKey]?.[item.productName];
-      if (!product) {
-        throw new Error(
-          `Missing product ${item.productName} for shop ${sale.shopKey}`
-        );
-      }
+
       const qty = Number(item.qty);
       const unitPrice = parseFloat(product.sellPrice.toString());
       const lineTotal = qty * unitPrice;
+
       return {
         productId: product.id,
         quantity: qty,
@@ -521,7 +732,7 @@ async function seedSales(
         customerId,
         saleDate: sale.saleDate,
         totalAmount: toMoney(totalAmount),
-        paymentMethod: sale.paymentMethod || "cash",
+        paymentMethod: sale.paymentMethod,
         note: sale.note || null,
       },
     });
@@ -624,37 +835,71 @@ async function seedCashEntries(shops: ShopMap) {
   }
 }
 
+// ========= Part–2 ends here =========
+// Next: main() + full execution → Part 3
+
+/**
+ * ========= MAIN SEED EXECUTION =========
+ */
+
 async function main() {
-  console.log("Resetting existing data...");
+  console.log("🔥 Resetting existing data...");
   await resetDatabase();
 
-  console.log("Seeding demo user...");
-  const { user, password } = await seedUser();
+  console.log("🔥 Seeding RBAC (roles, permissions, demo users)...");
+  const { usersByRole } = await seedRBACAndUsers(prisma);
 
-  console.log("Seeding shops...");
-  const shops = await seedShops(user.id);
+  const ownerUser = usersByRole.owner;
+  if (!ownerUser) {
+    throw new Error("Owner demo user missing — RBAC seeding failed!");
+  }
 
-  console.log("Seeding products...");
+  console.log("🔥 Seeding shops...");
+  const shops = await seedShops(ownerUser.id);
+
+  console.log("🔥 Seeding products...");
   const products = await seedProducts(shops);
 
-  console.log("Seeding customers and ledger...");
+  console.log("🔥 Seeding customers...");
   const customers = await seedCustomers(shops);
 
-  console.log("Seeding sales and sale items...");
+  console.log("🔥 Seeding sales...");
   await seedSales(shops, products, customers);
 
-  console.log("Seeding expenses...");
+  console.log("🔥 Seeding expenses...");
   await seedExpenses(shops);
 
-  console.log("Seeding cash entries...");
+  console.log("🔥 Seeding cash entries...");
   await seedCashEntries(shops);
 
-  console.log(`Seed finished. Login with ${user.email} / ${password}`);
+  console.log("\n🎉 Seed Completed Successfully!");
+  console.log("=========================================\n");
+  console.log(" SUPER ADMIN LOGIN:");
+  console.log(" Email: superadmin@pos.test");
+  console.log(" Password: Admin123!");
+  console.log("-----------------------------------------");
+  console.log(" ADMIN LOGIN:");
+  console.log(" Email: admin@pos.test");
+  console.log(" Password: Admin123!");
+  console.log("-----------------------------------------");
+  console.log(" AGENT LOGIN:");
+  console.log(" Email: agent@pos.test");
+  console.log(" Password: Agent123!");
+  console.log("-----------------------------------------");
+  console.log(" OWNER LOGIN:");
+  console.log(" Email: owner@pos.test");
+  console.log(" Password: Owner123!");
+  console.log("-----------------------------------------");
+  console.log(" STAFF LOGIN:");
+  console.log(" Email: staff@pos.test");
+  console.log(" Password: Staff123!");
+  console.log("=========================================\n");
 }
 
 main()
   .catch((err) => {
-    console.error("Seed failed", err);
+    console.error("❌ Seed failed");
+    console.error(err);
     process.exit(1);
   })
   .finally(async () => {
