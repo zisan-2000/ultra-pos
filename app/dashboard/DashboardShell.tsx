@@ -139,6 +139,20 @@ export function DashboardShell({
     return perms.includes(permission);
   };
 
+  const effectiveDashboardHref = useMemo(() => {
+    if (!rbacUser) return "/dashboard";
+
+    const roles = rbacUser.roles || [];
+
+    if (isSuperAdmin) return "/super-admin/dashboard";
+    if (roles.includes("admin")) return "/admin/dashboard";
+    if (roles.includes("agent")) return "/agent/dashboard";
+    if (roles.includes("owner")) return "/owner/dashboard";
+    if (roles.includes("staff")) return "/staff/dashboard";
+
+    return "/dashboard";
+  }, [rbacUser, isSuperAdmin]);
+
   const canAccessRbacAdmin = hasPermission("access_rbac_admin");
 
   const routePermissionMap: Record<string, string> = {
@@ -214,27 +228,32 @@ export function DashboardShell({
             <div className="flex flex-col gap-1">
               {navItems
                 .filter((item) => hasPermission(routePermissionMap[item.href]))
-                .map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setDrawerOpen(false);
-                      router.push(item.href);
-                    }}
-                    className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
-                      isActive(item.href)
-                        ? "bg-green-50 text-green-700 border border-green-100"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}
-                  >
-                    <span>{item.label}</span>
-                    {isActive(item.href) ? (
-                      <span className="text-xs text-green-600">চলমান</span>
-                    ) : null}
-                  </Link>
-                ))}
+                .map((item) => {
+                  const targetHref =
+                    item.href === "/dashboard" ? effectiveDashboardHref : item.href;
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={targetHref}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setDrawerOpen(false);
+                        router.push(targetHref);
+                      }}
+                      className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
+                        isActive(targetHref)
+                          ? "bg-green-50 text-green-700 border border-green-100"
+                          : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                      {isActive(targetHref) ? (
+                        <span className="text-xs text-green-600">চলমান</span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
             </div>
           </div>
 
@@ -322,18 +341,23 @@ export function DashboardShell({
         <div className="relative grid grid-cols-5 rounded-t-2xl bg-white/90 backdrop-blur-sm border border-slate-200 shadow-[0_-4px_18px_rgba(15,23,42,0.12)] px-3 pt-4 pb-3">
           {bottomNav
             .filter((item) => hasPermission(routePermissionMap[item.href]))
-            .map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 ${
-                  isActive(item.href) ? "text-blue-700" : "text-gray-500"
-                }`}
-              >
-                <span className="text-base leading-none">{item.icon}</span>
-                <span className="leading-none">{item.label}</span>
-              </Link>
-            ))}
+            .map((item) => {
+              const targetHref =
+                item.href === "/dashboard" ? effectiveDashboardHref : item.href;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={targetHref}
+                  className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 ${
+                    isActive(targetHref) ? "text-blue-700" : "text-gray-500"
+                  }`}
+                >
+                  <span className="text-base leading-none">{item.icon}</span>
+                  <span className="leading-none">{item.label}</span>
+                </Link>
+              );
+            })}
         </div>
       </nav>
 

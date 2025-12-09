@@ -1,9 +1,7 @@
-// app/dashboard/layout.tsx
-
 import type { ReactNode } from "react";
-import { DashboardLayoutWrapper } from "./DashboardLayoutWrapper";
+import { DashboardLayoutWrapper } from "@/app/dashboard/DashboardLayoutWrapper";
 
-export default async function DashboardLayout({
+export default async function StaffLayout({
   children,
 }: {
   children: ReactNode;
