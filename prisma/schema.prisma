@@ -53,8 +53,12 @@ model User {
   sessions      Session[]
   verifications Verification[]
 
-  roles         Role[]    @relation("UserRoles") // <-- BEST WAY
+  roles         Role[]    @relation("UserRoles")
 
+  // User hierarchy: who created this user
+  createdBy     String?   @map("created_by")
+  createdByUser User?     @relation("CreatedUsers", fields: [createdBy], references: [id])
+  createdUsers  User[]    @relation("CreatedUsers")
 
   @@map("users")
 }

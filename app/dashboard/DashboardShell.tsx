@@ -28,6 +28,8 @@ const navItems = [
   { href: "/dashboard/due", label: "ধার / পাওনা" },
   { href: "/dashboard/cash", label: "নগদ খাতা" },
   { href: "/dashboard/reports", label: "রিপোর্ট" },
+  { href: "/dashboard/profile", label: "আমার প্রোফাইল" },
+  { href: "/dashboard/users", label: "ব্যবহারকারী ব্যবস্থাপনা" },
 ];
 
 const bottomNav = [
@@ -36,6 +38,7 @@ const bottomNav = [
   { href: "/dashboard/products", label: "পণ্য", icon: "🗃️" },
   { href: "/dashboard/expenses", label: "খরচ", icon: "💸" },
   { href: "/dashboard/reports", label: "রিপোর্ট", icon: "📊" },
+  { href: "/dashboard/profile", label: "প্রোফাইল", icon: "👤" },
 ];
 
 const fabByRoute: Record<string, { href: string; label: string } | null> = {
@@ -164,6 +167,8 @@ export function DashboardShell({
     "/dashboard/due": "view_due_summary",
     "/dashboard/cash": "view_cashbook",
     "/dashboard/reports": "view_reports",
+    "/dashboard/profile": "view_settings",
+    "/dashboard/users": "view_users_under_me",
   };
 
   const isActive = (href: string) => {
@@ -184,6 +189,23 @@ export function DashboardShell({
     fabByRoute[
       bottomNav.find((item) => pathname.startsWith(item.href))?.href || pathname
     ] || null;
+
+  const mobileNavItems = bottomNav.filter((item) =>
+    hasPermission(routePermissionMap[item.href])
+  );
+
+  const bottomGridClass =
+    mobileNavItems.length >= 6
+      ? "grid-cols-6"
+      : mobileNavItems.length === 5
+      ? "grid-cols-5"
+      : mobileNavItems.length === 4
+      ? "grid-cols-4"
+      : mobileNavItems.length === 3
+      ? "grid-cols-3"
+      : mobileNavItems.length === 2
+      ? "grid-cols-2"
+      : "grid-cols-1";
 
   return (
     <div className="h-screen overflow-hidden bg-gray-50">
@@ -338,26 +360,26 @@ export function DashboardShell({
 
       {/* Bottom nav for mobile */}
       <nav className="fixed bottom-0 inset-x-0 z-30 lg:hidden px-3 pb-3">
-        <div className="relative grid grid-cols-5 rounded-t-2xl bg-white/90 backdrop-blur-sm border border-slate-200 shadow-[0_-4px_18px_rgba(15,23,42,0.12)] px-3 pt-4 pb-3">
-          {bottomNav
-            .filter((item) => hasPermission(routePermissionMap[item.href]))
-            .map((item) => {
-              const targetHref =
-                item.href === "/dashboard" ? effectiveDashboardHref : item.href;
+        <div
+          className={`relative grid ${bottomGridClass} rounded-t-2xl bg-white/90 backdrop-blur-sm border border-slate-200 shadow-[0_-4px_18px_rgba(15,23,42,0.12)] px-3 pt-4 pb-3`}
+        >
+          {mobileNavItems.map((item) => {
+            const targetHref =
+              item.href === "/dashboard" ? effectiveDashboardHref : item.href;
 
-              return (
-                <Link
-                  key={item.href}
-                  href={targetHref}
-                  className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 ${
-                    isActive(targetHref) ? "text-blue-700" : "text-gray-500"
-                  }`}
-                >
-                  <span className="text-base leading-none">{item.icon}</span>
-                  <span className="leading-none">{item.label}</span>
-                </Link>
-              );
-            })}
+            return (
+              <Link
+                key={item.href}
+                href={targetHref}
+                className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 ${
+                  isActive(targetHref) ? "text-blue-700" : "text-gray-500"
+                }`}
+              >
+                <span className="text-base leading-none">{item.icon}</span>
+                <span className="leading-none">{item.label}</span>
+              </Link>
+            );
+          })}
         </div>
       </nav>
 

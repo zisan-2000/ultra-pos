@@ -1,3 +1,5 @@
+// lib/auth-client.ts
+
 import { createAuthClient } from "better-auth/client";
 
 const appUrl =

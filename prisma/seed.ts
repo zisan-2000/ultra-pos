@@ -121,6 +121,14 @@ const PERMISSION_NAMES: string[] = [
   "assign_role_to_user",
   "revoke_role_from_user",
 
+  // User Management (Hierarchical)
+  "view_users_under_me",
+  "create_user_agent",
+  "create_user_owner",
+  "create_user_staff",
+  "edit_users_under_me",
+  "delete_users_under_me",
+
   // RBAC Admin access
   "access_rbac_admin",
 
@@ -284,8 +292,10 @@ async function seedRBACAndUsers(prismaClient: PrismaClient): Promise<{
     rolesByName[roleName] = role;
   }
 
-  // 3) RolePermission → super_admin gets ALL permissions
+  // 3) RolePermission → Assign permissions to roles
   const superAdminRole = rolesByName.super_admin;
+  
+  // Super admin gets ALL permissions
   await prismaClient.rolePermission.createMany({
     data: Object.values(permissionsByName).map((perm) => ({
       roleId: superAdminRole.id,
@@ -294,11 +304,257 @@ async function seedRBACAndUsers(prismaClient: PrismaClient): Promise<{
     skipDuplicates: true,
   });
 
-  // 4) Demo Users for each Role
+  // Admin permissions (can manage users, create agent/owner/staff)
+  const adminPermissions = [
+    "view_shops",
+    "switch_shop",
+    "view_products",
+    "create_product",
+    "update_product",
+    "delete_product",
+    "update_product_stock",
+    "update_product_price",
+    "manage_product_status",
+    "import_products",
+    "view_sales",
+    "view_sale_details",
+    "create_sale",
+    "update_sale",
+    "cancel_sale",
+    "create_due_sale",
+    "take_due_payment_from_sale",
+    "view_customers",
+    "create_customer",
+    "update_customer",
+    "delete_customer",
+    "view_due_summary",
+    "view_customer_due",
+    "create_due_entry",
+    "take_due_payment",
+    "writeoff_due",
+    "view_expenses",
+    "create_expense",
+    "update_expense",
+    "delete_expense",
+    "view_cashbook",
+    "create_cash_entry",
+    "update_cash_entry",
+    "delete_cash_entry",
+    "adjust_cash_balance",
+    "view_reports",
+    "view_sales_report",
+    "view_expense_report",
+    "view_cashbook_report",
+    "view_profit_report",
+    "view_payment_method_report",
+    "view_top_products_report",
+    "view_low_stock_report",
+    "export_reports",
+    "view_users_under_me",
+    "create_user_agent",
+    "create_user_owner",
+    "create_user_staff",
+    "edit_users_under_me",
+    "delete_users_under_me",
+    "view_settings",
+    "update_settings",
+    "view_dashboard_summary",
+    "use_offline_pos",
+    "sync_offline_data",
+  ];
+
+  await prismaClient.rolePermission.createMany({
+    data: adminPermissions.map((permName) => ({
+      roleId: rolesByName.admin.id,
+      permissionId: permissionsByName[permName].id,
+    })),
+    skipDuplicates: true,
+  });
+
+  // Agent permissions (can manage users, create owner/staff)
+  const agentPermissions = [
+    "view_shops",
+    "switch_shop",
+    "view_products",
+    "create_product",
+    "update_product",
+    "delete_product",
+    "update_product_stock",
+    "update_product_price",
+    "manage_product_status",
+    "view_sales",
+    "view_sale_details",
+    "create_sale",
+    "update_sale",
+    "cancel_sale",
+    "create_due_sale",
+    "take_due_payment_from_sale",
+    "view_customers",
+    "create_customer",
+    "update_customer",
+    "delete_customer",
+    "view_due_summary",
+    "view_customer_due",
+    "create_due_entry",
+    "take_due_payment",
+    "writeoff_due",
+    "view_expenses",
+    "create_expense",
+    "update_expense",
+    "delete_expense",
+    "view_cashbook",
+    "create_cash_entry",
+    "update_cash_entry",
+    "delete_cash_entry",
+    "view_reports",
+    "view_sales_report",
+    "view_expense_report",
+    "view_cashbook_report",
+    "view_profit_report",
+    "view_payment_method_report",
+    "view_top_products_report",
+    "view_low_stock_report",
+    "export_reports",
+    "view_users_under_me",
+    "create_user_owner",
+    "create_user_staff",
+    "edit_users_under_me",
+    "delete_users_under_me",
+    "view_settings",
+    "view_dashboard_summary",
+    "use_offline_pos",
+    "sync_offline_data",
+  ];
+
+  await prismaClient.rolePermission.createMany({
+    data: agentPermissions.map((permName) => ({
+      roleId: rolesByName.agent.id,
+      permissionId: permissionsByName[permName].id,
+    })),
+    skipDuplicates: true,
+  });
+
+  // Owner permissions (can manage users, create staff)
+  const ownerPermissions = [
+    "view_shops",
+    "switch_shop",
+    "view_products",
+    "create_product",
+    "update_product",
+    "delete_product",
+    "update_product_stock",
+    "update_product_price",
+    "manage_product_status",
+    "view_sales",
+    "view_sale_details",
+    "create_sale",
+    "update_sale",
+    "cancel_sale",
+    "create_due_sale",
+    "take_due_payment_from_sale",
+    "view_customers",
+    "create_customer",
+    "update_customer",
+    "delete_customer",
+    "view_due_summary",
+    "view_customer_due",
+    "create_due_entry",
+    "take_due_payment",
+    "writeoff_due",
+    "view_expenses",
+    "create_expense",
+    "update_expense",
+    "delete_expense",
+    "view_cashbook",
+    "create_cash_entry",
+    "update_cash_entry",
+    "delete_cash_entry",
+    "view_reports",
+    "view_sales_report",
+    "view_expense_report",
+    "view_cashbook_report",
+    "view_profit_report",
+    "view_payment_method_report",
+    "view_top_products_report",
+    "view_low_stock_report",
+    "export_reports",
+    "view_users_under_me",
+    "create_user_staff",
+    "edit_users_under_me",
+    "delete_users_under_me",
+    "view_settings",
+    "view_dashboard_summary",
+    "use_offline_pos",
+    "sync_offline_data",
+  ];
+
+  await prismaClient.rolePermission.createMany({
+    data: ownerPermissions.map((permName) => ({
+      roleId: rolesByName.owner.id,
+      permissionId: permissionsByName[permName].id,
+    })),
+    skipDuplicates: true,
+  });
+
+  // Staff permissions (no user management)
+  const staffPermissions = [
+    "view_shops",
+    "switch_shop",
+    "view_products",
+    "view_sales",
+    "view_sale_details",
+    "create_sale",
+    "create_due_sale",
+    "take_due_payment_from_sale",
+    "view_customers",
+    "create_customer",
+    "update_customer",
+    "view_due_summary",
+    "view_customer_due",
+    "create_due_entry",
+    "take_due_payment",
+    "view_expenses",
+    "view_cashbook",
+    "view_reports",
+    "view_sales_report",
+    "view_expense_report",
+    "view_cashbook_report",
+    "view_profit_report",
+    "view_payment_method_report",
+    "view_top_products_report",
+    "view_low_stock_report",
+    "export_reports",
+    "view_settings",
+    "view_dashboard_summary",
+    "use_offline_pos",
+    "sync_offline_data",
+  ];
+
+  await prismaClient.rolePermission.createMany({
+    data: staffPermissions.map((permName) => ({
+      roleId: rolesByName.staff.id,
+      permissionId: permissionsByName[permName].id,
+    })),
+    skipDuplicates: true,
+  });
+
+  // 4) Demo Users for each Role (with hierarchy: super_admin → admin → agent → owner → staff)
   const usersByRole = {} as Record<RoleName, User>;
 
   for (const demo of DEMO_USERS) {
     const passwordHash = await hashPassword(demo.password);
+
+    // Determine createdBy based on role hierarchy
+    let createdByUserId: string | undefined;
+    if (demo.role === "admin" && usersByRole.super_admin) {
+      createdByUserId = usersByRole.super_admin.id;
+    } else if (demo.role === "agent" && usersByRole.admin) {
+      createdByUserId = usersByRole.admin.id;
+    } else if (demo.role === "owner" && usersByRole.agent) {
+      createdByUserId = usersByRole.agent.id;
+    } else if (demo.role === "staff" && usersByRole.owner) {
+      createdByUserId = usersByRole.owner.id;
+    }
 
     const user = await prismaClient.user.create({
       data: {
@@ -306,6 +562,7 @@ async function seedRBACAndUsers(prismaClient: PrismaClient): Promise<{
         email: demo.email,
         emailVerified: true,
         passwordHash,
+        createdBy: createdByUserId,
         roles: {
           connect: { id: rolesByName[demo.role].id },
         },

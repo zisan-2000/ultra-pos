@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth-session";
 import { hasRole, isSuperAdmin } from "@/lib/rbac";
+import OwnerDashboardPage from "@/app/owner/dashboard/page";
 
 export default async function StaffDashboardPage() {
   const user = await requireUser();
@@ -9,11 +10,6 @@ export default async function StaffDashboardPage() {
     redirect("/dashboard");
   }
 
-  return (
-    <div className="py-8">
-      <h1 className="text-2xl font-bold mb-2">Welcome to the Staff Dashboard</h1>
-      <p className="text-sm text-gray-600">You can access your daily tasks and view key info here.</p>
-    </div>
-  );
+  return <OwnerDashboardPage />;
 }
 
