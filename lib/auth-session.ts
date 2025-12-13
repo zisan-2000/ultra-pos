@@ -1,14 +1,18 @@
 // lib/auth-session.ts
 
 import { cookies } from "next/headers";
-import { getUserWithRolesAndPermissions, type UserContext } from "./rbac";
+import { cache } from "react";
+import {
+  getUserWithRolesAndPermissionsCached,
+  type UserContext,
+} from "./rbac";
 
 type SessionPayload = {
   session: { userId: string } | null;
   user: { id: string; email?: string | null } | null;
 };
 
-async function fetchSession(): Promise<SessionPayload | null> {
+const fetchSession = cache(async (): Promise<SessionPayload | null> => {
   const cookieStore = await cookies();
   const cookieHeader = cookieStore
     .getAll()
@@ -29,14 +33,14 @@ async function fetchSession(): Promise<SessionPayload | null> {
   if (!res.ok) return null;
   const data = await res.json();
   return data as SessionPayload;
-}
+});
 
 export async function getCurrentUser(): Promise<UserContext | null> {
   const payload = await fetchSession();
   const userId = payload?.session?.userId;
   if (!userId) return null;
 
-  const ctx = await getUserWithRolesAndPermissions(userId);
+  const ctx = await getUserWithRolesAndPermissionsCached(userId);
   return ctx;
 }
 

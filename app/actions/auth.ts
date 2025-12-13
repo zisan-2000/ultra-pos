@@ -25,7 +25,11 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
 
     await fetch(`${baseURL}/api/auth/sign-out`, {
       method: "POST",
-      headers: { cookie: cookieHeader },
+      headers: {
+        cookie: cookieHeader,
+        "content-type": "application/json",
+      },
+      body: "{}",
       cache: "no-store",
     });
   } catch (e) {

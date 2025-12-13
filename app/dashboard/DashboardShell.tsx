@@ -58,11 +58,40 @@ const fabByRoute: Record<string, { href: string; label: string } | null> = {
   "/dashboard/cash": { href: "/dashboard/cash/new", label: "+ নতুন এন্ট্রি" },
 };
 
+const toRoleBasePath = (role: string | null | undefined) => {
+  if (!role) return "/dashboard";
+  return `/${role.replace(/_/g, "-")}`;
+};
+
+const resolveBasePath = (roles: string[] | null | undefined) => {
+  if (!roles || roles.length === 0) return "/dashboard";
+  if (roles.includes("super_admin")) return "/super-admin";
+  return toRoleBasePath(roles[0]);
+};
+
+const applyBasePath = (href: string, basePath: string) => {
+  if (!href.startsWith("/dashboard")) return href;
+  if (basePath === "/dashboard") return href;
+  if (href === "/dashboard") return `${basePath}/dashboard`;
+  return `${basePath}${href.slice("/dashboard".length)}`;
+};
+
+const canonicalizePathname = (pathname: string, basePath: string) => {
+  if (basePath === "/dashboard") return pathname;
+  if (pathname === `${basePath}/dashboard`) return "/dashboard";
+  if (pathname.startsWith(`${basePath}/`)) {
+    return "/dashboard" + pathname.slice(basePath.length);
+  }
+  return pathname;
+};
+
 export function DashboardShell({
   shops,
+  initialUser,
   children,
 }: {
   shops: Shop[];
+  initialUser: RbacUser;
   children: ReactNode;
 }) {
   const online = useOnlineStatus();
@@ -72,8 +101,8 @@ export function DashboardShell({
   const { shopId, setShop } = useCurrentShop();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [rbacUser, setRbacUser] = useState<RbacUser>(null);
-  const [rbacLoaded, setRbacLoaded] = useState(false);
+  const [rbacUser] = useState<RbacUser>(initialUser);
+  const [rbacLoaded] = useState(true);
 
   const safeShopId = useMemo(() => {
     if (!shops || shops.length === 0) return null;
@@ -99,40 +128,12 @@ export function DashboardShell({
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadRbac() {
-      try {
-        const res = await fetch("/api/rbac/me", { credentials: "include" });
-        if (!res.ok) {
-          if (!cancelled) {
-            setRbacUser(null);
-            setRbacLoaded(true);
-          }
-          return;
-        }
-        const data = await res.json();
-        if (!cancelled) {
-          setRbacUser(data.user ?? null);
-          setRbacLoaded(true);
-        }
-      } catch {
-        if (!cancelled) {
-          setRbacUser(null);
-          setRbacLoaded(true);
-        }
-      }
-    }
-
-    loadRbac();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const isSuperAdmin = rbacUser?.roles?.includes("super_admin") ?? false;
+  const roleBasePath = useMemo(
+    () => resolveBasePath(rbacUser?.roles ?? []),
+    [rbacUser],
+  );
 
   const hasPermission = (permission: string | null | undefined) => {
     if (!permission) return true;
@@ -142,19 +143,10 @@ export function DashboardShell({
     return perms.includes(permission);
   };
 
-  const effectiveDashboardHref = useMemo(() => {
-    if (!rbacUser) return "/dashboard";
-
-    const roles = rbacUser.roles || [];
-
-    if (isSuperAdmin) return "/super-admin/dashboard";
-    if (roles.includes("admin")) return "/admin/dashboard";
-    if (roles.includes("agent")) return "/agent/dashboard";
-    if (roles.includes("owner")) return "/owner/dashboard";
-    if (roles.includes("staff")) return "/staff/dashboard";
-
-    return "/dashboard";
-  }, [rbacUser, isSuperAdmin]);
+  const effectiveDashboardHref = useMemo(
+    () => applyBasePath("/dashboard", roleBasePath),
+    [roleBasePath],
+  );
 
   const canAccessRbacAdmin = hasPermission("access_rbac_admin");
 
@@ -173,8 +165,9 @@ export function DashboardShell({
 
   const isActive = (href: string) => {
     if (!mounted) return false;
-    if (href === "/dashboard") return pathname === "/dashboard";
-    return pathname.startsWith(href);
+    const target = applyBasePath(href, roleBasePath);
+    if (href === "/dashboard") return pathname === target;
+    return pathname.startsWith(target);
   };
 
   const handleShopChange = (id: string) => {
@@ -185,9 +178,12 @@ export function DashboardShell({
     router.replace(next);
   };
 
+  const canonicalPathname = canonicalizePathname(pathname, roleBasePath);
+
   const fabConfig =
     fabByRoute[
-      bottomNav.find((item) => pathname.startsWith(item.href))?.href || pathname
+      bottomNav.find((item) => canonicalPathname.startsWith(item.href))?.href ||
+        canonicalPathname
     ] || null;
 
   const mobileNavItems = bottomNav.filter((item) =>
@@ -252,7 +248,9 @@ export function DashboardShell({
                 .filter((item) => hasPermission(routePermissionMap[item.href]))
                 .map((item) => {
                   const targetHref =
-                    item.href === "/dashboard" ? effectiveDashboardHref : item.href;
+                    item.href === "/dashboard"
+                      ? effectiveDashboardHref
+                      : applyBasePath(item.href, roleBasePath);
 
                   return (
                     <Link
@@ -285,20 +283,20 @@ export function DashboardShell({
                 অ্যাডমিন
               </div>
               <Link
-                href="/dashboard/admin/rbac"
+                href={applyBasePath("/dashboard/admin/rbac", roleBasePath)}
                 onClick={(e) => {
                   e.preventDefault();
                   setDrawerOpen(false);
-                  router.push("/dashboard/admin/rbac");
+                  router.push(applyBasePath("/dashboard/admin/rbac", roleBasePath));
                 }}
                 className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
-                  isActive("/dashboard/admin/rbac")
+                  isActive(applyBasePath("/dashboard/admin/rbac", roleBasePath))
                     ? "bg-green-50 text-green-700 border border-green-100"
                     : "text-gray-700 hover:bg-gray-100"
                 }`}
               >
                 <span>RBAC ব্যবস্থাপনা</span>
-                {isActive("/dashboard/admin/rbac") ? (
+                {isActive(applyBasePath("/dashboard/admin/rbac", roleBasePath)) ? (
                   <span className="text-xs text-green-600">চলমান</span>
                 ) : null}
               </Link>
@@ -343,7 +341,7 @@ export function DashboardShell({
                 </select>
               ) : (
                 <Link
-                  href="/dashboard/shops/new"
+                  href={applyBasePath("/dashboard/shops/new", roleBasePath)}
                   className="text-sm font-semibold text-blue-600"
                 >
                   দোকান তৈরি করুন
@@ -365,7 +363,9 @@ export function DashboardShell({
         >
           {mobileNavItems.map((item) => {
             const targetHref =
-              item.href === "/dashboard" ? effectiveDashboardHref : item.href;
+              item.href === "/dashboard"
+                ? effectiveDashboardHref
+                : applyBasePath(item.href, roleBasePath);
 
             return (
               <Link
@@ -386,7 +386,7 @@ export function DashboardShell({
       {/* Floating Add button for primary actions */}
       {fabConfig && safeShopId ? (
         <Link
-          href={`${fabConfig.href}?shopId=${safeShopId}`}
+          href={`${applyBasePath(fabConfig.href, roleBasePath)}?shopId=${safeShopId}`}
           aria-label={fabConfig.label}
           className="fixed bottom-[100px] left-1/2 -translate-x-1/2 z-40 lg:hidden inline-flex items-center justify-center h-[52px] w-[52px] rounded-full bg-blue-500 text-white shadow-[0_6px_14px_rgba(0,0,0,0.12)] hover:bg-blue-600 transition-colors fab-tap"
         >

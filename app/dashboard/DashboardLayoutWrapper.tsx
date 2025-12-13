@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { getShopsByUser } from "@/app/actions/shops";
+import { getCurrentUser } from "@/lib/auth-session";
 import { DashboardShell } from "./DashboardShell";
 
 export async function DashboardLayoutWrapper({
@@ -8,5 +9,10 @@ export async function DashboardLayoutWrapper({
   children: ReactNode;
 }) {
   const shops = await getShopsByUser();
-  return <DashboardShell shops={shops || []}>{children}</DashboardShell>;
+  const user = await getCurrentUser();
+  return (
+    <DashboardShell shops={shops || []} initialUser={user}>
+      {children}
+    </DashboardShell>
+  );
 }

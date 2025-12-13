@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "./prisma";
 
 export type UserContext = {
@@ -8,43 +9,51 @@ export type UserContext = {
   permissions: string[];
 };
 
-export async function getUserWithRolesAndPermissions(userId: string): Promise<UserContext | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      roles: {
-        include: {
-          rolePermissions: {
-            include: {
-              permission: true,
+export async function getUserWithRolesAndPermissions(
+  userId: string,
+): Promise<UserContext | null> {
+  return getUserWithRolesAndPermissionsCached(userId);
+}
+
+export const getUserWithRolesAndPermissionsCached = cache(
+  async (userId: string): Promise<UserContext | null> => {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        roles: {
+          include: {
+            rolePermissions: {
+              include: {
+                permission: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    });
 
-  if (!user) return null;
+    if (!user) return null;
 
-  const roles = user.roles.map((r) => r.name);
+    const roles = user.roles.map((r) => r.name);
 
-  const permissionSet = new Set<string>();
-  for (const role of user.roles) {
-    for (const rp of role.rolePermissions) {
-      if (rp.permission?.name) {
-        permissionSet.add(rp.permission.name);
+    const permissionSet = new Set<string>();
+    for (const role of user.roles) {
+      for (const rp of role.rolePermissions) {
+        if (rp.permission?.name) {
+          permissionSet.add(rp.permission.name);
+        }
       }
     }
-  }
 
-  return {
-    id: user.id,
-    email: user.email ?? null,
-    name: user.name ?? null,
-    roles,
-    permissions: Array.from(permissionSet),
-  };
-}
+    return {
+      id: user.id,
+      email: user.email ?? null,
+      name: user.name ?? null,
+      roles,
+      permissions: Array.from(permissionSet),
+    };
+  },
+);
 
 export function isSuperAdmin(ctx: Pick<UserContext, "roles"> | null | undefined) {
   if (!ctx) return false;

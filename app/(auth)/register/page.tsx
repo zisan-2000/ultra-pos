@@ -11,6 +11,7 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -69,14 +70,25 @@ export default function RegisterPage() {
             required
           />
 
-          <input
-            className="border border-slate-200 px-3 py-2 w-full rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <div className="relative">
+            <input
+              className="border border-slate-200 px-3 py-2 w-full rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-12"
+              placeholder="Password"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((p) => !p)}
+              className="absolute inset-y-0 right-2 px-2 text-base text-gray-600 hover:text-gray-900"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              <span aria-hidden="true">{showPassword ? "🙈" : "👁"}</span>
+              <span className="sr-only">{showPassword ? "Hide" : "Show"}</span>
+            </button>
+          </div>
         </div>
 
         {error && (
