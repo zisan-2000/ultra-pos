@@ -130,6 +130,8 @@ export function DashboardShell({
 
 
   const isSuperAdmin = rbacUser?.roles?.includes("super_admin") ?? false;
+  const isAdmin = rbacUser?.roles?.includes("admin") ?? false;
+  const canViewUserCreationLog = isSuperAdmin || isAdmin;
   const roleBasePath = useMemo(
     () => resolveBasePath(rbacUser?.roles ?? []),
     [rbacUser],
@@ -149,6 +151,10 @@ export function DashboardShell({
   );
 
   const canAccessRbacAdmin = hasPermission("access_rbac_admin");
+  const userCreationLogHref = useMemo(
+    () => applyBasePath("/dashboard/admin/user-creation-log", roleBasePath),
+    [roleBasePath],
+  );
 
   const routePermissionMap: Record<string, string> = {
     "/dashboard": "view_dashboard_summary",
@@ -277,29 +283,51 @@ export function DashboardShell({
             </div>
           </div>
 
-          {canAccessRbacAdmin && (
+{(canAccessRbacAdmin || canViewUserCreationLog) && (
             <div className="mt-6 space-y-2">
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 অ্যাডমিন
               </div>
-              <Link
-                href={applyBasePath("/dashboard/admin/rbac", roleBasePath)}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setDrawerOpen(false);
-                  router.push(applyBasePath("/dashboard/admin/rbac", roleBasePath));
-                }}
-                className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
-                  isActive(applyBasePath("/dashboard/admin/rbac", roleBasePath))
-                    ? "bg-green-50 text-green-700 border border-green-100"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                <span>RBAC ব্যবস্থাপনা</span>
-                {isActive(applyBasePath("/dashboard/admin/rbac", roleBasePath)) ? (
-                  <span className="text-xs text-green-600">চলমান</span>
-                ) : null}
-              </Link>
+              {canViewUserCreationLog && (
+                <Link
+                  href={userCreationLogHref}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setDrawerOpen(false);
+                    router.push(userCreationLogHref);
+                  }}
+                  className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
+                    isActive(userCreationLogHref)
+                      ? "bg-green-50 text-green-700 border border-green-100"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  <span>User Creation Log</span>
+                  {isActive(userCreationLogHref) ? (
+                    <span className="text-xs text-green-600">চলমান</span>
+                  ) : null}
+                </Link>
+              )}
+              {canAccessRbacAdmin && (
+                <Link
+                  href={applyBasePath("/dashboard/admin/rbac", roleBasePath)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setDrawerOpen(false);
+                    router.push(applyBasePath("/dashboard/admin/rbac", roleBasePath));
+                  }}
+                  className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
+                    isActive(applyBasePath("/dashboard/admin/rbac", roleBasePath))
+                      ? "bg-green-50 text-green-700 border border-green-100"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  <span>RBAC ব্যবস্থাপনা</span>
+                  {isActive(applyBasePath("/dashboard/admin/rbac", roleBasePath)) ? (
+                    <span className="text-xs text-green-600">চলমান</span>
+                  ) : null}
+                </Link>
+              )}
             </div>
           )}
 
