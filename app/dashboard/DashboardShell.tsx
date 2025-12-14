@@ -302,7 +302,7 @@ export function DashboardShell({
                       : "text-gray-700 hover:bg-gray-100"
                   }`}
                 >
-                  <span>User Creation Log</span>
+                  <span>ব্যবহারকারী তৈরি লগ</span>
                   {isActive(userCreationLogHref) ? (
                     <span className="text-xs text-green-600">চলমান</span>
                   ) : null}
