@@ -1,8 +1,10 @@
 // app/dashboard/expenses/page.tsx
 
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getExpensesByShop } from "@/app/actions/expenses";
+
 import ShopSelectorClient from "./ShopSelectorClient";
 
 type ExpensePageProps = {
@@ -30,11 +32,19 @@ export default async function ExpensesPage({
     );
   }
 
+  const cookieStore = await cookies();
+  const cookieShopId = cookieStore.get("activeShopId")?.value;
+
+  const cookieSelectedShopId =
+    cookieShopId && shops.some((s) => s.id === cookieShopId)
+      ? cookieShopId
+      : null;
+
   const selectedShopId =
     resolvedSearch?.shopId &&
     shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
-      : shops[0].id;
+      : cookieSelectedShopId ?? shops[0].id;
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
 

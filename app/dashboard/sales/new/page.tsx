@@ -1,5 +1,6 @@
 // app/dashboard/sales/new/page.tsx
 
+import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getActiveProductsByShop } from "@/app/actions/products";
 import { createSale } from "@/app/actions/sales";
@@ -31,11 +32,19 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
     );
   }
 
+  const cookieStore = await cookies();
+  const cookieShopId = cookieStore.get("activeShopId")?.value;
+
+  const cookieSelectedShopId =
+    cookieShopId && shops.some((s) => s.id === cookieShopId)
+      ? cookieShopId
+      : null;
+
   const selectedShopId =
     resolvedSearch?.shopId &&
     shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
-      : shops[0].id;
+      : cookieSelectedShopId ?? shops[0].id;
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
   const products = await getActiveProductsByShop(selectedShopId);
@@ -77,6 +86,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
 
   return (
     <PosPageClient
+      key={selectedShopId}
       products={products as any}
       customers={customers as any}
       shopName={selectedShop.name}

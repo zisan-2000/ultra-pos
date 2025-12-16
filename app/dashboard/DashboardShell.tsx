@@ -117,6 +117,22 @@ export function DashboardShell({
     );
   }, [safeShopId, shops]);
 
+  // Sync URL ?shopId with global shop store & cookie
+  useEffect(() => {
+    if (!shops || shops.length === 0) return;
+
+    const urlShopId = searchParams?.get("shopId");
+    if (!urlShopId) return;
+
+    const existsInList = shops.some((s) => s.id === urlShopId);
+    if (!existsInList) return;
+
+    if (urlShopId !== shopId) {
+      setShop(urlShopId);
+      document.cookie = `activeShopId=${urlShopId}; path=/; max-age=${60 * 60 * 24 * 30}`;
+    }
+  }, [searchParams, shops, shopId, setShop]);
+
   useEffect(() => {
     if (safeShopId && safeShopId !== shopId) {
       setShop(safeShopId);
@@ -177,11 +193,18 @@ export function DashboardShell({
   };
 
   const handleShopChange = (id: string) => {
+    // Update global client store
     setShop(id);
+
+    // Persist globally selected shop for server components
+    document.cookie = `activeShopId=${id}; path=/; max-age=${60 * 60 * 24 * 30}`;
+
+    // Keep current URL in sync with selected shop
     const params = new URLSearchParams(searchParams?.toString() || "");
     params.set("shopId", id);
     const next = `${pathname}?${params.toString()}`;
     router.replace(next);
+    router.refresh();
   };
 
   const canonicalPathname = canonicalizePathname(pathname, roleBasePath);

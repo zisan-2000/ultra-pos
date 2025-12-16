@@ -21,6 +21,8 @@ export function ShopSwitcherClient({ shops, activeShopId }: Props) {
 
   function handleChange(id: string) {
     setShop(id);
+    // Persist globally selected shop
+    document.cookie = `activeShopId=${id}; path=/; max-age=${60 * 60 * 24 * 30}`;
     router.push(`/dashboard/products?shopId=${id}`);
   }
 

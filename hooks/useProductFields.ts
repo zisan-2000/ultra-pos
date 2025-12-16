@@ -15,8 +15,10 @@ const DEFAULT_UNITS = [
   "ft",
 ];
 
-export function useProductFields(businessType: BusinessType) {
-  const config = businessFieldConfig[businessType];
+export function useProductFields(businessType: BusinessType | string) {
+  const fallbackConfig = businessFieldConfig.mini_grocery;
+  const config =
+    businessFieldConfig[businessType as BusinessType] ?? fallbackConfig;
 
   const isFieldVisible = (field: string) =>
     !(config.hidden ?? []).includes(field as any);

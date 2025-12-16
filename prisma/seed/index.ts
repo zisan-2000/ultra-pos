@@ -1,0 +1,77 @@
+// prisma/seed/index.ts
+
+import { PrismaClient } from "@prisma/client";
+import { resetDatabase } from "./reset";
+import { seedRBACAndUsers } from "./rbac/seedRbac";
+import { seedShops } from "./pos/seedShops";
+import { seedProducts } from "./pos/seedProducts";
+import { seedCustomers } from "./pos/seedCustomers";
+import { seedSales } from "./pos/seedSales";
+import { seedExpenses } from "./pos/seedExpenses";
+import { seedCashEntries } from "./pos/seedCashEntries";
+
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log("🔥 Resetting existing data...");
+  await resetDatabase(prisma);
+
+  console.log("🔥 Seeding RBAC (roles, permissions, demo users)...");
+  const { usersByRole } = await seedRBACAndUsers(prisma);
+
+  const ownerUser = usersByRole.owner;
+  if (!ownerUser) {
+    throw new Error("Owner demo user missing — RBAC seeding failed!");
+  }
+
+  console.log("🔥 Seeding shops...");
+  const shops = await seedShops(prisma, ownerUser.id);
+
+  console.log("🔥 Seeding products...");
+  const products = await seedProducts(prisma, shops);
+
+  console.log("🔥 Seeding customers...");
+  const customers = await seedCustomers(prisma, shops);
+
+  console.log("🔥 Seeding sales...");
+  await seedSales(prisma, shops, products, customers);
+
+  console.log("🔥 Seeding expenses...");
+  await seedExpenses(prisma, shops);
+
+  console.log("🔥 Seeding cash entries...");
+  await seedCashEntries(prisma, shops);
+
+  console.log("\n🎉 Seed Completed Successfully!");
+  console.log("=========================================\n");
+  console.log(" SUPER ADMIN LOGIN:");
+  console.log(" Email: superadmin@pos.test");
+  console.log(" Password: Admin123!");
+  console.log("-----------------------------------------");
+  console.log(" ADMIN LOGIN:");
+  console.log(" Email: admin@pos.test");
+  console.log(" Password: Admin123!");
+  console.log("-----------------------------------------");
+  console.log(" AGENT LOGIN:");
+  console.log(" Email: agent@pos.test");
+  console.log(" Password: Agent123!");
+  console.log("-----------------------------------------");
+  console.log(" OWNER LOGIN:");
+  console.log(" Email: owner@pos.test");
+  console.log(" Password: Owner123!");
+  console.log("-----------------------------------------");
+  console.log(" STAFF LOGIN:");
+  console.log(" Email: staff@pos.test");
+  console.log(" Password: Staff123!");
+  console.log("=========================================\n");
+}
+
+main()
+  .catch((err) => {
+    console.error("❌ Seed failed");
+    console.error(err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

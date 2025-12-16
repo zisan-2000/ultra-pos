@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getProductsByShop } from "@/app/actions/products";
 import ProductsListClient from "./components/ProductsListClient";
@@ -27,8 +28,24 @@ export default async function ProductsPage({ searchParams }: PageProps) {
 
   const resolvedParams = await searchParams;
   const requestedShopId = resolvedParams?.shopId;
+
+  const cookieStore = await cookies();
+  const cookieShopId = cookieStore.get("activeShopId")?.value;
+
+  const cookieSelectedShopId =
+    cookieShopId && shops.some((s) => s.id === cookieShopId)
+      ? cookieShopId
+      : null;
+
   const shopIds = shops.map((s) => s.id);
-  const activeShopId = shopIds.includes(requestedShopId || "") ? (requestedShopId as string) : shops[0].id;
+
+  const urlSelectedShopId =
+    requestedShopId && shopIds.includes(requestedShopId)
+      ? requestedShopId
+      : null;
+
+  const activeShopId =
+    urlSelectedShopId ?? cookieSelectedShopId ?? shops[0].id;
 
   const onlineProducts = await getProductsByShop(activeShopId);
 

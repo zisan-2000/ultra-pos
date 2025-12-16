@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useCurrentShop } from "@/hooks/use-current-shop";
 
 type Shop = { id: string; name: string };
 
@@ -11,6 +12,7 @@ type Props = {
 
 export default function ShopSelectorClient({ shops, selectedShopId }: Props) {
   const router = useRouter();
+  const { setShop } = useCurrentShop();
 
   return (
     <select
@@ -18,6 +20,9 @@ export default function ShopSelectorClient({ shops, selectedShopId }: Props) {
       value={selectedShopId}
       onChange={(e) => {
         const id = e.target.value;
+        // Persist globally selected shop
+        setShop(id);
+        document.cookie = `activeShopId=${id}; path=/; max-age=${60 * 60 * 24 * 30}`;
         router.push(`/dashboard/reports?shopId=${id}`);
       }}
     >

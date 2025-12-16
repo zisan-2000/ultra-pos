@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 
 async function fetchSummary(shopId: string) {
@@ -25,8 +27,15 @@ export default async function OwnerDashboardPage() {
     );
   }
 
-  const shopId = shops[0].id;
-  const summary = await fetchSummary(shopId);
+  const cookieStore = await cookies();
+  const cookieShopId = cookieStore.get("activeShopId")?.value;
+
+  const selectedShopId =
+    cookieShopId && shops.some((s) => s.id === cookieShopId)
+      ? cookieShopId
+      : shops[0].id;
+
+  const summary = await fetchSummary(selectedShopId);
 
   return (
     <div className="space-y-6 section-gap">
@@ -76,24 +85,24 @@ export default async function OwnerDashboardPage() {
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900 mb-3">দ্রুত কাজ</h2>
         <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
-          <a
-            href="/dashboard/sales/new"
+          <Link
+            href={`/dashboard/sales/new?shopId=${selectedShopId}`}
             className="block bg-blue-50 border border-blue-100 text-blue-800 font-semibold rounded-lg py-4 px-3 text-base text-center transition-colors hover:border-blue-200 hover:bg-blue-100 pressable card-lift h-full"
           >
             <span className="flex flex-col items-center gap-1">
               <span className="text-xl">⚡</span>
               <span>নতুন বিক্রি শুরু করুন</span>
             </span>
-          </a>
-          <a
-            href="/dashboard/due"
+          </Link>
+          <Link
+            href={`/dashboard/due?shopId=${selectedShopId}`}
             className="block bg-emerald-50 border border-emerald-100 text-emerald-800 font-semibold rounded-lg py-4 px-3 text-base text-center transition-colors hover:border-emerald-200 hover:bg-emerald-100 pressable card-lift h-full"
           >
             <span className="flex flex-col items-center gap-1">
               <span className="text-xl">🧾</span>
               <span>ধার / বাকি লিখে রাখুন</span>
             </span>
-          </a>
+          </Link>
         </div>
       </div>
     </div>
