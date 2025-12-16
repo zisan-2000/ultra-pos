@@ -1,7 +1,15 @@
 // app/dashboard/sales/PosPageClient.tsx
+
 "use client";
 
-import { useState, FormEvent, useEffect, useCallback, useMemo, useRef } from "react";
+import {
+  useState,
+  FormEvent,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
 import { useCart } from "@/hooks/use-cart";
@@ -14,7 +22,7 @@ type PosPageClientProps = {
   products: {
     id: string;
     name: string;
-    sellPrice: string;
+    sellPrice: string | number;
     stockQty?: string | number;
     category?: string | null;
     trackStock?: boolean | null;
@@ -23,7 +31,7 @@ type PosPageClientProps = {
     id: string;
     name: string;
     phone: string | null;
-    totalDue: string;
+    totalDue: string | number;
   }[];
   shopName: string;
   shopId: string;
@@ -148,11 +156,17 @@ export function PosPageClient({
     clear();
   }
 
-  const itemCount = useMemo(() => items.reduce((sum, i) => sum + i.qty, 0), [items]);
+  const itemCount = useMemo(
+    () => items.reduce((sum, i) => sum + i.qty, 0),
+    [items]
+  );
 
   const scrollToCart = () => {
     if (cartPanelRef.current) {
-      cartPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      cartPanelRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     }
   };
 
@@ -187,7 +201,9 @@ export function PosPageClient({
 
             <span
               className={`text-sm px-4 py-2 rounded-full font-medium ${
-                online ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                online
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-red-100 text-red-700"
               }`}
             >
               {online ? "অনলাইন" : "অফলাইন"}
@@ -226,7 +242,9 @@ export function PosPageClient({
 
           {/* Payment Method */}
           <div className="space-y-2">
-            <label className="text-base font-medium text-slate-900">পেমেন্ট পদ্ধতি</label>
+            <label className="text-base font-medium text-slate-900">
+              পেমেন্ট পদ্ধতি
+            </label>
             <select
               className="w-full border border-slate-200 rounded-lg px-3 py-3 text-base"
               value={paymentMethod}
@@ -243,7 +261,9 @@ export function PosPageClient({
           {/* Customer Selection for Due */}
           {isDue && (
             <div className="space-y-2">
-              <label className="text-base font-medium text-slate-900">গ্রাহক নির্বাচন করুন</label>
+              <label className="text-base font-medium text-slate-900">
+                গ্রাহক নির্বাচন করুন
+              </label>
               <select
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-base"
                 value={customerId}
@@ -282,14 +302,17 @@ export function PosPageClient({
                 onChange={(e) => setPaidNow(e.target.value)}
               />
               <p className="text-sm text-slate-500">
-                মোট {safeTotalAmount.toFixed(2)} ৳ | আংশিক দিলে বাকি ধার হিসেবে থাকবে।
+                মোট {safeTotalAmount.toFixed(2)} ৳ | আংশিক দিলে বাকি ধার হিসেবে
+                থাকবে।
               </p>
             </div>
           )}
 
           {/* Note */}
           <div className="space-y-2">
-            <label className="text-base font-medium text-slate-900">নোট (ঐচ্ছিক)</label>
+            <label className="text-base font-medium text-slate-900">
+              নোট (ঐচ্ছিক)
+            </label>
             <textarea
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-base"
               rows={3}

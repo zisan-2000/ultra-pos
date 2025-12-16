@@ -26,10 +26,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="bn">
+    <html lang="bn" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-background text-foreground`}
         style={{ fontFamily: "'SutonnyMJ', 'Noto Sans Bengali', sans-serif" }}
+        suppressHydrationWarning
       >
         <ServiceWorkerRegister />
         {children}

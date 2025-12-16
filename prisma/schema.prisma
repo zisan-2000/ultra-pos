@@ -165,6 +165,10 @@ model Sale {
   paymentMethod String   @map("payment_method") @default("cash")
   note         String?
   createdAt    DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
+  status       String    @default("COMPLETED")
+  voidReason   String?   @map("void_reason")
+  voidAt       DateTime? @map("void_at") @db.Timestamptz(6)
+  voidByUserId String?   @map("void_by_user_id")
 
   shop      Shop      @relation(fields: [shopId], references: [id])
   customer  Customer? @relation(fields: [customerId], references: [id])

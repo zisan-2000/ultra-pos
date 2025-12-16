@@ -279,7 +279,28 @@ export async function getActiveProductsByShop(shopId: string) {
   requirePermission(user, "view_products");
   await assertShopBelongsToUser(shopId, user.id);
 
-  return prisma.product.findMany({
+  const rows = await prisma.product.findMany({
     where: { shopId, isActive: true },
+    select: {
+      id: true,
+      shopId: true,
+      name: true,
+      category: true,
+      buyPrice: true,
+      sellPrice: true,
+      stockQty: true,
+      trackStock: true,
+      isActive: true,
+      createdAt: true,
+    },
   });
+
+  // Convert Prisma Decimal/Date values to plain serializable primitives for client components
+  return rows.map((p) => ({
+    ...p,
+    buyPrice: p.buyPrice === null ? null : p.buyPrice.toString(),
+    sellPrice: p.sellPrice.toString(),
+    stockQty: p.stockQty.toString(),
+    createdAt: p.createdAt.toISOString(),
+  }));
 }

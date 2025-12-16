@@ -198,6 +198,7 @@ export async function getSalesByShop(shopId: string) {
 
   const rows = await prisma.sale.findMany({
     where: { shopId },
+    orderBy: { createdAt: "desc" },
   });
 
   if (rows.length === 0) return [];
@@ -253,4 +254,72 @@ export async function getSalesByShop(shopId: string) {
       customerName: r.customerId ? customerMap[r.customerId] : null,
     };
   });
+}
+
+// ------------------------------
+// VOID SALE (simple version, non-due only)
+// ------------------------------
+export async function voidSale(saleId: string, reason?: string | null) {
+  const user = await requireUser();
+  requirePermission(user, "create_sale");
+
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    include: { shop: true },
+  });
+
+  if (!sale) {
+    throw new Error("Sale not found");
+  }
+
+  if (sale.shop.ownerId !== user.id) {
+    throw new Error("Unauthorized access to this sale");
+  }
+
+  if ((sale as any).status === "VOIDED") {
+    return { success: true, alreadyVoided: true };
+  }
+
+  // For now, avoid trying to unwind complex due ledger logic.
+  if (sale.paymentMethod === "due") {
+    throw new Error("Due sales cannot be voided yet. Please handle via customer ledger.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Restore stock for tracked products
+    const saleItems = await tx.saleItem.findMany({
+      where: { saleId },
+      include: {
+        product: true,
+      },
+    });
+
+    for (const it of saleItems as any[]) {
+      const p = it.product;
+      if (!p || p.trackStock === false) continue;
+
+      const qty = Number(it.quantity || 0);
+      if (!Number.isFinite(qty) || qty === 0) continue;
+
+      const currentStock = Number(p.stockQty || 0);
+      const newStock = currentStock + qty;
+
+      await tx.product.update({
+        where: { id: p.id },
+        data: { stockQty: newStock.toFixed(2) },
+      });
+    }
+
+    await tx.sale.update({
+      where: { id: saleId },
+      data: {
+        status: "VOIDED",
+        voidReason: reason || null,
+        voidAt: new Date(),
+        voidByUserId: user.id,
+      } as any,
+    });
+  });
+
+  return { success: true };
 }

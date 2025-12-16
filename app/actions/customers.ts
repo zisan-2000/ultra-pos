@@ -1,3 +1,5 @@
+// app/actions/customers.ts
+
 "use server";
 
 import { Prisma } from "@prisma/client";
@@ -77,10 +79,18 @@ export async function getCustomersByShop(shopId: string) {
   const user = await getCurrentUser();
   await assertShopBelongsToUser(shopId, user.id);
 
-  return prisma.customer.findMany({
+  const rows = await prisma.customer.findMany({
     where: { shopId },
     orderBy: { totalDue: "desc" },
   });
+
+  // Strip Prisma Decimal/Date instances so we can pass the data into Client Components
+  return rows.map((c) => ({
+    ...c,
+    totalDue: Number(c.totalDue || 0),
+    lastPaymentAt: c.lastPaymentAt ? c.lastPaymentAt.toISOString() : null,
+    createdAt: c.createdAt.toISOString(),
+  }));
 }
 
 /* --------------------------------------------------
@@ -173,10 +183,7 @@ export async function recordCustomerPayment(input: PaymentInput) {
 /* --------------------------------------------------
    CUSTOMER STATEMENT
 -------------------------------------------------- */
-export async function getCustomerStatement(
-  shopId: string,
-  customerId: string
-) {
+export async function getCustomerStatement(shopId: string, customerId: string) {
   const user = await getCurrentUser();
   await assertShopBelongsToUser(shopId, user.id);
   await assertCustomerInShop(customerId, shopId);
@@ -199,17 +206,24 @@ export async function getDueSummary(shopId: string) {
     orderBy: { totalDue: "desc" },
   });
 
-  const totalDue = rows.reduce(
+  const customers = rows.map((c) => ({
+    ...c,
+    totalDue: Number(c.totalDue || 0),
+    lastPaymentAt: c.lastPaymentAt ? c.lastPaymentAt.toISOString() : null,
+    createdAt: c.createdAt.toISOString(),
+  }));
+
+  const totalDue = customers.reduce(
     (sum, c: any) => sum + Number(c.totalDue || 0),
     0
   );
 
-  const topDue = rows.slice(0, 5).map((c) => ({
+  const topDue = customers.slice(0, 5).map((c) => ({
     id: c.id,
     name: c.name,
     totalDue: Number(c.totalDue || 0),
     phone: c.phone,
   }));
 
-  return { totalDue, topDue, customers: rows };
+  return { totalDue, topDue, customers };
 }

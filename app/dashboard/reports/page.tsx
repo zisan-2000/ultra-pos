@@ -74,7 +74,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           <StatCard
             title="মোট বিক্রি"
             value={`${salesSummary.totalAmount.toFixed(2)} ৳`}
-            subtitle={`${salesSummary.count} টি বিল`}
+            subtitle={`নেট: ${salesSummary.completedCount ?? salesSummary.count} টি বিল` +
+              (typeof salesSummary.voidedCount === "number" && salesSummary.voidedCount > 0
+                ? ` (বাতিল: ${salesSummary.voidedCount} টি বিল)`
+                : "")}
             icon="💰"
           />
           <StatCard

@@ -53,6 +53,7 @@ export async function getCogsTotal(
     where: {
       sale: {
         shopId,
+        status: { not: "VOIDED" },
         saleDate: {
           gte: from,
           lte: to,
@@ -134,6 +135,8 @@ export async function getSalesWithFilter(
   return prisma.sale.findMany({
     where: {
       shopId,
+      // exclude voided sales from reports
+      status: { not: "VOIDED" },
       saleDate: {
         gte: start ?? undefined,
         lte: end ?? undefined,
@@ -188,16 +191,34 @@ export async function getCashWithFilter(
    SALES SUMMARY (ALL TIME)
 -------------------------------------------------- */
 export async function getSalesSummary(shopId: string) {
-  const rows = await prisma.sale.findMany({ where: { shopId } });
+  const [completed, voided] = await Promise.all([
+    prisma.sale.findMany({
+      where: {
+        shopId,
+        status: { not: "VOIDED" },
+      },
+    }),
+    prisma.sale.count({
+      where: {
+        shopId,
+        status: "VOIDED",
+      },
+    }),
+  ]);
 
-  const totalAmount = rows.reduce(
+  const totalAmount = completed.reduce(
     (sum, row: any) => sum + Number(row.totalAmount || 0),
     0
   );
 
+  const completedCount = completed.length;
+  const voidedCount = voided;
+
   return {
     totalAmount,
-    count: rows.length,
+    count: completedCount,
+    completedCount,
+    voidedCount,
   };
 }
 

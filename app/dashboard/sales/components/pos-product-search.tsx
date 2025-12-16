@@ -1,7 +1,7 @@
 // app/dashboard/sales/components/PosProductSearch.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "@/hooks/use-cart";
 
 type PosProductSearchProps = {
@@ -18,6 +18,7 @@ type PosProductSearchProps = {
 
 type UsageEntry = { count: number; lastUsed: number; favorite?: boolean };
 type EnrichedProduct = PosProductSearchProps["products"][number] & { category: string };
+type QuickSlot = EnrichedProduct | null;
 type SpeechRecognitionInstance = {
   lang: string;
   interimResults: boolean;
@@ -30,7 +31,18 @@ type SpeechRecognitionInstance = {
   onend: (() => void) | null;
 };
 
-const QUICK_LIMIT = 12;
+const QUICK_LIMIT = 8; // fixed slots so buttons never jump during a session
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+
+  return debounced;
+}
 
 function normalizeCategory(raw?: string | null) {
   const trimmed = (raw || "").trim();
@@ -41,34 +53,145 @@ function toNumber(val: string | number | undefined) {
   return Number(val ?? 0);
 }
 
+function buildQuickSlots(
+  products: EnrichedProduct[],
+  usageSeed: Record<string, UsageEntry>
+): QuickSlot[] {
+  const sorted = products
+    .slice()
+    .sort((a, b) => {
+      const ua = usageSeed[a.id] || {};
+      const ub = usageSeed[b.id] || {};
+
+      const favoriteDiff =
+        Number(ub.favorite || false) - Number(ua.favorite || false);
+      if (favoriteDiff !== 0) return favoriteDiff;
+
+      const countDiff = (ub.count ?? 0) - (ua.count ?? 0);
+      if (countDiff !== 0) return countDiff;
+
+      const recencyDiff = (ub.lastUsed ?? 0) - (ua.lastUsed ?? 0);
+      if (recencyDiff !== 0) return recencyDiff;
+
+      return a.name.localeCompare(b.name);
+    });
+
+  const slots: QuickSlot[] = Array(QUICK_LIMIT).fill(null);
+  const limit = Math.min(QUICK_LIMIT, sorted.length);
+  for (let i = 0; i < limit; i += 1) {
+    slots[i] = sorted[i];
+  }
+  return slots;
+}
+
+const ProductButton = memo(function ProductButton({
+  product,
+  onAdd,
+  recentlyAddedId,
+  cooldownProductId,
+}: {
+  product: EnrichedProduct;
+  onAdd: (product: EnrichedProduct) => void;
+  recentlyAddedId: string | null;
+  cooldownProductId: string | null;
+}) {
+  const stock = toNumber(product.stockQty);
+  const stockStyle =
+    stock <= 0
+      ? "bg-red-100 text-red-700"
+      : stock < 3
+      ? "bg-orange-100 text-orange-700"
+      : "bg-emerald-100 text-emerald-700";
+
+  const inCooldown = cooldownProductId === product.id;
+
+  return (
+    <button
+      key={product.id}
+      type="button"
+      className={`w-full h-full min-h-[140px] text-left rounded-xl border bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm transition-all p-3.5 pressable active:scale-[0.97] active:translate-y-[1px] ${
+        recentlyAddedId === product.id ? "ring-2 ring-emerald-200" : ""
+      } ${stock <= 0 ? "opacity-80" : ""} ${
+        inCooldown ? "opacity-95 shadow-inner border-emerald-200" : ""
+      }`}
+      onClick={() => onAdd(product)}
+    >
+      <div className="flex items-start justify-between gap-2 relative">
+        <h3 className="flex-1 font-semibold text-slate-900 text-sm sm:text-base leading-snug line-clamp-2">
+          {product.name}
+        </h3>
+        <span
+          className={`inline-flex items-center justify-center px-2.5 py-1 min-w-[44px] rounded-full text-[11px] font-semibold ${stockStyle}`}
+        >
+          {stock.toFixed(0)}
+        </span>
+        {recentlyAddedId === product.id && (
+          <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
+            +1
+          </span>
+        )}
+      </div>
+      <p className="text-base sm:text-lg font-bold text-emerald-600 mt-1">৳ {product.sellPrice}</p>
+      <p className="text-[11px] text-slate-500 mt-1 capitalize">
+        {(product.category || "Uncategorized").replace("&", "and")}
+      </p>
+    </button>
+  );
+});
+
 export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [usage, setUsage] = useState<Record<string, UsageEntry>>({});
+  const [showAllProducts, setShowAllProducts] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
-  const [lastAddedTime, setLastAddedTime] = useState(0);
+  const [cooldownProductId, setCooldownProductId] = useState<string | null>(null);
 
   const add = useCart((s) => s.add);
   const items = useCart((s) => s.items);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const quickSlotsRef = useRef<QuickSlot[] | null>(null);
+  const lastAddRef = useRef(0);
   const storageKey = useMemo(() => `pos-usage-${shopId}`, [shopId]);
 
+  const debouncedQuery = useDebounce(query, 200);
+
   useEffect(() => {
-    const stored = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+    const stored =
+      typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+    let parsed: Record<string, UsageEntry> = {};
     if (stored) {
       try {
-        setUsage(JSON.parse(stored));
+        parsed = JSON.parse(stored);
       } catch {
-        setUsage({});
+        parsed = {};
       }
-    } else {
-      setUsage({});
     }
-  }, [storageKey]);
+    setUsage(parsed);
+
+    // Initialize session-locked quick slots once using persisted usage + current products
+    if (!quickSlotsRef.current) {
+      const normalizedProducts: EnrichedProduct[] = products.map((p) => ({
+        ...p,
+        category: normalizeCategory(p.category),
+      }));
+      quickSlotsRef.current = buildQuickSlots(normalizedProducts, parsed);
+    }
+  }, [storageKey, products]);
+
+  // Persist usage separately to avoid doing localStorage writes in setState updaters
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(usage));
+    } catch {
+      // ignore quota / serialization errors in production UI
+    }
+  }, [usage, storageKey]);
 
   useEffect(() => {
     const SpeechRecognitionImpl =
@@ -93,21 +216,6 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
           favorite: prev[productId]?.favorite || false,
         },
       };
-      localStorage.setItem(storageKey, JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const toggleFavorite = (productId: string) => {
-    setUsage((prev) => {
-      const current = prev[productId];
-      const nextEntry: UsageEntry = {
-        count: current?.count ?? 0,
-        lastUsed: current?.lastUsed ?? Date.now(),
-        favorite: !current?.favorite,
-      };
-      const next = { ...prev, [productId]: nextEntry };
-      localStorage.setItem(storageKey, JSON.stringify(next));
       return next;
     });
   };
@@ -146,14 +254,14 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   );
 
   const filteredByQuery = useMemo(() => {
-    const term = query.trim().toLowerCase();
+    const term = debouncedQuery.trim().toLowerCase();
     if (!term) return filteredByCategory;
 
     return filteredByCategory.filter((p) => p.name.toLowerCase().includes(term));
-  }, [filteredByCategory, query]);
+  }, [filteredByCategory, debouncedQuery]);
 
   const sortedResults = useMemo(() => {
-    const term = query.trim().toLowerCase();
+    const term = debouncedQuery.trim().toLowerCase();
     return filteredByQuery.slice().sort((a, b) => {
       const ua = usage[a.id] || {};
       const ub = usage[b.id] || {};
@@ -174,80 +282,60 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
 
       return a.name.localeCompare(b.name);
     });
-  }, [filteredByQuery, usage, query]);
-
-  const favoriteProducts = useMemo(
-    () =>
-      filteredByCategory.filter((p) => usage[p.id]?.favorite).sort((a, b) => {
-        const ua = usage[a.id] || {};
-        const ub = usage[b.id] || {};
-        return (ub.lastUsed ?? 0) - (ua.lastUsed ?? 0);
-      }),
-    [filteredByCategory, usage]
-  );
-
-  const quickPickSource = filteredByCategory;
-  const quickPicks = useMemo(() => {
-    const sorted = quickPickSource.slice().sort((a, b) => {
-      const ua = usage[a.id] || {};
-      const ub = usage[b.id] || {};
-
-      const favoriteDiff = Number(ub.favorite || false) - Number(ua.favorite || false);
-      if (favoriteDiff !== 0) return favoriteDiff;
-
-      const countDiff = (ub.count ?? 0) - (ua.count ?? 0);
-      if (countDiff !== 0) return countDiff;
-
-      const recencyDiff = (ub.lastUsed ?? 0) - (ua.lastUsed ?? 0);
-      if (recencyDiff !== 0) return recencyDiff;
-
-      return a.name.localeCompare(b.name);
-    });
-
-    return sorted.slice(0, QUICK_LIMIT);
-  }, [quickPickSource, usage]);
+  }, [filteredByQuery, usage, debouncedQuery]);
 
   const smartSuggestions = useMemo(() => {
-    if (query.trim()) return sortedResults.slice(0, 6);
+    const quickSlots = (quickSlotsRef.current ?? Array(QUICK_LIMIT).fill(null)) as QuickSlot[];
+    if (debouncedQuery.trim()) return sortedResults.slice(0, 6);
 
-    const recent = quickPickSource
+    const quickIds = new Set(
+      (quickSlots.filter(Boolean) as EnrichedProduct[]).map((p) => p.id)
+    );
+
+    const recent = filteredByCategory
       .filter((p) => usage[p.id]?.lastUsed)
       .sort((a, b) => (usage[b.id]?.lastUsed ?? 0) - (usage[a.id]?.lastUsed ?? 0))
       .slice(0, 6);
 
     if (recent.length > 0) return recent;
-    return quickPicks.slice(0, 6);
-  }, [query, quickPickSource, quickPicks, sortedResults, usage]);
+    const slotProducts = quickSlots.filter(Boolean) as EnrichedProduct[];
+    return slotProducts.filter((p) => !quickIds.has(p.id)).slice(0, 6);
+  }, [debouncedQuery, filteredByCategory, sortedResults, usage]);
 
-  const handleAddToCart = (product: EnrichedProduct) => {
-    // Prevent double clicks within 300ms
-    const now = Date.now();
-    if (now - lastAddedTime < 300) return;
-    setLastAddedTime(now);
+  const handleAddToCart = useCallback(
+    (product: EnrichedProduct) => {
+      // Prevent double clicks within 300ms (ref-based, not state-based)
+      const now = Date.now();
+      if (now - lastAddRef.current < 300) return;
+      lastAddRef.current = now;
 
-    const stock = toNumber(product.stockQty);
-    const inCart = items.find((i) => i.productId === product.id)?.qty || 0;
-    const tracksStock = product.trackStock === true;
+      const stock = toNumber(product.stockQty);
+      const inCart = items.find((i) => i.productId === product.id)?.qty || 0;
+      const tracksStock = product.trackStock === true;
 
-    if (tracksStock && stock <= inCart) {
-      const proceed = window.confirm(
-        stock <= 0
-          ? `${product.name} is out of stock. Add anyway?`
-          : `${product.name} has only ${stock} left. Add anyway?`
-      );
-      if (!proceed) return;
-    }
+      if (tracksStock && stock <= inCart) {
+        const proceed = window.confirm(
+          stock <= 0
+            ? `${product.name} is out of stock. Add anyway?`
+            : `${product.name} has only ${stock} left. Add anyway?`
+        );
+        if (!proceed) return;
+      }
 
-    add({
-      shopId,
-      productId: product.id,
-      name: product.name,
-      unitPrice: Number(product.sellPrice),
-    });
-    bumpUsage(product.id);
-    setRecentlyAdded(product.id);
-    setTimeout(() => setRecentlyAdded(null), 450);
-  };
+      add({
+        shopId,
+        productId: product.id,
+        name: product.name,
+        unitPrice: Number(product.sellPrice || 0),
+      });
+      setCooldownProductId(product.id);
+      bumpUsage(product.id);
+      setRecentlyAdded(product.id);
+      setTimeout(() => setRecentlyAdded(null), 450);
+      setTimeout(() => setCooldownProductId(null), 220);
+    },
+    [add, bumpUsage, items, setCooldownProductId, setRecentlyAdded, shopId]
+  );
 
   const startVoice = () => {
     if (listening) return;
@@ -267,11 +355,19 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
     recognition.lang = "bn-BD";
     recognition.interimResults = false;
     recognition.continuous = false;
-    recognition.onerror = () => {
+    recognition.onerror = (e: any) => {
       setListening(false);
-      setVoiceError("Could not access microphone. Please allow mic permission.");
+      const errorCode = e?.error;
+      if (errorCode === "not-allowed" || errorCode === "denied") {
+        setVoiceError("মাইক পারমিশন নেই। ব্রাউজার থেকে মাইক্রোফোন অনুমতি দিন।");
+      } else {
+        setVoiceError("ভয়েস সার্চ ব্যর্থ হয়েছে। পরে আবার চেষ্টা করুন।");
+      }
     };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
     recognition.onresult = (event: any) => {
       const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
       if (spoken) {
@@ -291,55 +387,35 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
     setListening(false);
   };
 
-  const renderProductButton = (product: EnrichedProduct) => {
-    const stock = toNumber(product.stockQty);
-    const stockStyle =
-      stock <= 0
-        ? "bg-red-100 text-red-700"
-        : stock < 3
-        ? "bg-orange-100 text-orange-700"
-        : "bg-emerald-100 text-emerald-700";
+  const renderProductButton = (product: EnrichedProduct) => (
+    <ProductButton
+      key={product.id}
+      product={product}
+      onAdd={handleAddToCart}
+      recentlyAddedId={recentlyAdded}
+      cooldownProductId={cooldownProductId}
+    />
+  );
 
-    return (
-      <button
-        key={product.id}
-        type="button"
-        className={`w-full h-full text-left rounded-xl border bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm transition-all p-3 pressable ${
-          recentlyAdded === product.id ? "ring-2 ring-emerald-200" : ""
-        } ${stock <= 0 ? "opacity-80" : ""}`}
-        onClick={() => handleAddToCart(product)}
-      >
-        <div className="flex items-start justify-between gap-2 relative">
-          <h3 className="flex-1 font-semibold text-slate-900 text-sm sm:text-base leading-snug line-clamp-2">
-            {product.name}
-          </h3>
-          <span
-            className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${stockStyle}`}
-          >
-            {stock.toFixed(0)}
-          </span>
-          {recentlyAdded === product.id && (
-            <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
-              +1
-            </span>
-          )}
-        </div>
-        <p className="text-base sm:text-lg font-bold text-emerald-600 mt-1">৳ {product.sellPrice}</p>
-        <p className="text-[11px] text-slate-500 mt-1 capitalize">
-          {(product.category || "Uncategorized").replace("&", "and")}
-        </p>
-      </button>
-    );
-  };
+  const renderPlaceholderSlot = (index: number) => (
+    <div
+      key={`slot-${index}`}
+      className="w-full h-full min-h-[140px] rounded-xl border border-dashed border-slate-200 bg-white/70 flex items-center justify-center text-xs text-slate-400"
+    >
+      Fixed slot
+    </div>
+  );
 
   return (
     <div className="space-y-5">
-      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-3">
+      {/* Search + state toggles */}
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-3 sticky top-0 z-30 md:static md:top-auto">
         <div className="flex gap-2 items-center">
           <input
             className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-emerald-500"
             placeholder="পণ্য খুঁজুন (নাম/কোড)..."
             value={query}
+            onFocus={() => setShowAllProducts(true)}
             onChange={(e) => setQuery(e.target.value)}
           />
           <button
@@ -374,85 +450,97 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
         </p>
       </div>
 
-      <div className="sticky top-2 z-20 bg-gray-50/80 backdrop-blur border border-slate-200 rounded-xl p-3 flex flex-wrap gap-2">
-        {availableCategories.map((cat) => (
-          <button
-            key={cat.key}
-            type="button"
-            onClick={() => setActiveCategory(cat.key)}
-            className={`px-3 py-2 rounded-full border text-sm transition-colors ${
-              activeCategory === cat.key
-                ? "bg-emerald-50 border-emerald-400 text-emerald-800"
-                : "bg-white border-slate-200 text-slate-700 hover:border-emerald-200"
-            }`}
-          >
-            {cat.label}
-            <span className="ml-2 text-xs text-slate-500">({cat.count})</span>
-          </button>
-        ))}
-      </div>
-
-      {favoriteProducts.length > 0 && (
+      {/* Quick buttons: visible only when not searching to prioritize results */}
+      {query.trim().length === 0 && (
         <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
-              Favorite items
+              ⚡ দ্রুত বিক্রি (সেশন-লকড কুইক বাটন)
             </h3>
-            <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full">
-              Pinned for quick tap
+            <span className="text-xs text-slate-500">
+              এই বাটনগুলোর অর্ডার সেশনে আর বদলাবে না
             </span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-            {favoriteProducts.slice(0, QUICK_LIMIT).map((p) => renderProductButton(p))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-3.5 px-1 pb-1">
+            {(quickSlotsRef.current ?? Array(QUICK_LIMIT).fill(null)).map((slot, idx) =>
+              slot ? renderProductButton(slot) : renderPlaceholderSlot(idx)
+            )}
           </div>
+        </div>
+      )}
+
+      {(query.trim().length > 0 || items.length === 0) && (
+        <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
+              Smart suggestions
+            </h3>
+            <span className="text-xs text-slate-500">
+              শুধু সার্চ/ফাঁকা কার্টে হিন্ট দেখানো হচ্ছে
+            </span>
+          </div>
+          {smartSuggestions.length === 0 ? (
+            <p className="text-sm text-slate-500">কোনো সাজেশন নেই।</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 px-1 pb-1 text-sm">
+              {smartSuggestions.map((p) => renderProductButton(p))}
+            </div>
+          )}
         </div>
       )}
 
       <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
-            ⚡ দ্রুত বিক্রি (কুইক বাটন)
+            সব পণ্য (অটো সাজানো)
           </h3>
-          <span className="text-xs text-slate-500">
-            শেষ ব্যবহৃত ও ফ্রিকোয়েন্সি অনুযায়ী সাজানো
-          </span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
-          {quickPicks.map((p) => renderProductButton(p))}
-        </div>
-      </div>
-
-      <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
-            Smart suggestions
-          </h3>
-          <span className="text-xs text-slate-500">
-            Prefers last-used and best guesses while you type
-          </span>
-        </div>
-        {smartSuggestions.length === 0 ? (
-          <p className="text-sm text-slate-500">কোনো সাজেশন নেই।</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-            {smartSuggestions.map((p) => renderProductButton(p))}
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
-          সব পণ্য (অটো সাজানো)
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          {sortedResults.length === 0 ? (
-            <p className="text-center text-slate-500 py-8 col-span-full">
-              আপনার ফিল্টারে কোনো পণ্য নেই।
-            </p>
-          ) : (
-            sortedResults.map((p) => renderProductButton(p))
+          {!showAllProducts && (
+            <button
+              type="button"
+              className="text-xs font-semibold text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full hover:border-emerald-300"
+              onClick={() => setShowAllProducts(true)}
+            >
+              সব পণ্য দেখুন
+            </button>
           )}
         </div>
+        {showAllProducts ? (
+          <>
+            <div className="bg-gray-50/80 border border-slate-200 rounded-xl p-3 flex flex-wrap gap-2">
+              {availableCategories.map((cat) => (
+                <button
+                  key={cat.key}
+                  type="button"
+                  onClick={() => {
+                    setActiveCategory(cat.key);
+                    setShowAllProducts(true);
+                  }}
+                  className={`px-3 py-2 rounded-full border text-sm transition-colors ${
+                    activeCategory === cat.key
+                      ? "bg-emerald-50 border-emerald-400 text-emerald-800"
+                      : "bg-white border-slate-200 text-slate-700 hover:border-emerald-200"
+                  }`}
+                >
+                  {cat.label}
+                  <span className="ml-2 text-xs text-slate-500">({cat.count})</span>
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 px-1 pb-1 max-h-[520px] overflow-y-auto pr-1">
+              {sortedResults.length === 0 ? (
+                <p className="text-center text-slate-500 py-8 col-span-full">
+                  আপনার ফিল্টারে কোনো পণ্য নেই।
+                </p>
+              ) : (
+                sortedResults.map((p) => renderProductButton(p))
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-slate-500">
+            এই সেকশন অন-ডিমান্ড। উপরের বোতাম বা সার্চে ফোকাস করলেই খুলবে।
+          </p>
+        )}
       </div>
     </div>
   );
