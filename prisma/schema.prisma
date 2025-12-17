@@ -60,6 +60,10 @@ model User {
   createdByUser User?     @relation("CreatedUsers", fields: [createdBy], references: [id])
   createdUsers  User[]    @relation("CreatedUsers")
 
+  // Staff belongs to exactly one shop (optional for non-staff users)
+  staffShopId   String?   @map("staff_shop_id") @db.Uuid
+  staffShop     Shop?     @relation("StaffShop", fields: [staffShopId], references: [id])
+
   @@map("users")
 }
 
@@ -131,6 +135,7 @@ model Shop {
   cashEntries    CashEntry[]
   customers      Customer[]
   customerLedger CustomerLedger[]
+  staffMembers   User[]   @relation("StaffShop")
 
   @@index([ownerId], map: "idx_shops_owner_id")
   @@map("shops")

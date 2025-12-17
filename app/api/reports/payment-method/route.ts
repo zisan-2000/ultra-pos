@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth-session";
+import { assertShopAccess } from "@/lib/shop-access";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -7,6 +9,9 @@ export async function GET(req: Request) {
   const shopId = searchParams.get("shopId")!;
   const from = searchParams.get("from") || undefined;
   const to = searchParams.get("to") || undefined;
+
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
 
   const rows = await prisma.sale.findMany({
     where: {

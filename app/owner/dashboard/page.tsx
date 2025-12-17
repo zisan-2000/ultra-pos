@@ -2,10 +2,19 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 
-async function fetchSummary(shopId: string) {
+async function fetchSummary(shopId: string, cookieHeader: string) {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+    "http://localhost:3000";
+
   const res = await fetch(
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/reports/today-summary?shopId=${shopId}`,
-    { cache: "no-store" }
+    `${baseUrl}/api/reports/today-summary?shopId=${shopId}`,
+    {
+      cache: "no-store",
+      headers: {
+        cookie: cookieHeader,
+      },
+    }
   );
 
   if (!res.ok) {
@@ -29,13 +38,17 @@ export default async function OwnerDashboardPage() {
 
   const cookieStore = await cookies();
   const cookieShopId = cookieStore.get("activeShopId")?.value;
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+    .join("; ");
 
   const selectedShopId =
     cookieShopId && shops.some((s) => s.id === cookieShopId)
       ? cookieShopId
       : shops[0].id;
 
-  const summary = await fetchSummary(selectedShopId);
+  const summary = await fetchSummary(selectedShopId, cookieHeader);
 
   return (
     <div className="space-y-6 section-gap">

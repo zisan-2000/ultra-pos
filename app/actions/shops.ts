@@ -4,17 +4,10 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
+import { assertShopAccess } from "@/lib/shop-access";
 
 async function getCurrentUser() {
   return requireUser();
-}
-
-async function assertShopBelongsToUser(shopId: string, userId: string) {
-  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
-  if (!shop || shop.ownerId !== userId) {
-    throw new Error("Unauthorized");
-  }
-  return shop;
 }
 
 // ------------------------------
@@ -46,6 +39,17 @@ export async function createShop(data: {
 // ------------------------------
 export async function getShopsByUser() {
   const user = await getCurrentUser();
+  const isOwner = user.roles?.includes("owner");
+  const isStaff = user.roles?.includes("staff");
+
+  if (isStaff && !isOwner) {
+    if (!user.staffShopId) return [];
+    const shop = await prisma.shop.findUnique({
+      where: { id: user.staffShopId },
+    });
+    return shop ? [shop] : [];
+  }
+
   return prisma.shop.findMany({
     where: { ownerId: user.id },
   });
@@ -56,11 +60,7 @@ export async function getShopsByUser() {
 // ------------------------------
 export async function getShop(id: string) {
   const user = await getCurrentUser();
-  const shop = await prisma.shop.findUnique({
-    where: { id },
-  });
-  if (!shop || shop.ownerId !== user.id) throw new Error("Unauthorized");
-  return shop;
+  return assertShopAccess(id, user);
 }
 
 // ------------------------------
@@ -68,7 +68,10 @@ export async function getShop(id: string) {
 // ------------------------------
 export async function updateShop(id: string, data: any) {
   const user = await getCurrentUser();
-  await assertShopBelongsToUser(id, user.id);
+  const shop = await assertShopAccess(id, user);
+  if (shop.ownerId !== user.id) {
+    throw new Error("Unauthorized");
+  }
   await prisma.shop.update({
     where: { id },
     data,
@@ -81,7 +84,10 @@ export async function updateShop(id: string, data: any) {
 // ------------------------------
 export async function deleteShop(id: string) {
   const user = await getCurrentUser();
-  await assertShopBelongsToUser(id, user.id);
+  const shop = await assertShopAccess(id, user);
+  if (shop.ownerId !== user.id) {
+    throw new Error("Unauthorized");
+  }
 
   await prisma.$transaction(async (tx) => {
     const saleIds = await tx.sale.findMany({

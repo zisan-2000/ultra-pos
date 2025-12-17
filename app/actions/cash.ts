@@ -2,18 +2,9 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
+import { assertShopAccess } from "@/lib/shop-access";
 import { cashSchema } from "@/lib/validators/cash";
 import { requirePermission } from "@/lib/rbac";
-
-async function assertShopBelongsToUser(shopId: string, userId: string) {
-  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
-
-  if (!shop || shop.ownerId !== userId) {
-    throw new Error("Unauthorized access");
-  }
-
-  return shop;
-}
 
 // -------------------------------------------------
 // CREATE CASH ENTRY
@@ -23,7 +14,7 @@ export async function createCashEntry(input: any) {
 
   const user = await requireUser();
   requirePermission(user, "create_cash_entry");
-  await assertShopBelongsToUser(parsed.shopId, user.id);
+  await assertShopAccess(parsed.shopId, user);
 
   await prisma.cashEntry.create({
     data: {
@@ -45,7 +36,15 @@ export async function updateCashEntry(id: string, input: any) {
 
   const user = await requireUser();
   requirePermission(user, "update_cash_entry");
-  await assertShopBelongsToUser(parsed.shopId, user.id);
+  await assertShopAccess(parsed.shopId, user);
+
+  const existing = await prisma.cashEntry.findUnique({ where: { id } });
+  if (!existing) {
+    throw new Error("Cash entry not found");
+  }
+  if (existing.shopId !== parsed.shopId) {
+    throw new Error("Unauthorized access to this cash entry");
+  }
 
   await prisma.cashEntry.update({
     where: { id },
@@ -65,7 +64,7 @@ export async function updateCashEntry(id: string, input: any) {
 export async function getCashByShop(shopId: string) {
   const user = await requireUser();
   requirePermission(user, "view_cashbook");
-  await assertShopBelongsToUser(shopId, user.id);
+  await assertShopAccess(shopId, user);
 
   return prisma.cashEntry.findMany({
     where: { shopId },
@@ -76,9 +75,18 @@ export async function getCashByShop(shopId: string) {
 // GET SINGLE ENTRY
 // -------------------------------------------------
 export async function getCashEntry(id: string) {
+  const user = await requireUser();
+  requirePermission(user, "view_cashbook");
+
   const entry = await prisma.cashEntry.findUnique({
     where: { id },
   });
+
+  if (!entry) {
+    throw new Error("Cash entry not found");
+  }
+
+  await assertShopAccess(entry.shopId, user);
 
   return entry;
 }
@@ -89,6 +97,13 @@ export async function getCashEntry(id: string) {
 export async function deleteCashEntry(id: string) {
   const user = await requireUser();
   requirePermission(user, "delete_cash_entry");
+
+  const entry = await prisma.cashEntry.findUnique({ where: { id } });
+  if (!entry) {
+    throw new Error("Cash entry not found");
+  }
+
+  await assertShopAccess(entry.shopId, user);
 
   await prisma.cashEntry.delete({ where: { id } });
   return { success: true };

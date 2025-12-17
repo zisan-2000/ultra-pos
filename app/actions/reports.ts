@@ -2,6 +2,8 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth-session";
+import { assertShopAccess } from "@/lib/shop-access";
 
 /* --------------------------------------------------
    DATE FILTER HELPER
@@ -130,6 +132,8 @@ export async function getSalesWithFilter(
   from?: string,
   to?: string
 ) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
   const { start, end } = parseTimestampRange(from, to);
 
   return prisma.sale.findMany({
@@ -153,6 +157,8 @@ export async function getExpensesWithFilter(
   from?: string,
   to?: string
 ) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
   const { start, end } = parseDateRange(from, to);
 
   return prisma.expense.findMany({
@@ -174,6 +180,8 @@ export async function getCashWithFilter(
   from?: string,
   to?: string
 ) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
   const { start, end } = parseTimestampRange(from, to);
 
   return prisma.cashEntry.findMany({
@@ -191,6 +199,8 @@ export async function getCashWithFilter(
    SALES SUMMARY (ALL TIME)
 -------------------------------------------------- */
 export async function getSalesSummary(shopId: string) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
   const [completed, voided] = await Promise.all([
     prisma.sale.findMany({
       where: {
@@ -226,6 +236,8 @@ export async function getSalesSummary(shopId: string) {
    EXPENSE SUMMARY (ALL TIME)
 -------------------------------------------------- */
 export async function getExpenseSummary(shopId: string) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
   const rows = await prisma.expense.findMany({ where: { shopId } });
 
   const totalAmount = rows.reduce(
@@ -243,6 +255,8 @@ export async function getExpenseSummary(shopId: string) {
    CASH SUMMARY (ALL TIME)
 -------------------------------------------------- */
 export async function getCashSummary(shopId: string) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
   const rows = await prisma.cashEntry.findMany({ where: { shopId } });
 
   let totalIn = 0;
@@ -265,6 +279,8 @@ export async function getCashSummary(shopId: string) {
    PROFIT SUMMARY (ALL TIME)
 -------------------------------------------------- */
 export async function getProfitSummary(shopId: string) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
   const salesData = await getSalesSummary(shopId);
   const expenseData = await getExpenseSummary(shopId);
   const needsCogs = await shopNeedsCogs(shopId);

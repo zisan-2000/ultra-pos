@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCogsByDay } from "@/app/actions/reports";
+import { requireUser } from "@/lib/auth-session";
+import { assertShopAccess } from "@/lib/shop-access";
 
 function parseRange(from?: string | null, to?: string | null) {
   const start = from ? new Date(from) : undefined;
@@ -17,6 +19,9 @@ export async function GET(req: Request) {
   const shopId = searchParams.get("shopId")!;
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
 
   const { start, end } = parseRange(from, to);
 

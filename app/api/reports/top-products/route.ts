@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth-session";
+import { assertShopAccess } from "@/lib/shop-access";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
 
   const shopId = searchParams.get("shopId")!;
   const limit = Number(searchParams.get("limit") || 10);
+
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
 
   const items = await prisma.saleItem.findMany({
     where: { sale: { shopId } },

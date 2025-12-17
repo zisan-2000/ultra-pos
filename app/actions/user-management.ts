@@ -44,6 +44,9 @@ function getUserPrimaryRole(roles: string[]): string {
  * - staff cannot create any user
  */
 function canCreateRole(creatorRole: string, targetRole: string): boolean {
+  if (targetRole === "staff") {
+    return creatorRole === "owner";
+  }
   if (isSuperAdminRole(creatorRole)) return true;
 
   const creatorHierarchy = getRoleHierarchy(creatorRole);
@@ -78,6 +81,7 @@ export async function getManageableUsers() {
         emailVerified: true,
         createdAt: true,
         createdBy: true,
+        staffShopId: true,
         roles: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -94,6 +98,7 @@ export async function getManageableUsers() {
       emailVerified: true,
       createdAt: true,
       createdBy: true,
+      staffShopId: true,
       roles: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -107,7 +112,8 @@ export async function createUserWithRole(
   email: string,
   name: string,
   password: string,
-  roleId: string
+  roleId: string,
+  staffShopId?: string | null
 ) {
   const creator = await requireUser();
   const creatorRole = getUserPrimaryRole(creator.roles);
@@ -123,6 +129,10 @@ export async function createUserWithRole(
     throw new Error(
       `Forbidden: ${creatorRole} cannot create users with role ${role.name}`
     );
+  }
+
+  if (role.name === "staff" && creatorRole !== "owner") {
+    throw new Error("Only owners can create staff users");
   }
 
   // Check specific permission based on target role
@@ -144,6 +154,20 @@ export async function createUserWithRole(
   }
 
   const passwordHash = await hashPassword(password);
+  let resolvedStaffShopId: string | null | undefined = undefined;
+
+  if (role.name === "staff") {
+    if (!staffShopId) {
+      throw new Error("Shop is required for staff users");
+    }
+
+    const shop = await prisma.shop.findUnique({ where: { id: staffShopId } });
+    if (!shop || shop.ownerId !== creator.id) {
+      throw new Error("Invalid shop for staff user");
+    }
+
+    resolvedStaffShopId = staffShopId;
+  }
 
   // Create user
   const newUser = await prisma.user.create({
@@ -153,6 +177,7 @@ export async function createUserWithRole(
       emailVerified: false,
       passwordHash,
       createdBy: creator.id,
+      staffShopId: resolvedStaffShopId ?? undefined,
       roles: {
         connect: { id: roleId },
       },
@@ -188,10 +213,20 @@ export async function updateUser(
   requirePermission(editor, "edit_users_under_me");
 
   const editorRole = getUserPrimaryRole(editor.roles);
-  const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+  const targetUser = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { roles: { select: { name: true } } },
+  });
 
   if (!targetUser) {
     throw new Error("User not found");
+  }
+
+  const targetIsStaff = targetUser.roles.some((r) => r.name === "staff");
+  if (targetIsStaff) {
+    if (editorRole !== "owner" || targetUser.createdBy !== editor.id) {
+      throw new Error("Forbidden: only owners can update staff users");
+    }
   }
 
   // Check if editor can edit this user
@@ -238,10 +273,20 @@ export async function deleteUser(userId: string) {
   requirePermission(deleter, "delete_users_under_me");
 
   const deleterRole = getUserPrimaryRole(deleter.roles);
-  const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+  const targetUser = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { roles: { select: { name: true } } },
+  });
 
   if (!targetUser) {
     throw new Error("User not found");
+  }
+
+  const targetIsStaff = targetUser.roles.some((r) => r.name === "staff");
+  if (targetIsStaff) {
+    if (deleterRole !== "owner" || targetUser.createdBy !== deleter.id) {
+      throw new Error("Forbidden: only owners can deactivate staff users");
+    }
   }
 
   // Check if deleter can delete this user
@@ -250,13 +295,8 @@ export async function deleteUser(userId: string) {
   }
 
   // Prevent deleting super_admin users (except by another super_admin)
-  const targetRoles = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { roles: { select: { name: true } } },
-  });
-
   if (
-    targetRoles?.roles.some((r) => r.name === "super_admin") &&
+    targetUser.roles.some((r) => r.name === "super_admin") &&
     !isSuperAdminRole(deleterRole)
   ) {
     throw new Error("Forbidden: cannot delete super_admin users");
@@ -278,21 +318,10 @@ export async function getCreatableRoles() {
   const user = await requireUser();
   const primaryRole = getUserPrimaryRole(user.roles);
 
-  if (isSuperAdminRole(primaryRole)) {
-    // Super admin can see all roles except super_admin itself
-    return await prisma.role.findMany({
-      where: { name: { not: "super_admin" } },
-      select: { id: true, name: true, description: true },
-    });
-  }
-
-  // Others can only create roles below them in hierarchy
-  const creatableRoleNames = Object.entries(ROLE_HIERARCHY)
-    .filter(([_, hierarchy]) => hierarchy > getRoleHierarchy(primaryRole))
-    .map(([name, _]) => name);
-
-  return await prisma.role.findMany({
-    where: { name: { in: creatableRoleNames } },
+  const roles = await prisma.role.findMany({
+    where: { name: { not: "super_admin" } },
     select: { id: true, name: true, description: true },
   });
+
+  return roles.filter((role) => canCreateRole(primaryRole, role.name));
 }

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCogsTotal } from "@/app/actions/reports";
+import { requireUser } from "@/lib/auth-session";
+import { assertShopAccess } from "@/lib/shop-access";
 
 function startOfTodayUtc() {
   const d = new Date();
@@ -30,6 +32,9 @@ export async function GET(req: Request) {
     if (!shopId) {
       return NextResponse.json({ error: "shopId missing" }, { status: 400 });
     }
+
+    const user = await requireUser();
+    await assertShopAccess(shopId, user);
 
     const todayStart = startOfTodayUtc();
     const todayEnd = endOfTodayUtc(todayStart);

@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
+import { assertShopAccess } from "@/lib/shop-access";
 
 type CartItemInput = {
   productId: string;
@@ -43,16 +44,6 @@ type GetSalesByShopPaginatedInput = {
   dateFrom?: Date | null;
   dateTo?: Date | null;
 };
-
-async function assertShopBelongsToUser(shopId: string, userId: string) {
-  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
-
-  if (!shop || shop.ownerId !== userId) {
-    throw new Error("Unauthorized access to this shop");
-  }
-
-  return shop;
-}
 
 async function attachSaleSummaries(
   rows: SaleRow[],
@@ -119,7 +110,7 @@ async function attachSaleSummaries(
 export async function createSale(input: CreateSaleInput) {
   const user = await requireUser();
   requirePermission(user, "create_sale");
-  await assertShopBelongsToUser(input.shopId, user.id);
+  await assertShopAccess(input.shopId, user);
 
   if (!input.items || input.items.length === 0) {
     throw new Error("Cart is empty");
@@ -274,7 +265,7 @@ export async function createSale(input: CreateSaleInput) {
 export async function getSalesByShop(shopId: string) {
   const user = await requireUser();
   requirePermission(user, "view_sales");
-  await assertShopBelongsToUser(shopId, user.id);
+  await assertShopAccess(shopId, user);
 
   const rows = await prisma.sale.findMany({
     where: { shopId },
@@ -296,7 +287,7 @@ export async function getSalesByShopPaginated({
 }: GetSalesByShopPaginatedInput) {
   const user = await requireUser();
   requirePermission(user, "view_sales");
-  await assertShopBelongsToUser(shopId, user.id);
+  await assertShopAccess(shopId, user);
 
   const safeLimit = Math.max(1, Math.min(limit, 100));
 
@@ -358,9 +349,7 @@ export async function voidSale(saleId: string, reason?: string | null) {
     throw new Error("Sale not found");
   }
 
-  if (sale.shop.ownerId !== user.id) {
-    throw new Error("Unauthorized access to this sale");
-  }
+  await assertShopAccess(sale.shopId, user);
 
   if ((sale as any).status === "VOIDED") {
     return { success: true, alreadyVoided: true };

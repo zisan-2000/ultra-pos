@@ -6,16 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { expenseSchema } from "@/lib/validators/expense";
 import { requirePermission } from "@/lib/rbac";
-
-async function assertShopBelongsToUser(shopId: string, userId: string) {
-  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
-
-  if (!shop || shop.ownerId !== userId) {
-    throw new Error("Unauthorized access to this shop");
-  }
-
-  return shop;
-}
+import { assertShopAccess } from "@/lib/shop-access";
 
 function normalizeExpenseDate(raw?: string | null) {
   const trimmed = raw?.trim();
@@ -38,7 +29,7 @@ export async function createExpense(input: any) {
 
   const user = await requireUser();
   requirePermission(user, "create_expense");
-  await assertShopBelongsToUser(parsed.shopId, user.id);
+  await assertShopAccess(parsed.shopId, user);
 
   await prisma.expense.create({
     data: {
@@ -61,7 +52,15 @@ export async function updateExpense(id: string, input: any) {
 
   const user = await requireUser();
   requirePermission(user, "update_expense");
-  await assertShopBelongsToUser(parsed.shopId, user.id);
+  await assertShopAccess(parsed.shopId, user);
+
+  const existing = await prisma.expense.findUnique({ where: { id } });
+  if (!existing) {
+    throw new Error("Expense not found");
+  }
+  if (existing.shopId !== parsed.shopId) {
+    throw new Error("Unauthorized access to this expense");
+  }
 
   await prisma.expense.update({
     where: { id },
@@ -82,7 +81,7 @@ export async function updateExpense(id: string, input: any) {
 export async function getExpensesByShop(shopId: string) {
   const user = await requireUser();
   requirePermission(user, "view_expenses");
-  await assertShopBelongsToUser(shopId, user.id);
+  await assertShopAccess(shopId, user);
 
   return prisma.expense.findMany({
     where: { shopId },
@@ -93,9 +92,18 @@ export async function getExpensesByShop(shopId: string) {
 // GET SINGLE EXPENSE
 // -------------------------------------------------
 export async function getExpense(id: string) {
+  const user = await requireUser();
+  requirePermission(user, "view_expenses");
+
   const expense = await prisma.expense.findUnique({
     where: { id },
   });
+
+  if (!expense) {
+    throw new Error("Expense not found");
+  }
+
+  await assertShopAccess(expense.shopId, user);
 
   return expense;
 }
@@ -106,6 +114,13 @@ export async function getExpense(id: string) {
 export async function deleteExpense(id: string) {
   const user = await requireUser();
   requirePermission(user, "delete_expense");
+
+  const expense = await prisma.expense.findUnique({ where: { id } });
+  if (!expense) {
+    throw new Error("Expense not found");
+  }
+
+  await assertShopAccess(expense.shopId, user);
 
   await prisma.expense.delete({ where: { id } });
   return { success: true };

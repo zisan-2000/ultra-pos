@@ -1,12 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createUserWithRole } from "@/app/actions/user-management";
+import { getShopsByUser } from "@/app/actions/shops";
 
 type Role = {
   id: string;
   name: string;
   description: string | null;
+};
+
+type Shop = {
+  id: string;
+  name: string;
 };
 
 type CreateUserDialogProps = {
@@ -26,8 +32,41 @@ export function CreateUserDialog({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [selectedRoleId, setSelectedRoleId] = useState(creatableRoles[0]?.id || "");
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [selectedShopId, setSelectedShopId] = useState("");
+  const [shopsLoading, setShopsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedRole = useMemo(
+    () => creatableRoles.find((role) => role.id === selectedRoleId),
+    [creatableRoles, selectedRoleId]
+  );
+  const isStaffRole = selectedRole?.name === "staff";
+
+  useEffect(() => {
+    if (!isOpen || !isStaffRole) return;
+
+    let mounted = true;
+    setShopsLoading(true);
+    getShopsByUser()
+      .then((rows) => {
+        if (!mounted) return;
+        setShops(rows);
+        setSelectedShopId((prev) => prev || rows[0]?.id || "");
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err instanceof Error ? err.message : "Shop list load failed");
+      })
+      .finally(() => {
+        if (mounted) setShopsLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isOpen, isStaffRole]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,13 +77,25 @@ export function CreateUserDialog({
       return;
     }
 
+    if (isStaffRole && !selectedShopId) {
+      setError("Staff user এর জন্য shop নির্বাচন করতে হবে");
+      return;
+    }
+
     try {
       setLoading(true);
-      await createUserWithRole(email, name, password, selectedRoleId);
+      await createUserWithRole(
+        email,
+        name,
+        password,
+        selectedRoleId,
+        isStaffRole ? selectedShopId : undefined
+      );
       setName("");
       setEmail("");
       setPassword("");
       setSelectedRoleId(creatableRoles[0]?.id || "");
+      setSelectedShopId("");
       onSuccess();
       onClose();
     } catch (err) {
@@ -145,6 +196,33 @@ export function CreateUserDialog({
               ))}
             </select>
           </div>
+
+          {isStaffRole && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Shop নির্বাচন করুন *
+              </label>
+              <select
+                value={selectedShopId}
+                onChange={(e) => setSelectedShopId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loading || shopsLoading}
+              >
+                {shops.length === 0 ? (
+                  <option value="">কোনো Shop পাওয়া যায়নি</option>
+                ) : (
+                  shops.map((shop) => (
+                    <option key={shop.id} value={shop.id}>
+                      {shop.name}
+                    </option>
+                  ))
+                )}
+              </select>
+              {shopsLoading ? (
+                <p className="text-xs text-gray-500 mt-1">Shop লোড হচ্ছে...</p>
+              ) : null}
+            </div>
+          )}
 
           {/* Buttons */}
           <div className="flex gap-3 pt-4">

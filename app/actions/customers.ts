@@ -5,6 +5,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
+import { assertShopAccess } from "@/lib/shop-access";
 
 type CreateCustomerInput = {
   shopId: string;
@@ -27,16 +28,6 @@ async function getCurrentUser() {
   return requireUser();
 }
 
-async function assertShopBelongsToUser(shopId: string, userId: string) {
-  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
-
-  if (!shop || shop.ownerId !== userId) {
-    throw new Error("Unauthorized access to this shop");
-  }
-
-  return shop;
-}
-
 async function assertCustomerInShop(customerId: string, shopId: string) {
   const row = await prisma.customer.findFirst({
     where: { id: customerId, shopId },
@@ -54,7 +45,7 @@ async function assertCustomerInShop(customerId: string, shopId: string) {
 -------------------------------------------------- */
 export async function createCustomer(input: CreateCustomerInput) {
   const user = await getCurrentUser();
-  await assertShopBelongsToUser(input.shopId, user.id);
+  await assertShopAccess(input.shopId, user);
 
   const name = input.name?.trim();
   if (!name) throw new Error("Name is required");
@@ -77,7 +68,7 @@ export async function createCustomer(input: CreateCustomerInput) {
 -------------------------------------------------- */
 export async function getCustomersByShop(shopId: string) {
   const user = await getCurrentUser();
-  await assertShopBelongsToUser(shopId, user.id);
+  await assertShopAccess(shopId, user);
 
   const rows = await prisma.customer.findMany({
     where: { shopId },
@@ -103,7 +94,7 @@ export async function addDueSaleEntry(input: {
   description?: string | null;
 }) {
   const user = await getCurrentUser();
-  await assertShopBelongsToUser(input.shopId, user.id);
+  await assertShopAccess(input.shopId, user);
   const customer = await assertCustomerInShop(input.customerId, input.shopId);
 
   const amount = Number(input.amount || 0);
@@ -143,7 +134,7 @@ export async function addDueSaleEntry(input: {
 -------------------------------------------------- */
 export async function recordCustomerPayment(input: PaymentInput) {
   const user = await getCurrentUser();
-  await assertShopBelongsToUser(input.shopId, user.id);
+  await assertShopAccess(input.shopId, user);
   const customer = await assertCustomerInShop(input.customerId, input.shopId);
 
   const amount = Number(input.amount || 0);
@@ -185,7 +176,7 @@ export async function recordCustomerPayment(input: PaymentInput) {
 -------------------------------------------------- */
 export async function getCustomerStatement(shopId: string, customerId: string) {
   const user = await getCurrentUser();
-  await assertShopBelongsToUser(shopId, user.id);
+  await assertShopAccess(shopId, user);
   await assertCustomerInShop(customerId, shopId);
 
   return prisma.customerLedger.findMany({
@@ -199,7 +190,7 @@ export async function getCustomerStatement(shopId: string, customerId: string) {
 -------------------------------------------------- */
 export async function getDueSummary(shopId: string) {
   const user = await getCurrentUser();
-  await assertShopBelongsToUser(shopId, user.id);
+  await assertShopAccess(shopId, user);
 
   const rows = await prisma.customer.findMany({
     where: { shopId },

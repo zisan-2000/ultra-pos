@@ -7,6 +7,7 @@ export type UserContext = {
   name: string | null;
   roles: string[];
   permissions: string[];
+  staffShopId: string | null;
 };
 
 export async function getUserWithRolesAndPermissions(
@@ -51,6 +52,7 @@ export const getUserWithRolesAndPermissionsCached = cache(
       name: user.name ?? null,
       roles,
       permissions: Array.from(permissionSet),
+      staffShopId: (user as any).staffShopId ?? null,
     };
   },
 );

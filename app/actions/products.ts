@@ -5,6 +5,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
+import { assertShopAccess } from "@/lib/shop-access";
 
 // ---------------------------------
 // TYPES
@@ -56,21 +57,6 @@ type GetProductsByShopPaginatedInput = {
   query?: string | null;
   status?: ProductStatusFilter;
 };
-
-// ---------------------------------
-// AUTH HELPERS
-// ---------------------------------
-async function assertShopBelongsToUser(shopId: string, userId: string) {
-  const shop = await prisma.shop.findUnique({
-    where: { id: shopId },
-  });
-
-  if (!shop || shop.ownerId !== userId) {
-    throw new Error("Unauthorized access to this shop");
-  }
-
-  return shop;
-}
 
 // ---------------------------------
 // HELPERS
@@ -163,7 +149,7 @@ function normalizeUnitUpdate(
 export async function createProduct(input: CreateProductInput) {
   const user = await requireUser();
   requirePermission(user, "create_product");
-  await assertShopBelongsToUser(input.shopId, user.id);
+  await assertShopAccess(input.shopId, user);
 
   const buyPrice = normalizeMoneyInput(input.buyPrice);
   const sellPrice = normalizeNumberInput(input.sellPrice, {
@@ -198,7 +184,7 @@ export async function createProduct(input: CreateProductInput) {
 export async function getProductsByShop(shopId: string) {
   const user = await requireUser();
   requirePermission(user, "view_products");
-  await assertShopBelongsToUser(shopId, user.id);
+  await assertShopAccess(shopId, user);
 
   return prisma.product.findMany({
     where: { shopId },
@@ -217,7 +203,7 @@ export async function getProductsByShopPaginated({
 }: GetProductsByShopPaginatedInput) {
   const user = await requireUser();
   requirePermission(user, "view_products");
-  await assertShopBelongsToUser(shopId, user.id);
+  await assertShopAccess(shopId, user);
 
   const safePage = Math.max(1, Math.floor(page));
   const safePageSize = Math.max(1, Math.min(Math.floor(pageSize), 100));
@@ -282,7 +268,7 @@ export async function getProduct(id: string) {
   if (!product) throw new Error("Product not found");
 
   requirePermission(user, "view_products");
-  await assertShopBelongsToUser(product.shopId, user.id);
+  await assertShopAccess(product.shopId, user);
 
   return product;
 }
@@ -298,7 +284,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   if (!product) throw new Error("Product not found");
   const user = await requireUser();
   requirePermission(user, "update_product");
-  await assertShopBelongsToUser(product.shopId, user.id);
+  await assertShopAccess(product.shopId, user);
 
   const buyPrice = normalizeMoneyInput(data.buyPrice);
   const sellPrice =
@@ -347,7 +333,7 @@ export async function deleteProduct(id: string) {
 
   const user = await requireUser();
   requirePermission(user, "delete_product");
-  await assertShopBelongsToUser(product.shopId, user.id);
+  await assertShopAccess(product.shopId, user);
 
   await prisma.product.delete({ where: { id } });
 
@@ -360,7 +346,7 @@ export async function deleteProduct(id: string) {
 export async function getActiveProductsByShop(shopId: string) {
   const user = await requireUser();
   requirePermission(user, "view_products");
-  await assertShopBelongsToUser(shopId, user.id);
+  await assertShopAccess(shopId, user);
 
   const rows = await prisma.product.findMany({
     where: { shopId, isActive: true },
