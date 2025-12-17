@@ -11,9 +11,21 @@ type Shop = {
   name: string;
 };
 
-type Props = { shops: Shop[]; activeShopId: string };
+type ProductStatusFilter = "all" | "active" | "inactive";
 
-export function ShopSwitcherClient({ shops, activeShopId }: Props) {
+type Props = {
+  shops: Shop[];
+  activeShopId: string;
+  query?: string;
+  status?: ProductStatusFilter;
+};
+
+export function ShopSwitcherClient({
+  shops,
+  activeShopId,
+  query,
+  status = "all",
+}: Props) {
   const router = useRouter();
   const { shopId, setShop } = useCurrentShop();
 
@@ -23,7 +35,10 @@ export function ShopSwitcherClient({ shops, activeShopId }: Props) {
     setShop(id);
     // Persist globally selected shop
     document.cookie = `activeShopId=${id}; path=/; max-age=${60 * 60 * 24 * 30}`;
-    router.push(`/dashboard/products?shopId=${id}`);
+    const params = new URLSearchParams({ shopId: id });
+    if (query) params.set("q", query);
+    if (status !== "all") params.set("status", status);
+    router.push(`/dashboard/products?${params.toString()}`);
   }
 
   return (

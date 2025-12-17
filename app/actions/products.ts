@@ -36,6 +36,27 @@ type UpdateProductInput = {
   size?: string | null;
 };
 
+type ProductListRow = {
+  id: string;
+  name: string;
+  category: string;
+  buyPrice?: string | null;
+  sellPrice: string;
+  stockQty: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+type ProductStatusFilter = "all" | "active" | "inactive";
+
+type GetProductsByShopPaginatedInput = {
+  shopId: string;
+  page?: number;
+  pageSize?: number;
+  query?: string | null;
+  status?: ProductStatusFilter;
+};
+
 // ---------------------------------
 // AUTH HELPERS
 // ---------------------------------
@@ -185,6 +206,70 @@ export async function getProductsByShop(shopId: string) {
 }
 
 // ---------------------------------
+// GET PRODUCTS BY SHOP (PAGINATED + SEARCH)
+// ---------------------------------
+export async function getProductsByShopPaginated({
+  shopId,
+  page = 1,
+  pageSize = 12,
+  query,
+  status = "all",
+}: GetProductsByShopPaginatedInput) {
+  const user = await requireUser();
+  requirePermission(user, "view_products");
+  await assertShopBelongsToUser(shopId, user.id);
+
+  const safePage = Math.max(1, Math.floor(page));
+  const safePageSize = Math.max(1, Math.min(Math.floor(pageSize), 100));
+  const normalizedQuery = (query || "").trim();
+  const where: any = { shopId };
+
+  if (status === "active") {
+    where.isActive = true;
+  } else if (status === "inactive") {
+    where.isActive = false;
+  }
+
+  if (normalizedQuery) {
+    where.OR = [
+      { name: { contains: normalizedQuery, mode: "insensitive" } },
+      { category: { contains: normalizedQuery, mode: "insensitive" } },
+    ];
+  }
+
+  const totalCount = await prisma.product.count({ where });
+  const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
+  const resolvedPage = Math.min(safePage, totalPages);
+  const skip = (resolvedPage - 1) * safePageSize;
+
+  const rows = await prisma.product.findMany({
+    where,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    skip,
+    take: safePageSize,
+  });
+
+  const items: ProductListRow[] = rows.map((product) => ({
+    id: product.id,
+    name: product.name,
+    category: product.category,
+    buyPrice: product.buyPrice === null ? null : product.buyPrice?.toString() ?? null,
+    sellPrice: product.sellPrice.toString(),
+    stockQty: product.stockQty.toString(),
+    isActive: product.isActive,
+    createdAt: product.createdAt.toISOString(),
+  }));
+
+  return {
+    items,
+    totalCount,
+    totalPages,
+    page: resolvedPage,
+    pageSize: safePageSize,
+  };
+}
+
+// ---------------------------------
 // GET SINGLE PRODUCT
 // ---------------------------------
 export async function getProduct(id: string) {
@@ -232,17 +317,15 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
       ? data.trackStock
       : product.trackStock ?? false;
   const resolvedStockQty = trackStockFlag ? stockQty : "0";
-  const { trackStock, ...rest } = data;
-  const payload: any = {
-    ...rest,
-    ...(buyPrice !== undefined ? { buyPrice } : {}),
-    ...(sellPrice !== undefined ? { sellPrice } : {}),
-    ...(resolvedStockQty !== undefined ? { stockQty: resolvedStockQty } : {}),
-  };
+  const payload: Record<string, any> = {};
 
-  if (trackStock !== undefined) {
-    payload.trackStock = trackStock;
-  }
+  if (data.name !== undefined) payload.name = data.name;
+  if (data.category !== undefined) payload.category = data.category;
+  if (data.isActive !== undefined) payload.isActive = data.isActive;
+  if (data.trackStock !== undefined) payload.trackStock = data.trackStock;
+  if (buyPrice !== undefined) payload.buyPrice = buyPrice;
+  if (sellPrice !== undefined) payload.sellPrice = sellPrice;
+  if (resolvedStockQty !== undefined) payload.stockQty = resolvedStockQty;
 
   await prisma.product.update({
     where: { id },

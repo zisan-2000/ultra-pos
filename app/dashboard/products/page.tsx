@@ -1,12 +1,37 @@
+// app/dashboard/products/page.tsx
+
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
-import { getProductsByShop } from "@/app/actions/products";
+import { getProductsByShopPaginated } from "@/app/actions/products";
 import ProductsListClient from "./components/ProductsListClient";
 
 type PageProps = {
-  searchParams?: Promise<{ shopId?: string }>;
+  searchParams?: Promise<{
+    shopId?: string;
+    page?: string;
+    q?: string;
+    status?: string;
+  }>;
 };
+
+const PAGE_SIZE = 12;
+
+function parsePositiveInt(value?: string) {
+  if (!value) return null;
+  const num = Number.parseInt(value, 10);
+  return Number.isFinite(num) && num > 0 ? num : null;
+}
+
+function normalizeQuery(value?: string) {
+  if (!value) return "";
+  return value.toString().trim();
+}
+
+function normalizeStatus(value?: string) {
+  if (value === "active" || value === "inactive") return value;
+  return "all";
+}
 
 export default async function ProductsPage({ searchParams }: PageProps) {
   const shops = await getShopsByUser();
@@ -44,31 +69,43 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       ? requestedShopId
       : null;
 
-  const activeShopId =
-    urlSelectedShopId ?? cookieSelectedShopId ?? shops[0].id;
+  const activeShopId = urlSelectedShopId ?? cookieSelectedShopId ?? shops[0].id;
 
-  const onlineProducts = await getProductsByShop(activeShopId);
+  const page = parsePositiveInt(resolvedParams?.page) ?? 1;
+  const query = normalizeQuery(resolvedParams?.q);
+  const status = normalizeStatus(resolvedParams?.status);
 
-  // Convert Decimal objects to strings for client component
-  const serializedProducts = onlineProducts.map((product) => ({
-    ...product,
-    buyPrice: product.buyPrice ? String(product.buyPrice) : null,
-    sellPrice: String(product.sellPrice),
-    stockQty: String(product.stockQty),
-  }));
+  const { items, totalCount, totalPages, page: currentPage, pageSize } =
+    await getProductsByShopPaginated({
+      shopId: activeShopId,
+      page,
+      pageSize: PAGE_SIZE,
+      query,
+      status,
+    });
 
   return (
     <div className="space-y-6 section-gap">
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-700">📦</span>
-            <h1 className="text-3xl font-bold text-gray-900 leading-tight">পণ্য তালিকা</h1>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-700">
+              📦
+            </span>
+            <h1 className="text-3xl font-bold text-gray-900 leading-tight">
+              পণ্য তালিকা
+            </h1>
           </div>
           <ProductsListClient
             shops={shops}
             activeShopId={activeShopId}
-            serverProducts={serializedProducts}
+            serverProducts={items}
+            page={currentPage}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            totalPages={totalPages}
+            initialQuery={query}
+            initialStatus={status}
           />
         </div>
       </div>

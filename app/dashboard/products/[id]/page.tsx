@@ -12,5 +12,12 @@ export default async function EditProductPage({ params }: PageProps) {
   if (!product) return <div>Product not found.</div>;
   if (!shop) return <div>Shop not found.</div>;
 
-  return <EditProductClient product={product} shop={shop} />;
+  const serializedProduct = JSON.parse(JSON.stringify(product));
+  const serializedShop = {
+    id: shop.id,
+    name: shop.name,
+    businessType: shop.businessType ?? null,
+  };
+
+  return <EditProductClient product={serializedProduct} shop={serializedShop} />;
 }
