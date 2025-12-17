@@ -175,6 +175,8 @@ model Sale {
   saleItems SaleItem[]
 
   @@index([shopId], map: "idx_sales_shop")
+  @@index([shopId, createdAt, id], map: "idx_sales_shop_created_id")
+  @@index([shopId, status, createdAt], map: "idx_sales_shop_status_created")
   @@index([customerId], map: "idx_sales_customer")
   @@map("sales")
 }

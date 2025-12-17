@@ -23,6 +23,27 @@ type CreateSaleInput = {
   paidNow?: number | null;
 };
 
+export type SaleCursor = {
+  createdAt: string;
+  id: string;
+};
+
+type SaleRow = Prisma.SaleGetPayload<{}>;
+
+type SaleWithSummary = SaleRow & {
+  itemCount: number;
+  itemPreview: string;
+  customerName: string | null;
+};
+
+type GetSalesByShopPaginatedInput = {
+  shopId: string;
+  limit?: number;
+  cursor?: { createdAt: Date; id: string } | null;
+  dateFrom?: Date | null;
+  dateTo?: Date | null;
+};
+
 async function assertShopBelongsToUser(shopId: string, userId: string) {
   const shop = await prisma.shop.findUnique({ where: { id: shopId } });
 
@@ -31,6 +52,65 @@ async function assertShopBelongsToUser(shopId: string, userId: string) {
   }
 
   return shop;
+}
+
+async function attachSaleSummaries(
+  rows: SaleRow[],
+  shopId: string
+): Promise<SaleWithSummary[]> {
+  if (rows.length === 0) return [];
+
+  const saleIds = rows.map((r) => r.id);
+
+  const items = await prisma.saleItem.findMany({
+    where: { saleId: { in: saleIds } },
+    select: {
+      saleId: true,
+      quantity: true,
+      product: {
+        select: { name: true },
+      },
+    },
+  });
+
+  const itemSummaryMap: Record<
+    string,
+    { count: number; names: string[] }
+  > = {};
+
+  for (const it of items) {
+    const entry = itemSummaryMap[it.saleId] || { count: 0, names: [] };
+    entry.count += 1;
+    if (entry.names.length < 3 && it.product?.name) {
+      entry.names.push(
+        `${it.product.name} x${Number(it.quantity || 0)}`
+      );
+    }
+    itemSummaryMap[it.saleId] = entry;
+  }
+
+  const customerIds = Array.from(
+    new Set(rows.map((r) => r.customerId).filter(Boolean) as string[])
+  );
+
+  let customerMap: Record<string, string> = {};
+  if (customerIds.length) {
+    const cs = await prisma.customer.findMany({
+      where: { shopId, id: { in: customerIds } },
+      select: { id: true, name: true },
+    });
+    customerMap = Object.fromEntries(cs.map((c) => [c.id, c.name || ""]));
+  }
+
+  return rows.map((r) => {
+    const summary = itemSummaryMap[r.id] || { count: 0, names: [] };
+    return {
+      ...r,
+      itemCount: summary.count,
+      itemPreview: summary.names.join(", "),
+      customerName: r.customerId ? customerMap[r.customerId] : null,
+    };
+  });
 }
 
 // ------------------------------
@@ -198,62 +278,68 @@ export async function getSalesByShop(shopId: string) {
 
   const rows = await prisma.sale.findMany({
     where: { shopId },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
 
-  if (rows.length === 0) return [];
+  return attachSaleSummaries(rows, shopId);
+}
 
-  const saleIds = rows.map((r) => r.id);
+// ------------------------------
+// GET SALES BY SHOP (CURSOR PAGINATION)
+// ------------------------------
+export async function getSalesByShopPaginated({
+  shopId,
+  limit = 12,
+  cursor,
+  dateFrom,
+  dateTo,
+}: GetSalesByShopPaginatedInput) {
+  const user = await requireUser();
+  requirePermission(user, "view_sales");
+  await assertShopBelongsToUser(shopId, user.id);
 
-  const items = await prisma.saleItem.findMany({
-    where: { saleId: { in: saleIds } },
-    select: {
-      saleId: true,
-      quantity: true,
-      product: {
-        select: { name: true },
-      },
-    },
-  });
+  const safeLimit = Math.max(1, Math.min(limit, 100));
 
-  const itemSummaryMap: Record<
-    string,
-    { count: number; names: string[] }
-  > = {};
-
-  for (const it of items) {
-    const entry = itemSummaryMap[it.saleId] || { count: 0, names: [] };
-    entry.count += 1;
-    if (entry.names.length < 3 && it.product?.name) {
-      entry.names.push(
-        `${it.product.name} x${Number(it.quantity || 0)}`
-      );
-    }
-    itemSummaryMap[it.saleId] = entry;
-  }
-
-  const customerIds = Array.from(
-    new Set(rows.map((r) => r.customerId).filter(Boolean) as string[])
-  );
-
-  let customerMap: Record<string, string> = {};
-  if (customerIds.length) {
-    const cs = await prisma.customer.findMany({
-      where: { shopId, id: { in: customerIds } },
-      select: { id: true, name: true },
-    });
-    customerMap = Object.fromEntries(cs.map((c) => [c.id, c.name || ""]));
-  }
-
-  return rows.map((r) => {
-    const summary = itemSummaryMap[r.id] || { count: 0, names: [] };
-    return {
-      ...r,
-      itemCount: summary.count,
-      itemPreview: summary.names.join(", "),
-      customerName: r.customerId ? customerMap[r.customerId] : null,
+  const where: Prisma.SaleWhereInput = { shopId };
+  if (dateFrom || dateTo) {
+    where.createdAt = {
+      ...(dateFrom ? { gte: dateFrom } : {}),
+      ...(dateTo ? { lt: dateTo } : {}),
     };
+  }
+
+  if (cursor) {
+    where.AND = [
+      {
+        OR: [
+          { createdAt: { lt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+        ],
+      },
+    ];
+  }
+
+  const rows = await prisma.sale.findMany({
+    where,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: safeLimit + 1,
   });
+
+  const hasMore = rows.length > safeLimit;
+  const pageRows = rows.slice(0, safeLimit);
+  const items = await attachSaleSummaries(pageRows, shopId);
+
+  const last = pageRows[pageRows.length - 1];
+  const nextCursor: SaleCursor | null =
+    hasMore && last
+      ? { createdAt: last.createdAt.toISOString(), id: last.id }
+      : null;
+
+  return {
+    items,
+    nextCursor,
+    hasMore,
+  };
 }
 
 // ------------------------------
