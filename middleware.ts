@@ -121,6 +121,11 @@ export async function middleware(req: NextRequest) {
     return appendCookies(NextResponse.next(), cookiesToSet);
   }
 
+  // Allow super-admin system settings to resolve directly
+  if (pathname.startsWith("/super-admin/system-settings")) {
+    return appendCookies(NextResponse.next(), cookiesToSet);
+  }
+
   if (looksRolePrefixed) {
     const normalized = remainder || "/dashboard";
     const rewriteTarget =

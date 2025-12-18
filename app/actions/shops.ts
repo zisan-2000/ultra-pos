@@ -18,12 +18,31 @@ export async function createShop(data: {
   address?: string;
   phone?: string;
   businessType?: string;
+  ownerId?: string;
 }) {
   const user = await getCurrentUser();
+  const isSuperAdmin = user.roles?.includes("super_admin") ?? false;
+  const requestedOwnerId = data.ownerId?.trim() || undefined;
+
+  if (!isSuperAdmin) {
+    throw new Error("Only super admin can create shops");
+  }
+
+  if (requestedOwnerId) {
+    const targetOwner = await prisma.user.findUnique({
+      where: { id: requestedOwnerId },
+      select: { id: true, roles: { select: { name: true } } },
+    });
+    if (!targetOwner || !targetOwner.roles.some((r) => r.name === "owner")) {
+      throw new Error("Target owner is not valid");
+    }
+  }
+
+  const targetOwnerId = requestedOwnerId ?? user.id;
 
   await prisma.shop.create({
     data: {
-      ownerId: user.id,
+      ownerId: targetOwnerId,
       name: data.name,
       address: data.address || "",
       phone: data.phone || "",
@@ -32,6 +51,23 @@ export async function createShop(data: {
   });
 
   return { success: true };
+}
+
+// ------------------------------
+// GET OWNER OPTIONS (SUPER ADMIN)
+// ------------------------------
+export async function getOwnerOptions() {
+  const user = await getCurrentUser();
+  const isSuperAdmin = user.roles?.includes("super_admin") ?? false;
+  if (!isSuperAdmin) {
+    throw new Error("Forbidden");
+  }
+
+  return prisma.user.findMany({
+    where: { roles: { some: { name: "owner" } } },
+    select: { id: true, name: true, email: true },
+    orderBy: [{ name: "asc" }, { email: "asc" }],
+  });
 }
 
 // ------------------------------

@@ -171,6 +171,7 @@ export function DashboardShell({
     () => applyBasePath("/dashboard/admin/user-creation-log", roleBasePath),
     [roleBasePath],
   );
+  const systemSettingsHref = "/super-admin/system-settings";
 
   const routePermissionMap: Record<string, string> = {
     "/dashboard": "view_dashboard_summary",
@@ -351,6 +352,32 @@ export function DashboardShell({
                   ) : null}
                 </Link>
               )}
+            </div>
+          )}
+
+          {isSuperAdmin && (
+            <div className="mt-4 space-y-2">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Settings
+              </div>
+              <Link
+                href={systemSettingsHref}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setDrawerOpen(false);
+                  router.push(systemSettingsHref);
+                }}
+                className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
+                  pathname === systemSettingsHref
+                    ? "bg-green-50 text-green-700 border border-green-100"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                <span>System Settings</span>
+                {pathname === systemSettingsHref ? (
+                  <span className="text-xs text-green-600">সক্রিয়</span>
+                ) : null}
+              </Link>
             </div>
           )}
 

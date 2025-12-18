@@ -37,6 +37,7 @@ type Props = {
     businessType?: BusinessType;
   };
   submitLabel?: string;
+  ownerOptions?: Array<{ id: string; name: string | null; email: string | null }>;
 };
 
 const SHOP_TEMPLATE_KEY = "shopTemplates:v1";
@@ -82,6 +83,7 @@ export default function ShopFormClient({
   action,
   initial,
   submitLabel = "+ দ্রুত দোকান যোগ করুন",
+  ownerOptions,
 }: Props) {
   const router = useRouter();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -89,11 +91,14 @@ export default function ShopFormClient({
   const [voiceReady, setVoiceReady] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [name, setName] = useState(initial?.name || "");
   const [address, setAddress] = useState(initial?.address || "");
   const [phone, setPhone] = useState(initial?.phone || "");
   const [businessType, setBusinessType] = useState<BusinessType>(initial?.businessType || "tea_stall");
+  const [selectedOwnerId, setSelectedOwnerId] = useState("");
+  const hasOwnerOptions = Boolean(ownerOptions && ownerOptions.length > 0);
 
   useEffect(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem(SHOP_TEMPLATE_KEY) : null;
@@ -116,6 +121,15 @@ export default function ShopFormClient({
       recognitionRef.current?.stop?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!ownerOptions) return;
+    if (ownerOptions.length === 0) {
+      setSelectedOwnerId("");
+      return;
+    }
+    setSelectedOwnerId((prev) => prev || ownerOptions[0]?.id || "");
+  }, [ownerOptions]);
 
   const frequentTemplates = useMemo(
     () => templates.slice().sort((a, b) => b.count - a.count || b.lastUsed - a.lastUsed),
@@ -216,6 +230,17 @@ export default function ShopFormClient({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
+    setSubmitError(null);
+
+    if (ownerOptions && !hasOwnerOptions) {
+      setSubmitError("কোনো owner পাওয়া যায়নি");
+      return;
+    }
+
+    if (ownerOptions && !selectedOwnerId) {
+      setSubmitError("Owner নির্বাচন করতে হবে");
+      return;
+    }
 
     const payloadName = (form.get("name") as string) || name;
     const payloadAddress = (form.get("address") as string) || address;
@@ -227,6 +252,9 @@ export default function ShopFormClient({
     form.set("address", payloadAddress);
     form.set("phone", payloadPhone);
     form.set("businessType", payloadBusinessType);
+    if (ownerOptions) {
+      form.set("ownerId", selectedOwnerId);
+    }
 
     const template: ShopTemplate = {
       name: payloadName,
@@ -238,12 +266,42 @@ export default function ShopFormClient({
     };
     persistTemplates(mergeTemplates(templates, template));
 
-    await action(form);
-    router.push(backHref);
+    try {
+      await action(form);
+      router.push(backHref);
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : "Shop তৈরি করতে ব্যর্থ"
+      );
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
+      {ownerOptions ? (
+        <div className="space-y-2">
+          <label className="block text-base font-medium text-gray-900">মালিক নির্বাচন করুন *</label>
+          <select
+            name="ownerId"
+            value={selectedOwnerId}
+            onChange={(e) => setSelectedOwnerId(e.target.value)}
+            className="w-full border border-slate-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          >
+            {ownerOptions.length === 0 ? (
+              <option value="">কোনো মালিক পাওয়া যায়নি</option>
+            ) : (
+              ownerOptions.map((owner) => (
+                <option key={owner.id} value={owner.id}>
+                  {owner.name || owner.email || "Unknown owner"}
+                </option>
+              ))
+            )}
+          </select>
+          <p className="text-sm text-gray-500">এই দোকানটি কোন মালিকের অধীনে হবে তা নির্বাচন করুন</p>
+        </div>
+      ) : null}
+
       {/* Shop Name */}
       <div className="space-y-2">
         <label className="block text-base font-medium text-gray-900">দোকানের নাম *</label>
@@ -428,6 +486,9 @@ export default function ShopFormClient({
         মাইক্রোফোনে বলুন: “নিউ রহমান স্টোর 017…” → নাম + ফোন প্রস্তুত
       </p>
       {voiceError ? <p className="text-xs text-red-600">{voiceError}</p> : null}
+      {submitError ? (
+        <p className="text-xs text-red-600">{submitError}</p>
+      ) : null}
     </form>
   );
 }

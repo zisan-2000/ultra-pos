@@ -271,3 +271,14 @@ model CustomerLedger {
   @@index([entryDate], map: "idx_customer_ledger_entry_date")
   @@map("customer_ledger")
 }
+
+// Global singleton settings
+model SystemSetting {
+  id              String   @id @default("singleton")
+  supportPhone    String?  @map("support_phone")
+  supportWhatsapp String?  @map("support_whatsapp")
+  updatedBy       String?  @map("updated_by")
+  updatedAt       DateTime @map("updated_at") @updatedAt @default(now()) @db.Timestamptz(6)
+
+  @@map("system_settings")
+}

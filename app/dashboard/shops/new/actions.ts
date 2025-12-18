@@ -10,6 +10,7 @@ export async function handleCreateShop(formData: FormData) {
     address: formData.get("address") as string,
     phone: formData.get("phone") as string,
     businessType: (formData.get("businessType") as any) || "tea_stall",
+    ownerId: (formData.get("ownerId") as string) || undefined,
   });
 
   redirect("/dashboard/shops");
