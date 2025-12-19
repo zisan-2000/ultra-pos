@@ -10,93 +10,221 @@ export type BusinessType =
   | "pharmacy"
   | "mini_wholesale";
 
-type Field =
+export type Field =
   | "name"
   | "sellPrice"
   | "buyPrice"
   | "unit"
-  | "stock"
   | "expiry"
   | "size";
 
+type FieldRule = {
+  required?: boolean;
+  hidden?: boolean;
+};
+
+export type StockRule = {
+  enabledByDefault: boolean;
+  requiredWhenEnabled: boolean;
+};
+
+export type UnitKeywordRule = { keywords: string[]; unit: string };
+
+export type UnitRule = {
+  enabled: boolean;
+  default?: string;
+  options: string[];
+  keywordRules?: UnitKeywordRule[];
+};
+
+export type BusinessFieldConfig = {
+  fields: Record<Field, FieldRule>;
+  stock: StockRule;
+  unit: UnitRule;
+};
+
 export const businessOptions: { id: BusinessType; label: string }[] = [
-  { id: "tea_stall", label: "চা স্টল" },
+  { id: "tea_stall", label: "চা/কফি দোকান" },
   { id: "pan_cigarette", label: "পান/সিগারেট দোকান" },
   { id: "mobile_recharge", label: "মোবাইল রিচার্জ" },
-  { id: "fruits_veg", label: "ফল/সবজি স্টল" },
-  { id: "snacks_stationery", label: "স্ন্যাকস/স্টেশনারি" },
-  { id: "mini_grocery", label: "মুদি দোকান" },
-  { id: "clothing", label: "পোশাক/গার্মেন্টস" },
+  { id: "fruits_veg", label: "সবজি/ফল" },
+  { id: "snacks_stationery", label: "স্ন্যাক্স/স্টেশনারি" },
+  { id: "mini_grocery", label: "মিনি মুদি" },
+  { id: "clothing", label: "কাপড়/গার্মেন্টস" },
   { id: "cosmetics_gift", label: "কসমেটিকস/গিফট" },
   { id: "pharmacy", label: "ফার্মেসি" },
-  { id: "mini_wholesale", label: "মিনি হোলসেল" },
+  { id: "mini_wholesale", label: "হোলসেল" },
 ];
 
-type FieldConfig = {
-  required: Field[];
-  optional?: Field[];
-  hidden?: Field[];
-  defaultStockOn?: boolean;
-  units?: string[];
-};
+const COMMON_FIELDS: Field[] = ["name", "sellPrice", "buyPrice", "unit", "expiry", "size"];
 
-export const businessFieldConfig: Record<BusinessType, FieldConfig> = {
+export const DEFAULT_UNIT_KEYWORD_RULES: UnitKeywordRule[] = [
+  { keywords: ["ডিম", "egg"], unit: "pcs" },
+  { keywords: ["তেল", "oil", "দুধ", "পানি", "সিরাপ"], unit: "liter" },
+  { keywords: ["চিনি", "চাল", "আটা", "ময়দা", "সুজি", "লবণ", "ডাল"], unit: "kg" },
+  { keywords: ["চিপস", "প্যাকেট", "বিস্কুট", "চকলেট"], unit: "packet" },
+  { keywords: ["স্ট্রিপ", "ট্যাবলেট", "capsule"], unit: "strip" },
+  { keywords: ["কাপড়", "টি শার্ট", "শার্ট", "প্যান্ট"], unit: "pcs" },
+];
+
+function buildFields(overrides: Partial<Record<Field, FieldRule>>): Record<Field, FieldRule> {
+  return COMMON_FIELDS.reduce((acc, field) => {
+    acc[field] = { required: false, hidden: false, ...(overrides[field] ?? {}) };
+    return acc;
+  }, {} as Record<Field, FieldRule>);
+}
+
+export const businessFieldConfig: Record<BusinessType, BusinessFieldConfig> = {
   tea_stall: {
-    required: ["name", "sellPrice", "stock"],
-    hidden: ["buyPrice", "unit", "expiry", "size"],
-    defaultStockOn: false,
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: { hidden: true },
+      unit: { hidden: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: false, requiredWhenEnabled: true },
+    unit: { enabled: false, options: [] },
   },
   pan_cigarette: {
-    required: ["name", "sellPrice", "stock"],
-    hidden: ["buyPrice", "unit", "expiry", "size"],
-    defaultStockOn: false,
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: { hidden: true },
+      unit: { hidden: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: false, requiredWhenEnabled: true },
+    unit: { enabled: false, options: [] },
   },
   mobile_recharge: {
-    required: ["sellPrice", "stock"],
-    optional: ["name"],
-    hidden: ["buyPrice", "unit", "expiry", "size"],
-    defaultStockOn: false,
+    fields: buildFields({
+      name: { hidden: true },
+      sellPrice: { required: true },
+      buyPrice: { hidden: true },
+      unit: { hidden: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: false, requiredWhenEnabled: true },
+    unit: { enabled: false, options: [] },
   },
   fruits_veg: {
-    required: ["name", "sellPrice", "unit", "stock"],
-    hidden: ["buyPrice", "expiry", "size"],
-    units: ["kg", "gm", "pcs"],
-    defaultStockOn: true,
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      unit: { required: true },
+      buyPrice: { hidden: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: true, requiredWhenEnabled: true },
+    unit: {
+      enabled: true,
+      options: ["kg", "gm", "pcs"],
+      default: "kg",
+      keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
+    },
   },
   snacks_stationery: {
-    required: ["name", "sellPrice", "stock"],
-    hidden: ["buyPrice", "unit", "expiry", "size"],
-    defaultStockOn: false,
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: { hidden: true },
+      unit: { hidden: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: false, requiredWhenEnabled: true },
+    unit: { enabled: false, options: [] },
   },
   mini_grocery: {
-    required: ["name", "sellPrice", "unit", "stock"],
-    optional: ["buyPrice"],
-    hidden: ["expiry", "size"],
-    units: ["pcs", "kg", "liter"],
-    defaultStockOn: true,
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: {},
+      unit: { required: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: true, requiredWhenEnabled: true },
+    unit: {
+      enabled: true,
+      options: ["pcs", "kg", "liter"],
+      default: "kg",
+      keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
+    },
   },
   clothing: {
-    required: ["name", "sellPrice", "stock"],
-    optional: ["buyPrice", "size"],
-    hidden: ["unit", "expiry"],
-    defaultStockOn: false,
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: {},
+      unit: { hidden: true },
+      expiry: { hidden: true },
+      size: {},
+    }),
+    stock: { enabledByDefault: false, requiredWhenEnabled: true },
+    unit: { enabled: false, options: [] },
   },
   cosmetics_gift: {
-    required: ["name", "sellPrice", "stock"],
-    optional: ["buyPrice"],
-    hidden: ["unit", "expiry", "size"],
-    defaultStockOn: false,
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: {},
+      unit: { hidden: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: false, requiredWhenEnabled: true },
+    unit: { enabled: false, options: [] },
   },
   pharmacy: {
-    required: ["name", "sellPrice", "buyPrice", "unit", "stock", "expiry"],
-    hidden: ["size"],
-    units: ["pcs", "strip", "ml"],
-    defaultStockOn: true,
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: { required: true },
+      unit: { required: true },
+      expiry: { required: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: true, requiredWhenEnabled: true },
+    unit: {
+      enabled: true,
+      options: ["pcs", "strip", "ml"],
+      default: "strip",
+      keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
+    },
   },
   mini_wholesale: {
-    required: ["name", "sellPrice", "buyPrice", "unit", "stock"],
-    hidden: ["expiry", "size"],
-    units: ["kg", "carton", "box"],
-    defaultStockOn: true,
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: { required: true },
+      unit: { required: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: true, requiredWhenEnabled: true },
+    unit: {
+      enabled: true,
+      options: ["kg", "carton", "box"],
+      default: "carton",
+      keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
+    },
   },
 };
+
+function validateConfig(configs: Record<BusinessType, BusinessFieldConfig>) {
+  Object.entries(configs).forEach(([type, config]) => {
+    Object.entries(config.fields).forEach(([field, rule]) => {
+      if (rule.hidden && rule.required) {
+        throw new Error(`Config error for ${type}: field "${field}" cannot be hidden and required`);
+      }
+    });
+  });
+}
+
+validateConfig(businessFieldConfig);

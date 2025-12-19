@@ -9,6 +9,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { db } from "@/lib/dexie/db";
 import { ShopSwitcherClient } from "../shop-switcher-client";
 import { useCurrentShop } from "@/hooks/use-current-shop";
+import { deleteProduct } from "@/app/actions/products";
 
 type Shop = { id: string; name: string };
 type Product = {
@@ -86,6 +87,7 @@ export default function ProductsListClient({
   const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState<ProductStatusFilter>(initialStatus);
   const [offlinePage, setOfflinePage] = useState(page);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
@@ -231,6 +233,30 @@ export default function ProductsListClient({
     if (targetPage < 1 || targetPage > effectiveTotalPages) return;
     applyFilters(targetPage);
   }
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (deletingId) return;
+      const confirmed = confirm("আপনি কি এই পণ্যটি ডিলিট করতে চান?");
+      if (!confirmed) return;
+      if (!online) {
+        alert("অফলাইনে ডিলিট করা যাবে না। অনলাইনে এসে আবার চেষ্টা করুন।");
+        return;
+      }
+      try {
+        setDeletingId(id);
+        await deleteProduct(id);
+        setProducts((prev) => prev.filter((p) => p.id !== id));
+        router.refresh();
+      } catch (err) {
+        console.error("Delete failed", err);
+        alert("পণ্য ডিলিট করা যায়নি। পরে চেষ্টা করুন।");
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [deletingId, online, router]
+  );
 
   useEffect(() => {
     if (online) return;
@@ -427,8 +453,17 @@ export default function ProductsListClient({
                 >
                   <span>এডিট</span>
                 </Link>
-                <button className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-50 border border-red-200 text-red-800 rounded-lg font-semibold hover:border-red-300 hover:bg-red-100 transition-colors pressable">
-                  <span>ডিলিট</span>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(product.id)}
+                  disabled={deletingId === product.id}
+                  className={`w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 border rounded-lg font-semibold pressable transition-colors ${
+                    deletingId === product.id
+                      ? "bg-red-50 border-red-100 text-red-400 opacity-70 cursor-not-allowed"
+                      : "bg-red-50 border-red-200 text-red-800 hover:border-red-300 hover:bg-red-100"
+                  }`}
+                >
+                  <span>{deletingId === product.id ? "মুছছে..." : "ডিলিট"}</span>
                 </button>
               </div>
             </div>

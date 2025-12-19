@@ -2,14 +2,14 @@
 
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
 import { updateProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
-import { type BusinessType } from "@/lib/productFormConfig";
+import { type BusinessType, type Field } from "@/lib/productFormConfig";
 
 type Props = { product: any; shop: { id: string; name: string; businessType?: string | null } };
 
@@ -36,15 +36,6 @@ type TemplateItem = {
 
 const TEMPLATE_LIMIT = 25;
 
-const KEYWORD_UNIT_RULES: { keywords: string[]; unit: string }[] = [
-  { keywords: ["ডিম", "egg"], unit: "pcs" },
-  { keywords: ["তেল", "oil", "দুধ", "পানি", "সিরাপ"], unit: "liter" },
-  { keywords: ["চিনি", "চাল", "আটা", "ময়দা", "সুজি", "লবণ", "ডাল"], unit: "kg" },
-  { keywords: ["চিপস", "প্যাকেট", "বিস্কুট", "চকলেট"], unit: "packet" },
-  { keywords: ["স্ট্রিপ", "ট্যাবলেট", "capsule"], unit: "strip" },
-  { keywords: ["কাপড়", "টি শার্ট", "শার্ট", "প্যান্ট"], unit: "pcs" },
-];
-
 const KEYWORD_CATEGORY_RULES: { keywords: string[]; category: string }[] = [
   { keywords: ["চা", "কফি"], category: "চা/কফি" },
   { keywords: ["ডিম", "চিনি", "তেল", "মসলা", "আটা", "চাল", "আলু"], category: "মুদি" },
@@ -58,72 +49,64 @@ const BUSINESS_ASSISTS: Record<
   BusinessType,
   {
     defaultCategory: string;
-    defaultUnit?: string;
+    fallbackName?: string;
     categoryChips: string[];
     priceHints: string[];
   }
 > = {
   tea_stall: {
     defaultCategory: "চা/কফি",
-    defaultUnit: "pcs",
     categoryChips: ["চা/কফি", "স্ন্যাক্স", "বিস্কুট"],
     priceHints: ["5", "10", "15", "20"],
   },
   pan_cigarette: {
     defaultCategory: "পান/সিগারেট",
-    defaultUnit: "packet",
     categoryChips: ["পান/সিগারেট", "স্ন্যাক্স", "রিচার্জ"],
     priceHints: ["5", "10", "12", "20"],
   },
   mobile_recharge: {
     defaultCategory: "রিচার্জ",
-    defaultUnit: "pcs",
     categoryChips: ["রিচার্জ", "ডেটা প্যাক"],
     priceHints: ["20", "50", "100", "200"],
+    fallbackName: "Mobile Recharge",
   },
   fruits_veg: {
     defaultCategory: "সবজি/ফল",
-    defaultUnit: "kg",
     categoryChips: ["সবজি/ফল", "পাতাজাতীয়", "মসলা"],
     priceHints: ["40", "60", "80", "120"],
   },
   snacks_stationery: {
     defaultCategory: "স্ন্যাক্স",
-    defaultUnit: "pcs",
     categoryChips: ["স্ন্যাক্স", "স্টেশনারি", "পানীয়"],
     priceHints: ["10", "20", "30", "50"],
   },
   mini_grocery: {
     defaultCategory: "মুদি",
-    defaultUnit: "kg",
     categoryChips: ["মুদি", "পানীয়", "স্ন্যাক্স"],
     priceHints: ["50", "80", "100", "120"],
   },
   clothing: {
     defaultCategory: "কাপড়",
-    defaultUnit: "pcs",
     categoryChips: ["কাপড়", "এক্সেসরিজ"],
     priceHints: ["150", "250", "350", "500"],
   },
   cosmetics_gift: {
     defaultCategory: "কসমেটিকস",
-    defaultUnit: "pcs",
     categoryChips: ["কসমেটিকস", "গিফট আইটেম", "হেয়ার কেয়ার"],
     priceHints: ["60", "80", "120", "200"],
   },
   pharmacy: {
     defaultCategory: "ঔষধ",
-    defaultUnit: "strip",
     categoryChips: ["ঔষধ", "বেবি কেয়ার", "হেলথ কেয়ার"],
     priceHints: ["5", "30", "60", "120"],
   },
   mini_wholesale: {
     defaultCategory: "হোলসেল",
-    defaultUnit: "carton",
     categoryChips: ["হোলসেল", "মুদি", "স্ন্যাক্স"],
     priceHints: ["500", "1000", "1500", "2000"],
   },
 };
+
 
 function parseProductText(input: string) {
   const cleaned = input.replace(/টাকা|tk|taka|price/gi, " ").replace(/:/g, " ");
@@ -135,16 +118,7 @@ function parseProductText(input: string) {
   return { name, price: price || undefined };
 }
 
-function suggestUnitByName(name: string, availableUnits: string[], businessUnit?: string) {
-  const lower = name.toLowerCase();
-  for (const rule of KEYWORD_UNIT_RULES) {
-    if (rule.keywords.some((k) => lower.includes(k.toLowerCase()))) {
-      return availableUnits.includes(rule.unit) ? rule.unit : rule.unit;
-    }
-  }
-  if (businessUnit && availableUnits.includes(businessUnit)) return businessUnit;
-  return undefined;
-}
+
 
 function suggestCategoryByName(name: string, businessCategory?: string) {
   const lower = name.toLowerCase();
@@ -188,16 +162,71 @@ export default function EditProductClient({ product, shop }: Props) {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const templateStorageKey = useMemo(() => `productTemplates:${shop.id}`, [shop.id]);
   const shopId = shop.id;
-
-  const [name, setName] = useState(product.name || "");
+  const businessAssist = BUSINESS_ASSISTS[businessType];
+  const fallbackName = businessAssist?.fallbackName || "Unnamed product";
+  const {
+    isFieldVisible,
+    isFieldRequired,
+    stock,
+    unitOptions: configUnits,
+    defaultUnit: configDefaultUnit,
+    suggestUnit,
+  } = useProductFields(businessType);
+  const configUnitsKey = useMemo(() => configUnits.join("|"), [configUnits]);
+const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
+    buyPrice: () => (
+      <div className="space-y-2">
+        <label className="block text-base font-medium text-gray-900">ক্রয়মূল্য (ঐচ্ছিক)</label>
+        <input
+          name="buyPrice"
+          type="number"
+          step="0.01"
+          min="0"
+          required={isFieldRequired("buyPrice")}
+          className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+          placeholder="যেমন: ৫৫.০০"
+          defaultValue={product.buyPrice || ""}
+        />
+        <p className="text-sm text-gray-500">চাইলে লাভ হিসাবের জন্য ক্রয়মূল্য দিন</p>
+      </div>
+    ),
+    expiry: () => (
+      <div className="space-y-2">
+        <label className="block text-base font-medium text-gray-900">মেয়াদোত্তীর্ণের তারিখ</label>
+        <input
+          name="expiryDate"
+          type="date"
+          required={isFieldRequired("expiry")}
+          className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+          defaultValue={product.expiryDate || ""}
+        />
+      </div>
+    ),
+    size: () => (
+      <div className="space-y-2">
+        <label className="block text-base font-medium text-gray-900">সাইজ / ভ্যারিয়েন্ট</label>
+        <input
+          name="size"
+          type="text"
+          required={isFieldRequired("size")}
+          className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+          placeholder="যেমন: L, XL, 100ml"
+          defaultValue={product.size || ""}
+        />
+      </div>
+    ),
+  };
+  const visibleAdvancedFields = (["buyPrice", "expiry", "size"] as Field[]).filter((field) =>
+    isFieldVisible(field)
+  );
+  const [name, setName] = useState((product.name as string) || fallbackName);
   const [sellPrice, setSellPrice] = useState((product.sellPrice || "").toString());
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
 
-  const businessAssist = BUSINESS_ASSISTS[businessType];
-
+  
   const templateCategories = useMemo(
     () => dedupe(templates.map((t) => t.category).filter(Boolean) as string[]),
     [templates]
@@ -217,9 +246,6 @@ export default function EditProductClient({ product, shop }: Props) {
     const combined = dedupe([...businessCategories, ...templateCategories, "Uncategorized"]);
     return combined.length ? combined : ["Uncategorized"];
   }, [businessCategories, templateCategories]);
-
-  const { isFieldVisible, isFieldRequired, defaultStockOn, unitOptions: configUnits } =
-    useProductFields(businessType);
 
   const unitLabels = useMemo(
     () => ({
@@ -248,9 +274,11 @@ export default function EditProductClient({ product, shop }: Props) {
   );
   const [unitOptions, setUnitOptions] = useState<string[]>(configUnits);
   const [selectedUnit, setSelectedUnit] = useState(
-    product.baseUnit || businessAssist?.defaultUnit || configUnits[0] || "pcs"
+    product.baseUnit || configDefaultUnit || configUnits[0] || "pcs"
   );
-  const [stockEnabled, setStockEnabled] = useState(product.trackStock ?? defaultStockOn);
+  const [stockEnabled, setStockEnabled] = useState(
+    product.trackStock ?? stock.enabledByDefault
+  );
 
   // Voice availability
   useEffect(() => {
@@ -311,19 +339,27 @@ export default function EditProductClient({ product, shop }: Props) {
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
       const custom = Array.isArray(parsed) ? parsed : [];
       const merged = Array.from(new Set([...configUnits, ...custom, selectedUnit]));
-      setUnitOptions(merged);
-      setSelectedUnit((prev: string) => (merged.includes(prev) ? prev : merged[0] || "pcs"));
+
+      setUnitOptions((prev) => {
+        const sameLength = prev.length === merged.length;
+        const sameItems = sameLength && prev.every((v, idx) => v === merged[idx]);
+        return sameItems ? prev : merged;
+      });
+      setSelectedUnit((prev: string) => {
+        const next = configDefaultUnit || merged[0] || "pcs";
+        return merged.includes(prev) ? prev : next;
+      });
     } catch (err) {
       console.error("Failed to load custom units", err);
-      setUnitOptions(configUnits);
-      setSelectedUnit(configUnits[0] || "pcs");
+      setUnitOptions((prev) => (prev.length ? prev : configUnits));
+      setSelectedUnit((prev) => (prev ? prev : configDefaultUnit || configUnits[0] || "pcs"));
     }
-  }, [configUnits, selectedUnit, shopId]);
+  }, [configUnitsKey, configDefaultUnit, selectedUnit, shopId]);
 
   // Track stock default
   useEffect(() => {
-    setStockEnabled(product.trackStock ?? defaultStockOn);
-  }, [product.trackStock, defaultStockOn, businessType]);
+    setStockEnabled(product.trackStock ?? stock.enabledByDefault);
+  }, [product.trackStock, stock.enabledByDefault, businessType]);
 
   function handleAddCustomCategory() {
     const input = prompt("নতুন ক্যাটাগরি যোগ করুন");
@@ -357,18 +393,18 @@ export default function EditProductClient({ product, shop }: Props) {
     const parsed = parseProductText(raw);
     const finalName = parsed.name || raw;
 
-    setName(finalName);
+    if (isFieldVisible("name")) {
+      setName(finalName);
+    } else if (!name) {
+      setName(fallbackName || finalName);
+    }
 
     if (parsed.price) {
       setSellPrice(parsed.price);
     }
 
     if (isFieldVisible("unit")) {
-      const suggested = suggestUnitByName(
-        finalName,
-        [...unitOptions, businessAssist?.defaultUnit || ""],
-        businessAssist?.defaultUnit
-      );
+      const suggested = suggestUnit(finalName, unitOptions);
       if (suggested) {
         setUnitOptions((prev) => (prev.includes(suggested) ? prev : [...prev, suggested]));
         setSelectedUnit(suggested);
@@ -486,7 +522,7 @@ export default function EditProductClient({ product, shop }: Props) {
       : null;
 
     const baseUnit = isFieldVisible("unit")
-      ? ((form.get("baseUnit") as string) || configUnits[0] || "pcs")
+      ? ((form.get("baseUnit") as string) || configDefaultUnit || configUnits[0] || "pcs")
       : undefined;
 
     const stockQty = stockEnabled ? ((form.get("stockQty") as string) || "0") : "0";
@@ -499,14 +535,19 @@ export default function EditProductClient({ product, shop }: Props) {
       ? ((form.get("size") as string) || "").toString().trim() || null
       : null;
 
+    const resolvedSellPrice = (form.get("sellPrice") as string) || sellPrice;
+    const resolvedName = isFieldVisible("name")
+      ? (form.get("name") as string) || name || fallbackName
+      : name || fallbackName || (resolvedSellPrice ? `Item ${resolvedSellPrice}` : "Unnamed product");
+
     const payload: LocalProduct = {
       ...product,
       shopId: shopId,
-      name: (form.get("name") as string) || name,
+      name: resolvedName,
       category: selectedCategory || "Uncategorized",
       baseUnit,
       buyPrice,
-      sellPrice: (form.get("sellPrice") as string) || sellPrice,
+      sellPrice: resolvedSellPrice,
       stockQty,
       isActive: form.get("isActive") === "on",
       trackStock: stockEnabled,
@@ -555,53 +596,55 @@ export default function EditProductClient({ product, shop }: Props) {
       <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
         
         {/* Product Name */}
-        <div className="space-y-2">
-          <label className="block text-base font-medium text-gray-900">পণ্যের নাম *</label>
-          <div className="flex gap-3">
-            <input
-              name="name"
-              value={name}
-              onChange={(e) => setNameWithSmartDefaults(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="যেমন: চা, ডিম, বিস্কুট..."
-              required={isFieldRequired("name")}
-              autoComplete="off"
-            />
-            <button
-              type="button"
-              onClick={listening ? stopVoice : startVoice}
-              disabled={!voiceReady}
-              className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
-                listening
-                  ? "bg-red-50 border-red-300 text-red-700"
-                  : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
-              } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
-            >
-              {listening ? "থামান" : "ভয়েস"}
-            </button>
-          </div>
-          <p className="text-sm text-gray-500">
-            {listening
-              ? "শুনছে... বলুন: “ডিম ১০ টাকা”"
-              : voiceReady
-              ? "মাইক্রোফোনে বললে নাম + দাম অটো ভর্তি"
-              : "এই ব্রাউজারে ভয়েস ইনপুট নেই"} {voiceError ? `(${voiceError})` : ""}
-          </p>
-          {smartNameSuggestions.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-1">
-              {smartNameSuggestions.map((title) => (
-                <button
-                  key={title}
-                  type="button"
-                  onClick={() => setNameWithSmartDefaults(title)}
-                  className="px-3 py-2 rounded-full border border-emerald-200 text-emerald-800 bg-emerald-50 text-sm hover:border-emerald-300"
-                >
-                  {title}
-                </button>
-              ))}
+        {isFieldVisible("name") && (
+          <div className="space-y-2">
+            <label className="block text-base font-medium text-gray-900">পণ্যের নাম *</label>
+            <div className="flex gap-3">
+              <input
+                name="name"
+                value={name}
+                onChange={(e) => setNameWithSmartDefaults(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="যেমন: চা, ডিম, বিস্কুট..."
+                required={isFieldRequired("name")}
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={listening ? stopVoice : startVoice}
+                disabled={!voiceReady}
+                className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                  listening
+                    ? "bg-red-50 border-red-300 text-red-700"
+                    : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+              >
+                {listening ? "থামান" : "ভয়েস"}
+              </button>
             </div>
-          )}
-        </div>
+            <p className="text-sm text-gray-500">
+              {listening
+                ? "শুনছে... বলুন: “ডিম ১০ টাকা”"
+                : voiceReady
+                ? "মাইক্রোফোনে বললে নাম + দাম অটো ভরতি"
+                : "এই ব্রাউজারে ভয়েস ইনপুট নেই"} {voiceError ? `(${voiceError})` : ""}
+            </p>
+            {smartNameSuggestions.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {smartNameSuggestions.map((title) => (
+                  <button
+                    key={title}
+                    type="button"
+                    onClick={() => setNameWithSmartDefaults(title)}
+                    className="px-3 py-2 rounded-full border border-emerald-200 text-emerald-800 bg-emerald-50 text-sm hover:border-emerald-300"
+                  >
+                    {title}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Sell Price */}
         <div className="space-y-2">
@@ -739,7 +782,7 @@ export default function EditProductClient({ product, shop }: Props) {
               step="0.01"
               min="0"
               defaultValue={product.stockQty || "0"}
-              required={stockEnabled && isFieldRequired("stock")}
+              required={stockEnabled && stock.requiredWhenEnabled}
               disabled={!stockEnabled}
               className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100 disabled:text-gray-500"
               placeholder="যেমন: 10, 5.50"
@@ -748,56 +791,18 @@ export default function EditProductClient({ product, shop }: Props) {
         </div>
 
         {/* Advanced */}
-        <details className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-          <summary className="cursor-pointer text-base font-semibold text-gray-900">
-            অ্যাডভান্সড অপশন (ঐচ্ছিক)
-          </summary>
-          <div className="mt-4 space-y-4">
-            {isFieldVisible("buyPrice") && (
-              <div className="space-y-2">
-                <label className="block text-base font-medium text-gray-900">ক্রয়মূল্য (ঐচ্ছিক)</label>
-                <input
-                  name="buyPrice"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required={isFieldRequired("buyPrice")}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="যেমন: ৫৫.০০"
-                  defaultValue={product.buyPrice || ""}
-                />
-                <p className="text-sm text-gray-500">চাইলে লাভ হিসাবের জন্য ক্রয়মূল্য দিন</p>
-              </div>
-            )}
-
-            {isFieldVisible("expiry") && (
-              <div className="space-y-2">
-                <label className="block text-base font-medium text-gray-900">মেয়াদোত্তীর্ণের তারিখ</label>
-                <input
-                  name="expiryDate"
-                  type="date"
-                  required={isFieldRequired("expiry")}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                  defaultValue={product.expiryDate || ""}
-                />
-              </div>
-            )}
-
-            {isFieldVisible("size") && (
-              <div className="space-y-2">
-                <label className="block text-base font-medium text-gray-900">সাইজ / বৈচিত্র্য</label>
-                <input
-                  name="size"
-                  type="text"
-                  required={isFieldRequired("size")}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="যেমন: L, XL, 100ml"
-                  defaultValue={product.size || ""}
-                />
-              </div>
-            )}
-          </div>
-        </details>
+        {visibleAdvancedFields.length > 0 && (
+          <details className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <summary className="cursor-pointer text-base font-semibold text-gray-900">
+              অ্যাডভান্সড অপশন (ঐচ্ছিক)
+            </summary>
+            <div className="mt-4 space-y-4">
+              {visibleAdvancedFields.map((field) => (
+                <Fragment key={field}>{advancedFieldRenderers[field]?.()}</Fragment>
+              ))}
+            </div>
+          </details>
+        )}
 
         {/* Active Status */}
         <div className="space-y-2">
