@@ -681,12 +681,13 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             </div>
             <p className="text-sm text-gray-500">
               {listening
-                ? "শুনছে... দামসহ নাম বলুন: “ডিম ১০ টাকা”"
+                ? "Listening... say product name and price"
                 : voiceReady
-                ? "মাইক্রোফোনে বললে নাম + দাম অটো ভর্তি হবে"
-                : "এই ব্রাউজারে ভয়েস ইনপুট নেই"}{" "}
+                ? "Say product name and price to fill automatically"
+                : "Microphone not ready"}{" "}
               {voiceError ? `(${voiceError})` : ""}
             </p>
+            
             {smartNameSuggestions.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
                 {smartNameSuggestions.map((title) => (

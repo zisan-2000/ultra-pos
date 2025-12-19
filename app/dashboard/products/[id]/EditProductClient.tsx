@@ -332,29 +332,29 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     }
   }, [baseCategories, businessAssist, product.category, shopId]);
 
-  // Load units
+  // Load units (guard against infinite re-renders)
   useEffect(() => {
     try {
       const stored = localStorage.getItem(`customUnits:${shopId}`);
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
       const custom = Array.isArray(parsed) ? parsed : [];
-      const merged = Array.from(new Set([...configUnits, ...custom, selectedUnit]));
+
+      const initialUnit = product.baseUnit || configDefaultUnit || configUnits[0] || "pcs";
+      const merged = Array.from(new Set([...configUnits, ...custom, initialUnit].filter(Boolean)));
 
       setUnitOptions((prev) => {
         const sameLength = prev.length === merged.length;
         const sameItems = sameLength && prev.every((v, idx) => v === merged[idx]);
         return sameItems ? prev : merged;
       });
-      setSelectedUnit((prev: string) => {
-        const next = configDefaultUnit || merged[0] || "pcs";
-        return merged.includes(prev) ? prev : next;
-      });
+
+      setSelectedUnit((prev: string) => (merged.includes(prev) ? prev : initialUnit));
     } catch (err) {
       console.error("Failed to load custom units", err);
       setUnitOptions((prev) => (prev.length ? prev : configUnits));
       setSelectedUnit((prev) => (prev ? prev : configDefaultUnit || configUnits[0] || "pcs"));
     }
-  }, [configUnitsKey, configDefaultUnit, selectedUnit, shopId]);
+  }, [shopId, configUnitsKey, configDefaultUnit, product.baseUnit]);
 
   // Track stock default
   useEffect(() => {
@@ -624,10 +624,10 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             </div>
             <p className="text-sm text-gray-500">
               {listening
-                ? "শুনছে... বলুন: “ডিম ১০ টাকা”"
+                ? "Listening... say product name and price"
                 : voiceReady
-                ? "মাইক্রোফোনে বললে নাম + দাম অটো ভরতি"
-                : "এই ব্রাউজারে ভয়েস ইনপুট নেই"} {voiceError ? `(${voiceError})` : ""}
+                ? "Say product name and price to fill automatically"
+                : "Microphone not ready"} {voiceError ? `(${voiceError})` : ""}
             </p>
             {smartNameSuggestions.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
