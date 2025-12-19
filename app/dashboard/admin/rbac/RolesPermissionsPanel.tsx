@@ -13,6 +13,119 @@ interface RolesPermissionsPanelProps {
   permissions: Permission[];
 }
 
+type ModuleKey =
+  | "dashboard"
+  | "shops"
+  | "products"
+  | "sales"
+  | "customers"
+  | "expenses"
+  | "cash"
+  | "reports"
+  | "users"
+  | "roles"
+  | "settings"
+  | "offline"
+  | "other";
+
+const moduleLabels: Record<ModuleKey, string> = {
+  dashboard: "ড্যাশবোর্ড",
+  shops: "দোকান",
+  products: "পণ্য",
+  sales: "বিক্রি",
+  customers: "কাস্টমার / বকেয়া",
+  expenses: "খরচ",
+  cash: "ক্যাশ",
+  reports: "রিপোর্ট",
+  users: "ব্যবহারকারী",
+  roles: "রোল / পারমিশন",
+  settings: "সেটিংস",
+  offline: "অফলাইন / সিঙ্ক",
+  other: "অন্যান্য",
+};
+
+type PermissionMeta = {
+  label: string;
+  description?: string;
+  module: ModuleKey;
+  critical?: boolean;
+};
+
+const permissionMeta: Record<string, PermissionMeta> = {
+  view_dashboard_summary: {
+    label: "ড্যাশবোর্ড দেখা",
+    module: "dashboard",
+  },
+  view_shops: { label: "দোকান দেখা", module: "shops" },
+  create_shop: { label: "দোকান তৈরি", module: "shops" },
+  update_shop: { label: "দোকান সম্পাদনা", module: "shops" },
+  delete_shop: { label: "দোকান মুছে ফেলা", module: "shops", critical: true },
+  switch_shop: { label: "শপ সুইচ", module: "shops" },
+  view_products: { label: "পণ্য দেখা", module: "products" },
+  create_product: { label: "পণ্য তৈরি", module: "products" },
+  update_product: { label: "পণ্য সম্পাদনা", module: "products" },
+  delete_product: { label: "পণ্য মুছে ফেলা", module: "products", critical: true },
+  update_product_stock: { label: "স্টক আপডেট", module: "products" },
+  update_product_price: { label: "মূল্য আপডেট", module: "products" },
+  manage_product_status: { label: "পণ্যের স্ট্যাটাস টগল", module: "products" },
+  import_products: { label: "পণ্য ইম্পোর্ট", module: "products" },
+  view_sales: { label: "বিক্রি দেখা", module: "sales" },
+  view_sale_details: { label: "বিক্রি ডিটেইলস", module: "sales" },
+  create_sale: { label: "নতুন বিক্রি", module: "sales" },
+  update_sale: { label: "বিক্রি সম্পাদনা", module: "sales" },
+  cancel_sale: { label: "বিক্রি বাতিল", module: "sales", critical: true },
+  create_due_sale: { label: "ধার বিক্রি", module: "sales" },
+  take_due_payment_from_sale: { label: "বিক্রি থেকে বকেয়া গ্রহণ", module: "sales" },
+  view_customers: { label: "কাস্টমার দেখা", module: "customers" },
+  create_customer: { label: "কাস্টমার তৈরি", module: "customers" },
+  update_customer: { label: "কাস্টমার সম্পাদনা", module: "customers" },
+  delete_customer: { label: "কাস্টমার মুছে ফেলা", module: "customers", critical: true },
+  view_due_summary: { label: "বকেয়া সারাংশ", module: "customers" },
+  view_customer_due: { label: "কাস্টমারের বকেয়া দেখা", module: "customers" },
+  create_due_entry: { label: "বকেয়া এন্ট্রি", module: "customers" },
+  take_due_payment: { label: "বকেয়া পরিশোধ গ্রহণ", module: "customers" },
+  writeoff_due: { label: "বকেয়া রাইট-অফ", module: "customers", critical: true },
+  view_expenses: { label: "খরচ দেখা", module: "expenses" },
+  create_expense: { label: "খরচ যোগ", module: "expenses" },
+  update_expense: { label: "খরচ সম্পাদনা", module: "expenses" },
+  delete_expense: { label: "খরচ মুছে ফেলা", module: "expenses", critical: true },
+  view_cashbook: { label: "ক্যাশবুক দেখা", module: "cash" },
+  create_cash_entry: { label: "ক্যাশ এন্ট্রি", module: "cash" },
+  update_cash_entry: { label: "ক্যাশ এন্ট্রি সম্পাদনা", module: "cash" },
+  delete_cash_entry: { label: "ক্যাশ এন্ট্রি মুছে ফেলা", module: "cash", critical: true },
+  adjust_cash_balance: { label: "ক্যাশ ব্যালেন্স অ্যাডজাস্ট", module: "cash", critical: true },
+  view_reports: { label: "রিপোর্ট দেখা", module: "reports" },
+  view_sales_report: { label: "বিক্রি রিপোর্ট", module: "reports" },
+  view_expense_report: { label: "খরচ রিপোর্ট", module: "reports" },
+  view_cashbook_report: { label: "ক্যাশবুক রিপোর্ট", module: "reports" },
+  view_profit_report: { label: "লাভ-ক্ষতি রিপোর্ট", module: "reports" },
+  view_payment_method_report: { label: "পেমেন্ট মেথড রিপোর্ট", module: "reports" },
+  view_top_products_report: { label: "বেস্টসেলার রিপোর্ট", module: "reports" },
+  view_low_stock_report: { label: "লো স্টক রিপোর্ট", module: "reports" },
+  export_reports: { label: "রিপোর্ট এক্সপোর্ট", module: "reports" },
+  view_users: { label: "ব্যবহারকারী দেখা", module: "users" },
+  create_user: { label: "ব্যবহারকারী তৈরি", module: "users" },
+  update_user: { label: "ব্যবহারকারী সম্পাদনা", module: "users" },
+  delete_user: { label: "ব্যবহারকারী মুছে ফেলা", module: "users", critical: true },
+  view_roles: { label: "রোল দেখা", module: "roles" },
+  create_role: { label: "রোল তৈরি", module: "roles" },
+  update_role: { label: "রোল আপডেট", module: "roles" },
+  delete_role: { label: "রোল মুছে ফেলা", module: "roles", critical: true },
+  assign_role_to_user: { label: "রোল অ্যাসাইন", module: "roles" },
+  revoke_role_from_user: { label: "রোল রিভোক", module: "roles" },
+  view_users_under_me: { label: "সাব-ইউজার দেখা", module: "users" },
+  create_user_agent: { label: "এজেন্ট তৈরি", module: "users" },
+  create_user_owner: { label: "ওনার তৈরি", module: "users" },
+  create_user_staff: { label: "স্টাফ তৈরি", module: "users" },
+  edit_users_under_me: { label: "সাব-ইউজার সম্পাদনা", module: "users" },
+  delete_users_under_me: { label: "সাব-ইউজার মুছে ফেলা", module: "users", critical: true },
+  access_rbac_admin: { label: "RBAC অ্যাডমিন অ্যাক্সেস", module: "roles", critical: true },
+  view_settings: { label: "সেটিংস দেখা", module: "settings" },
+  update_settings: { label: "সেটিংস আপডেট", module: "settings" },
+  use_offline_pos: { label: "অফলাইন POS ব্যবহার", module: "offline" },
+  sync_offline_data: { label: "সিঙ্ক অফলাইন ডেটা", module: "offline" },
+};
+
 export function RolesPermissionsPanel({
   roles,
   permissions,
@@ -21,6 +134,8 @@ export function RolesPermissionsPanel({
     roles[0]?.id ?? null,
   );
   const [saving, startSaving] = useTransition();
+  const [query, setQuery] = useState("");
+  const [filterMode, setFilterMode] = useState<"all" | "on" | "off">("all");
   const [localAssignments, setLocalAssignments] = useState<
     Record<string, Set<string>>
   >(() => {
@@ -41,6 +156,55 @@ export function RolesPermissionsPanel({
     return localAssignments[selectedRole.id] ?? new Set<string>();
   }, [selectedRole, localAssignments]);
 
+  const groupedPermissions = useMemo(() => {
+    const modulesMap = new Map<
+      ModuleKey,
+      {
+        key: ModuleKey;
+        label: string;
+        items: Array<Permission & { meta: PermissionMeta }>;
+      }
+    >();
+
+    const normalizedQuery = query.trim().toLowerCase();
+
+    const matchesFilters = (p: Permission, meta: PermissionMeta) => {
+      const checked = selectedPermissionIds.has(p.id);
+      if (filterMode === "on" && !checked) return false;
+      if (filterMode === "off" && checked) return false;
+
+      if (!normalizedQuery) return true;
+      return (
+        p.name.toLowerCase().includes(normalizedQuery) ||
+        (p.description?.toLowerCase().includes(normalizedQuery) ?? false) ||
+        meta.label.toLowerCase().includes(normalizedQuery) ||
+        moduleLabels[meta.module].toLowerCase().includes(normalizedQuery)
+      );
+    };
+
+    permissions.forEach((p) => {
+      const meta: PermissionMeta =
+        permissionMeta[p.name] ?? {
+          label: p.name,
+          module: "other" as ModuleKey,
+        };
+      if (!matchesFilters(p, meta)) return;
+
+      const key = meta.module;
+      const existing = modulesMap.get(key) ?? {
+        key,
+        label: moduleLabels[key] ?? moduleLabels.other,
+        items: [],
+      };
+      existing.items.push({ ...p, meta });
+      modulesMap.set(key, existing);
+    });
+
+    return Array.from(modulesMap.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, "bn"),
+    );
+  }, [permissions, query, filterMode, selectedPermissionIds]);
+
   const togglePermission = (permissionId: string) => {
     if (!selectedRole) return;
     setLocalAssignments((prev) => {
@@ -54,6 +218,18 @@ export function RolesPermissionsPanel({
     });
   };
 
+  const bulkSet = (ids: string[], enabled: boolean) => {
+    if (!selectedRole || ids.length === 0) return;
+    setLocalAssignments((prev) => {
+      const current = new Set(prev[selectedRole.id] ?? []);
+      ids.forEach((id) => {
+        if (enabled) current.add(id);
+        else current.delete(id);
+      });
+      return { ...prev, [selectedRole.id]: current };
+    });
+  };
+
   const handleSave = () => {
     if (!selectedRole) return;
     const ids = Array.from(selectedPermissionIds);
@@ -63,104 +239,200 @@ export function RolesPermissionsPanel({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-base font-semibold text-gray-900">Roles &amp; Permissions</h2>
-        <span className="text-xs text-gray-500">{roles.length} roles</span>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+            🛡️ Roles & Permissions
+          </div>
+          <h2 className="text-lg font-semibold text-slate-900">রোলের পারমিশন</h2>
+          <p className="text-[12px] text-slate-600">
+            মডিউল অনুযায়ী পারমিশন সাজানো। রোল সিলেক্ট করুন, খুঁজে টিক/আনটিক করুন। সেভ করলে সঙ্গে সঙ্গে প্রয়োগ হবে।
+          </p>
+        </div>
+        <span className="text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+          {roles.length} roles
+        </span>
       </div>
-      <div className="grid grid-cols-5 gap-3 text-xs sm:text-sm">
+
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 text-xs sm:text-sm">
         {/* Roles list */}
-        <div className="col-span-2 border rounded-lg overflow-hidden max-h-[320px] overflow-y-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
-                  Role
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {roles.map((r) => {
-                const isActive = r.id === selectedRoleId;
-                return (
-                  <tr key={r.id}>
-                    <td
-                      className={`px-3 py-2 cursor-pointer ${
-                        isActive ? "bg-green-50" : "hover:bg-gray-50"
-                      }`}
-                      onClick={() => setSelectedRoleId(r.id)}
-                    >
-                      <div className="font-medium text-gray-900 text-xs sm:text-sm">
-                        {r.name}
-                      </div>
-                      {r.description ? (
-                        <div className="text-[11px] text-gray-500">
-                          {r.description}
-                        </div>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="sm:col-span-2 border border-slate-200 rounded-xl overflow-hidden max-h-[480px] overflow-y-auto shadow-inner">
+          <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
+            Role
+          </div>
+          <div className="divide-y divide-slate-100">
+            {roles.map((r) => {
+              const isActive = r.id === selectedRoleId;
+              const enabledCount = localAssignments[r.id]?.size ?? 0;
+              return (
+                <button
+                  type="button"
+                  key={r.id}
+                  onClick={() => setSelectedRoleId(r.id)}
+                  className={`w-full text-left px-3 py-2.5 transition-colors flex items-start justify-between gap-3 ${
+                    isActive
+                      ? "bg-emerald-50 border-l-4 border-emerald-400"
+                      : "hover:bg-slate-50"
+                  }`}
+                >
+                  <div>
+                    <div className="font-semibold text-slate-900 text-xs sm:text-sm">
+                      {r.name}
+                    </div>
+                    {r.description ? (
+                      <div className="text-[11px] text-slate-500">{r.description}</div>
+                    ) : null}
+                  </div>
+                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
+                    {enabledCount}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Permissions for selected role */}
-        <div className="col-span-3 border rounded-lg overflow-hidden max-h-[320px] overflow-y-auto">
+        <div className="sm:col-span-3 border border-slate-200 rounded-xl overflow-hidden max-h-[480px] flex flex-col shadow-inner">
           {selectedRole ? (
             <>
-              <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
-                <div className="text-xs font-semibold text-gray-700">
-                  Permissions for role: <span className="font-mono">{selectedRole.name}</span>
+              <div className="flex flex-wrap items-center gap-3 px-3 py-3 border-b bg-slate-50">
+                <div className="text-[12px] font-semibold text-slate-700 flex-1">
+                  Permissions for: <span className="font-mono">{selectedRole.name}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {saving ? "Saving..." : "Save"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="পারমিশন সার্চ করুন"
+                    className="w-44 md:w-56 lg:w-64 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+                    {(["all", "on", "off"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setFilterMode(mode)}
+                        className={`px-2.5 py-1 text-[11px] font-semibold rounded-md ${
+                          filterMode === mode
+                            ? "bg-blue-600 text-white"
+                            : "text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        {mode === "all"
+                          ? "সকল"
+                          : mode === "on"
+                          ? "শুধু চালু"
+                          : "শুধু বন্ধ"}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="inline-flex items-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {saving ? "Saving..." : "Save"}
+                  </button>
+                </div>
               </div>
-              <div className="divide-y divide-gray-200">
-                {permissions.map((p) => {
-                  const checked = selectedPermissionIds.has(p.id);
-                  return (
-                    <label
-                      key={p.id}
-                      className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 text-xs sm:text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        checked={checked}
-                        onChange={() => togglePermission(p.id)}
-                      />
-                      <div>
-                        <div className="font-mono text-[11px] sm:text-xs text-gray-900">
-                          {p.name}
-                        </div>
-                        {p.description ? (
-                          <div className="text-[10px] text-gray-500">
-                            {p.description}
+
+              <div className="divide-y divide-slate-100 overflow-y-auto">
+                {groupedPermissions.length === 0 ? (
+                  <div className="p-4 text-xs text-slate-500">
+                    সার্চ / ফিল্টার মিলে কোনো পারমিশন পাওয়া যায়নি।
+                  </div>
+                ) : (
+                  groupedPermissions.map((module) => {
+                    const total = module.items.length;
+                    const enabled = module.items.filter((p) =>
+                      selectedPermissionIds.has(p.id),
+                    ).length;
+                    const ids = module.items.map((p) => p.id);
+                    return (
+                      <div key={module.key} className="px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-semibold text-slate-900">
+                              {module.label}
+                            </div>
+                            <span className="text-[11px] text-slate-500">
+                              {enabled}/{total}
+                            </span>
                           </div>
-                        ) : null}
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <button
+                              type="button"
+                              onClick={() => bulkSet(ids, true)}
+                              className="px-2 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100"
+                            >
+                              Select all
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => bulkSet(ids, false)}
+                              className="px-2 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 grid grid-cols-1 gap-1">
+                          {module.items.map((p) => {
+                            const checked = selectedPermissionIds.has(p.id);
+                            return (
+                              <label
+                                key={p.id}
+                                className="flex items-start gap-3 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                  checked={checked}
+                                  onChange={() => togglePermission(p.id)}
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-slate-900">
+                                      {p.meta.label}
+                                    </span>
+                                    <span className="text-[11px] font-mono text-slate-500">
+                                      {p.name}
+                                    </span>
+                                    {p.meta.critical ? (
+                                      <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                                        Critical
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  {p.description || p.meta.description ? (
+                                    <div className="text-[11px] text-slate-600">
+                                      {p.description || p.meta.description}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </label>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </>
           ) : (
-            <div className="p-4 text-xs text-gray-500">
-              Select a role to manage its permissions.
-            </div>
+            <div className="p-4 text-xs text-slate-500">Select a role to manage its permissions.</div>
           )}
         </div>
       </div>
-      <p className="mt-3 text-[11px] text-gray-500">
-        Changes are applied immediately for the selected role. Super admin always retains all permissions regardless of these settings.
+
+      <p className="text-[11px] text-slate-500">
+        নোট: সুপার অ্যাডমিন সবসময় সব পারমিশন রাখবে—এখানে পরিবর্তন হলেও তার ওপর প্রভাব ফেলবে না।
       </p>
     </div>
   );

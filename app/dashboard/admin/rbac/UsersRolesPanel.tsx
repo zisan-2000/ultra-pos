@@ -84,54 +84,62 @@ export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
     selectedUserId && users.find((u) => u.id === selectedUserId);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">Users &amp; Roles</h2>
-          <p className="text-[11px] text-gray-500 mt-0.5">
-            View users and manage which roles are assigned to each user.
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+            👥 Users & Roles
+          </div>
+          <h2 className="text-lg font-semibold text-slate-900">টিম অ্যাক্সেস</h2>
+          <p className="text-[12px] text-slate-600">
+            কার কাছে কোন রোল আছে তা রিভিউ করুন ও প্রয়োজনমতো আপডেট করুন।
           </p>
         </div>
-        <span className="text-xs text-gray-500">{users.length} users</span>
+        <span className="text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+          {users.length} users
+        </span>
       </div>
 
-      <div className="border rounded-lg overflow-hidden max-h-[360px] overflow-y-auto text-sm">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[420px] overflow-y-auto text-sm shadow-inner">
+        <table className="min-w-full divide-y divide-slate-100">
+          <thead className="bg-slate-50">
             <tr>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
                 User
               </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
                 Roles
               </th>
-              <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <th className="px-3 py-2 text-right text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
-            {users.map((u) => (
-              <tr key={u.id}>
+          <tbody className="bg-white divide-y divide-slate-100">
+            {users.map((u, idx) => (
+              <tr
+                key={u.id}
+                className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
+              >
                 <td className="px-3 py-2 align-top">
-                  <div className="font-medium text-gray-900 text-xs sm:text-sm">
+                  <div className="font-semibold text-slate-900 text-xs sm:text-sm">
                     {u.name || "(No name)"}
                   </div>
-                  <div className="text-[11px] text-gray-500 break-all">
+                  <div className="text-[11px] text-slate-500 break-all">
                     {u.email || "(No email)"}
                   </div>
                 </td>
                 <td className="px-3 py-2 align-top text-xs sm:text-sm">
                   <div className="flex flex-wrap gap-1">
                     {u.roles.length === 0 ? (
-                      <span className="inline-flex items-center rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[11px] text-gray-400">
+                      <span className="inline-flex items-center rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[11px] text-slate-400">
                         No roles
                       </span>
                     ) : (
                       u.roles.map((r) => (
                         <span
                           key={r.id}
-                          className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700"
+                          className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700 border border-slate-200"
                         >
                           {r.name}
                         </span>
@@ -143,9 +151,9 @@ export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
                   <button
                     type="button"
                     onClick={() => openForUser(u.id)}
-                    className="inline-flex items-center rounded-md border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
                   >
-                    Manage
+                    ✏️ Manage
                   </button>
                 </td>
               </tr>
@@ -154,49 +162,49 @@ export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
         </table>
       </div>
 
-      {/* Simple dialog */}
       {selectedUser && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">
-                  Manage roles for
-                </h3>
-                <p className="text-xs text-gray-600 break-all">
-                  {selectedUser.email || selectedUser.name || selectedUser.id}
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 backdrop-blur-[2px] px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200 p-5 space-y-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+                  👤 User
+                </div>
+                <h3 className="text-base font-semibold text-slate-900">রোল ব্যবস্থাপনা</h3>
+                <p className="text-xs text-slate-600 break-all">
+                  {selectedUser.name || selectedUser.email || selectedUser.id}
                 </p>
               </div>
               <button
                 type="button"
-                className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
                 onClick={closeDialog}
                 aria-label="Close"
               >
-                ×
+                ✕
               </button>
             </div>
 
-            <div className="max-h-64 overflow-y-auto border rounded-md divide-y divide-gray-100">
+            <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
               {roles.map((role) => {
                 const assigned = localAssignments[selectedUser.id]?.has(role.id);
                 return (
                   <label
                     key={role.id}
-                    className="flex items-start gap-2 px-3 py-2 text-xs sm:text-sm cursor-pointer hover:bg-gray-50"
+                    className="flex items-start gap-3 px-3 py-2.5 text-xs sm:text-sm cursor-pointer hover:bg-slate-50"
                   >
                     <input
                       type="checkbox"
-                      className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       checked={assigned ?? false}
                       onChange={() => toggleRole(role.id)}
                     />
                     <div>
-                      <div className="font-medium text-gray-900 text-xs sm:text-sm">
+                      <div className="font-semibold text-slate-900 text-xs sm:text-sm">
                         {role.name}
                       </div>
                       {role.description ? (
-                        <div className="text-[10px] text-gray-500">
+                        <div className="text-[11px] text-slate-500">
                           {role.description}
                         </div>
                       ) : null}
@@ -206,10 +214,10 @@ export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
               })}
             </div>
 
-            <div className="mt-4 flex justify-end gap-2 text-xs">
+            <div className="flex justify-end gap-2 text-xs">
               <button
                 type="button"
-                className="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 onClick={closeDialog}
                 disabled={saving}
               >
@@ -219,11 +227,9 @@ export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex items-center rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {saving && workingUserId === selectedUser.id
-                  ? "Saving..."
-                  : "Save"}
+                {saving && workingUserId === selectedUser.id ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
