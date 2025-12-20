@@ -4,6 +4,7 @@ import { getShopsByUser } from "@/app/actions/shops";
 import ProductFormClient from "./ProductFormClient";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { getBusinessTypeConfig } from "@/app/actions/business-types";
 
 type PageProps = {
   searchParams?: Promise<{ shopId?: string }>;
@@ -24,9 +25,11 @@ export default async function NewProductPage({ searchParams }: PageProps) {
       ? shops.find((s) => s.id === requestedShopId)!
       : shops[0];
 
+  const businessConfig = await getBusinessTypeConfig(activeShop.businessType ?? null);
+
   return (
     <Suspense fallback={<div>Loading product form...</div>}>
-      <ProductFormClient shop={activeShop} />
+      <ProductFormClient shop={activeShop} businessConfig={businessConfig || undefined} />
     </Suspense>
   );
 }

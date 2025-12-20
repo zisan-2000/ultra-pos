@@ -4,14 +4,18 @@ import {
   businessFieldConfig,
   DEFAULT_UNIT_KEYWORD_RULES,
   type UnitKeywordRule,
+  type BusinessFieldConfig,
 } from "@/lib/productFormConfig";
 
 const FALLBACK_UNITS = ["pcs", "packet", "box", "dozen", "kg", "gm", "liter", "ml", "ft"];
 const FIELDS: Field[] = ["name", "sellPrice", "buyPrice", "unit", "expiry", "size"];
 
-export function useProductFields(businessType: BusinessType | string) {
+export function useProductFields(
+  businessType: BusinessType | string,
+  overrideConfig?: BusinessFieldConfig | null,
+) {
   const fallbackConfig = businessFieldConfig.mini_grocery;
-  const config = businessFieldConfig[businessType as BusinessType] ?? fallbackConfig;
+  const config = overrideConfig ?? businessFieldConfig[businessType as BusinessType] ?? fallbackConfig;
 
   const isFieldVisible = (field: Field) => !config.fields[field]?.hidden;
   const isFieldRequired = (field: Field) => Boolean(config.fields[field]?.required);

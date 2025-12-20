@@ -217,7 +217,7 @@ export const businessFieldConfig: Record<BusinessType, BusinessFieldConfig> = {
   },
 };
 
-function validateConfig(configs: Record<BusinessType, BusinessFieldConfig>) {
+function validateConfig(configs: Record<string, BusinessFieldConfig>) {
   Object.entries(configs).forEach(([type, config]) => {
     Object.entries(config.fields).forEach(([field, rule]) => {
       if (rule.hidden && rule.required) {
@@ -228,3 +228,5 @@ function validateConfig(configs: Record<BusinessType, BusinessFieldConfig>) {
 }
 
 validateConfig(businessFieldConfig);
+
+export { validateConfig };

@@ -18,10 +18,11 @@ import { db, type LocalProduct } from "@/lib/dexie/db";
 import { createProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
-import { type BusinessType, type Field } from "@/lib/productFormConfig";
+import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
 
 type Props = {
   shop: { id: string; name: string; businessType?: string | null };
+  businessConfig?: BusinessFieldConfig | null;
 };
 
 type SpeechRecognitionInstance = {
@@ -176,7 +177,7 @@ function mergeTemplates(existing: TemplateItem[], incoming: TemplateItem) {
 function dedupe(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
-function ProductForm({ shop }: Props) {
+function ProductForm({ shop, businessConfig }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
   const businessType = (shop.businessType as BusinessType) || "tea_stall";
@@ -220,7 +221,7 @@ function ProductForm({ shop }: Props) {
     unitOptions: configUnits,
     defaultUnit: configDefaultUnit,
     suggestUnit,
-  } = useProductFields(businessType);
+  } = useProductFields(businessType, businessConfig);
   const configUnitsKey = useMemo(() => configUnits.join("|"), [configUnits]);
 
   const unitLabels = useMemo(

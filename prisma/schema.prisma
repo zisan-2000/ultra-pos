@@ -141,6 +141,20 @@ model Shop {
   @@map("shops")
 }
 
+model BusinessType {
+  id         String   @id @default(uuid()) @db.Uuid
+  key        String   @unique
+  label      String
+  isActive   Boolean  @map("is_active") @default(true)
+  fieldRules Json     @map("field_rules")
+  stockRules Json     @map("stock_rules")
+  unitRules  Json     @map("unit_rules")
+  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  @@map("business_types")
+}
+
 model Product {
   id         String   @id @default(uuid()) @db.Uuid
   shopId     String   @map("shop_id") @db.Uuid

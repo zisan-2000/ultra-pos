@@ -3,6 +3,8 @@
 import { getShop, updateShop } from "@/app/actions/shops";
 import { redirect } from "next/navigation";
 import ShopFormClient from "../ShopFormClient";
+import { listActiveBusinessTypes } from "@/app/actions/business-types";
+import { businessOptions } from "@/lib/productFormConfig";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -12,6 +14,13 @@ export default async function EditShop({ params }: PageProps) {
   if (!shop) {
     return <div className="p-6 text-center text-red-600">Shop not found</div>;
   }
+
+  const dbBusinessTypes = await listActiveBusinessTypes().catch(() => []);
+  const businessTypeOptions = [
+    ...dbBusinessTypes.map((t) => ({ id: t.key, label: t.label })),
+    ...businessOptions.filter((opt) => !dbBusinessTypes.some((t) => t.key === opt.id)),
+  ];
+
   const backHref = "/dashboard/shops";
 
   async function handleUpdate(formData: FormData) {
@@ -31,7 +40,7 @@ export default async function EditShop({ params }: PageProps) {
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">দোকানের তথ্য সম্পাদনা</h1>
-        <p className="text-gray-600 mt-2">ভয়েস + টেমপ্লেট দিয়ে তড়িৎ আপডেট</p>
+        <p className="text-gray-600 mt-2">নাম + ঠিকানা আপডেট করুন</p>
       </div>
 
       <ShopFormClient
@@ -43,7 +52,8 @@ export default async function EditShop({ params }: PageProps) {
           phone: shop.phone || "",
           businessType: (shop.businessType as any) || "tea_stall",
         }}
-        submitLabel="✓ দোকান আপডেট করুন"
+        submitLabel="সংরক্ষণ করুন"
+        businessTypeOptions={businessTypeOptions}
       />
     </div>
   );

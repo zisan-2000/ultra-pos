@@ -5,6 +5,8 @@ import { handleCreateShop } from "./actions";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth-session";
 import { getOwnerOptions } from "@/app/actions/shops";
+import { listActiveBusinessTypes } from "@/app/actions/business-types";
+import { businessOptions } from "@/lib/productFormConfig";
 
 export default async function NewShopPage() {
   const backHref = "/dashboard/shops";
@@ -31,6 +33,11 @@ export default async function NewShopPage() {
   }
 
   const ownerOptions = await getOwnerOptions();
+  const dbBusinessTypes = await listActiveBusinessTypes().catch(() => []);
+  const mergedBusinessTypes = [
+    ...dbBusinessTypes.map((t) => ({ id: t.key, label: t.label })),
+    ...businessOptions.filter((opt) => !dbBusinessTypes.some((t) => t.key === opt.id)),
+  ];
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -39,7 +46,12 @@ export default async function NewShopPage() {
         <p className="text-gray-600 mt-2">মৌলিক তথ্য, ঠিকানা, যোগাযোগ ও ব্যবসার ধরন যুক্ত করুন</p>
       </div>
 
-      <ShopFormClient backHref={backHref} action={handleCreateShop} ownerOptions={ownerOptions} />
+      <ShopFormClient
+        backHref={backHref}
+        action={handleCreateShop}
+        ownerOptions={ownerOptions}
+        businessTypeOptions={mergedBusinessTypes}
+      />
     </div>
   );
 }

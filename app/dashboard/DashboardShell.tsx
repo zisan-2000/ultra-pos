@@ -361,6 +361,24 @@ export function DashboardShell({
                 Settings
               </div>
               <Link
+                href={applyBasePath("/dashboard/admin/business-types", roleBasePath)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setDrawerOpen(false);
+                  router.push(applyBasePath("/dashboard/admin/business-types", roleBasePath));
+                }}
+                className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
+                  isActive(applyBasePath("/dashboard/admin/business-types", roleBasePath))
+                    ? "bg-green-50 text-green-700 border border-green-100"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                <span>Business Types</span>
+                {isActive(applyBasePath("/dashboard/admin/business-types", roleBasePath)) ? (
+                  <span className="text-xs text-green-600">সক্রিয়</span>
+                ) : null}
+              </Link>
+              <Link
                 href={systemSettingsHref}
                 onClick={(e) => {
                   e.preventDefault();

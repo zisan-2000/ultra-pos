@@ -9,9 +9,13 @@ import { db, type LocalProduct } from "@/lib/dexie/db";
 import { updateProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
-import { type BusinessType, type Field } from "@/lib/productFormConfig";
+import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
 
-type Props = { product: any; shop: { id: string; name: string; businessType?: string | null } };
+type Props = {
+  product: any;
+  shop: { id: string; name: string; businessType?: string | null };
+  businessConfig?: BusinessFieldConfig | null;
+};
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -155,7 +159,7 @@ function dedupe(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-export default function EditProductClient({ product, shop }: Props) {
+export default function EditProductClient({ product, shop, businessConfig }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
   const businessType = (shop.businessType as BusinessType) || "tea_stall";
@@ -171,7 +175,7 @@ export default function EditProductClient({ product, shop }: Props) {
     unitOptions: configUnits,
     defaultUnit: configDefaultUnit,
     suggestUnit,
-  } = useProductFields(businessType);
+  } = useProductFields(businessType, businessConfig);
   const configUnitsKey = useMemo(() => configUnits.join("|"), [configUnits]);
 const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     buyPrice: () => (

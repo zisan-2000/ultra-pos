@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { businessOptions, type BusinessType } from "@/lib/productFormConfig";
+import { businessOptions } from "@/lib/productFormConfig";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -22,7 +22,7 @@ type ShopTemplate = {
   name: string;
   address?: string;
   phone?: string;
-  businessType: BusinessType;
+  businessType: string;
   count: number;
   lastUsed: number;
 };
@@ -34,10 +34,11 @@ type Props = {
     name?: string;
     address?: string;
     phone?: string;
-    businessType?: BusinessType;
+    businessType?: string;
   };
   submitLabel?: string;
   ownerOptions?: Array<{ id: string; name: string | null; email: string | null }>;
+  businessTypeOptions?: Array<{ id: string; label: string }>;
 };
 
 const SHOP_TEMPLATE_KEY = "shopTemplates:v1";
@@ -82,8 +83,9 @@ export default function ShopFormClient({
   backHref,
   action,
   initial,
-  submitLabel = "+ দ্রুত দোকান যোগ করুন",
+  submitLabel = "+ নতুন দোকান তৈরি করুন",
   ownerOptions,
+  businessTypeOptions,
 }: Props) {
   const router = useRouter();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -96,7 +98,10 @@ export default function ShopFormClient({
   const [name, setName] = useState(initial?.name || "");
   const [address, setAddress] = useState(initial?.address || "");
   const [phone, setPhone] = useState(initial?.phone || "");
-  const [businessType, setBusinessType] = useState<BusinessType>(initial?.businessType || "tea_stall");
+  const availableBusinessTypes = businessTypeOptions?.length ? businessTypeOptions : businessOptions;
+  const [businessType, setBusinessType] = useState<string>(
+    initial?.businessType || availableBusinessTypes[0]?.id || "tea_stall"
+  );
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const hasOwnerOptions = Boolean(ownerOptions && ownerOptions.length > 0);
 
@@ -148,7 +153,7 @@ export default function ShopFormClient({
   }, [frequentTemplates, recentTemplates]);
 
   const businessUsage = useMemo(() => {
-    const counts: Record<BusinessType, number> = {} as any;
+    const counts: Record<string, number> = {};
     templates.forEach((t) => {
       counts[t.businessType] = (counts[t.businessType] ?? 0) + t.count;
     });
@@ -156,13 +161,10 @@ export default function ShopFormClient({
   }, [templates]);
 
   const sortedBusinessOptions = useMemo(() => {
-    return businessOptions
+    return availableBusinessTypes
       .slice()
-      .sort(
-        (a, b) =>
-          (businessUsage[b.id as BusinessType] ?? 0) - (businessUsage[a.id as BusinessType] ?? 0)
-      );
-  }, [businessUsage]);
+      .sort((a, b) => (businessUsage[b.id] ?? 0) - (businessUsage[a.id] ?? 0));
+  }, [availableBusinessTypes, businessUsage]);
 
   function persistTemplates(next: ShopTemplate[]) {
     setTemplates(next);
@@ -245,8 +247,7 @@ export default function ShopFormClient({
     const payloadName = (form.get("name") as string) || name;
     const payloadAddress = (form.get("address") as string) || address;
     const payloadPhone = (form.get("phone") as string) || phone;
-    const payloadBusinessType =
-      ((form.get("businessType") as BusinessType) || businessType) as BusinessType;
+    const payloadBusinessType = (form.get("businessType") as string) || businessType;
 
     form.set("name", payloadName);
     form.set("address", payloadAddress);
@@ -410,7 +411,7 @@ export default function ShopFormClient({
             <button
               key={b.id}
               type="button"
-              onClick={() => setBusinessType(b.id as BusinessType)}
+              onClick={() => setBusinessType(b.id)}
               className={`px-3 py-2 rounded-full border text-sm ${
                 businessType === b.id
                   ? "bg-blue-50 border-blue-400 text-blue-800"
@@ -424,11 +425,11 @@ export default function ShopFormClient({
         <select
           name="businessType"
           value={businessType}
-          onChange={(e) => setBusinessType(e.target.value as BusinessType)}
+          onChange={(e) => setBusinessType(e.target.value)}
           className="w-full border border-slate-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
           required
         >
-          {businessOptions.map((b) => (
+          {availableBusinessTypes.map((b) => (
             <option key={b.id} value={b.id}>
               {b.label}
             </option>
@@ -459,7 +460,7 @@ export default function ShopFormClient({
                   </p>
                 </div>
                 <span className="text-xs text-blue-700">
-                  {businessOptions.find((b) => b.id === t.businessType)?.label}
+                  {availableBusinessTypes.find((b) => b.id === t.businessType)?.label || t.businessType}
                 </span>
               </button>
             ))}
@@ -492,3 +493,6 @@ export default function ShopFormClient({
     </form>
   );
 }
+
+
+
