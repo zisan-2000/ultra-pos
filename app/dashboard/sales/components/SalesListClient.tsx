@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { db } from "@/lib/dexie/db";
+import { VoidSaleControls } from "./VoidSaleControls";
 
 type SaleSummary = {
   id: string;
@@ -27,6 +28,7 @@ type Props = {
   prevHref: string | null;
   nextHref: string | null;
   showPagination: boolean;
+  voidSaleAction: (formData: FormData) => Promise<void>;
 };
 
 function formatBanglaDate(iso: string) {
@@ -49,6 +51,7 @@ export default function SalesListClient({
   prevHref,
   nextHref,
   showPagination,
+  voidSaleAction,
 }: Props) {
   const online = useOnlineStatus();
   const [items, setItems] = useState<SaleSummary[]>(sales);
@@ -58,7 +61,7 @@ export default function SalesListClient({
     nagad: "নগদ",
     card: "কার্ড",
     bank_transfer: "ব্যাংক ট্রান্সফার",
-    due: "বাকি",
+    due: "বকেয়া",
   };
 
   // Seed Dexie when online; load from Dexie when offline.
@@ -162,18 +165,18 @@ export default function SalesListClient({
   const renderedItems = useMemo(() => items, [items]);
   const renderPayment = (paymentMethod: string, customerName: string | null) => {
     const key = paymentMethod?.toLowerCase?.() || "cash";
-    const label = paymentLabels[key] || paymentMethod || "পেমেন্ট";
+    const label = paymentLabels[key] || paymentMethod || "অজানা";
     if (key === "due" && customerName) {
-      return `বাকি | গ্রাহক: ${customerName}`;
+      return `বকেয়া | ক্রেতা: ${customerName}`;
     }
-    return `পেমেন্ট: ${label}`;
+    return `পেমেন্টঃ ${label}`;
   };
 
   return (
     <div className="space-y-4">
       {renderedItems.length === 0 ? (
         <p className="text-center text-gray-600 py-8">
-          {online ? "কোনো বিক্রি পাওয়া যায়নি" : "Offline: সাম্প্রতিক বিক্রি ক্যাশে নেই"}
+          {online ? "এখনও কোনো বিক্রি পাওয়া যায়নি" : "Offline: সর্বশেষ সিঙ্কের ডেটা লোড হচ্ছে না"}
         </p>
       ) : (
         renderedItems.map((s) => {
@@ -182,9 +185,12 @@ export default function SalesListClient({
           const createdAtStr = formatBanglaDate(s.createdAt);
           const totalStr = Number(s.totalAmount || 0).toFixed(2);
           const paymentText = renderPayment(s.paymentMethod, s.customerName);
+          const paymentKey = s.paymentMethod?.toLowerCase?.() || "cash";
+          const isDueSale = paymentKey === "due";
           const itemLine =
             s.itemPreview ||
-            (s.itemCount > 0 ? `${s.itemCount} আইটেম` : "আইটেম তথ্য নেই");
+            (s.itemCount > 0 ? `${s.itemCount} আইটেম` : "আইটেম পাওয়া যায়নি");
+          const formId = `void-sale-${s.id}`;
 
           return (
             <div
@@ -198,14 +204,14 @@ export default function SalesListClient({
                   <p className="text-2xl font-bold text-gray-900">{totalStr} ৳</p>
                   {isVoided && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
-                      ???????? ??????
+                      বাতিল করা হয়েছে
                     </span>
                   )}
                 </div>
                 <p className="text-base text-gray-600">{paymentText}</p>
-                <p className="text-sm text-gray-500">আইটেম: {itemLine}</p>
+                <p className="text-sm text-gray-500">আইটেমঃ {itemLine}</p>
                 {isVoided && voidReason && (
-                  <p className="text-xs text-red-600 mt-1">বাতিলের কারণ: {voidReason}</p>
+                  <p className="text-xs text-red-600 mt-1">বাতিলের কারণঃ {voidReason}</p>
                 )}
               </div>
               <div className="flex flex-col items-end gap-2">
@@ -215,6 +221,25 @@ export default function SalesListClient({
                     Offline view (read-only)
                   </p>
                 )}
+                {online ? (
+                  isDueSale ? (
+                    <div className="flex flex-col items-end gap-1 text-right">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-700">
+                        ⚠️ ধার বিক্রি সরাসরি বাতিল করা যায় না
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        কাস্টমার লেজার থেকে অ্যাডজাস্ট করুন
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <form id={formId} action={voidSaleAction} />
+                      <VoidSaleControls saleId={s.id} isVoided={isVoided} formId={formId} />
+                    </div>
+                  )
+                ) : (
+                  <p className="text-[11px] text-slate-400">অনলাইনে এলে বাতিল করা যাবে</p>
+                )}
               </div>
             </div>
           );
@@ -223,18 +248,18 @@ export default function SalesListClient({
 
       {showPagination && online && (
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-500">?????? {page}</p>
+          <p className="text-sm text-slate-500">পৃষ্ঠা {page}</p>
           <div className="flex flex-wrap items-center gap-2">
             {prevHref ? (
               <Link
                 href={prevHref}
                 className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
               >
-                ????
+                আগের
               </Link>
             ) : (
               <span className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-400">
-                ????
+                আগের
               </span>
             )}
 
@@ -265,11 +290,11 @@ export default function SalesListClient({
                 href={nextHref}
                 className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
               >
-                ????
+                পরের
               </Link>
             ) : (
               <span className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-400">
-                ????
+                পরের
               </span>
             )}
           </div>

@@ -327,6 +327,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
 export async function deleteProduct(id: string) {
   const product = await prisma.product.findUnique({
     where: { id },
+    select: { id: true, shopId: true },
   });
 
   if (!product) throw new Error("Product not found");
@@ -335,9 +336,31 @@ export async function deleteProduct(id: string) {
   requirePermission(user, "delete_product");
   await assertShopAccess(product.shopId, user);
 
+  const saleItemsCount = await prisma.saleItem.count({
+    where: { productId: id },
+  });
+
+  if (saleItemsCount > 0) {
+    await prisma.product.update({
+      where: { id },
+      data: {
+        isActive: false,
+        trackStock: false,
+      },
+    });
+
+    return {
+      success: true,
+      deleted: false,
+      archived: true,
+      message:
+        "This product has existing sales and was marked inactive instead of deleting to keep your sale history intact.",
+    };
+  }
+
   await prisma.product.delete({ where: { id } });
 
-  return { success: true };
+  return { success: true, deleted: true };
 }
 
 // ---------------------------------

@@ -310,12 +310,27 @@ export default function ProductsListClient({
       }
       try {
         setDeletingId(id);
-        await deleteProduct(id);
-        setProducts((prev) => prev.filter((p) => p.id !== id));
+        const result = await deleteProduct(id);
+
+        if (result?.archived) {
+          setProducts((prev) =>
+            prev.map((p) => (p.id === id ? { ...p, isActive: false } : p))
+          );
+          alert(
+            "এই পণ্যটি আগে বিক্রিতে ব্যবহার হয়েছে, তাই ডিলিট করা যায়নি। এটিকে নিষ্ক্রিয় করা হয়েছে।"
+          );
+        } else {
+          setProducts((prev) => prev.filter((p) => p.id !== id));
+        }
+
         router.refresh();
       } catch (err) {
         console.error("Delete failed", err);
-        alert("পণ্য ডিলিট করা যায়নি। পরে চেষ্টা করুন।");
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : "পণ্য ডিলিট করা যায়নি। পরে চেষ্টা করুন।";
+        alert(message);
       } finally {
         setDeletingId(null);
       }

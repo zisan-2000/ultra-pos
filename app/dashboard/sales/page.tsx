@@ -430,6 +430,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
           prevHref={prevHref}
           nextHref={nextHref}
           showPagination={showPagination}
+          voidSaleAction={voidSaleAction}
         />
       </div>
     </div>
