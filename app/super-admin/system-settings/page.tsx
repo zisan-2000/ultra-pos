@@ -5,11 +5,12 @@ import { getSupportContact, updateSupportContact } from "@/app/actions/system-se
 import { requireUser } from "@/lib/auth-session";
 
 type PageProps = {
-  searchParams?: { saved?: string };
+  searchParams?: Promise<{ saved?: string }>;
 };
 
 export default async function SystemSettingsPage({ searchParams }: PageProps) {
-  const saved = searchParams?.saved === "1";
+  const resolvedSearch = await searchParams;
+  const saved = resolvedSearch?.saved === "1";
   const user = await requireUser();
   const isSuperAdmin = user.roles?.includes("super_admin") ?? false;
 

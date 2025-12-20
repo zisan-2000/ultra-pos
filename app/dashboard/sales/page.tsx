@@ -12,6 +12,7 @@ import {
 } from "@/app/actions/sales";
 import ShopSelectorClient from "./ShopSelectorClient";
 import { VoidSaleControls } from "./components/VoidSaleControls";
+import SalesListClient from "./components/SalesListClient";
 
 type SalesSearchParams = {
   shopId?: string;
@@ -329,6 +330,21 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   const showPagination = page > 1 || hasMore;
   const prevHref = prevPage ? buildPageLink(prevPage) : null;
   const nextHref = nextPage ? buildPageLink(nextPage) : null;
+  const clientSales = sales.map((s) => ({
+    id: s.id,
+    totalAmount: (s.totalAmount as any)?.toString?.() ?? s.totalAmount?.toString?.() ?? "0",
+    paymentMethod: s.paymentMethod,
+    status: (s as any).status ?? "COMPLETED",
+    voidReason: (s as any).voidReason ?? null,
+    createdAt: s.createdAt.toISOString(),
+    itemCount: (s as any).itemCount ?? 0,
+    itemPreview: (s as any).itemPreview ?? "",
+    customerName: (s as any).customerName ?? null,
+  }));
+  const pageLinks = pageNumbers.map((p) => ({
+    page: p,
+    href: buildPageLink(p),
+  }));
 
   return (
     <div className="space-y-6 section-gap">
@@ -406,142 +422,16 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
       </div>
 
       <div className="space-y-4">
-        {sales.length === 0 ? (
-          <p className="text-center text-gray-600 py-8 bg-white border border-slate-200 rounded-xl">
-            এখনও কোনো বিক্রি নেই।
-          </p>
-        ) : (
-          sales.map((s) => {
-            const totalNum = Number(s.totalAmount ?? 0);
-            const totalStr = Number.isFinite(totalNum)
-              ? totalNum.toFixed(2)
-              : s.totalAmount?.toString?.() ?? "0.00";
-            const createdAtStr = s.createdAt
-              ? new Date(s.createdAt as any).toLocaleString("bn-BD")
-              : "";
-
-            const isVoided = (s as any).status === "VOIDED";
-            const voidReason = (s as any).voidReason as string | null;
-            const canVoid = s.paymentMethod !== "due";
-            const voidFormId = `void-sale-form-${s.id}`;
-
-            return (
-              <div
-                key={s.id}
-                className={`bg-white rounded-xl p-5 flex justify-between items-start gap-4 shadow-sm hover:shadow-md card-lift border ${
-                  isVoided ? "border-gray-200" : "border-red-200 bg-red-50/60"
-                }`}
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <p className="text-2xl font-bold text-gray-900">{totalStr} ৳</p>
-                    {isVoided && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
-                        বাতিলকৃত বিক্রি
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-base text-gray-600">
-                    পেমেন্ট: {s.paymentMethod === "due" ? "ধার" : s.paymentMethod === "cash" ? "ক্যাশ" : s.paymentMethod}
-                    {s.paymentMethod === "due" && s.customerName
-                      ? ` • গ্রাহক: ${s.customerName}`
-                      : ""}
-                  </p>
-                  {s.itemCount > 0 && (
-                    <p className="text-sm text-gray-500">
-                      পণ্য: {s.itemPreview || `${s.itemCount} টি`}
-                    </p>
-                  )}
-                  {isVoided && voidReason && (
-                    <p className="text-xs text-red-600 mt-1">
-                      কারণ: {voidReason}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <p className="text-sm text-gray-500 text-right">
-                    {createdAtStr}
-                  </p>
-                  {!isVoided && canVoid && (
-                    <form
-                      id={voidFormId}
-                      action={voidSaleAction}
-                      className="flex items-center gap-2"
-                    >
-                      <VoidSaleControls
-                        saleId={s.id}
-                        isVoided={isVoided}
-                        formId={voidFormId}
-                      />
-                    </form>
-                  )}
-                  {!isVoided && !canVoid && (
-                    <p className="text-xs text-slate-400 text-right">
-                      ধার বিক্রি এখানে বাতিল করা যায় না
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
+        <SalesListClient
+          shopId={selectedShopId}
+          sales={clientSales}
+          page={page}
+          pageLinks={pageLinks}
+          prevHref={prevHref}
+          nextHref={nextHref}
+          showPagination={showPagination}
+        />
       </div>
-
-      {showPagination && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-500">পৃষ্ঠা {page}</p>
-          <div className="flex flex-wrap items-center gap-2">
-            {prevHref ? (
-              <Link
-                href={prevHref}
-                className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
-              >
-                আগের
-              </Link>
-            ) : (
-              <span className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-400">
-                আগের
-              </span>
-            )}
-
-            {pageNumbers.map((pageNumber) => {
-              const href = buildPageLink(pageNumber);
-              if (pageNumber === page || !href) {
-                return (
-                  <span
-                    key={pageNumber}
-                    className="px-3 py-1 text-sm rounded-md border border-slate-200 bg-slate-100 text-slate-700"
-                  >
-                    {pageNumber}
-                  </span>
-                );
-              }
-              return (
-                <Link
-                  key={pageNumber}
-                  href={href}
-                  className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
-                >
-                  {pageNumber}
-                </Link>
-              );
-            })}
-
-            {nextHref ? (
-              <Link
-                href={nextHref}
-                className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
-              >
-                পরের
-              </Link>
-            ) : (
-              <span className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-400">
-                পরের
-              </span>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

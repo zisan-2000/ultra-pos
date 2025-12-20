@@ -132,12 +132,74 @@ export default function ProductsListClient({
   }, []);
 
   useEffect(() => {
-    if (!online) {
-      db.products.where("shopId").equals(activeShopId).toArray().then(setProducts);
-    } else {
+    if (online) {
       setProducts(serverProducts);
+      const rows = serverProducts.map((p) => ({
+        id: p.id,
+        shopId: activeShopId,
+        name: p.name,
+        category: p.category || "Uncategorized",
+        buyPrice: p.buyPrice ?? null,
+        sellPrice: p.sellPrice.toString(),
+        stockQty: (p.stockQty ?? "0").toString(),
+        isActive: p.isActive,
+        trackStock: (p as any).trackStock ?? false,
+        updatedAt: Date.now(),
+        syncStatus: "synced" as const,
+      }));
+      db.products.bulkPut(rows).catch((err) => {
+        console.error("Seed Dexie products failed", err);
+      });
+      try {
+        localStorage.setItem(
+          `cachedProducts:${activeShopId}`,
+          JSON.stringify(serverProducts)
+        );
+      } catch (err) {
+        console.warn("Persist cached products failed", err);
+      }
+      return;
     }
-  }, [online, activeShopId, serverProducts]);
+
+    db.products
+      .where("shopId")
+      .equals(activeShopId)
+      .toArray()
+      .then((rows) =>
+        setProducts(
+          rows.map((p) => ({
+            id: p.id,
+            name: p.name,
+            category: p.category,
+            buyPrice: p.buyPrice ?? null,
+            sellPrice: p.sellPrice,
+            stockQty: p.stockQty,
+            isActive: p.isActive,
+            createdAt: p.updatedAt?.toString?.() || "",
+          }))
+        )
+      )
+      .catch((err) => {
+        console.error("Load offline products failed", err);
+      });
+  }, [online, activeShopId, serverProducts, products.length]);
+
+  // Fallback: if Dexie has nothing (first offline visit), use last cached server copy.
+  useEffect(() => {
+    if (online) return;
+    if (products.length > 0) return;
+
+    try {
+      const cached = localStorage.getItem(`cachedProducts:${activeShopId}`);
+      if (!cached) return;
+      const parsed = JSON.parse(cached) as Product[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setProducts(parsed);
+      }
+    } catch (err) {
+      console.warn("Load cached products failed", err);
+    }
+  }, [online, activeShopId, serverProducts, products.length]);
 
   const activeShopName = useMemo(
     () => shops.find((s) => s.id === activeShopId)?.name || "",
@@ -192,23 +254,26 @@ export default function ProductsListClient({
     [activeShopId, query, status]
   );
 
-  function applyFilters(
-    targetPage: number,
-    nextQuery = query,
-    nextStatus = status,
-    replace = false
-  ) {
-    if (online) {
-      const href = buildHref(targetPage, nextQuery, nextStatus);
-      if (replace) {
-        router.replace(href);
+  const applyFilters = useCallback(
+    (
+      targetPage: number,
+      nextQuery = query,
+      nextStatus = status,
+      replace = false
+    ) => {
+      if (online) {
+        const href = buildHref(targetPage, nextQuery, nextStatus);
+        if (replace) {
+          router.replace(href);
+        } else {
+          router.push(href);
+        }
       } else {
-        router.push(href);
+        setOfflinePage(targetPage);
       }
-    } else {
-      setOfflinePage(targetPage);
-    }
-  }
+    },
+    [online, buildHref, router, query, status]
+  );
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -274,7 +339,7 @@ export default function ProductsListClient({
     }
     lastAppliedRef.current = { query: cleanQuery, status };
     applyFilters(1, cleanQuery, status, true);
-  }, [online, debouncedQuery, status]);
+  }, [online, debouncedQuery, status, applyFilters]);
 
   function startListening() {
     setVoiceError(null);

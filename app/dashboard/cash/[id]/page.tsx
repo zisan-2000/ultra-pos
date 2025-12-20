@@ -45,6 +45,7 @@ export default async function EditCashPage({ params }: PageProps) {
         shopId={entryShopId}
         backHref={backHref}
         action={handleSubmit}
+        id={id}
         initialValues={{
           entryType: (entry.entryType as "IN" | "OUT") || "IN",
           amount: entry.amount?.toString?.() || "",

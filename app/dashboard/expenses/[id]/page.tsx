@@ -50,6 +50,7 @@ export default async function EditExpensePage({ params }: PageProps) {
         shopId={expenseShopId}
         backHref={backHref}
         action={handleUpdate}
+        id={id}
         initialValues={{
           amount: expense.amount?.toString?.() || "",
           category: expense.category || "",

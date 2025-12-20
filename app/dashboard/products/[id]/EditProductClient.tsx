@@ -2,7 +2,7 @@
 
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type JSX } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
@@ -352,9 +352,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     } catch (err) {
       console.error("Failed to load custom units", err);
       setUnitOptions((prev) => (prev.length ? prev : configUnits));
-      setSelectedUnit((prev) => (prev ? prev : configDefaultUnit || configUnits[0] || "pcs"));
+      setSelectedUnit((prev: string) => (prev ? prev : configDefaultUnit || configUnits[0] || "pcs"));
     }
-  }, [shopId, configUnitsKey, configDefaultUnit, product.baseUnit]);
+  }, [shopId, configUnitsKey, configDefaultUnit, product.baseUnit, configUnits]);
 
   // Track stock default
   useEffect(() => {

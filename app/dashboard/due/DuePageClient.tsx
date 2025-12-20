@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useOnlineStatus } from "@/lib/sync/net-status";
+import { queueAdd } from "@/lib/sync/queue";
 
 type Customer = {
   id: string;
@@ -65,6 +67,7 @@ export default function DuePageClient({
   initialCustomers,
   initialSummary,
 }: Props) {
+  const online = useOnlineStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [voiceReady, setVoiceReady] = useState(false);
   const [listening, setListening] = useState(false);
@@ -108,6 +111,29 @@ export default function DuePageClient({
   function dedupe(values: string[]) {
     return Array.from(new Set(values.filter(Boolean)));
   }
+
+  // Cache seed when online; load cache when offline (customers + summary)
+  useEffect(() => {
+    if (online) {
+      setCustomers(initialCustomers || []);
+      setSummary(initialSummary || { totalDue: 0, topDue: [] });
+      try {
+        localStorage.setItem(`due:customers:${shopId}`, JSON.stringify(initialCustomers || []));
+        localStorage.setItem(`due:summary:${shopId}`, JSON.stringify(initialSummary || {}));
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    try {
+      const cachedCustomers = localStorage.getItem(`due:customers:${shopId}`);
+      const cachedSummary = localStorage.getItem(`due:summary:${shopId}`);
+      if (cachedCustomers) setCustomers(JSON.parse(cachedCustomers) as Customer[]);
+      if (cachedSummary) setSummary(JSON.parse(cachedSummary) as Summary);
+    } catch {
+      // ignore
+    }
+  }, [online, initialCustomers, initialSummary, shopId]);
 
   function mergeCustomerTemplates(existing: CustomerTemplate[], incoming: CustomerTemplate) {
     const idx = existing.findIndex((t) => t.name.toLowerCase() === incoming.name.toLowerCase());
@@ -216,12 +242,34 @@ export default function DuePageClient({
   async function loadStatement(customerId: string) {
     if (!customerId) return;
     setLoadingStatement(true);
+    // Offline: use cached statement
+    if (!online) {
+      try {
+        const cached = localStorage.getItem(`due:statement:${shopId}:${customerId}`);
+        if (cached) {
+          setStatement(JSON.parse(cached) || []);
+        } else {
+          setStatement([]);
+        }
+      } catch {
+        setStatement([]);
+      } finally {
+        setLoadingStatement(false);
+      }
+      return;
+    }
+
     try {
       const res = await fetch(
         `/api/due/statement?shopId=${shopId}&customerId=${customerId}`
       );
       const json = await res.json();
       setStatement(json.data || []);
+      try {
+        localStorage.setItem(`due:statement:${shopId}:${customerId}`,(JSON.stringify(json.data || [])));
+      } catch {
+        // ignore cache errors
+      }
     } finally {
       setLoadingStatement(false);
     }
@@ -230,6 +278,25 @@ export default function DuePageClient({
   async function handleAddCustomer(e: FormEvent) {
     e.preventDefault();
     if (!newCustomer.name.trim()) return;
+    if (!online) {
+      const payload = {
+        id: crypto.randomUUID(),
+        shopId,
+        name: newCustomer.name.trim(),
+        phone: newCustomer.phone.trim() || undefined,
+        address: newCustomer.address.trim() || undefined,
+        totalDue: "0",
+      };
+      setCustomers((prev) => [payload, ...prev]);
+      try {
+        localStorage.setItem(`due:customers:${shopId}`, JSON.stringify([payload, ...customers]));
+      } catch {
+        // ignore
+      }
+      await queueAdd("due_customer", "create", payload);
+      setNewCustomer({ name: "", phone: "", address: "" });
+      return;
+    }
 
     await fetch("/api/due/customers", {
       method: "POST",
@@ -260,6 +327,10 @@ export default function DuePageClient({
   async function handlePayment(e: FormEvent) {
     e.preventDefault();
     if (!paymentForm.customerId || !paymentForm.amount) return;
+    if (!online) {
+      alert("Offline অবস্থায় পেমেন্ট/আদায় যোগ করা যাবে না। অনলাইনে গিয়ে চেষ্টা করুন।");
+      return;
+    }
 
     setSavingPayment(true);
     try {

@@ -206,7 +206,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
     };
   }, []);
 
-  const bumpUsage = (productId: string) => {
+  const bumpUsage = useCallback((productId: string) => {
     setUsage((prev) => {
       const next = {
         ...prev,
@@ -218,7 +218,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
       };
       return next;
     });
-  };
+  }, []);
 
   const productsWithCategory = useMemo<EnrichedProduct[]>(
     () => products.map((p) => ({ ...p, category: normalizeCategory(p.category) })),

@@ -2,6 +2,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useOnlineStatus } from "@/lib/sync/net-status";
+import { db } from "@/lib/dexie/db";
+import { queueAdd } from "@/lib/sync/queue";
 import Link from "next/link";
 
 type SpeechRecognitionInstance = {
@@ -28,6 +31,7 @@ type Props = {
   shopId: string;
   backHref: string;
   action: (formData: FormData) => Promise<void>;
+  id?: string;
   initialValues?: {
     amount?: string;
     category?: string;
@@ -73,9 +77,11 @@ export default function ExpenseFormClient({
   shopId,
   backHref,
   action,
+  id,
   initialValues,
   submitLabel = "+ দ্রুত খরচ যোগ করুন",
 }: Props) {
+  const online = useOnlineStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
@@ -223,7 +229,27 @@ export default function ExpenseFormClient({
       persistTemplates(mergeTemplates(templates, template));
     }
 
-    await action(form);
+    if (online) {
+      await action(form);
+      return;
+    }
+
+    const isEdit = Boolean(id);
+    const expenseId = id || crypto.randomUUID();
+    const payload = {
+      id: expenseId,
+      shopId,
+      amount: form.get("amount") as string,
+      category: (form.get("category") as string) || "অন্যন্য",
+      note: (form.get("note") as string) || "",
+      expenseDate: (form.get("expenseDate") as string) || new Date().toISOString().slice(0, 10),
+      createdAt: Date.now(),
+      syncStatus: isEdit ? "updated" as const : "new" as const,
+    };
+
+    await db.expenses.put(payload as any);
+    await queueAdd("expense", isEdit ? "update" : "create", payload);
+    alert(isEdit ? "Offline: খরচ আপডেট কিউ হয়েছে, সংযোগ পেলে সিঙ্ক হবে।" : "Offline: খরচ সংরক্ষিত, সংযোগ পেলে সিঙ্ক হবে।");
   }
 
   return (

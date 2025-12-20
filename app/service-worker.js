@@ -93,8 +93,14 @@ async function handleNavigation(request) {
   const cache = await caches.open(CACHE_NAME);
 
   try {
-    return await fetch(request);
+    const networkResponse = await fetch(request);
+    if (networkResponse && networkResponse.ok) {
+      cache.put(request, networkResponse.clone());
+    }
+    return networkResponse;
   } catch (error) {
+    const cached = await cache.match(request);
+    if (cached) return cached;
     const offline = await cache.match("/offline");
     if (offline) return offline;
     throw error;

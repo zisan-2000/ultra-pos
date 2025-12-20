@@ -2,6 +2,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useOnlineStatus } from "@/lib/sync/net-status";
+import { db } from "@/lib/dexie/db";
+import { queueAdd } from "@/lib/sync/queue";
 import Link from "next/link";
 
 type SpeechRecognitionInstance = {
@@ -28,6 +31,7 @@ type Props = {
   shopId: string;
   backHref: string;
   action: (formData: FormData) => Promise<void>;
+  id?: string;
   initialValues?: {
     entryType?: "IN" | "OUT";
     amount?: string;
@@ -73,9 +77,11 @@ export default function CashFormClient({
   shopId,
   backHref,
   action,
+  id,
   initialValues,
   submitLabel = "+ দ্রুত ক্যাশ এন্ট্রি করুন",
 }: Props) {
+  const online = useOnlineStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
@@ -219,7 +225,30 @@ export default function CashFormClient({
       persistTemplates(mergeTemplates(templates, template));
     }
 
-    await action(form);
+    if (online) {
+      await action(form);
+      return;
+    }
+
+    const isEdit = Boolean(id);
+    const entryId = id || crypto.randomUUID();
+    const payload = {
+      id: entryId,
+      shopId,
+      entryType: (form.get("entryType") as "IN" | "OUT") || "IN",
+      amount: form.get("amount") as string,
+      reason: (form.get("reason") as string) || "",
+      createdAt: Date.now(),
+      syncStatus: isEdit ? "updated" as const : "new" as const,
+    };
+
+    await db.cash.put(payload as any);
+    await queueAdd("cash", isEdit ? "update" : "create", payload);
+    alert(
+      isEdit
+        ? "Offline: ক্যাশ এন্ট্রি আপডেট কিউ হয়েছে, সংযোগ পেলে সিঙ্ক হবে।"
+        : "Offline: ক্যাশ এন্ট্রি সংরক্ষিত, সংযোগ পেলে সিঙ্ক হবে।"
+    );
   }
 
   return (

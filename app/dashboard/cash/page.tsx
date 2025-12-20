@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getCashByShop } from "@/app/actions/cash";
 import ShopSelectorClient from "./ShopSelectorClient";
+import { CashListClient } from "./components/CashListClient";
 
 type CashPageProps = {
   searchParams?: Promise<{ shopId?: string } | undefined>;
@@ -46,6 +47,14 @@ export default async function CashPage({ searchParams }: CashPageProps) {
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
 
   const rows = await getCashByShop(selectedShopId);
+  const serializableRows = rows.map((e) => ({
+    id: e.id,
+    shopId: e.shopId,
+    entryType: (e.entryType as "IN" | "OUT") || "IN",
+    amount: e.amount?.toString?.() ?? (e as any).amount ?? "0",
+    reason: e.reason,
+    createdAt: e.createdAt?.toISOString?.() ?? e.createdAt,
+  }));
 
   const balance = rows.reduce((sum, e) => {
     const amt = Number(e.amount);
@@ -84,52 +93,7 @@ export default async function CashPage({ searchParams }: CashPageProps) {
         </div>
       </div>
 
-      <div className="space-y-4">
-        {rows.length === 0 ? (
-          <p className="text-center text-gray-600 py-8 bg-white border border-slate-200 rounded-xl">
-            এখনও কোনো এন্ট্রি নেই।
-          </p>
-        ) : (
-          rows.map((e) => (
-            <div
-              key={e.id}
-              className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col gap-4 md:flex-row md:justify-between md:items-center shadow-sm hover:shadow-md card-lift"
-            >
-              <div>
-                <p className={`text-2xl font-bold ${
-                  e.entryType === "IN" ? "text-emerald-700" : "text-red-600"
-                }`}>
-                  {e.entryType === "IN" ? "+" : "-"}{Number(e.amount)} ৳
-                </p>
-                <p className="text-base text-gray-700 mt-2">{e.reason}</p>
-              </div>
-
-              <div className="w-full md:w-auto grid grid-cols-2 gap-2 md:flex md:gap-2">
-                <Link
-                  href={`/dashboard/cash/${e.id}`}
-                  className="w-full md:w-auto px-4 py-2 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg font-semibold hover:border-blue-300 hover:bg-blue-100 transition-colors text-center"
-                >
-                  এডিট
-                </Link>
-
-                <form
-                  action={async () => {
-                    "use server";
-                    const { deleteCashEntry } = await import(
-                      "@/app/actions/cash"
-                    );
-                    await deleteCashEntry(e.id);
-                  }}
-                >
-                  <button className="w-full md:w-auto px-4 py-2 bg-red-50 border border-red-200 text-red-800 rounded-lg font-semibold hover:border-red-300 hover:bg-red-100 transition-colors">
-                    ডিলিট
-                  </button>
-                </form>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+      <CashListClient shopId={selectedShopId} rows={serializableRows} />
     </div>
   );
 }

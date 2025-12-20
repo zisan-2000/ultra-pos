@@ -3,7 +3,15 @@
 
 "use client";
 
-import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  Suspense,
+  type ReactElement,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
@@ -242,8 +250,8 @@ function ProductForm({ shop }: Props) {
   const [selectedUnit, setSelectedUnit] = useState(configDefaultUnit || configUnits[0] || "pcs");
   const [stockEnabled, setStockEnabled] = useState(stock.enabledByDefault);
 
-  const ensuredShopId = shop.id;
-const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
+const ensuredShopId = shop.id;
+const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
     buyPrice: () => (
       <div className="space-y-2">
         <label className="block text-base font-medium text-gray-900">ক্রয়মূল্য (ঐচ্ছিক)</label>
@@ -316,11 +324,13 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   }, [
     businessType,
     configUnitsKey,
+    configUnits,
     configDefaultUnit,
     stock.enabledByDefault,
     businessAssist,
     baseCategoryKey,
     fallbackName,
+    baseCategories,
   ]);
 
   // Voice availability
@@ -401,7 +411,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       setUnitOptions((prev) => (prev.length ? prev : configUnits));
       setSelectedUnit((prev) => (prev ? prev : configDefaultUnit || configUnits[0] || "pcs"));
     }
-  }, [ensuredShopId, configUnitsKey, configDefaultUnit]);
+  }, [ensuredShopId, configUnitsKey, configDefaultUnit, configUnits]);
 
   function handleAddCustomCategory() {
     const input = prompt("নতুন ক্যাটাগরি যোগ করুন");

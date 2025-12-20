@@ -46,6 +46,50 @@ async function syncSales(batch: { newItems: any[] }) {
 }
 
 // -----------------------------
+// SYNC EXPENSES
+// -----------------------------
+async function syncExpenses(batch: { newItems: any[] }) {
+  const res = await fetch("/api/sync/expenses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(batch),
+  });
+
+  if (!res.ok) {
+    throw new Error("Expense sync failed");
+  }
+}
+
+// -----------------------------
+// SYNC CASH
+// -----------------------------
+async function syncCash(batch: { newItems: any[] }) {
+  const res = await fetch("/api/sync/cash", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(batch),
+  });
+
+  if (!res.ok) {
+    throw new Error("Cash sync failed");
+  }
+}
+
+// -----------------------------
+// SYNC DUE (customers + payments)
+// -----------------------------
+async function syncDue(batch: { customers: any[]; payments: any[] }) {
+  const res = await fetch("/api/sync/due", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(batch),
+  });
+  if (!res.ok) {
+    throw new Error("Due sync failed");
+  }
+}
+
+// -----------------------------
 // MAIN SYNC ENGINE
 // -----------------------------
 export async function runSyncEngine() {
@@ -62,6 +106,10 @@ export async function runSyncEngine() {
   const productDelete: string[] = [];
 
   const salesCreate: any[] = [];
+  const expenseCreate: any[] = [];
+  const cashCreate: any[] = [];
+  const dueCustomers: any[] = [];
+  const duePayments: any[] = [];
 
   // --------------------------
   // Group items by type/action
@@ -78,6 +126,22 @@ export async function runSyncEngine() {
 
       if (type === "sale") {
         if (action === "create") salesCreate.push(payload);
+      }
+
+      if (type === "expense") {
+        if (action === "create") expenseCreate.push(payload);
+      }
+
+      if (type === "cash") {
+        if (action === "create") cashCreate.push(payload);
+      }
+
+      if (type === "due_customer") {
+        if (action === "create") dueCustomers.push(payload);
+      }
+
+      if (type === "due_payment") {
+        if (action === "payment" || action === "create") duePayments.push(payload);
       }
     } catch (e) {
       console.error("Sync error for queue item:", e);
@@ -101,6 +165,25 @@ export async function runSyncEngine() {
     if (salesCreate.length) {
       await syncSales({
         newItems: salesCreate,
+      });
+    }
+
+    if (expenseCreate.length) {
+      await syncExpenses({
+        newItems: expenseCreate,
+      });
+    }
+
+    if (cashCreate.length) {
+      await syncCash({
+        newItems: cashCreate,
+      });
+    }
+
+    if (dueCustomers.length || duePayments.length) {
+      await syncDue({
+        customers: dueCustomers,
+        payments: duePayments,
       });
     }
 

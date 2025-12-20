@@ -18,6 +18,15 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
 
+type ProductOption = {
+  id: string;
+  name: string;
+  sellPrice: string;
+  stockQty?: string | number;
+  category?: string | null;
+  trackStock?: boolean | null;
+};
+
 type PosPageClientProps = {
   products: {
     id: string;
@@ -52,6 +61,13 @@ export function PosPageClient({
   const [barFlash, setBarFlash] = useState(false);
   const cartPanelRef = useRef<HTMLDivElement | null>(null);
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [productOptions, setProductOptions] = useState<ProductOption[]>(
+    () =>
+      products.map((p) => ({
+        ...p,
+        sellPrice: p.sellPrice.toString(),
+      })) as ProductOption[]
+  );
   const items = useMemo(
     () => (cartShopId === shopId ? cartItems : []),
     [cartItems, cartShopId, shopId]
@@ -78,6 +94,54 @@ export function PosPageClient({
     { value: "bank_transfer", label: "ব্যাংক ট্রান্সফার" },
     { value: "due", label: "ধার" },
   ];
+
+  // Keep Dexie seeded when online; load from Dexie when offline.
+  useEffect(() => {
+    if (online) {
+      setProductOptions(
+        products.map((p) => ({
+          ...p,
+          sellPrice: p.sellPrice.toString(),
+        }))
+      );
+      const rows = products.map((p) => ({
+        id: p.id,
+        shopId,
+        name: p.name,
+        category: p.category || "Uncategorized",
+        sellPrice: p.sellPrice.toString(),
+        stockQty: (p.stockQty ?? "0").toString(),
+        isActive: true,
+        trackStock: Boolean(p.trackStock),
+        updatedAt: Date.now(),
+        syncStatus: "synced" as const,
+      }));
+      db.products.bulkPut(rows).catch((err) => {
+        console.error("Seed Dexie products failed", err);
+      });
+      return;
+    }
+
+    db.products
+      .where("shopId")
+      .equals(shopId)
+      .toArray()
+      .then((rows) => {
+        setProductOptions(
+          rows.map((p) => ({
+            id: p.id,
+            name: p.name,
+            sellPrice: p.sellPrice.toString(),
+            stockQty: p.stockQty?.toString(),
+            category: p.category,
+            trackStock: p.trackStock,
+          }))
+        );
+      })
+      .catch((err) => {
+        console.error("Load offline products failed", err);
+      });
+  }, [online, products, shopId]);
 
   // Keep cart tied to the currently selected shop; reset when shop changes
   useEffect(() => {
@@ -212,7 +276,7 @@ export function PosPageClient({
         </div>
 
         <div className="flex-1">
-          <PosProductSearch products={products} shopId={shopId} />
+          <PosProductSearch products={productOptions} shopId={shopId} />
         </div>
       </div>
 
