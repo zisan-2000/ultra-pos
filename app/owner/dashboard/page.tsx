@@ -1,3 +1,5 @@
+// app/owner/dashboard/page.tsx
+
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
@@ -56,8 +58,7 @@ export default async function OwnerDashboardPage({
       : null;
 
   const selectedShopId =
-    resolvedSearch?.shopId &&
-    shops.some((s) => s.id === resolvedSearch.shopId)
+    resolvedSearch?.shopId && shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
       : cookieSelectedShopId ?? shops[0].id;
 
@@ -68,7 +69,9 @@ export default async function OwnerDashboardPage({
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 leading-tight">ড্যাশবোর্ড</h1>
+            <h1 className="text-3xl font-bold text-gray-900 leading-tight">
+              ড্যাশবোর্ড
+            </h1>
             <p className="text-sm text-gray-500 mt-1 leading-snug">
               আজকের সারসংক্ষেপ, বিক্রি ও খরচ
             </p>
