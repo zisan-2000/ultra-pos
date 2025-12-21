@@ -110,7 +110,9 @@ export async function syncDefaultBusinessTypes() {
   const user = await requireUser();
   assertSuperAdmin(user);
 
-  const labelMap = new Map(businessOptions.map((b) => [b.id, b.label]));
+  const labelMap = new Map<string, string>(
+    businessOptions.map((b) => [b.id as string, b.label as string]),
+  );
 
   for (const [key, config] of Object.entries(STATIC_CONFIGS)) {
     validateConfig({ [key]: config });
