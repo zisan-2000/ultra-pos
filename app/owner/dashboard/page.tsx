@@ -2,6 +2,10 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 
+type DashboardPageProps = {
+  searchParams?: Promise<{ shopId?: string } | undefined>;
+};
+
 async function fetchSummary(shopId: string, cookieHeader: string) {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
@@ -24,7 +28,9 @@ async function fetchSummary(shopId: string, cookieHeader: string) {
   return await res.json();
 }
 
-export default async function OwnerDashboardPage() {
+export default async function OwnerDashboardPage({
+  searchParams,
+}: DashboardPageProps) {
   const shops = await getShopsByUser();
 
   if (!shops || shops.length === 0) {
@@ -36,6 +42,7 @@ export default async function OwnerDashboardPage() {
     );
   }
 
+  const resolvedSearch = await searchParams;
   const cookieStore = await cookies();
   const cookieShopId = cookieStore.get("activeShopId")?.value;
   const cookieHeader = cookieStore
@@ -43,10 +50,16 @@ export default async function OwnerDashboardPage() {
     .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
     .join("; ");
 
-  const selectedShopId =
+  const cookieSelectedShopId =
     cookieShopId && shops.some((s) => s.id === cookieShopId)
       ? cookieShopId
-      : shops[0].id;
+      : null;
+
+  const selectedShopId =
+    resolvedSearch?.shopId &&
+    shops.some((s) => s.id === resolvedSearch.shopId)
+      ? resolvedSearch.shopId
+      : cookieSelectedShopId ?? shops[0].id;
 
   const summary = await fetchSummary(selectedShopId, cookieHeader);
 
