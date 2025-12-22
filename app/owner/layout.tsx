@@ -1,3 +1,5 @@
+// app/owner/layout.tsx
+
 import type { ReactNode } from "react";
 import { DashboardLayoutWrapper } from "@/app/dashboard/DashboardLayoutWrapper";
 

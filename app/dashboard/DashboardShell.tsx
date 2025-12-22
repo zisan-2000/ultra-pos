@@ -5,9 +5,23 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import LogoutButton from "@/components/LogoutButton";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useCurrentShop } from "@/hooks/use-current-shop";
+import { Plus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Shop = { id: string; name: string };
 
@@ -32,13 +46,13 @@ const navItems = [
   { href: "/dashboard/users", label: "ব্যবহারকারী ব্যবস্থাপনা" },
 ];
 
+// ✅ mobile bottom nav: 6 -> 5 (profile removed)
 const bottomNav = [
   { href: "/dashboard", label: "ড্যাশ", icon: "🏠" },
   { href: "/dashboard/sales", label: "বিক্রি", icon: "🛒" },
   { href: "/dashboard/products", label: "পণ্য", icon: "🗃️" },
   { href: "/dashboard/expenses", label: "খরচ", icon: "💸" },
   { href: "/dashboard/reports", label: "রিপোর্ট", icon: "📊" },
-  { href: "/dashboard/profile", label: "প্রোফাইল", icon: "👤" },
 ];
 
 const fabByRoute: Record<string, { href: string; label: string } | null> = {
@@ -49,13 +63,16 @@ const fabByRoute: Record<string, { href: string; label: string } | null> = {
   },
   "/dashboard/products": {
     href: "/dashboard/products/new",
-    label: "+ নতুন পণ্য",
+    label: "নতুন পণ্য যোগ করুন",
   },
   "/dashboard/expenses": {
     href: "/dashboard/expenses/new",
-    label: "+ নতুন খরচ",
+    label: "নতুন খরচ যোগ করুন",
   },
-  "/dashboard/cash": { href: "/dashboard/cash/new", label: "+ নতুন এন্ট্রি" },
+  "/dashboard/cash": {
+    href: "/dashboard/cash/new",
+    label: "নতুন এন্ট্রি যোগ করুন",
+  },
 };
 
 const toRoleBasePath = (role: string | null | undefined) => {
@@ -103,6 +120,7 @@ export function DashboardShell({
   const [mounted, setMounted] = useState(false);
   const [rbacUser] = useState<RbacUser>(initialUser);
   const [rbacLoaded] = useState(true);
+  const [shopNameOpen, setShopNameOpen] = useState(false);
 
   const safeShopId = useMemo(() => {
     if (!shops || shops.length === 0) return null;
@@ -129,7 +147,9 @@ export function DashboardShell({
 
     if (urlShopId !== shopId) {
       setShop(urlShopId);
-      document.cookie = `activeShopId=${urlShopId}; path=/; max-age=${60 * 60 * 24 * 30}`;
+      document.cookie = `activeShopId=${urlShopId}; path=/; max-age=${
+        60 * 60 * 24 * 30
+      }`;
     }
   }, [searchParams, shops, shopId, setShop]);
 
@@ -144,13 +164,13 @@ export function DashboardShell({
     setMounted(true);
   }, []);
 
-
   const isSuperAdmin = rbacUser?.roles?.includes("super_admin") ?? false;
   const isAdmin = rbacUser?.roles?.includes("admin") ?? false;
   const canViewUserCreationLog = isSuperAdmin || isAdmin;
+
   const roleBasePath = useMemo(
     () => resolveBasePath(rbacUser?.roles ?? []),
-    [rbacUser],
+    [rbacUser]
   );
 
   const hasPermission = (permission: string | null | undefined) => {
@@ -163,13 +183,13 @@ export function DashboardShell({
 
   const effectiveDashboardHref = useMemo(
     () => applyBasePath("/dashboard", roleBasePath),
-    [roleBasePath],
+    [roleBasePath]
   );
 
   const canAccessRbacAdmin = hasPermission("access_rbac_admin");
   const userCreationLogHref = useMemo(
     () => applyBasePath("/dashboard/admin/user-creation-log", roleBasePath),
-    [roleBasePath],
+    [roleBasePath]
   );
   const systemSettingsHref = "/super-admin/system-settings";
 
@@ -194,13 +214,11 @@ export function DashboardShell({
   };
 
   const handleShopChange = (id: string) => {
-    // Update global client store
     setShop(id);
+    document.cookie = `activeShopId=${id}; path=/; max-age=${
+      60 * 60 * 24 * 30
+    }`;
 
-    // Persist globally selected shop for server components
-    document.cookie = `activeShopId=${id}; path=/; max-age=${60 * 60 * 24 * 30}`;
-
-    // Keep current URL in sync with selected shop
     const params = new URLSearchParams(searchParams?.toString() || "");
     params.set("shopId", id);
     const next = `${pathname}?${params.toString()}`;
@@ -209,6 +227,8 @@ export function DashboardShell({
   };
 
   const canonicalPathname = canonicalizePathname(pathname, roleBasePath);
+
+  const showFabLabel = canonicalPathname === "/dashboard";
 
   const fabConfig =
     fabByRoute[
@@ -234,7 +254,7 @@ export function DashboardShell({
       : "grid-cols-1";
 
   return (
-    <div className="h-screen overflow-hidden bg-gray-50">
+    <div className="h-screen overflow-x-hidden bg-gray-50">
       {/* Overlay for drawer on mobile */}
       {drawerOpen && (
         <button
@@ -258,6 +278,7 @@ export function DashboardShell({
               </h1>
               <p className="text-sm text-gray-500 mt-1">POS সিস্টেম</p>
             </div>
+
             <span
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
                 online
@@ -307,7 +328,7 @@ export function DashboardShell({
             </div>
           </div>
 
-{(canAccessRbacAdmin || canViewUserCreationLog) && (
+          {(canAccessRbacAdmin || canViewUserCreationLog) && (
             <div className="mt-6 space-y-2">
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 অ্যাডমিন
@@ -332,22 +353,29 @@ export function DashboardShell({
                   ) : null}
                 </Link>
               )}
+
               {canAccessRbacAdmin && (
                 <Link
                   href={applyBasePath("/dashboard/admin/rbac", roleBasePath)}
                   onClick={(e) => {
                     e.preventDefault();
                     setDrawerOpen(false);
-                    router.push(applyBasePath("/dashboard/admin/rbac", roleBasePath));
+                    router.push(
+                      applyBasePath("/dashboard/admin/rbac", roleBasePath)
+                    );
                   }}
                   className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
-                    isActive(applyBasePath("/dashboard/admin/rbac", roleBasePath))
+                    isActive(
+                      applyBasePath("/dashboard/admin/rbac", roleBasePath)
+                    )
                       ? "bg-green-50 text-green-700 border border-green-100"
                       : "text-gray-700 hover:bg-gray-100"
                   }`}
                 >
                   <span>RBAC ব্যবস্থাপনা</span>
-                  {isActive(applyBasePath("/dashboard/admin/rbac", roleBasePath)) ? (
+                  {isActive(
+                    applyBasePath("/dashboard/admin/rbac", roleBasePath)
+                  ) ? (
                     <span className="text-xs text-green-600">চলমান</span>
                   ) : null}
                 </Link>
@@ -361,23 +389,39 @@ export function DashboardShell({
                 Settings
               </div>
               <Link
-                href={applyBasePath("/dashboard/admin/business-types", roleBasePath)}
+                href={applyBasePath(
+                  "/dashboard/admin/business-types",
+                  roleBasePath
+                )}
                 onClick={(e) => {
                   e.preventDefault();
                   setDrawerOpen(false);
-                  router.push(applyBasePath("/dashboard/admin/business-types", roleBasePath));
+                  router.push(
+                    applyBasePath(
+                      "/dashboard/admin/business-types",
+                      roleBasePath
+                    )
+                  );
                 }}
                 className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
-                  isActive(applyBasePath("/dashboard/admin/business-types", roleBasePath))
+                  isActive(
+                    applyBasePath(
+                      "/dashboard/admin/business-types",
+                      roleBasePath
+                    )
+                  )
                     ? "bg-green-50 text-green-700 border border-green-100"
                     : "text-gray-700 hover:bg-gray-100"
                 }`}
               >
                 <span>Business Types</span>
-                {isActive(applyBasePath("/dashboard/admin/business-types", roleBasePath)) ? (
+                {isActive(
+                  applyBasePath("/dashboard/admin/business-types", roleBasePath)
+                ) ? (
                   <span className="text-xs text-green-600">সক্রিয়</span>
                 ) : null}
               </Link>
+
               <Link
                 href={systemSettingsHref}
                 onClick={(e) => {
@@ -406,47 +450,90 @@ export function DashboardShell({
 
         {/* Main content */}
         <div className="flex-1 flex flex-col h-full lg:pl-0 overflow-hidden">
-          <header className="sticky top-0 z-20 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 shadow-sm">
-            <div className="flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-3">
+          <header className="sticky top-0 z-20 bg-linear-to-r from-slate-50 to-slate-100 border-b border-slate-200 shadow-sm">
+            <div className="flex items-start gap-3 px-4 sm:px-6 lg:px-8 py-3">
+              {/* Drawer toggle */}
               <button
-                className="lg:hidden rounded-lg border border-slate-200 px-3 py-2 text-gray-700 bg-white shadow-sm"
+                className="lg:hidden rounded-lg border border-slate-200 px-3 py-2 text-gray-700 bg-white shadow-sm shrink-0 mt-1"
                 onClick={() => setDrawerOpen((p) => !p)}
                 aria-label="Toggle navigation"
               >
                 ☰
               </button>
 
-              <div className="flex-1">
-                <p className="text-[11px] text-gray-500">বর্তমান দোকান</p>
-                <h2 className="text-base font-semibold text-gray-900 leading-tight">
-                  {currentShopName}
-                </h2>
+              {/* Left content */}
+              <div className="flex-1 min-w-0">
+                {/* <p className="text-[11px] text-gray-500 mb-1">বর্তমান দোকান</p> */}
+
+                {/* Shop name (click to view full name) */}
+                <button
+                  onClick={() => setShopNameOpen(true)}
+                  className="text-left w-full"
+                >
+                  <h2 className="text-base font-bold text-gray-900 leading-snug line-clamp-2 hover:underline">
+                    {currentShopName}
+                  </h2>
+                </button>
               </div>
 
-              {shops?.length > 0 ? (
-                <select
-                  value={safeShopId || undefined}
-                  onChange={(e) => handleShopChange(e.target.value)}
-                  className="w-40 sm:w-56 lg:w-64 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  {shops.map((shop) => (
-                    <option key={shop.id} value={shop.id}>
-                      {shop.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <Link
-                  href={applyBasePath("/dashboard/shops/new", roleBasePath)}
-                  className="text-sm font-semibold text-blue-600"
-                >
-                  দোকান তৈরি করুন
-                </Link>
-              )}
+              {/* Shop selector + Status */}
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                {shops?.length > 0 ? (
+                  <Select
+                    value={safeShopId ?? undefined}
+                    onValueChange={(value) => handleShopChange(value)}
+                  >
+                    <SelectTrigger className="w-[200px] border border-slate-200 bg-white text-left shadow-sm focus:ring-2 focus:ring-green-500">
+                      <SelectValue placeholder="দোকান নির্বাচন" />
+                    </SelectTrigger>
+                    <SelectContent align="end" className="w-[220px]">
+                      {shops.map((shop) => (
+                        <SelectItem key={shop.id} value={shop.id}>
+                          {shop.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Link
+                    href={applyBasePath("/dashboard/shops/new", roleBasePath)}
+                    className="text-sm font-semibold text-blue-600"
+                  >
+                    দোকান তৈরি করুন
+                  </Link>
+                )}
+
+                {/* Online / Offline status under select */}
+                <div className="flex items-center gap-1 text-xs font-semibold mt-2">
+                  <span
+                    className={`inline-flex h-2 w-2 rounded-full ${
+                      online ? "bg-emerald-500" : "bg-red-500"
+                    }`}
+                  />
+                  <span
+                    className={online ? "text-emerald-700" : "text-red-700"}
+                  >
+                    {online ? "অনলাইন" : "অফলাইন"}
+                  </span>
+                </div>
+              </div>
             </div>
+
+            {/* Full shop name dialog */}
+            <Dialog open={shopNameOpen} onOpenChange={setShopNameOpen}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>বর্তমান দোকান</DialogTitle>
+                </DialogHeader>
+
+                <p className="text-base font-semibold text-gray-900 leading-relaxed break-words">
+                  {currentShopName}
+                </p>
+              </DialogContent>
+            </Dialog>
           </header>
 
-          <main className="flex-1 pb-24 lg:pb-10 overflow-y-auto">
+          <main className="flex-1 pb-28 lg:pb-10 overflow-y-auto">
             <div className="px-4 sm:px-6 lg:px-8 py-6">{children}</div>
           </main>
         </div>
@@ -479,14 +566,45 @@ export function DashboardShell({
         </div>
       </nav>
 
-      {/* Floating Add button for primary actions */}
+      {/* ✅ Floating primary action: now self-explanatory (problem #3) */}
+
+      {/* Smart Floating Action Button */}
       {fabConfig && safeShopId ? (
         <Link
-          href={`${applyBasePath(fabConfig.href, roleBasePath)}?shopId=${safeShopId}`}
+          href={`${applyBasePath(
+            fabConfig.href,
+            roleBasePath
+          )}?shopId=${safeShopId}`}
           aria-label={fabConfig.label}
-          className="fixed bottom-[100px] left-1/2 -translate-x-1/2 z-40 lg:hidden inline-flex items-center justify-center h-[52px] w-[52px] rounded-full bg-blue-500 text-white shadow-[0_6px_14px_rgba(0,0,0,0.12)] hover:bg-blue-600 transition-colors fab-tap"
+          title={fabConfig.label}
+          className={`
+      fixed bottom-[104px]
+ left-1/2 -translate-x-1/2 z-40 lg:hidden
+      flex items-center justify-center
+      rounded-full
+      bg-indigo-500 hover:bg-indigo-600
+      text-white
+      shadow-[0_10px_24px_rgba(15,23,42,0.18)]
+      active:scale-[0.97]
+      transition-all duration-200
+      ${showFabLabel ? "px-5 py-3 gap-2" : "h-14 w-14"}
+    `}
         >
-          <span className="text-lg leading-none">＋</span>
+          {/* Icon */}
+          <span
+            className={`flex items-center justify-center rounded-full bg-white/20 ${
+              showFabLabel ? "h-8 w-8" : "h-10 w-10 bg-transparent"
+            }`}
+          >
+            <Plus className="h-5 w-5 stroke-[2.5]" />
+          </span>
+
+          {/* Label (Dashboard only) */}
+          {showFabLabel && (
+            <span className="text-sm font-semibold whitespace-nowrap">
+              {fabConfig.label}
+            </span>
+          )}
         </Link>
       ) : null}
     </div>

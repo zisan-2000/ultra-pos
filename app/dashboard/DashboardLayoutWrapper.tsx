@@ -1,3 +1,5 @@
+// app/dashboard/DashboardLayoutWrapper.tsx
+
 import type { ReactNode } from "react";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getCurrentUser } from "@/lib/auth-session";
