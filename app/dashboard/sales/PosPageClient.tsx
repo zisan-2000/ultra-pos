@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
 } from "react";
+import Link from "next/link";
 import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
 import { useCart } from "@/hooks/use-cart";
@@ -84,6 +85,7 @@ export function PosPageClient({
   const [customerId, setCustomerId] = useState<string>("");
   const [paidNow, setPaidNow] = useState<string>("");
   const [note, setNote] = useState("");
+  const [success, setSuccess] = useState<{ saleId?: string } | null>(null);
   const online = useOnlineStatus();
   const isDue = paymentMethod === "due";
   const paymentOptions = [
@@ -182,9 +184,12 @@ export function PosPageClient({
       formData.set("cart", JSON.stringify(items));
       formData.set("totalAmount", safeTotalAmount.toString());
 
-      await submitSale(formData);
+      const res = await submitSale(formData);
       clear();
       setPaidNow("");
+      setNote("");
+      setCustomerId("");
+      setSuccess({ saleId: (res as any)?.saleId });
       return;
     }
 
@@ -249,6 +254,17 @@ export function PosPageClient({
     const t = setTimeout(() => setBarFlash(false), 240);
     return () => clearTimeout(t);
   }, [items.length]);
+
+  useEffect(() => {
+    if (!success) return;
+    const t = setTimeout(() => setSuccess(null), 2200);
+    try {
+      navigator.vibrate?.(20);
+    } catch {
+      // ignore vibration failures
+    }
+    return () => clearTimeout(t);
+  }, [success]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -446,6 +462,29 @@ export function PosPageClient({
             >
               বিল সম্পন্ন
             </button>
+          </div>
+        </div>
+      )}
+
+      {success && (
+        <div className="fixed bottom-24 inset-x-4 z-50">
+          <div className="rounded-xl bg-emerald-600 text-white px-4 py-3 shadow-lg flex items-center justify-between gap-3">
+            <span className="font-semibold">✔️ বিক্রি সম্পন্ন</span>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/dashboard/sales?shopId=${shopId}`}
+                className="text-xs font-semibold underline underline-offset-2"
+              >
+                বিক্রি দেখুন
+              </Link>
+              <button
+                type="button"
+                onClick={() => setSuccess(null)}
+                className="text-xs font-semibold text-emerald-50 hover:text-white"
+              >
+                ঠিক আছে
+              </button>
+            </div>
           </div>
         </div>
       )}

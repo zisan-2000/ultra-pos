@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createPortal } from "react-dom";
 
@@ -24,14 +24,18 @@ function SubmitButton({ formId }: SubmitButtonProps) {
       type="submit"
       form={formId}
       disabled={pending}
-      className="px-4 py-2 text-sm rounded-md bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-60"
+      className="inline-flex items-center justify-center rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
     >
-      {pending ? "প্রসেস হচ্ছে..." : "নিশ্চিত করুন"}
+      {pending ? "বাতিল হচ্ছে..." : "চূড়ান্ত বাতিল"}
     </button>
   );
 }
 
-export function VoidSaleControls({ saleId, isVoided, formId }: VoidSaleControlsProps) {
+export function VoidSaleControls({
+  saleId,
+  isVoided,
+  formId,
+}: VoidSaleControlsProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -41,8 +45,8 @@ export function VoidSaleControls({ saleId, isVoided, formId }: VoidSaleControlsP
 
   if (isVoided) {
     return (
-      <span className="text-xs text-slate-400">
-        এই বিক্রিটি বাতিল করা যাবে না
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-3 py-1 text-[11px] font-semibold text-red-700 border border-red-100">
+        ❌ ইতিমধ্যেই বাতিল
       </span>
     );
   }
@@ -52,63 +56,59 @@ export function VoidSaleControls({ saleId, isVoided, formId }: VoidSaleControlsP
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="px-3 py-1.5 rounded-md text-xs font-semibold border border-red-200 text-red-600 bg-white hover:bg-red-50 transition"
+        className="inline-flex items-center gap-1 rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 bg-white hover:bg-red-50 transition"
       >
-        বিক্রি বাতিল
+        ❌ বাতিল করুন
       </button>
 
       {mounted &&
         open &&
         createPortal(
           <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-            onClick={() => setOpen(false)} // ⬅ outside click
+            className="fixed inset-0 z-[9999] flex items-end bg-black/40 backdrop-blur-[2px]"
+            onClick={() => setOpen(false)}
           >
             <div
-              onClick={(e) => e.stopPropagation()} // ⬅ prevent close on modal click
-              className="w-full mx-4 sm:mx-0 sm:max-w-md max-w-[calc(100%-2rem)] rounded-xl bg-white shadow-xl border border-slate-200"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full rounded-t-2xl bg-white shadow-2xl border-t border-slate-100 p-4 space-y-4"
             >
               <input type="hidden" name="saleId" value={saleId} form={formId} />
 
-              {/* Header */}
-              <div className="px-5 py-4 border-b border-slate-100">
-                <h3 className="text-base font-semibold text-slate-900">
-                  বিক্রি বাতিল নিশ্চিতকরণ
-                </h3>
-                <p className="mt-1 text-sm text-slate-600">
-                  আপনি কি নিশ্চিত যে এই বিক্রিটি বাতিল করতে চান?
-                </p>
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-600 border border-red-100">
+                  ⚠️
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-semibold text-slate-900">
+                    বিক্রি বাতিল করলে টাকা ফেরত যাবে
+                  </h3>
+                  <p className="text-sm text-slate-600">
+                    নিশ্চিত হলে কারণ লিখে চূড়ান্ত বাতিল করুন।
+                  </p>
+                </div>
               </div>
 
-              {/* Body */}
-              <div className="px-5 py-4 space-y-3">
-                <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>মোট বিক্রির রিপোর্টে গণনা হবে না</li>
-                    <li>অডিট ও হিসাবের জন্য রেকর্ড থাকবে</li>
-                    <li>এই কাজটি পরে আর ফেরানো যাবে না</li>
-                  </ul>
-                </div>
-
+              <div className="space-y-2">
                 <input
                   type="text"
                   name="reason"
                   form={formId}
-                  placeholder="বাতিলের কারণ (ঐচ্ছিক)"
-                  className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
+                  placeholder="কারণ (ঐচ্ছিক)"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
                 />
+                <p className="text-[11px] text-slate-500">
+                  এই ধাপ দুর্ঘটনাবশত Void হওয়া ঠেকাতে যুক্ত করা হয়েছে।
+                </p>
               </div>
 
-              {/* Footer */}
-              <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
+              <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="px-4 py-2 text-sm rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+                  className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  বাতিল
+                  ফিরে যান
                 </button>
-
                 <SubmitButton formId={formId} />
               </div>
             </div>

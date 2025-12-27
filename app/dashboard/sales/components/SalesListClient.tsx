@@ -1,3 +1,5 @@
+// app/dashboard/sales/components/SalesListClient.tsx
+
 "use client";
 
 import Link from "next/link";
@@ -18,26 +20,38 @@ type SaleSummary = {
   customerName: string | null;
 };
 
-type PageLink = { page: number; href: string | null };
-
 type Props = {
   shopId: string;
   sales: SaleSummary[];
   page: number;
-  pageLinks: PageLink[];
   prevHref: string | null;
   nextHref: string | null;
-  showPagination: boolean;
+  hasMore: boolean;
   voidSaleAction: (formData: FormData) => Promise<void>;
 };
 
-function formatBanglaDate(iso: string) {
+const paymentLabels: Record<string, string> = {
+  cash: "💵 ক্যাশ",
+  bkash: "📱 বিকাশ",
+  nagad: "📲 নগদ",
+  card: "💳 কার্ড",
+  bank_transfer: "🏦 ব্যাংক",
+  due: "🧾 বাকিতে",
+};
+
+function formatDate(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString("bn-BD", {
-    year: "numeric",
+  return date.toLocaleDateString("bn-BD", {
     month: "short",
     day: "numeric",
+  });
+}
+
+function formatTime(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("bn-BD", {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -47,22 +61,13 @@ export default function SalesListClient({
   shopId,
   sales,
   page,
-  pageLinks,
   prevHref,
   nextHref,
-  showPagination,
+  hasMore,
   voidSaleAction,
 }: Props) {
   const online = useOnlineStatus();
   const [items, setItems] = useState<SaleSummary[]>(sales);
-  const paymentLabels: Record<string, string> = {
-    cash: "নগদ",
-    bkash: "বিকাশ",
-    nagad: "নগদ",
-    card: "কার্ড",
-    bank_transfer: "ব্যাংক ট্রান্সফার",
-    due: "বকেয়া",
-  };
 
   // Seed Dexie when online; load from Dexie when offline.
   useEffect(() => {
@@ -153,7 +158,8 @@ export default function SalesListClient({
         });
 
         mapped.sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
         setItems(mapped);
       })
@@ -163,141 +169,155 @@ export default function SalesListClient({
   }, [online, sales, shopId]);
 
   const renderedItems = useMemo(() => items, [items]);
-  const renderPayment = (paymentMethod: string, customerName: string | null) => {
-    const key = paymentMethod?.toLowerCase?.() || "cash";
-    const label = paymentLabels[key] || paymentMethod || "অজানা";
-    if (key === "due" && customerName) {
-      return `বকেয়া | ক্রেতা: ${customerName}`;
-    }
-    return `পেমেন্টঃ ${label}`;
-  };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {!online && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-1 text-xs font-semibold text-orange-700 border border-orange-100">
+              📡 Offline - শুধু দেখা যাবে
+            </span>
+          )}
+          {page > 1 && prevHref && (
+            <Link
+              href={prevHref}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              ⬆️ নতুনগুলো
+            </Link>
+          )}
+        </div>
+        <span className="text-xs text-slate-500">পৃষ্ঠা {page}</span>
+      </div>
+
       {renderedItems.length === 0 ? (
-        <p className="text-center text-gray-600 py-8">
-          {online ? "এখনও কোনো বিক্রি পাওয়া যায়নি" : "Offline: সর্বশেষ সিঙ্কের ডেটা লোড হচ্ছে না"}
+        <p className="text-center text-gray-600 py-10">
+          {online
+            ? "এই তারিখে কোনো বিক্রি নেই"
+            : "Offline: সর্বশেষ সিঙ্ককৃত বিক্রিগুলো দেখাচ্ছে"}
         </p>
       ) : (
         renderedItems.map((s) => {
           const isVoided = (s.status || "").toUpperCase() === "VOIDED";
           const voidReason = s.voidReason || "";
-          const createdAtStr = formatBanglaDate(s.createdAt);
           const totalStr = Number(s.totalAmount || 0).toFixed(2);
-          const paymentText = renderPayment(s.paymentMethod, s.customerName);
           const paymentKey = s.paymentMethod?.toLowerCase?.() || "cash";
+          const paymentText =
+            paymentLabels[paymentKey] || s.paymentMethod || "নগদ";
           const isDueSale = paymentKey === "due";
           const itemLine =
             s.itemPreview ||
-            (s.itemCount > 0 ? `${s.itemCount} আইটেম` : "আইটেম পাওয়া যায়নি");
+            (s.itemCount > 0
+              ? `${s.itemCount} আইটেম`
+              : "কোন আইটেম সংযুক্ত নেই");
+          const timeStr = formatTime(s.createdAt);
+          const dateStr = formatDate(s.createdAt);
           const formId = `void-sale-${s.id}`;
+          const statusPill = isVoided
+            ? "bg-red-100 text-red-700 border-red-200"
+            : "bg-emerald-50 text-emerald-700 border-emerald-100";
+          const statusText = isVoided ? "❌ বাতিল" : "✅ পরিশোধিত";
 
           return (
             <div
               key={s.id}
-              className={`bg-white rounded-xl p-5 flex justify-between items-start gap-4 shadow-sm hover:shadow-md card-lift border ${
-                isVoided ? "border-gray-200" : "border-red-200 bg-red-50/60"
+              className={`rounded-2xl border bg-white p-4 shadow-sm hover:shadow-md transition card-lift ${
+                isVoided ? "opacity-90 border-red-100" : "border-slate-100"
               }`}
             >
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-2xl font-bold text-gray-900">{totalStr} ৳</p>
-                  {isVoided && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
-                      বাতিল করা হয়েছে
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <p className="text-2xl font-bold text-gray-900">
+                      ৳ {totalStr}
+                    </p>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold border ${statusPill}`}
+                    >
+                      {statusText}
                     </span>
+                  </div>
+                  <p className="text-sm text-gray-700 flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700 border border-slate-100">
+                      {paymentText}
+                    </span>
+                    {s.customerName && (
+                      <span className="text-xs text-slate-500">
+                        👤 {s.customerName}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-sm text-gray-600 flex items-center gap-2">
+                    🧾 {itemLine}
+                  </p>
+                  {isVoided && voidReason && (
+                    <p className="text-xs text-red-600 mt-1">
+                      বাতিলের কারণ: {voidReason}
+                    </p>
+                  )}
+                  {isDueSale && !isVoided && (
+                    <p className="text-xs text-amber-600">
+                      বাকির বিক্রি – কাস্টমার লেজারে পরিশোধ করুন
+                    </p>
                   )}
                 </div>
-                <p className="text-base text-gray-600">{paymentText}</p>
-                <p className="text-sm text-gray-500">আইটেমঃ {itemLine}</p>
-                {isVoided && voidReason && (
-                  <p className="text-xs text-red-600 mt-1">বাতিলের কারণঃ {voidReason}</p>
-                )}
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                <p className="text-sm text-gray-500 text-right">{createdAtStr}</p>
-                {!online && (
-                  <p className="text-xs text-slate-400 text-right">
-                    Offline view (read-only)
-                  </p>
-                )}
-                {online ? (
-                  isDueSale ? (
-                    <div className="flex flex-col items-end gap-1 text-right">
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-700">
-                        ⚠️ ধার বিক্রি সরাসরি বাতিল করা যায় না
+
+                <div className="flex flex-col items-end gap-2">
+                  <div className="text-right text-xs text-slate-500">
+                    <p className="font-semibold flex items-center gap-1 justify-end">
+                      ⏱ {timeStr}
+                    </p>
+                    <p>{dateStr}</p>
+                  </div>
+
+                  {!online && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700 border border-orange-100">
+                      বাতিল করা যাবে না (Offline)
+                    </span>
+                  )}
+
+                  {online ? (
+                    isDueSale ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 border border-amber-100">
+                        বাকির বিল – বাতিল নয়
                       </span>
-                      <span className="text-[11px] text-slate-500">
-                        কাস্টমার লেজার থেকে অ্যাডজাস্ট করুন
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <form id={formId} action={voidSaleAction} />
-                      <VoidSaleControls saleId={s.id} isVoided={isVoided} formId={formId} />
-                    </div>
-                  )
-                ) : (
-                  <p className="text-[11px] text-slate-400">অনলাইনে এলে বাতিল করা যাবে</p>
-                )}
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <form id={formId} action={voidSaleAction} />
+                        <VoidSaleControls
+                          saleId={s.id}
+                          isVoided={isVoided}
+                          formId={formId}
+                        />
+                      </div>
+                    )
+                  ) : null}
+                </div>
               </div>
             </div>
           );
         })
       )}
 
-      {showPagination && online && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-500">পৃষ্ঠা {page}</p>
-          <div className="flex flex-wrap items-center gap-2">
-            {prevHref ? (
-              <Link
-                href={prevHref}
-                className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
-              >
-                আগের
-              </Link>
-            ) : (
-              <span className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-400">
-                আগের
-              </span>
-            )}
-
-            {pageLinks.map(({ page: pageNumber, href }) => {
-              if (pageNumber === page || !href) {
-                return (
-                  <span
-                    key={pageNumber}
-                    className="px-3 py-1 text-sm rounded-md border border-slate-200 bg-slate-100 text-slate-700"
-                  >
-                    {pageNumber}
-                  </span>
-                );
-              }
-              return (
-                <Link
-                  key={pageNumber}
-                  href={href}
-                  className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
-                >
-                  {pageNumber}
-                </Link>
-              );
-            })}
-
-            {nextHref ? (
-              <Link
-                href={nextHref}
-                className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
-              >
-                পরের
-              </Link>
-            ) : (
-              <span className="px-3 py-1 text-sm rounded-md border border-slate-200 text-slate-400">
-                পরের
-              </span>
-            )}
-          </div>
+      {hasMore && (
+        <div className="flex justify-center pt-2">
+          {online && nextHref ? (
+            <Link
+              href={nextHref}
+              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 transition"
+            >
+              ⬇️ আরও দেখুন
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-400"
+            >
+              ⬇️ আরও দেখুন
+            </button>
+          )}
         </div>
       )}
     </div>

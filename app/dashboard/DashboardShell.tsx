@@ -230,11 +230,14 @@ export function DashboardShell({
 
   const showFabLabel = canonicalPathname === "/dashboard";
 
-  const fabConfig =
+  const baseFabConfig =
     fabByRoute[
       bottomNav.find((item) => canonicalPathname.startsWith(item.href))?.href ||
         canonicalPathname
     ] || null;
+  const fabConfig = canonicalPathname.startsWith("/dashboard/sales/new")
+    ? null
+    : baseFabConfig;
 
   const mobileNavItems = bottomNav.filter((item) =>
     hasPermission(routePermissionMap[item.href])

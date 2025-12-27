@@ -334,6 +334,46 @@ export async function getSalesByShopPaginated({
 }
 
 // ------------------------------
+// SALES SUMMARY (count + total)
+// ------------------------------
+export async function getSalesSummary({
+  shopId,
+  dateFrom,
+  dateTo,
+}: {
+  shopId: string;
+  dateFrom?: Date | null;
+  dateTo?: Date | null;
+}) {
+  const user = await requireUser();
+  requirePermission(user, "view_sales");
+  await assertShopAccess(shopId, user);
+
+  const where: Prisma.SaleWhereInput = {
+    shopId,
+    status: { not: "VOIDED" },
+  };
+
+  if (dateFrom || dateTo) {
+    where.createdAt = {
+      ...(dateFrom ? { gte: dateFrom } : {}),
+      ...(dateTo ? { lt: dateTo } : {}),
+    };
+  }
+
+  const agg = await prisma.sale.aggregate({
+    where,
+    _sum: { totalAmount: true },
+    _count: { _all: true },
+  });
+
+  return {
+    totalAmount: agg._sum.totalAmount?.toString() ?? "0",
+    count: agg._count._all ?? 0,
+  };
+}
+
+// ------------------------------
 // VOID SALE (simple version, non-due only)
 // ------------------------------
 export async function voidSale(saleId: string, reason?: string | null) {

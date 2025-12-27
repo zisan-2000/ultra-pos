@@ -6,7 +6,6 @@ import { getActiveProductsByShop } from "@/app/actions/products";
 import { createSale } from "@/app/actions/sales";
 import { getCustomersByShop } from "@/app/actions/customers";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { PosPageClient } from "../PosPageClient";
 
 type NewSalePageProps = {
@@ -72,7 +71,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       qty: number;
     }[];
 
-    await createSale({
+    const result = await createSale({
       shopId,
       items,
       paymentMethod,
@@ -81,7 +80,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       note,
     });
 
-    redirect(`/dashboard/sales?shopId=${shopId}`);
+    return result;
   }
 
   return (
