@@ -1,3 +1,5 @@
+// app/dashboard/reports/components/TopProductsReport.tsx
+
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -26,7 +28,9 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">সেরা বিক্রি হওয়া পণ্য</h2>
+          <h2 className="text-lg font-bold text-gray-900">
+            সেরা বিক্রি হওয়া পণ্য
+          </h2>
           <p className="text-xs text-gray-500">
             বিক্রিত সংখ্যা ও আয়ের ভিত্তিতে তালিকা
           </p>

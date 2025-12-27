@@ -1,20 +1,23 @@
+// app/dashboard/reports/components/SalesReport.tsx
+
 "use client";
 
-import { useEffect, useState } from "react";
-import { QuickDateFilter } from "./QuickDateFilter";
+import { useEffect, useMemo, useState } from "react";
 import { generateCSV } from "@/lib/utils/csv";
 import { downloadFile } from "@/lib/utils/download";
 
-export default function SalesReport({ shopId }: { shopId: string }) {
+type Props = { shopId: string; from?: string; to?: string };
+
+export default function SalesReport({ shopId, from, to }: Props) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  async function load(from?: string, to?: string) {
+  async function load(rangeFrom?: string, rangeTo?: string) {
     setLoading(true);
     try {
       const params = new URLSearchParams({ shopId });
-      if (from) params.append("from", from);
-      if (to) params.append("to", to);
+      if (rangeFrom) params.append("from", rangeFrom);
+      if (rangeTo) params.append("to", rangeTo);
 
       const res = await fetch(`/api/reports/sales?${params.toString()}`);
       if (!res.ok) {
@@ -31,23 +34,21 @@ export default function SalesReport({ shopId }: { shopId: string }) {
   }
 
   useEffect(() => {
-    load(); // load all time by default
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shopId]);
+    load(from, to);
+  }, [shopId, from, to]);
 
-  const totalAmount = items.reduce(
-    (sum, s) => sum + Number(s.totalAmount || 0),
-    0
+  const totalAmount = useMemo(
+    () => items.reduce((sum, s) => sum + Number(s.totalAmount || 0), 0),
+    [items]
   );
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">বিক্রয় রিপোর্ট</h2>
-          <p className="text-xs text-gray-500">শুধু তালিকা, কোনো চার্ট নেই।</p>
+          <h2 className="text-lg font-bold text-gray-900">বিক্রি রিপোর্ট</h2>
+          <p className="text-xs text-gray-500">তারিখ, পেমেন্ট, নোট</p>
         </div>
-        <QuickDateFilter onSelect={load} />
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
@@ -58,7 +59,7 @@ export default function SalesReport({ shopId }: { shopId: string }) {
           onClick={() => {
             const csv = generateCSV(
               ["id", "saleDate", "totalAmount", "paymentMethod", "note"],
-              items // ? FIXED
+              items
             );
             downloadFile("sales-report.csv", csv);
           }}
@@ -73,12 +74,18 @@ export default function SalesReport({ shopId }: { shopId: string }) {
         {loading ? (
           <p className="text-sm text-gray-500 text-center py-4">লোড হচ্ছে...</p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">কোনো বিক্রয় পাওয়া যায়নি</p>
+          <p className="text-sm text-gray-500 text-center py-4">
+            কোনো বিক্রি পাওয়া যায়নি
+          </p>
         ) : (
           items.map((s) => (
-            <div key={s.id} className="border border-gray-200 p-3 rounded-lg flex justify-between items-center hover:bg-gray-50 transition-colors">
+            <div
+              key={s.id}
+              className="border border-gray-200 p-3 rounded-lg flex justify-between items-center hover:bg-gray-50 transition-colors"
+            >
               <p>
-                <b className="text-gray-900">{s.totalAmount} ৳</b> <span className="text-gray-600">- {s.paymentMethod}</span>
+                <b className="text-gray-900">{s.totalAmount} ৳</b>{" "}
+                <span className="text-gray-600">- {s.paymentMethod}</span>
               </p>
               <p className="text-xs text-gray-500">
                 {new Date(s.saleDate).toLocaleDateString("bn-BD")}

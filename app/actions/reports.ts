@@ -196,22 +196,35 @@ export async function getCashWithFilter(
 }
 
 /* --------------------------------------------------
-   SALES SUMMARY (ALL TIME)
+   SALES SUMMARY (DATE AWARE)
 -------------------------------------------------- */
-export async function getSalesSummary(shopId: string) {
+export async function getSalesSummary(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
+  const { start, end } = parseTimestampRange(from, to);
   const [completed, voided] = await Promise.all([
     prisma.sale.findMany({
       where: {
         shopId,
         status: { not: "VOIDED" },
+        saleDate: {
+          gte: start ?? undefined,
+          lte: end ?? undefined,
+        },
       },
     }),
     prisma.sale.count({
       where: {
         shopId,
         status: "VOIDED",
+        saleDate: {
+          gte: start ?? undefined,
+          lte: end ?? undefined,
+        },
       },
     }),
   ]);
@@ -231,14 +244,23 @@ export async function getSalesSummary(shopId: string) {
     voidedCount,
   };
 }
-
-/* --------------------------------------------------
-   EXPENSE SUMMARY (ALL TIME)
--------------------------------------------------- */
-export async function getExpenseSummary(shopId: string) {
+export async function getExpenseSummary(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
-  const rows = await prisma.expense.findMany({ where: { shopId } });
+  const { start, end } = parseDateRange(from, to);
+  const rows = await prisma.expense.findMany({
+    where: {
+      shopId,
+      expenseDate: {
+        gte: start ?? undefined,
+        lte: end ?? undefined,
+      },
+    },
+  });
 
   const totalAmount = rows.reduce(
     (sum, row: any) => sum + Number(row.amount || 0),
@@ -250,14 +272,23 @@ export async function getExpenseSummary(shopId: string) {
     count: rows.length,
   };
 }
-
-/* --------------------------------------------------
-   CASH SUMMARY (ALL TIME)
--------------------------------------------------- */
-export async function getCashSummary(shopId: string) {
+export async function getCashSummary(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
-  const rows = await prisma.cashEntry.findMany({ where: { shopId } });
+  const { start, end } = parseTimestampRange(from, to);
+  const rows = await prisma.cashEntry.findMany({
+    where: {
+      shopId,
+      createdAt: {
+        gte: start ?? undefined,
+        lte: end ?? undefined,
+      },
+    },
+  });
 
   let totalIn = 0;
   let totalOut = 0;
@@ -265,26 +296,29 @@ export async function getCashSummary(shopId: string) {
   for (const row of rows as any[]) {
     const amt = Number(row.amount || 0);
     if (row.entryType === "IN") totalIn += amt;
-    else totalOut += amt;
+    if (row.entryType === "OUT") totalOut += amt;
   }
+
+  const balance = totalIn - totalOut;
 
   return {
     totalIn,
     totalOut,
-    balance: totalIn - totalOut,
+    balance,
   };
 }
-
-/* --------------------------------------------------
-   PROFIT SUMMARY (ALL TIME)
--------------------------------------------------- */
-export async function getProfitSummary(shopId: string) {
+export async function getProfitSummary(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
-  const salesData = await getSalesSummary(shopId);
-  const expenseData = await getExpenseSummary(shopId);
+  const salesData = await getSalesSummary(shopId, from, to);
+  const expenseData = await getExpenseSummary(shopId, from, to);
   const needsCogs = await shopNeedsCogs(shopId);
-  const cogs = needsCogs ? await getCogsTotal(shopId) : 0;
+  const { start, end } = parseTimestampRange(from, to);
+  const cogs = needsCogs ? await getCogsTotal(shopId, start, end) : 0;
 
   const totalExpense = expenseData.totalAmount + cogs;
   const profit = salesData.totalAmount - totalExpense;

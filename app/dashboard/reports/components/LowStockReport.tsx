@@ -1,3 +1,5 @@
+// app/dashboard/reports/components/LowStockReport.tsx
+
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -27,8 +29,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
     load(threshold);
   }, [load, threshold]);
 
-  const renderStatus = (qty: number) =>
-    qty <= 5 ? "জরুরি" : "কম";
+  const renderStatus = (qty: number) => (qty <= 5 ? "জরুরি" : "কম");
 
   return (
     <div className="space-y-4">
