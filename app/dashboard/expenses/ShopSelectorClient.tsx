@@ -1,3 +1,5 @@
+// app/dashboard/expenses/ShopSelectorClient.tsx
+
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -22,7 +24,9 @@ export default function ShopSelectorClient({ shops, selectedShopId }: Props) {
         const id = e.target.value;
         // Persist globally selected shop
         setShop(id);
-        document.cookie = `activeShopId=${id}; path=/; max-age=${60 * 60 * 24 * 30}`;
+        document.cookie = `activeShopId=${id}; path=/; max-age=${
+          60 * 60 * 24 * 30
+        }`;
         router.push(`/dashboard/expenses?shopId=${id}`);
       }}
     >

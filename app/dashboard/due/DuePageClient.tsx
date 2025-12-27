@@ -1,3 +1,5 @@
+// app/dashboard/due/DuePageClient.tsx
+
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -15,7 +17,12 @@ type Customer = {
 
 type Summary = {
   totalDue: number;
-  topDue: { id: string; name: string; totalDue: number; phone?: string | null }[];
+  topDue: {
+    id: string;
+    name: string;
+    totalDue: number;
+    phone?: string | null;
+  }[];
 };
 
 type StatementRow = {
@@ -73,11 +80,21 @@ export default function DuePageClient({
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
-  const customerTemplateKey = useMemo(() => `due:customerTemplates:${shopId}`, [shopId]);
-  const paymentTemplateKey = useMemo(() => `due:paymentTemplates:${shopId}`, [shopId]);
+  const customerTemplateKey = useMemo(
+    () => `due:customerTemplates:${shopId}`,
+    [shopId]
+  );
+  const paymentTemplateKey = useMemo(
+    () => `due:paymentTemplates:${shopId}`,
+    [shopId]
+  );
 
-  const [activeTab, setActiveTab] = useState<"summary" | "add" | "payment" | "list">("summary");
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers || []);
+  const [activeTab, setActiveTab] = useState<
+    "summary" | "add" | "payment" | "list"
+  >("summary");
+  const [customers, setCustomers] = useState<Customer[]>(
+    initialCustomers || []
+  );
   const [summary, setSummary] = useState<Summary>(
     initialSummary || { totalDue: 0, topDue: [] }
   );
@@ -95,8 +112,12 @@ export default function DuePageClient({
     amount: "",
     description: "",
   });
-  const [customerTemplates, setCustomerTemplates] = useState<CustomerTemplate[]>([]);
-  const [paymentTemplates, setPaymentTemplates] = useState<PaymentTemplate[]>([]);
+  const [customerTemplates, setCustomerTemplates] = useState<
+    CustomerTemplate[]
+  >([]);
+  const [paymentTemplates, setPaymentTemplates] = useState<PaymentTemplate[]>(
+    []
+  );
 
   function parseAmount(text: string) {
     const match = text.match(/(\d+(?:[.,]\d+)?)/);
@@ -118,8 +139,14 @@ export default function DuePageClient({
       setCustomers(initialCustomers || []);
       setSummary(initialSummary || { totalDue: 0, topDue: [] });
       try {
-        localStorage.setItem(`due:customers:${shopId}`, JSON.stringify(initialCustomers || []));
-        localStorage.setItem(`due:summary:${shopId}`, JSON.stringify(initialSummary || {}));
+        localStorage.setItem(
+          `due:customers:${shopId}`,
+          JSON.stringify(initialCustomers || [])
+        );
+        localStorage.setItem(
+          `due:summary:${shopId}`,
+          JSON.stringify(initialSummary || {})
+        );
       } catch {
         // ignore
       }
@@ -128,15 +155,21 @@ export default function DuePageClient({
     try {
       const cachedCustomers = localStorage.getItem(`due:customers:${shopId}`);
       const cachedSummary = localStorage.getItem(`due:summary:${shopId}`);
-      if (cachedCustomers) setCustomers(JSON.parse(cachedCustomers) as Customer[]);
+      if (cachedCustomers)
+        setCustomers(JSON.parse(cachedCustomers) as Customer[]);
       if (cachedSummary) setSummary(JSON.parse(cachedSummary) as Summary);
     } catch {
       // ignore
     }
   }, [online, initialCustomers, initialSummary, shopId]);
 
-  function mergeCustomerTemplates(existing: CustomerTemplate[], incoming: CustomerTemplate) {
-    const idx = existing.findIndex((t) => t.name.toLowerCase() === incoming.name.toLowerCase());
+  function mergeCustomerTemplates(
+    existing: CustomerTemplate[],
+    incoming: CustomerTemplate
+  ) {
+    const idx = existing.findIndex(
+      (t) => t.name.toLowerCase() === incoming.name.toLowerCase()
+    );
     const next = [...existing];
     if (idx >= 0) {
       const current = next[idx];
@@ -150,12 +183,18 @@ export default function DuePageClient({
     } else {
       next.unshift(incoming);
     }
-    return next.sort((a, b) => b.count - a.count || b.lastUsed - a.lastUsed).slice(0, 50);
+    return next
+      .sort((a, b) => b.count - a.count || b.lastUsed - a.lastUsed)
+      .slice(0, 50);
   }
 
-  function mergePaymentTemplates(existing: PaymentTemplate[], incoming: PaymentTemplate) {
+  function mergePaymentTemplates(
+    existing: PaymentTemplate[],
+    incoming: PaymentTemplate
+  ) {
     const keyMatch = (t: PaymentTemplate) =>
-      (t.customerId || "") === (incoming.customerId || "") && (t.description || "") === (incoming.description || "");
+      (t.customerId || "") === (incoming.customerId || "") &&
+      (t.description || "") === (incoming.description || "");
     const idx = existing.findIndex(keyMatch);
     const next = [...existing];
     if (idx >= 0) {
@@ -171,13 +210,16 @@ export default function DuePageClient({
     } else {
       next.unshift(incoming);
     }
-    return next.sort((a, b) => b.count - a.count || b.lastUsed - a.lastUsed).slice(0, 50);
+    return next
+      .sort((a, b) => b.count - a.count || b.lastUsed - a.lastUsed)
+      .slice(0, 50);
   }
 
   useEffect(() => {
     const SpeechRecognitionImpl =
       typeof window !== "undefined"
-        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        ? (window as any).SpeechRecognition ||
+          (window as any).webkitSpeechRecognition
         : null;
     setVoiceReady(Boolean(SpeechRecognitionImpl));
     return () => recognitionRef.current?.stop?.();
@@ -245,7 +287,9 @@ export default function DuePageClient({
     // Offline: use cached statement
     if (!online) {
       try {
-        const cached = localStorage.getItem(`due:statement:${shopId}:${customerId}`);
+        const cached = localStorage.getItem(
+          `due:statement:${shopId}:${customerId}`
+        );
         if (cached) {
           setStatement(JSON.parse(cached) || []);
         } else {
@@ -266,7 +310,10 @@ export default function DuePageClient({
       const json = await res.json();
       setStatement(json.data || []);
       try {
-        localStorage.setItem(`due:statement:${shopId}:${customerId}`,(JSON.stringify(json.data || [])));
+        localStorage.setItem(
+          `due:statement:${shopId}:${customerId}`,
+          JSON.stringify(json.data || [])
+        );
       } catch {
         // ignore cache errors
       }
@@ -289,7 +336,10 @@ export default function DuePageClient({
       };
       setCustomers((prev) => [payload, ...prev]);
       try {
-        localStorage.setItem(`due:customers:${shopId}`, JSON.stringify([payload, ...customers]));
+        localStorage.setItem(
+          `due:customers:${shopId}`,
+          JSON.stringify([payload, ...customers])
+        );
       } catch {
         // ignore
       }
@@ -328,7 +378,9 @@ export default function DuePageClient({
     e.preventDefault();
     if (!paymentForm.customerId || !paymentForm.amount) return;
     if (!online) {
-      alert("Offline অবস্থায় পেমেন্ট/আদায় যোগ করা যাবে না। অনলাইনে গিয়ে চেষ্টা করুন।");
+      alert(
+        "Offline অবস্থায় পেমেন্ট/আদায় যোগ করা যাবে না। অনলাইনে গিয়ে চেষ্টা করুন।"
+      );
       return;
     }
 
@@ -356,7 +408,11 @@ export default function DuePageClient({
       setPaymentTemplates(merged);
       localStorage.setItem(paymentTemplateKey, JSON.stringify(merged));
 
-      setPaymentForm({ customerId: paymentForm.customerId, amount: "", description: "" });
+      setPaymentForm({
+        customerId: paymentForm.customerId,
+        amount: "",
+        description: "",
+      });
       await refreshData();
       await loadStatement(paymentForm.customerId);
     } finally {
@@ -385,11 +441,19 @@ export default function DuePageClient({
     return dedupe(fromTemplates).slice(0, 6);
   }, [paymentTemplates]);
 
-  function startVoice(field: "customerName" | "customerPhone" | "customerAddress" | "paymentAmount" | "paymentDescription") {
+  function startVoice(
+    field:
+      | "customerName"
+      | "customerPhone"
+      | "customerAddress"
+      | "paymentAmount"
+      | "paymentDescription"
+  ) {
     if (listening) return;
     const SpeechRecognitionImpl =
       typeof window !== "undefined"
-        ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
+        ? (window as any).SpeechRecognition ||
+          (window as any).webkitSpeechRecognition
         : null;
 
     if (!SpeechRecognitionImpl) {
@@ -414,7 +478,8 @@ export default function DuePageClient({
           const phone = parsePhone(spoken);
           const name = phone ? spoken.replace(phone, "").trim() : spoken;
           setNewCustomer((p) => ({ ...p, name }));
-          if (phone && !newCustomer.phone) setNewCustomer((p) => ({ ...p, phone }));
+          if (phone && !newCustomer.phone)
+            setNewCustomer((p) => ({ ...p, phone }));
         } else if (field === "customerPhone") {
           const phone = parsePhone(spoken);
           if (phone) setNewCustomer((p) => ({ ...p, phone }));
@@ -428,9 +493,13 @@ export default function DuePageClient({
             setPaymentForm((p) => ({ ...p, description: leftover }));
           }
         } else if (field === "paymentDescription") {
-          setPaymentForm((p) => ({ ...p, description: p.description ? `${p.description} ${spoken}` : spoken }));
+          setPaymentForm((p) => ({
+            ...p,
+            description: p.description ? `${p.description} ${spoken}` : spoken,
+          }));
           const amt = parseAmount(spoken);
-          if (amt && !paymentForm.amount) setPaymentForm((p) => ({ ...p, amount: amt }));
+          if (amt && !paymentForm.amount)
+            setPaymentForm((p) => ({ ...p, amount: amt }));
         }
       }
       setListening(false);
@@ -450,21 +519,23 @@ export default function DuePageClient({
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
-            <p className="text-sm text-gray-600 mb-2">মোট বাকি</p>
-            <p className="text-4xl font-bold text-gray-900">{summary.totalDue.toFixed(2)} ৳</p>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
-            <p className="text-sm text-gray-600 mb-2">গ্রাহক সংখ্যা</p>
-            <p className="text-4xl font-bold text-gray-900">{customers.length}</p>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
-            <p className="text-sm text-gray-600 mb-2">সর্বোচ্চ বাকি</p>
-            {summary.topDue?.length === 0 ? (
-              <p className="text-sm text-gray-500">কোনো বাকি নেই</p>
-            ) : (
-              <div className="space-y-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
+          <p className="text-sm text-gray-600 mb-2">মোট বাকি</p>
+          <p className="text-4xl font-bold text-gray-900">
+            {summary.totalDue.toFixed(2)} ৳
+          </p>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
+          <p className="text-sm text-gray-600 mb-2">গ্রাহক সংখ্যা</p>
+          <p className="text-4xl font-bold text-gray-900">{customers.length}</p>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
+          <p className="text-sm text-gray-600 mb-2">সর্বোচ্চ বাকি</p>
+          {summary.topDue?.length === 0 ? (
+            <p className="text-sm text-gray-500">কোনো বাকি নেই</p>
+          ) : (
+            <div className="space-y-2">
               {summary.topDue?.slice(0, 2).map((c) => (
                 <p key={c.id} className="text-sm font-medium text-gray-900">
                   {c.name}: {c.totalDue.toFixed(2)} ৳
@@ -503,17 +574,27 @@ export default function DuePageClient({
           {/* Summary Tab */}
           {activeTab === "summary" && (
             <div className="space-y-4">
-              <h3 className="text-lg font-bold text-gray-900">গ্রাহক তালিকা ও বিবরণ</h3>
+              <h3 className="text-lg font-bold text-gray-900">
+                গ্রাহক তালিকা ও বিবরণ
+              </h3>
               <div className="space-y-3">
                 {customers.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">এখনও কোনো গ্রাহক নেই।</p>
+                  <p className="text-center text-gray-500 py-8">
+                    এখনও কোনো গ্রাহক নেই।
+                  </p>
                 ) : (
                   customers.map((c) => (
-                    <div key={c.id} className="bg-gray-50 rounded-lg p-4 flex justify-between items-start card-lift">
+                    <div
+                      key={c.id}
+                      className="bg-gray-50 rounded-lg p-4 flex justify-between items-start card-lift"
+                    >
                       <div>
-                        <h4 className="font-semibold text-gray-900">{c.name}</h4>
+                        <h4 className="font-semibold text-gray-900">
+                          {c.name}
+                        </h4>
                         <p className="text-sm text-gray-600 mt-1">
-                          {c.phone || "ফোন নেই"} {c.address ? `• ${c.address}` : ""}
+                          {c.phone || "ফোন নেই"}{" "}
+                          {c.address ? `• ${c.address}` : ""}
                         </p>
                       </div>
                       <div className="text-right">
@@ -522,7 +603,10 @@ export default function DuePageClient({
                         </p>
                         {c.lastPaymentAt && (
                           <p className="text-xs text-gray-500 mt-1">
-                            শেষ পেমেন্ট: {new Date(c.lastPaymentAt).toLocaleDateString("bn-BD")}
+                            শেষ পেমেন্ট:{" "}
+                            {new Date(c.lastPaymentAt).toLocaleDateString(
+                              "bn-BD"
+                            )}
                           </p>
                         )}
                       </div>
@@ -536,21 +620,29 @@ export default function DuePageClient({
           {/* Add Customer Tab */}
           {activeTab === "add" && (
             <form onSubmit={handleAddCustomer} className="space-y-4 max-w-lg">
-              <h3 className="text-lg font-bold text-gray-900">নতুন গ্রাহক যোগ করুন</h3>
+              <h3 className="text-lg font-bold text-gray-900">
+                নতুন গ্রাহক যোগ করুন
+              </h3>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-gray-900">গ্রাহকের নাম *</label>
+                <label className="block text-base font-medium text-gray-900">
+                  গ্রাহকের নাম *
+                </label>
                 <div className="flex gap-3">
                   <input
                     className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                     placeholder="যেমন: করিম সাহেব"
                     value={newCustomer.name}
-                    onChange={(e) => setNewCustomer((p) => ({ ...p, name: e.target.value }))}
+                    onChange={(e) =>
+                      setNewCustomer((p) => ({ ...p, name: e.target.value }))
+                    }
                     required
                     autoComplete="off"
                   />
                   <button
                     type="button"
-                    onClick={listening ? stopVoice : () => startVoice("customerName")}
+                    onClick={
+                      listening ? stopVoice : () => startVoice("customerName")
+                    }
                     disabled={!voiceReady}
                     className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
                       listening
@@ -567,7 +659,9 @@ export default function DuePageClient({
                       <button
                         key={n}
                         type="button"
-                        onClick={() => setNewCustomer((p) => ({ ...p, name: n }))}
+                        onClick={() =>
+                          setNewCustomer((p) => ({ ...p, name: n }))
+                        }
                         className="px-3 py-2 rounded-full border border-emerald-200 text-emerald-800 bg-emerald-50 text-sm hover:border-emerald-300"
                       >
                         {n}
@@ -577,17 +671,23 @@ export default function DuePageClient({
                 )}
               </div>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-gray-900">ফোন নম্বর (ঐচ্ছিক)</label>
+                <label className="block text-base font-medium text-gray-900">
+                  ফোন নম্বর (ঐচ্ছিক)
+                </label>
                 <div className="flex gap-3">
                   <input
                     className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                     placeholder="যেমন: 01700000000"
                     value={newCustomer.phone}
-                    onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))}
+                    onChange={(e) =>
+                      setNewCustomer((p) => ({ ...p, phone: e.target.value }))
+                    }
                   />
                   <button
                     type="button"
-                    onClick={listening ? stopVoice : () => startVoice("customerPhone")}
+                    onClick={
+                      listening ? stopVoice : () => startVoice("customerPhone")
+                    }
                     disabled={!voiceReady}
                     className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
                       listening
@@ -600,17 +700,25 @@ export default function DuePageClient({
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-gray-900">ঠিকানা (ঐচ্ছিক)</label>
+                <label className="block text-base font-medium text-gray-900">
+                  ঠিকানা (ঐচ্ছিক)
+                </label>
                 <div className="flex gap-3">
                   <input
                     className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                     placeholder="যেমন: বাজার রোড, ঢাকা"
                     value={newCustomer.address}
-                    onChange={(e) => setNewCustomer((p) => ({ ...p, address: e.target.value }))}
+                    onChange={(e) =>
+                      setNewCustomer((p) => ({ ...p, address: e.target.value }))
+                    }
                   />
                   <button
                     type="button"
-                    onClick={listening ? stopVoice : () => startVoice("customerAddress")}
+                    onClick={
+                      listening
+                        ? stopVoice
+                        : () => startVoice("customerAddress")
+                    }
                     disabled={!voiceReady}
                     className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
                       listening
@@ -622,7 +730,7 @@ export default function DuePageClient({
                   </button>
                 </div>
               </div>
-              <button 
+              <button
                 type="submit"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
               >
@@ -636,12 +744,17 @@ export default function DuePageClient({
             <form onSubmit={handlePayment} className="space-y-4 max-w-lg">
               <h3 className="text-lg font-bold text-gray-900">পেমেন্ট নিন</h3>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-gray-900">গ্রাহক বাছাই করুন *</label>
+                <label className="block text-base font-medium text-gray-900">
+                  গ্রাহক বাছাই করুন *
+                </label>
                 <select
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   value={paymentForm.customerId}
                   onChange={(e) => {
-                    setPaymentForm((p) => ({ ...p, customerId: e.target.value }));
+                    setPaymentForm((p) => ({
+                      ...p,
+                      customerId: e.target.value,
+                    }));
                     setSelectedCustomerId(e.target.value);
                     loadStatement(e.target.value);
                   }}
@@ -656,7 +769,9 @@ export default function DuePageClient({
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-gray-900">পেমেন্টের পরিমাণ (৳) *</label>
+                <label className="block text-base font-medium text-gray-900">
+                  পেমেন্টের পরিমাণ (৳) *
+                </label>
                 <div className="flex gap-3">
                   <input
                     className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -665,12 +780,16 @@ export default function DuePageClient({
                     min="0"
                     step="0.01"
                     value={paymentForm.amount}
-                    onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))}
+                    onChange={(e) =>
+                      setPaymentForm((p) => ({ ...p, amount: e.target.value }))
+                    }
                     required
                   />
                   <button
                     type="button"
-                    onClick={listening ? stopVoice : () => startVoice("paymentAmount")}
+                    onClick={
+                      listening ? stopVoice : () => startVoice("paymentAmount")
+                    }
                     disabled={!voiceReady}
                     className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
                       listening
@@ -687,7 +806,9 @@ export default function DuePageClient({
                       <button
                         key={a}
                         type="button"
-                        onClick={() => setPaymentForm((p) => ({ ...p, amount: a }))}
+                        onClick={() =>
+                          setPaymentForm((p) => ({ ...p, amount: a }))
+                        }
                         className="px-3 py-2 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm hover:border-emerald-300"
                       >
                         ৳ {a}
@@ -697,17 +818,28 @@ export default function DuePageClient({
                 )}
               </div>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-gray-900">বিবরণ (ঐচ্ছিক)</label>
+                <label className="block text-base font-medium text-gray-900">
+                  বিবরণ (ঐচ্ছিক)
+                </label>
                 <div className="flex gap-3">
                   <input
                     className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                     placeholder="যেমন: নগদ পেমেন্ট"
                     value={paymentForm.description}
-                    onChange={(e) => setPaymentForm((p) => ({ ...p, description: e.target.value }))}
+                    onChange={(e) =>
+                      setPaymentForm((p) => ({
+                        ...p,
+                        description: e.target.value,
+                      }))
+                    }
                   />
                   <button
                     type="button"
-                    onClick={listening ? stopVoice : () => startVoice("paymentDescription")}
+                    onClick={
+                      listening
+                        ? stopVoice
+                        : () => startVoice("paymentDescription")
+                    }
                     disabled={!voiceReady}
                     className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
                       listening
@@ -721,7 +853,11 @@ export default function DuePageClient({
               </div>
               <button
                 type="submit"
-                disabled={!paymentForm.customerId || !paymentForm.amount || savingPayment}
+                disabled={
+                  !paymentForm.customerId ||
+                  !paymentForm.amount ||
+                  savingPayment
+                }
                 className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
               >
                 {savingPayment ? "সংরক্ষণ করছে..." : "✓ পেমেন্ট রেকর্ড করুন"}
@@ -734,7 +870,9 @@ export default function DuePageClient({
             <div className="space-y-4">
               <h3 className="text-lg font-bold text-gray-900">সব গ্রাহক</h3>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-gray-900">বিবরণ দেখতে গ্রাহক বাছাই করুন</label>
+                <label className="block text-base font-medium text-gray-900">
+                  বিবরণ দেখতে গ্রাহক বাছাই করুন
+                </label>
                 <select
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   value={selectedCustomerId}
@@ -783,9 +921,13 @@ export default function DuePageClient({
                           statementWithBalance.map((row) => (
                             <tr key={row.id} className="border-t">
                               <td className="p-3">
-                                {new Date(row.entryDate).toLocaleDateString("bn-BD")}
+                                {new Date(row.entryDate).toLocaleDateString(
+                                  "bn-BD"
+                                )}
                               </td>
-                              <td className="p-3 text-left">{row.description || "-"}</td>
+                              <td className="p-3 text-left">
+                                {row.description || "-"}
+                              </td>
                               <td className="p-3 text-right">
                                 {row.entryType === "SALE"
                                   ? Number(row.amount || 0).toFixed(2)
@@ -806,12 +948,12 @@ export default function DuePageClient({
                     </table>
                   </div>
 
-              <div className="space-y-3 md:hidden">
-                {loadingStatement ? (
-                  <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
-                    লোড হচ্ছে...
-                  </p>
-                ) : statementWithBalance.length === 0 ? (
+                  <div className="space-y-3 md:hidden">
+                    {loadingStatement ? (
+                      <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
+                        লোড হচ্ছে...
+                      </p>
+                    ) : statementWithBalance.length === 0 ? (
                       <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
                         কোনো লেনদেন নেই
                       </p>
@@ -819,7 +961,9 @@ export default function DuePageClient({
                       statementWithBalance.map((row) => {
                         const sale = row.entryType === "SALE";
                         const amount = Number(row.amount || 0).toFixed(2);
-                        const running = Number((row as any).running || 0).toFixed(2);
+                        const running = Number(
+                          (row as any).running || 0
+                        ).toFixed(2);
                         return (
                           <div
                             key={row.id}
@@ -828,7 +972,9 @@ export default function DuePageClient({
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="text-xs text-gray-500">
-                                  {new Date(row.entryDate).toLocaleDateString("bn-BD")}
+                                  {new Date(row.entryDate).toLocaleDateString(
+                                    "bn-BD"
+                                  )}
                                 </p>
                                 <p className="text-base font-semibold text-gray-900 mt-1">
                                   {row.description || "-"}
@@ -855,7 +1001,9 @@ export default function DuePageClient({
                                 </p>
                               </div>
                               <div className="bg-gray-50 rounded-lg p-3">
-                                <p className="text-xs text-gray-500">চলতি বকেয়া</p>
+                                <p className="text-xs text-gray-500">
+                                  চলতি বকেয়া
+                                </p>
                                 <p className="text-base font-semibold text-gray-900">
                                   {running} ৳
                                 </p>

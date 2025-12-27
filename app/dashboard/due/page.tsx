@@ -1,3 +1,5 @@
+// app/dashboard/due/page.tsx
+
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getCustomersByShop, getDueSummary } from "@/app/actions/customers";
@@ -30,8 +32,7 @@ export default async function DuePage({ searchParams }: DuePageProps) {
       : null;
 
   const selectedShopId =
-    resolvedSearch?.shopId &&
-    shops.some((s) => s.id === resolvedSearch.shopId)
+    resolvedSearch?.shopId && shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
       : cookieSelectedShopId ?? shops[0].id;
 
@@ -47,8 +48,12 @@ export default async function DuePage({ searchParams }: DuePageProps) {
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">🤝</span>
-            <h1 className="text-3xl font-bold text-gray-900 leading-tight">ধার / বাকি</h1>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+              🤝
+            </span>
+            <h1 className="text-3xl font-bold text-gray-900 leading-tight">
+              ধার / বাকি
+            </h1>
           </div>
           <p className="text-sm text-gray-500 mt-2 leading-snug">
             দোকান: <span className="font-semibold">{selectedShop.name}</span>

@@ -1,3 +1,5 @@
+// app/dashboard/due/ShopSelector.tsx
+
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -22,7 +24,9 @@ export default function DueShopSelector({ shops, selectedShopId }: Props) {
         const id = e.target.value;
         // Persist globally selected shop
         setShop(id);
-        document.cookie = `activeShopId=${id}; path=/; max-age=${60 * 60 * 24 * 30}`;
+        document.cookie = `activeShopId=${id}; path=/; max-age=${
+          60 * 60 * 24 * 30
+        }`;
         router.push(`/dashboard/due?shopId=${id}`);
       }}
     >

@@ -61,32 +61,36 @@ export default async function ExpensesPage({
   }));
 
   return (
-    <div className="space-y-6 section-gap">
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">💸</span>
-              <h1 className="text-3xl font-bold text-gray-900 leading-tight">খরচের তালিকা</h1>
+    <div className="space-y-4 section-gap">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+              💸
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 leading-tight">
+                খরচ
+              </h1>
+              <p className="text-sm text-gray-500 leading-snug">
+                দোকান: <span className="font-semibold">{selectedShop.name}</span>
+              </p>
             </div>
-            <p className="text-base text-gray-600 mt-1 leading-snug">
-              আজ কী কী খরচ করলেন, লিখে রাখুন।
-            </p>
-            <p className="text-sm text-gray-500 leading-snug">
-              দোকান: <span className="font-semibold">{selectedShop.name}</span>
-            </p>
           </div>
+          <p className="text-sm text-gray-600 leading-snug">
+            আজ কত খরচ হলো, দ্রুত দেখুন ও নিয়ন্ত্রণ করুন।
+          </p>
+        </div>
 
-          <div className="w-full lg:w-auto flex flex-col sm:flex-row sm:items-center gap-3">
-            <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
+        <div className="w-full lg:w-auto flex flex-col sm:flex-row sm:items-center gap-3">
+          <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
 
-            <Link
-              href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
-              className="w-full sm:w-auto px-6 py-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg font-semibold hover:border-emerald-300 hover:bg-emerald-100 transition-colors text-center pressable"
-            >
-              ➕ নতুন খরচ
-            </Link>
-          </div>
+          <Link
+            href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
+            className="w-full sm:w-auto px-6 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors text-center pressable"
+          >
+            + নতুন খরচ
+          </Link>
         </div>
       </div>
 
