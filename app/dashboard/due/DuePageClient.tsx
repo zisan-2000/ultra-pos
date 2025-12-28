@@ -516,60 +516,102 @@ export default function DuePageClient({
     setListening(false);
   }
 
+  const tabs = [
+    { id: "summary", label: "সারাংশ" },
+    { id: "add", label: "গ্রাহক যোগ" },
+    { id: "payment", label: "পেমেন্ট নিন" },
+    { id: "list", label: "স্টেটমেন্ট" },
+  ] as const;
+
+  const topDueName = summary.topDue?.[0]?.name || "";
+  const topDueAmount = summary.topDue?.[0]?.totalDue ?? 0;
+
   return (
-    <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
-          <p className="text-sm text-gray-600 mb-2">মোট বাকি</p>
-          <p className="text-4xl font-bold text-gray-900">
-            {summary.totalDue.toFixed(2)} ৳
-          </p>
+    <div className="space-y-5 pb-24">
+      {/* Sticky header + tabs */}
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-100">
+        <div className="px-3 py-3 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] text-slate-500 font-semibold">দোকান</p>
+            <p className="text-base font-semibold text-slate-900 leading-tight">
+              {shopName}
+            </p>
+            <p className="text-[11px] text-slate-500">
+              {customers.length} গ্রাহক
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[11px] text-slate-500 font-semibold">মোট বাকি</p>
+            <p className="text-2xl font-bold text-slate-900 leading-tight">
+              {summary.totalDue.toFixed(2)} ৳
+            </p>
+            {topDueName ? (
+              <p className="text-[11px] text-slate-500">
+                সর্বোচ্চ: {topDueName} ({topDueAmount.toFixed(2)} ৳)
+              </p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab("add")}
+            className="shrink-0 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700"
+          >
+            + গ্রাহক
+          </button>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
-          <p className="text-sm text-gray-600 mb-2">গ্রাহক সংখ্যা</p>
-          <p className="text-4xl font-bold text-gray-900">{customers.length}</p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-6 card-lift">
-          <p className="text-sm text-gray-600 mb-2">সর্বোচ্চ বাকি</p>
-          {summary.topDue?.length === 0 ? (
-            <p className="text-sm text-gray-500">কোনো বাকি নেই</p>
-          ) : (
-            <div className="space-y-2">
-              {summary.topDue?.slice(0, 2).map((c) => (
-                <p key={c.id} className="text-sm font-medium text-gray-900">
-                  {c.name}: {c.totalDue.toFixed(2)} ৳
-                </p>
+        <div className="px-2 pb-2">
+          <div className="relative">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pr-10">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? "bg-emerald-600 text-white shadow-sm"
+                      : "bg-slate-100 text-slate-800"
+                  }`}
+                >
+                  {tab.label}
+                </button>
               ))}
             </div>
-          )}
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent" />
+          </div>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="bg-white rounded-lg border border-gray-200">
-        <div className="flex border-b border-gray-200">
-          {[
-            { id: "summary", label: "সারসংক্ষেপ" },
-            { id: "add", label: "নতুন গ্রাহক" },
-            { id: "payment", label: "পেমেন্ট নিন" },
-            { id: "list", label: "গ্রাহক তালিকা" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex-1 py-4 px-4 font-medium text-center transition-colors ${
-                activeTab === tab.id
-                  ? "text-green-600 border-b-2 border-green-600 bg-green-50"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      {/* Summary KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="md:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-sm card-lift">
+          <p className="text-sm text-slate-500 mb-1">মোট বাকি</p>
+          <p className="text-4xl font-bold text-slate-900">
+            {summary.totalDue.toFixed(2)} ৳
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            সর্বশেষ আপডেট করা ডেটা
+          </p>
         </div>
+        <div className="grid grid-cols-2 md:grid-cols-1 gap-3">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm card-lift">
+            <p className="text-xs text-slate-500 mb-1">মোট গ্রাহক</p>
+            <p className="text-2xl font-bold text-slate-900">{customers.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm card-lift">
+            <p className="text-xs text-slate-500 mb-1">সর্বোচ্চ বাকি</p>
+            {topDueName ? (
+              <p className="text-sm font-semibold text-slate-900 leading-snug">
+                {topDueName}: {topDueAmount.toFixed(2)} ৳
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">কোনো বাকি নেই</p>
+            )}
+          </div>
+        </div>
+      </div>
 
-        {/* Tab Content */}
+      {/* Tab Navigation + Content */}
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
         <div className="p-6">
           {/* Summary Tab */}
           {activeTab === "summary" && (
@@ -959,59 +1001,52 @@ export default function DuePageClient({
                       </p>
                     ) : (
                       statementWithBalance.map((row) => {
-                        const sale = row.entryType === "SALE";
-                        const amount = Number(row.amount || 0).toFixed(2);
-                        const running = Number(
-                          (row as any).running || 0
-                        ).toFixed(2);
-                        return (
-                          <div
-                            key={row.id}
-                            className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm card-lift"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-xs text-gray-500">
-                                  {new Date(row.entryDate).toLocaleDateString(
-                                    "bn-BD"
-                                  )}
-                                </p>
-                                <p className="text-base font-semibold text-gray-900 mt-1">
-                                  {row.description || "-"}
-                                </p>
-                              </div>
-                              <span
-                                className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                  sale
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-blue-100 text-blue-700"
-                                }`}
-                              >
-                                {sale ? "বিক্রি" : "পরিশোধ"}
-                              </span>
-                            </div>
+        const sale = row.entryType === "SALE";
+        const amount = Number(row.amount || 0).toFixed(2);
+        const running = Number((row as any).running || 0).toFixed(2);
+        return (
+          <div
+            key={row.id}
+            className="relative bg-white border border-gray-200 rounded-xl p-4 shadow-sm card-lift overflow-hidden"
+          >
+            <div
+              className={`absolute left-0 top-3 bottom-3 w-1 rounded-full ${
+                sale ? "bg-emerald-400" : "bg-blue-400"
+              }`}
+            />
+            <div className="pl-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500">
+                  {new Date(row.entryDate).toLocaleDateString("bn-BD")}
+                </p>
+                <p className="text-base font-semibold text-gray-900 mt-1">
+                  {row.description || "-"}
+                </p>
+              </div>
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  sale ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
+                }`}
+              >
+                {sale ? "বিক্রি" : "পেমেন্ট"}
+              </span>
+            </div>
 
-                            <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-gray-600">
-                              <div className="bg-gray-50 rounded-lg p-3">
-                                <p className="text-xs text-gray-500">
-                                  {sale ? "বিক্রির পরিমাণ" : "পরিশোধিত পরিমাণ"}
-                                </p>
-                                <p className="text-base font-semibold text-gray-900">
-                                  {amount} ৳
-                                </p>
-                              </div>
-                              <div className="bg-gray-50 rounded-lg p-3">
-                                <p className="text-xs text-gray-500">
-                                  চলতি বকেয়া
-                                </p>
-                                <p className="text-base font-semibold text-gray-900">
-                                  {running} ৳
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
+            <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-gray-600">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs text-gray-500">
+                  {sale ? "বিক্রির পরিমাণ" : "পেমেন্টের পরিমাণ"}
+                </p>
+                <p className="text-base font-semibold text-gray-900">{amount} ৳</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs text-gray-500">চলতি বাকি</p>
+                <p className="text-base font-semibold text-gray-900">{running} ৳</p>
+              </div>
+            </div>
+          </div>
+        );
+      })
                     )}
                   </div>
                 </div>

@@ -93,7 +93,11 @@ export default async function CashPage({ searchParams }: CashPageProps) {
         </div>
       </div>
 
-      <CashListClient shopId={selectedShopId} rows={serializableRows} />
+      <CashListClient
+        shopId={selectedShopId}
+        shopName={selectedShop.name}
+        rows={serializableRows}
+      />
     </div>
   );
 }
