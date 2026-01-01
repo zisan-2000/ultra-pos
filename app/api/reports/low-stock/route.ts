@@ -1,42 +1,52 @@
-import { NextResponse } from "next/server";
+// app/api/reports/low-stock/route.ts
+
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
+export async function GET(request: NextRequest) {
+  try {
+    const user = await requireUser();
+    const { searchParams } = new URL(request.url);
+    const shopId = searchParams.get("shopId");
+    const limit = parseInt(searchParams.get("limit") || "10");
 
-  const shopId = searchParams.get("shopId") || "";
-  const threshold = Number(searchParams.get("limit") || 10); // stock threshold
+    if (!shopId) {
+      return NextResponse.json({ error: "shopId required" }, { status: 400 });
+    }
 
-  if (!shopId) {
-    return NextResponse.json({ data: [], error: "shopId missing" }, { status: 400 });
-  }
+    await assertShopAccess(shopId, user);
 
-  const user = await requireUser();
-  await assertShopAccess(shopId, user);
-
-  // guard: non-number threshold -> default 10
-  const thresholdValue = Number.isFinite(threshold) ? threshold : 10;
-  const thresholdParam = thresholdValue.toFixed(2);
-
-  const rows = await prisma.product.findMany({
-    where: {
-      shopId,
-      isActive: true,
-      stockQty: {
-        lte: thresholdParam,
+    const lowStockProducts = await prisma.product.findMany({
+      where: {
+        shopId,
+        isActive: true,
+        trackStock: true,
+        stockQty: {
+          lte: limit,
+        },
       },
-    },
-    orderBy: { stockQty: "asc" },
-    take: 50,
-  });
+      select: {
+        id: true,
+        name: true,
+        stockQty: true,
+      },
+      orderBy: {
+        stockQty: "asc",
+      },
+      take: limit,
+    });
 
-  // normalize numeric fields as numbers for the client
-  const normalized = rows.map((p) => ({
-    ...p,
-    stockQty: Number(p.stockQty),
-  }));
+    const data = lowStockProducts.map((p) => ({
+      id: p.id,
+      name: p.name,
+      stockQty: Number(p.stockQty),
+    }));
 
-  return NextResponse.json({ data: normalized });
+    return NextResponse.json({ data });
+  } catch (error: any) {
+    console.error("Low stock report error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

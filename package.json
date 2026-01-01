@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"
+    "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts",
+    "ci:health": "bash scripts/ci-healthcheck.sh",
+    "release:check-sw": "bash scripts/check-sw-cache-name.sh"
   },
   "prisma": {
     "seed": "tsx --tsconfig tsconfig.seed.json prisma/seed.ts"

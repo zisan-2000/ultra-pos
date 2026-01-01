@@ -2,14 +2,16 @@ import { NextResponse } from "next/server";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-export function GET() {
-  const filePath = join(process.cwd(), "app/service-worker.js");
-  const sw = readFileSync(filePath, "utf8");
+// Cache the service worker script in-memory to avoid per-request disk reads.
+const swPath = join(process.cwd(), "app/service-worker.js");
+const swSource = readFileSync(swPath, "utf8");
 
-  return new NextResponse(sw, {
+export function GET() {
+  return new NextResponse(swSource, {
     headers: {
       "Content-Type": "application/javascript",
-      "Cache-Control": "public, max-age=0, must-revalidate",
+      // Aggressive caching is safe; SW versioning is controlled via CACHE_NAME bump.
+      "Cache-Control": "public, max-age=31536000, immutable",
     },
   });
 }

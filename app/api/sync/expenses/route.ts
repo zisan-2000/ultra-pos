@@ -2,6 +2,10 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth-session";
+import { assertShopAccess } from "@/lib/shop-access";
+import { z } from "zod";
+import { rateLimit } from "@/lib/rate-limit";
 
 type IncomingExpense = {
   id?: string;
@@ -12,6 +16,22 @@ type IncomingExpense = {
   expenseDate?: string | number | Date;
   createdAt?: number | string;
 };
+
+const expenseSchema = z.object({
+  id: z.string().optional(),
+  shopId: z.string(),
+  amount: z.union([z.string(), z.number()]),
+  category: z.string(),
+  note: z.string().nullable().optional(),
+  expenseDate: z.union([z.string(), z.number(), z.date()]).optional(),
+  createdAt: z.union([z.string(), z.number()]).optional(),
+});
+
+const bodySchema = z.object({
+  newItems: z.array(expenseSchema).optional().default([]),
+  updatedItems: z.array(expenseSchema.extend({ id: z.string() })).optional().default([]),
+  deletedIds: z.array(z.string()).optional().default([]),
+});
 
 function toMoney(value: string | number) {
   const num = Number(value);
@@ -27,8 +47,54 @@ function toDate(value?: number | string | Date) {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { newItems = [], updatedItems = [], deletedIds = [] } = body || {};
+    const rl = rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-expenses" });
+    if (rl.limited) {
+      return NextResponse.json(
+        { success: false, error: "Too many requests" },
+        { status: 429, headers: rl.headers },
+      );
+    }
+
+    const raw = await req.json();
+    const parsed = bodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: "Invalid payload", details: parsed.error.format() },
+        { status: 400 },
+      );
+    }
+
+    const { newItems, updatedItems, deletedIds } = parsed.data;
+
+    const user = await requireUser();
+
+    const shopIds = new Set<string>();
+    (Array.isArray(newItems) ? newItems : []).forEach((e: IncomingExpense) => {
+      if (e?.shopId) shopIds.add(e.shopId);
+    });
+    (Array.isArray(updatedItems) ? updatedItems : []).forEach((e: IncomingExpense) => {
+      if (e?.shopId) shopIds.add(e.shopId);
+    });
+
+    const deleteIds = Array.isArray(deletedIds) ? (deletedIds as string[]) : [];
+    if (deleteIds.length) {
+      const existing = await prisma.expense.findMany({
+        where: { id: { in: deleteIds } },
+        select: { id: true, shopId: true },
+      });
+      existing.forEach((e) => shopIds.add(e.shopId));
+    }
+
+    if ((newItems.length || updatedItems.length || deleteIds.length) && shopIds.size === 0) {
+      return NextResponse.json(
+        { success: false, error: "shopId required to sync expenses" },
+        { status: 400 },
+      );
+    }
+
+    for (const shopId of shopIds) {
+      await assertShopAccess(shopId, user);
+    }
 
     if (Array.isArray(newItems) && newItems.length > 0) {
       const data = newItems.map((item: IncomingExpense) => ({

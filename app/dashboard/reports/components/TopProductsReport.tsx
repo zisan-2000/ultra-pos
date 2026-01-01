@@ -11,11 +11,26 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
 
   const load = useCallback(
     async (limit = 10) => {
-      const res = await fetch(
-        `/api/reports/top-products?shopId=${shopId}&limit=${limit}`
-      );
-      const json = await res.json();
-      setData(json.data || []);
+      try {
+        const res = await fetch(
+          `/api/reports/top-products?shopId=${shopId}&limit=${limit}`,
+          { cache: "no-store" }
+        );
+        if (!res.ok) {
+          setData([]);
+          return;
+        }
+        const text = await res.text();
+        if (!text) {
+          setData([]);
+          return;
+        }
+        const json = JSON.parse(text);
+        setData(Array.isArray(json?.data) ? json.data : []);
+      } catch (e) {
+        console.error("Top products load failed", e);
+        setData([]);
+      }
     },
     [shopId]
   );
@@ -73,7 +88,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
                   <td className="p-3 text-gray-900">{item.name}</td>
                   <td className="p-3 text-right text-gray-900">{item.qty}</td>
                   <td className="p-3 text-right text-gray-900">
-                    {item.revenue.toFixed(2)}
+                    {Number(item.revenue || 0).toFixed(2)}
                   </td>
                 </tr>
               ))
@@ -110,7 +125,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
               <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
                 <span>আয়</span>
                 <span className="font-semibold text-gray-900">
-                  {item.revenue.toFixed(2)} ?
+                  {Number(item.revenue || 0).toFixed(2)} ?
                 </span>
               </div>
             </div>

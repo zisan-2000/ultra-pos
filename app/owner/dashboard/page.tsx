@@ -83,28 +83,28 @@ export default async function OwnerDashboardPage({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card
             title="আজকের বিক্রি"
-            value={`${(summary?.sales ?? 0).toFixed(2)} ৳`}
+            value={`${Number(summary?.sales?.total ?? summary?.sales ?? 0).toFixed(2)} ৳`}
             color="bg-emerald-500"
             icon="💰"
           />
 
           <Card
             title="আজকের খরচ"
-            value={`${(summary?.expenses ?? 0).toFixed(2)} ৳`}
+            value={`${Number(summary?.expenses?.total ?? summary?.expenses ?? 0).toFixed(2)} ৳`}
             color="bg-red-500"
             icon="💸"
           />
 
           <Card
             title="আজকের লাভ"
-            value={`${(summary?.profit ?? 0).toFixed(2)} ৳`}
+            value={`${Number(summary?.profit ?? 0).toFixed(2)} ৳`}
             color="bg-blue-600"
             icon="📈"
           />
 
           <Card
             title="ক্যাশ ব্যালেন্স"
-            value={`${(summary?.balance ?? 0).toFixed(2)} ৳`}
+            value={`${Number(summary?.cash?.balance ?? summary?.balance ?? 0).toFixed(2)} ৳`}
             color="bg-amber-400"
             icon="🏦"
           />

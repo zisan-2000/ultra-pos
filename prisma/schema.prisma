@@ -172,6 +172,7 @@ model Product {
 
   @@index([shopId], map: "idx_products_shop")
   @@index([shopId, isActive], map: "idx_products_active")
+  @@index([shopId, isActive, stockQty], map: "idx_products_low_stock")
   @@map("products")
 }
 
@@ -196,6 +197,8 @@ model Sale {
   @@index([shopId], map: "idx_sales_shop")
   @@index([shopId, createdAt, id], map: "idx_sales_shop_created_id")
   @@index([shopId, status, createdAt], map: "idx_sales_shop_status_created")
+  @@index([shopId, saleDate], map: "idx_sales_shop_sale_date")
+  @@index([shopId, status, saleDate], map: "idx_sales_shop_status_sale_date")
   @@index([customerId], map: "idx_sales_customer")
   @@map("sales")
 }
@@ -245,6 +248,7 @@ model CashEntry {
   shop Shop @relation(fields: [shopId], references: [id])
 
   @@index([shopId], map: "idx_cash_entries_shop")
+  @@index([shopId, createdAt], map: "idx_cash_entries_shop_created")
   @@map("cash_entries")
 }
 

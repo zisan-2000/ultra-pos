@@ -1,3 +1,5 @@
+// app/actions/reports.ts
+
 "use server";
 
 import { Prisma } from "@prisma/client";
@@ -14,13 +16,40 @@ function parseTimestampRange(from?: string, to?: string) {
 
   const start =
     startDate && !Number.isNaN(startDate.getTime()) ? startDate : undefined;
-  const end =
-    endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
+  const end = endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
 
   if (start) start.setUTCHours(0, 0, 0, 0);
   if (end) end.setUTCHours(23, 59, 59, 999);
 
   return { start, end };
+}
+
+function ensureBoundedRange(
+  start?: Date | null,
+  end?: Date | null,
+  fallbackDays = 30
+) {
+  const endDate = end ? new Date(end) : new Date();
+  endDate.setUTCHours(23, 59, 59, 999);
+
+  const startDate = start
+    ? new Date(start)
+    : new Date(endDate.getTime() - fallbackDays * 24 * 60 * 60 * 1000);
+  startDate.setUTCHours(0, 0, 0, 0);
+
+  return { start: startDate, end: endDate };
+}
+
+function clampRange(start?: Date | null, end?: Date | null, maxDays = 90) {
+  const bounded = ensureBoundedRange(start, end, maxDays);
+  const maxWindowMs = maxDays * 24 * 60 * 60 * 1000;
+  const delta = bounded.end.getTime() - bounded.start.getTime();
+  if (delta > maxWindowMs) {
+    const clampedStart = new Date(bounded.end.getTime() - maxWindowMs);
+    clampedStart.setUTCHours(0, 0, 0, 0);
+    return { start: clampedStart, end: bounded.end };
+  }
+  return bounded;
 }
 
 const SHOP_TYPES_WITH_COGS = new Set([
@@ -48,63 +77,57 @@ function sumCogs(rows: { qty: any; buyPrice: any }[]) {
 
 export async function getCogsTotal(
   shopId: string,
-  from?: Date,
-  to?: Date
+  from?: Date | null,
+  to?: Date | null
 ) {
-  const rows = await prisma.saleItem.findMany({
-    where: {
-      sale: {
-        shopId,
-        status: { not: "VOIDED" },
-        saleDate: {
-          gte: from,
-          lte: to,
-        },
-      },
-    },
-    select: {
-      quantity: true,
-      product: { select: { buyPrice: true } },
-    },
-  });
+  const { start, end } = ensureBoundedRange(from, to);
 
-  const mapped = rows.map((r) => ({
-    qty: r.quantity,
-    buyPrice: r.product?.buyPrice,
-  }));
+  const rows = await prisma.$queryRaw<
+    { sum: Prisma.Decimal | number | null }[]
+  >(Prisma.sql`
+    SELECT
+      SUM(CAST(si.quantity AS numeric) * COALESCE(p.buy_price, 0)) AS sum
+    FROM "sale_items" si
+    JOIN "sales" s ON s.id = si.sale_id
+    JOIN "products" p ON p.id = si.product_id
+    WHERE s.shop_id = CAST(${shopId} AS uuid)
+      AND s.status <> 'VOIDED'
+      AND s.sale_date >= ${start}
+      AND s.sale_date <= ${end}
+  `);
 
-  return sumCogs(mapped as any);
+  const raw = rows[0]?.sum ?? 0;
+  return Number(raw);
 }
 
 export async function getCogsByDay(
   shopId: string,
-  from?: Date,
-  to?: Date
+  from?: Date | null,
+  to?: Date | null
 ) {
-  const rows = await prisma.saleItem.findMany({
-    where: {
-      sale: {
-        shopId,
-        saleDate: {
-          gte: from,
-          lte: to,
-        },
-      },
-    },
-    select: {
-      quantity: true,
-      sale: { select: { saleDate: true } },
-      product: { select: { buyPrice: true } },
-    },
-  });
+  const { start, end } = ensureBoundedRange(from, to);
+
+  const rows = await prisma.$queryRaw<
+    { day: Date; sum: Prisma.Decimal | number | null }[]
+  >(Prisma.sql`
+    SELECT
+      DATE(s.sale_date) AS day,
+      SUM(CAST(si.quantity AS numeric) * COALESCE(p.buy_price, 0)) AS sum
+    FROM "sale_items" si
+    JOIN "sales" s ON s.id = si.sale_id
+    JOIN "products" p ON p.id = si.product_id
+    WHERE s.shop_id = CAST(${shopId} AS uuid)
+      AND s.status <> 'VOIDED'
+      AND s.sale_date >= ${start}
+      AND s.sale_date <= ${end}
+    GROUP BY DATE(s.sale_date)
+    ORDER BY DATE(s.sale_date)
+  `);
 
   const byDay: Record<string, number> = {};
-  rows.forEach((r: any) => {
-    const day = new Date(r.sale!.saleDate).toISOString().split("T")[0];
-    const qty = Number(r.quantity ?? 0);
-    const buy = Number(r.product?.buyPrice ?? 0);
-    if (!Number.isFinite(qty) || !Number.isFinite(buy)) return;
-    byDay[day] = (byDay[day] || 0) + qty * buy;
+  rows.forEach((r) => {
+    const day = new Date(r.day).toISOString().split("T")[0];
+    byDay[day] = Number(r.sum ?? 0);
   });
   return byDay;
 }
@@ -115,13 +138,18 @@ function parseDateRange(from?: string, to?: string) {
 
   const start =
     startDate && !Number.isNaN(startDate.getTime()) ? startDate : undefined;
-  const end =
-    endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
+  const end = endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
 
   if (start) start.setUTCHours(0, 0, 0, 0);
   if (end) end.setUTCHours(23, 59, 59, 999);
 
   return { start, end };
+}
+
+function normalizeLimit(limit?: number | null, defaultLimit = 200) {
+  const n = Number(limit);
+  if (!Number.isFinite(n)) return defaultLimit;
+  return Math.max(1, Math.min(n, 500));
 }
 
 /* --------------------------------------------------
@@ -130,11 +158,14 @@ function parseDateRange(from?: string, to?: string) {
 export async function getSalesWithFilter(
   shopId: string,
   from?: string,
-  to?: string
+  to?: string,
+  limit?: number
 ) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
-  const { start, end } = parseTimestampRange(from, to);
+  const safeLimit = normalizeLimit(limit);
+  const parsed = parseTimestampRange(from, to);
+  const { start, end } = clampRange(parsed.start, parsed.end, 90);
 
   return prisma.sale.findMany({
     where: {
@@ -146,6 +177,8 @@ export async function getSalesWithFilter(
         lte: end ?? undefined,
       },
     },
+    orderBy: [{ saleDate: "desc" }, { id: "desc" }],
+    take: safeLimit,
   });
 }
 
@@ -155,11 +188,14 @@ export async function getSalesWithFilter(
 export async function getExpensesWithFilter(
   shopId: string,
   from?: string,
-  to?: string
+  to?: string,
+  limit?: number
 ) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
-  const { start, end } = parseDateRange(from, to);
+  const safeLimit = normalizeLimit(limit);
+  const parsed = parseDateRange(from, to);
+  const { start, end } = clampRange(parsed.start, parsed.end, 90);
 
   return prisma.expense.findMany({
     where: {
@@ -169,6 +205,8 @@ export async function getExpensesWithFilter(
         lte: end ?? undefined,
       },
     },
+    orderBy: [{ expenseDate: "desc" }, { id: "desc" }],
+    take: safeLimit,
   });
 }
 
@@ -178,11 +216,14 @@ export async function getExpensesWithFilter(
 export async function getCashWithFilter(
   shopId: string,
   from?: string,
-  to?: string
+  to?: string,
+  limit?: number
 ) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
-  const { start, end } = parseTimestampRange(from, to);
+  const safeLimit = normalizeLimit(limit);
+  const parsed = parseTimestampRange(from, to);
+  const { start, end } = clampRange(parsed.start, parsed.end, 90);
 
   return prisma.cashEntry.findMany({
     where: {
@@ -192,6 +233,8 @@ export async function getCashWithFilter(
         lte: end ?? undefined,
       },
     },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: safeLimit,
   });
 }
 
@@ -205,17 +248,22 @@ export async function getSalesSummary(
 ) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
-  const { start, end } = parseTimestampRange(from, to);
-  const [completed, voided] = await Promise.all([
-    prisma.sale.findMany({
-      where: {
-        shopId,
-        status: { not: "VOIDED" },
-        saleDate: {
-          gte: start ?? undefined,
-          lte: end ?? undefined,
-        },
-      },
+  const parsed = parseTimestampRange(from, to);
+  const { start, end } = clampRange(parsed.start, parsed.end, 90);
+  const where: Prisma.SaleWhereInput = {
+    shopId,
+    status: { not: "VOIDED" },
+    saleDate: {
+      gte: start ?? undefined,
+      lte: end ?? undefined,
+    },
+  };
+
+  const [agg, voided] = await Promise.all([
+    prisma.sale.aggregate({
+      where,
+      _sum: { totalAmount: true },
+      _count: { _all: true },
     }),
     prisma.sale.count({
       where: {
@@ -229,13 +277,9 @@ export async function getSalesSummary(
     }),
   ]);
 
-  const totalAmount = completed.reduce(
-    (sum, row: any) => sum + Number(row.totalAmount || 0),
-    0
-  );
-
-  const completedCount = completed.length;
-  const voidedCount = voided;
+  const totalAmount = Number(agg._sum.totalAmount ?? 0);
+  const completedCount = agg._count._all ?? 0;
+  const voidedCount = voided ?? 0;
 
   return {
     totalAmount,
@@ -251,8 +295,9 @@ export async function getExpenseSummary(
 ) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
-  const { start, end } = parseDateRange(from, to);
-  const rows = await prisma.expense.findMany({
+  const parsed = parseDateRange(from, to);
+  const { start, end } = clampRange(parsed.start, parsed.end, 90);
+  const agg = await prisma.expense.aggregate({
     where: {
       shopId,
       expenseDate: {
@@ -260,16 +305,15 @@ export async function getExpenseSummary(
         lte: end ?? undefined,
       },
     },
+    _sum: { amount: true },
+    _count: { _all: true },
   });
 
-  const totalAmount = rows.reduce(
-    (sum, row: any) => sum + Number(row.amount || 0),
-    0
-  );
+  const totalAmount = Number(agg._sum.amount ?? 0);
 
   return {
     totalAmount,
-    count: rows.length,
+    count: agg._count._all ?? 0,
   };
 }
 export async function getCashSummary(
@@ -279,25 +323,35 @@ export async function getCashSummary(
 ) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
-  const { start, end } = parseTimestampRange(from, to);
-  const rows = await prisma.cashEntry.findMany({
-    where: {
-      shopId,
-      createdAt: {
-        gte: start ?? undefined,
-        lte: end ?? undefined,
+  const parsed = parseTimestampRange(from, to);
+  const { start, end } = clampRange(parsed.start, parsed.end, 90);
+  const [inAgg, outAgg] = await Promise.all([
+    prisma.cashEntry.aggregate({
+      where: {
+        shopId,
+        entryType: "IN",
+        createdAt: {
+          gte: start ?? undefined,
+          lte: end ?? undefined,
+        },
       },
-    },
-  });
+      _sum: { amount: true },
+    }),
+    prisma.cashEntry.aggregate({
+      where: {
+        shopId,
+        entryType: "OUT",
+        createdAt: {
+          gte: start ?? undefined,
+          lte: end ?? undefined,
+        },
+      },
+      _sum: { amount: true },
+    }),
+  ]);
 
-  let totalIn = 0;
-  let totalOut = 0;
-
-  for (const row of rows as any[]) {
-    const amt = Number(row.amount || 0);
-    if (row.entryType === "IN") totalIn += amt;
-    if (row.entryType === "OUT") totalOut += amt;
-  }
+  const totalIn = Number(inAgg._sum.amount ?? 0);
+  const totalOut = Number(outAgg._sum.amount ?? 0);
 
   const balance = totalIn - totalOut;
 
@@ -314,11 +368,18 @@ export async function getProfitSummary(
 ) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
-  const salesData = await getSalesSummary(shopId, from, to);
-  const expenseData = await getExpenseSummary(shopId, from, to);
-  const needsCogs = await shopNeedsCogs(shopId);
   const { start, end } = parseTimestampRange(from, to);
-  const cogs = needsCogs ? await getCogsTotal(shopId, start, end) : 0;
+  const bounded = ensureBoundedRange(start, end);
+
+  const rangeFrom = bounded.start.toISOString();
+  const rangeTo = bounded.end.toISOString();
+
+  const salesData = await getSalesSummary(shopId, rangeFrom, rangeTo);
+  const expenseData = await getExpenseSummary(shopId, rangeFrom, rangeTo);
+  const needsCogs = await shopNeedsCogs(shopId);
+  const cogs = needsCogs
+    ? await getCogsTotal(shopId, bounded.start, bounded.end)
+    : 0;
 
   const totalExpense = expenseData.totalAmount + cogs;
   const profit = salesData.totalAmount - totalExpense;

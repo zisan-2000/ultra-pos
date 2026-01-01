@@ -2,6 +2,33 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth-session";
+import { assertShopAccess } from "@/lib/shop-access";
+import { z } from "zod";
+import { rateLimit } from "@/lib/rate-limit";
+import { withTracing } from "@/lib/tracing";
+
+const productCreateSchema = z.object({
+  id: z.string().optional(),
+  shopId: z.string(),
+  name: z.string().optional(),
+  category: z.string().optional(),
+  buyPrice: z.union([z.string(), z.number()]).optional().nullable(),
+  sellPrice: z.union([z.string(), z.number()]).optional(),
+  stockQty: z.union([z.string(), z.number()]).optional(),
+  trackStock: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const productUpdateSchema = productCreateSchema.extend({
+  id: z.string(),
+});
+
+const syncBodySchema = z.object({
+  newItems: z.array(productCreateSchema).optional().default([]),
+  updatedItems: z.array(productUpdateSchema).optional().default([]),
+  deletedIds: z.array(z.string()).optional().default([]),
+});
 
 type IncomingProduct = Record<string, any>;
 
@@ -72,39 +99,98 @@ function sanitizeUpdate(item: IncomingProduct) {
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-
-    const { newItems = [], updatedItems = [], deletedIds = [] } = body || {};
-
-    // Insert new
-    if (Array.isArray(newItems) && newItems.length > 0) {
-      const sanitized = newItems.map(sanitizeCreate);
-      await prisma.product.createMany({ data: sanitized as any, skipDuplicates: true });
-    }
-
-    // Update existing
-    if (Array.isArray(updatedItems) && updatedItems.length > 0) {
-      for (const item of updatedItems) {
-        const { id, data } = sanitizeUpdate(item);
-        await prisma.product.update({
-          where: { id },
-          data,
-        });
+  return withTracing(req, "sync-products", async () => {
+    try {
+      const rl = rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-products" });
+      if (rl.limited) {
+        return NextResponse.json(
+          { success: false, error: "Too many requests" },
+          { status: 429, headers: rl.headers },
+        );
       }
-    }
 
-    // Delete
-    if (Array.isArray(deletedIds) && deletedIds.length > 0) {
-      await prisma.product.deleteMany({ where: { id: { in: deletedIds } } });
-    }
+      const raw = await req.json();
+      const parsed = syncBodySchema.safeParse(raw);
+      if (!parsed.success) {
+        return NextResponse.json(
+          { success: false, error: "Invalid payload", details: parsed.error.format() },
+          { status: 400 },
+        );
+      }
 
-    return NextResponse.json({ success: true });
-  } catch (e: any) {
-    console.error("Product sync failed", e);
-    return NextResponse.json(
-      { success: false, error: e?.message || "Sync failed" },
-      { status: 500 }
-    );
-  }
+      const { newItems, updatedItems, deletedIds } = parsed.data;
+
+      // ---------- AuthZ guard ----------
+      const user = await requireUser();
+
+      const shopIds = new Set<string>();
+      (Array.isArray(newItems) ? newItems : []).forEach((p) => {
+        if (p?.shopId) shopIds.add(p.shopId);
+      });
+
+      const updateIds = (Array.isArray(updatedItems) ? updatedItems : [])
+        .map((p) => p?.id)
+        .filter(Boolean) as string[];
+
+      const deleteIds = Array.isArray(deletedIds) ? (deletedIds as string[]) : [];
+
+      if (updateIds.length) {
+        const existing = await prisma.product.findMany({
+          where: { id: { in: updateIds } },
+          select: { id: true, shopId: true },
+        });
+        existing.forEach((p) => shopIds.add(p.shopId));
+      }
+
+      if (deleteIds.length) {
+        const existing = await prisma.product.findMany({
+          where: { id: { in: deleteIds } },
+          select: { id: true, shopId: true },
+        });
+        existing.forEach((p) => shopIds.add(p.shopId));
+      }
+
+      // Require at least one shopId to authorize against when there is work to do
+      if ((newItems.length || updatedItems.length || deleteIds.length) && shopIds.size === 0) {
+        return NextResponse.json(
+          { success: false, error: "shopId required to sync products" },
+          { status: 400 },
+        );
+      }
+
+      for (const shopId of shopIds) {
+        await assertShopAccess(shopId, user);
+      }
+
+      // Insert new
+      if (Array.isArray(newItems) && newItems.length > 0) {
+        const sanitized = newItems.map(sanitizeCreate);
+        await prisma.product.createMany({ data: sanitized as any, skipDuplicates: true });
+      }
+
+      // Update existing
+      if (Array.isArray(updatedItems) && updatedItems.length > 0) {
+        for (const item of updatedItems) {
+          const { id, data } = sanitizeUpdate(item);
+          await prisma.product.update({
+            where: { id },
+            data,
+          });
+        }
+      }
+
+      // Delete
+      if (Array.isArray(deletedIds) && deletedIds.length > 0) {
+        await prisma.product.deleteMany({ where: { id: { in: deletedIds } } });
+      }
+
+      return NextResponse.json({ success: true });
+    } catch (e: any) {
+      console.error("Product sync failed", e);
+      return NextResponse.json(
+        { success: false, error: e?.message || "Sync failed" },
+        { status: 500 }
+      );
+    }
+  });
 }

@@ -1,55 +1,66 @@
-import { NextResponse } from "next/server";
+// app/api/reports/top-products/route.ts
+
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
+export async function GET(request: NextRequest) {
+  try {
+    const user = await requireUser();
+    const { searchParams } = new URL(request.url);
+    const shopId = searchParams.get("shopId");
+    const limit = parseInt(searchParams.get("limit") || "10");
 
-  const shopId = searchParams.get("shopId")!;
-  const limit = Number(searchParams.get("limit") || 10);
+    if (!shopId) {
+      return NextResponse.json({ error: "shopId required" }, { status: 400 });
+    }
 
-  const user = await requireUser();
-  await assertShopAccess(shopId, user);
+    await assertShopAccess(shopId, user);
 
-  const items = await prisma.saleItem.findMany({
-    where: { sale: { shopId } },
-    select: {
-      productId: true,
-      quantity: true,
-      unitPrice: true,
-      product: {
-        select: {
-          name: true,
-          shopId: true,
+    const topProducts = await prisma.saleItem.groupBy({
+      by: ["productId"],
+      where: {
+        sale: {
+          shopId,
+          status: { not: "VOIDED" },
         },
       },
-    },
-  });
-
-  const map: Record<string, { name: string; qty: number; revenue: number }> = {};
-
-  items
-    .filter((item) => item.product?.shopId === shopId)
-    .forEach((item) => {
-      if (!map[item.productId]) {
-        map[item.productId] = {
-          name: item.product?.name || "Unknown",
-          qty: 0,
-          revenue: 0,
-        };
-      }
-
-      const qty = Number(item.quantity);
-      const price = Number(item.unitPrice);
-
-      map[item.productId].qty += qty;
-      map[item.productId].revenue += qty * price;
+      _sum: {
+        quantity: true,
+        lineTotal: true,
+      },
+      orderBy: {
+        _sum: {
+          lineTotal: "desc",
+        },
+      },
+      take: limit,
     });
 
-  const result = Object.values(map)
-    .sort((a, b) => b.qty - a.qty)
-    .slice(0, limit);
+    // Get product names
+    const productIds = topProducts.map((p) => p.productId);
+    const products = await prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
 
-  return NextResponse.json({ data: result });
+    const productMap = new Map(products.map((p) => [p.id, p.name]));
+
+    const data = topProducts.map((item) => ({
+      name: productMap.get(item.productId) || "Unknown",
+      qty: Number(item._sum.quantity || 0),
+      revenue: Number(item._sum.lineTotal || 0),
+    }));
+
+    return NextResponse.json({ data });
+  } catch (error: any) {
+    console.error("Top products report error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

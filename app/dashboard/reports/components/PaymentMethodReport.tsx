@@ -19,7 +19,8 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
       if (rangeTo) params.append("to", rangeTo);
 
       const res = await fetch(
-        `/api/reports/payment-method?${params.toString()}`
+        `/api/reports/payment-method?${params.toString()}`,
+        { cache: "no-store" }
       );
 
       if (!res.ok) {
@@ -27,8 +28,16 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
         return;
       }
 
-      const json = await res.json();
-      setData(json.data || []);
+      const text = await res.text();
+      if (!text) {
+        setData([]);
+        return;
+      }
+      const json = JSON.parse(text);
+      setData(Array.isArray(json?.data) ? json.data : []);
+    } catch (err) {
+      console.error("Payment method load failed", err);
+      setData([]);
     } finally {
       setLoading(false);
     }

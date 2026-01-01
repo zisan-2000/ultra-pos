@@ -12,9 +12,9 @@ const resolveBasePath = (roles: string[] | null | undefined) => {
   return toRoleBasePath(roles[0]);
 };
 
-async function getSession(req: NextRequest) {
+async function getAuthContext(req: NextRequest) {
   try {
-    const sessionRes = await fetch(new URL("/api/auth/get-session", req.url), {
+    const res = await fetch(new URL("/api/auth/session-rbac", req.url), {
       method: "GET",
       headers: {
         cookie: req.headers.get("cookie") ?? "",
@@ -22,33 +22,16 @@ async function getSession(req: NextRequest) {
       cache: "no-store",
     });
 
-    const setCookie = sessionRes.headers.get("set-cookie");
-    const data = sessionRes.ok ? await sessionRes.json() : null;
+    const setCookie = res.headers.get("set-cookie");
+    const data = res.ok ? await res.json() : null;
 
     return {
-      session: data?.session || null,
+      session: data?.session ?? null,
+      user: data?.user ?? null,
       setCookie,
     };
   } catch (error) {
-    console.error("BetterAuth get-session failed in middleware", error);
-    return { session: null, setCookie: null };
-  }
-}
-
-async function getRbacUser(req: NextRequest) {
-  try {
-    const res = await fetch(new URL("/api/rbac/me", req.url), {
-      method: "GET",
-      headers: {
-        cookie: req.headers.get("cookie") ?? "",
-      },
-      cache: "no-store",
-    });
-    const setCookie = res.headers.get("set-cookie");
-    const data = res.ok ? await res.json() : null;
-    return { user: data?.user || null, setCookie };
-  } catch (error) {
-    console.error("RBAC lookup failed in middleware", error);
+    console.error("Auth context lookup failed in middleware", error);
     return { user: null, setCookie: null };
   }
 }
@@ -63,7 +46,12 @@ const appendCookies = (res: NextResponse, cookies: Array<string | null>) => {
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   if (pathname.startsWith("/api/")) {
-    return NextResponse.next();
+    const res = NextResponse.next();
+    // Attach a request id for downstream tracing if not provided by the client.
+    if (!req.headers.get("x-request-id")) {
+      res.headers.set("x-request-id", crypto.randomUUID());
+    }
+    return res;
   }
 
   const isAuthPage =
@@ -81,7 +69,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const { session, setCookie: sessionCookie } = await getSession(req);
+  const { session, user, setCookie: sessionCookie } = await getAuthContext(req);
 
   const cookiesToSet: Array<string | null> = [];
   if (sessionCookie) cookiesToSet.push(sessionCookie);
@@ -94,8 +82,6 @@ export async function middleware(req: NextRequest) {
   }
 
   if (session && isAuthPage) {
-    const { user, setCookie } = await getRbacUser(req);
-    if (setCookie) cookiesToSet.push(setCookie);
     const basePath = resolveBasePath(user?.roles ?? []);
     const target = `${basePath}/dashboard`;
     return appendCookies(NextResponse.redirect(new URL(target, req.url)), cookiesToSet);
@@ -110,8 +96,6 @@ export async function middleware(req: NextRequest) {
   if (isDashboardPath) {
     // If user has a role-prefixed base path, normalize /dashboard to that base.
     if (pathname === "/dashboard" && session) {
-      const { user, setCookie } = await getRbacUser(req);
-      if (setCookie) cookiesToSet.push(setCookie);
       const basePath = resolveBasePath(user?.roles ?? []);
       if (basePath !== "/dashboard") {
         const target = `${basePath}/dashboard${search}`;
