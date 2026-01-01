@@ -125,7 +125,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
               <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
                 <span>আয়</span>
                 <span className="font-semibold text-gray-900">
-                  {Number(item.revenue || 0).toFixed(2)} ?
+                  {Number(item.revenue || 0).toFixed(2)} ৳
                 </span>
               </div>
             </div>

@@ -11,16 +11,31 @@ import { assertShopAccess } from "@/lib/shop-access";
    DATE FILTER HELPER
 -------------------------------------------------- */
 function parseTimestampRange(from?: string, to?: string) {
-  const startDate = from ? new Date(from) : undefined;
-  const endDate = to ? new Date(to) : undefined;
+  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
-  const start =
-    startDate && !Number.isNaN(startDate.getTime()) ? startDate : undefined;
-  const end = endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
+  const parse = (value?: string, mode?: "start" | "end") => {
+    if (!value) return undefined;
+    // If UI passes YYYY-MM-DD, interpret as Asia/Dhaka local day.
+    if (isDateOnly(value)) {
+      const tzOffset = "+06:00";
+      const iso =
+        mode === "end"
+          ? `${value}T23:59:59.999${tzOffset}`
+          : `${value}T00:00:00.000${tzOffset}`;
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? undefined : d;
+    }
 
-  if (start) start.setUTCHours(0, 0, 0, 0);
-  if (end) end.setUTCHours(23, 59, 59, 999);
+    // Otherwise assume ISO timestamp and clamp to UTC day boundaries.
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return undefined;
+    if (mode === "start") d.setUTCHours(0, 0, 0, 0);
+    if (mode === "end") d.setUTCHours(23, 59, 59, 999);
+    return d;
+  };
 
+  const start = parse(from, "start");
+  const end = parse(to, "end");
   return { start, end };
 }
 
@@ -133,17 +148,7 @@ export async function getCogsByDay(
 }
 
 function parseDateRange(from?: string, to?: string) {
-  const startDate = from ? new Date(from) : undefined;
-  const endDate = to ? new Date(to) : undefined;
-
-  const start =
-    startDate && !Number.isNaN(startDate.getTime()) ? startDate : undefined;
-  const end = endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
-
-  if (start) start.setUTCHours(0, 0, 0, 0);
-  if (end) end.setUTCHours(23, 59, 59, 999);
-
-  return { start, end };
+  return parseTimestampRange(from, to);
 }
 
 function normalizeLimit(limit?: number | null, defaultLimit = 200) {
@@ -165,7 +170,10 @@ export async function getSalesWithFilter(
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
   const parsed = parseTimestampRange(from, to);
-  const { start, end } = clampRange(parsed.start, parsed.end, 90);
+  const useUnbounded = !from && !to;
+  const { start, end } = useUnbounded
+    ? { start: undefined, end: undefined }
+    : clampRange(parsed.start, parsed.end, 90);
 
   return prisma.sale.findMany({
     where: {
@@ -195,7 +203,10 @@ export async function getExpensesWithFilter(
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
   const parsed = parseDateRange(from, to);
-  const { start, end } = clampRange(parsed.start, parsed.end, 90);
+  const useUnbounded = !from && !to;
+  const { start, end } = useUnbounded
+    ? { start: undefined, end: undefined }
+    : clampRange(parsed.start, parsed.end, 90);
 
   return prisma.expense.findMany({
     where: {
@@ -223,7 +234,10 @@ export async function getCashWithFilter(
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
   const parsed = parseTimestampRange(from, to);
-  const { start, end } = clampRange(parsed.start, parsed.end, 90);
+  const useUnbounded = !from && !to;
+  const { start, end } = useUnbounded
+    ? { start: undefined, end: undefined }
+    : clampRange(parsed.start, parsed.end, 90);
 
   return prisma.cashEntry.findMany({
     where: {
@@ -249,7 +263,10 @@ export async function getSalesSummary(
   const user = await requireUser();
   await assertShopAccess(shopId, user);
   const parsed = parseTimestampRange(from, to);
-  const { start, end } = clampRange(parsed.start, parsed.end, 90);
+  const useUnbounded = !from && !to;
+  const { start, end } = useUnbounded
+    ? { start: undefined, end: undefined }
+    : clampRange(parsed.start, parsed.end, 90);
   const where: Prisma.SaleWhereInput = {
     shopId,
     status: { not: "VOIDED" },
@@ -296,7 +313,10 @@ export async function getExpenseSummary(
   const user = await requireUser();
   await assertShopAccess(shopId, user);
   const parsed = parseDateRange(from, to);
-  const { start, end } = clampRange(parsed.start, parsed.end, 90);
+  const useUnbounded = !from && !to;
+  const { start, end } = useUnbounded
+    ? { start: undefined, end: undefined }
+    : clampRange(parsed.start, parsed.end, 90);
   const agg = await prisma.expense.aggregate({
     where: {
       shopId,
@@ -324,7 +344,10 @@ export async function getCashSummary(
   const user = await requireUser();
   await assertShopAccess(shopId, user);
   const parsed = parseTimestampRange(from, to);
-  const { start, end } = clampRange(parsed.start, parsed.end, 90);
+  const useUnbounded = !from && !to;
+  const { start, end } = useUnbounded
+    ? { start: undefined, end: undefined }
+    : clampRange(parsed.start, parsed.end, 90);
   const [inAgg, outAgg] = await Promise.all([
     prisma.cashEntry.aggregate({
       where: {
@@ -369,7 +392,8 @@ export async function getProfitSummary(
   const user = await requireUser();
   await assertShopAccess(shopId, user);
   const { start, end } = parseTimestampRange(from, to);
-  const bounded = ensureBoundedRange(start, end);
+  const fallbackDays = !from && !to ? 3650 : 30;
+  const bounded = ensureBoundedRange(start, end, fallbackDays);
 
   const rangeFrom = bounded.start.toISOString();
   const rangeTo = bounded.end.toISOString();

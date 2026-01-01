@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Select,
   SelectContent,
@@ -15,7 +15,25 @@ import {
 import LogoutButton from "@/components/LogoutButton";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useCurrentShop } from "@/hooks/use-current-shop";
-import { Plus } from "lucide-react";
+import {
+  BarChart3,
+  ChevronDown,
+  HandCoins,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  NotebookText,
+  Package,
+  Plus,
+  Receipt,
+  Settings,
+  ShoppingCart,
+  Store,
+  User,
+  Users,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -33,26 +51,26 @@ type RbacUser = {
   permissions: string[];
 } | null;
 
-const navItems = [
-  { href: "/dashboard", label: "ড্যাশবোর্ড" },
-  { href: "/dashboard/shops", label: "দোকান" },
-  { href: "/dashboard/products", label: "পণ্য" },
-  { href: "/dashboard/sales", label: "বিক্রি" },
-  { href: "/dashboard/expenses", label: "খরচ" },
-  { href: "/dashboard/due", label: "ধার / পাওনা" },
-  { href: "/dashboard/cash", label: "নগদ খাতা" },
-  { href: "/dashboard/reports", label: "রিপোর্ট" },
-  { href: "/dashboard/profile", label: "আমার প্রোফাইল" },
-  { href: "/dashboard/users", label: "ব্যবহারকারী ব্যবস্থাপনা" },
+const navItems: { href: string; label: string; Icon: LucideIcon }[] = [
+  { href: "/dashboard", label: "ড্যাশবোর্ড", Icon: LayoutDashboard },
+  { href: "/dashboard/shops", label: "দোকান", Icon: Store },
+  { href: "/dashboard/products", label: "পণ্য", Icon: Package },
+  { href: "/dashboard/sales", label: "বিক্রি", Icon: ShoppingCart },
+  { href: "/dashboard/expenses", label: "খরচ", Icon: Receipt },
+  { href: "/dashboard/due", label: "ধার / পাওনা", Icon: HandCoins },
+  { href: "/dashboard/cash", label: "নগদ খাতা", Icon: NotebookText },
+  { href: "/dashboard/reports", label: "রিপোর্ট", Icon: BarChart3 },
+  { href: "/dashboard/profile", label: "আমার প্রোফাইল", Icon: User },
+  { href: "/dashboard/users", label: "ব্যবহারকারী ব্যবস্থাপনা", Icon: Users },
 ];
 
 // ✅ mobile bottom nav: 6 -> 5 (profile removed)
-const bottomNav = [
-  { href: "/dashboard", label: "ড্যাশ", icon: "🏠" },
-  { href: "/dashboard/sales", label: "বিক্রি", icon: "🛒" },
-  { href: "/dashboard/products", label: "পণ্য", icon: "🗃️" },
-  { href: "/dashboard/expenses", label: "খরচ", icon: "💸" },
-  { href: "/dashboard/reports", label: "রিপোর্ট", icon: "📊" },
+const bottomNav: { href: string; label: string; Icon: LucideIcon }[] = [
+  { href: "/dashboard", label: "ড্যাশ", Icon: LayoutDashboard },
+  { href: "/dashboard/sales", label: "বিক্রি", Icon: ShoppingCart },
+  { href: "/dashboard/products", label: "পণ্য", Icon: Package },
+  { href: "/dashboard/expenses", label: "খরচ", Icon: Receipt },
+  { href: "/dashboard/reports", label: "রিপোর্ট", Icon: BarChart3 },
 ];
 
 const fabByRoute: Record<string, { href: string; label: string } | null> = {
@@ -117,10 +135,13 @@ export function DashboardShell({
   const router = useRouter();
   const { shopId, setShop } = useCurrentShop();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [rbacUser] = useState<RbacUser>(initialUser);
   const [rbacLoaded] = useState(true);
   const [shopNameOpen, setShopNameOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   const safeShopId = useMemo(() => {
     if (!shops || shops.length === 0) return null;
@@ -163,6 +184,64 @@ export function DashboardShell({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setUserMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!drawerOpen) setUserMenuOpen(false);
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (!userMenuRef.current) return;
+      if (!userMenuRef.current.contains(target)) setUserMenuOpen(false);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setUserMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown, { passive: true });
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [userMenuOpen]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const raw = window.localStorage.getItem("dashboard.sidebarCollapsed");
+      if (raw === "1") setSidebarCollapsed(true);
+      if (raw === "0") setSidebarCollapsed(false);
+    } catch {
+      // ignore
+    }
+  }, [mounted]);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(
+          "dashboard.sidebarCollapsed",
+          next ? "1" : "0"
+        );
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   const isSuperAdmin = rbacUser?.roles?.includes("super_admin") ?? false;
   const isAdmin = rbacUser?.roles?.includes("admin") ?? false;
@@ -228,6 +307,34 @@ export function DashboardShell({
 
   const canonicalPathname = canonicalizePathname(pathname, roleBasePath);
 
+  const profileHref = useMemo(
+    () => applyBasePath("/dashboard/profile", roleBasePath),
+    [roleBasePath]
+  );
+
+  const userDisplayName = rbacUser?.name?.trim() || "User";
+  const userEmail = rbacUser?.email?.trim() || "";
+  const userInitials = useMemo(() => {
+    const source = (rbacUser?.name || rbacUser?.email || "").trim();
+    if (!source) return "U";
+    const parts = source
+      .replace(/\s+/g, " ")
+      .split(" ")
+      .filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }, [rbacUser?.name, rbacUser?.email]);
+
+  const primaryRoleLabel = useMemo(() => {
+    const role = (rbacUser?.roles || [])[0] || "";
+    if (!role) return "";
+    return role
+      .replace(/_/g, " ")
+      .split(" ")
+      .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ""))
+      .join(" ");
+  }, [rbacUser?.roles]);
+
   const showFabLabel = canonicalPathname === "/dashboard";
 
   const baseFabConfig =
@@ -257,7 +364,7 @@ export function DashboardShell({
       : "grid-cols-1";
 
   return (
-    <div className="h-screen overflow-x-hidden bg-gray-50">
+    <div className="h-screen overflow-x-hidden bg-slate-50">
       {/* Overlay for drawer on mobile */}
       {drawerOpen && (
         <button
@@ -270,198 +377,412 @@ export function DashboardShell({
       <div className="flex h-full">
         {/* Sidebar / Drawer */}
         <aside
-          className={`fixed z-40 inset-y-0 left-0 w-72 bg-white border-r border-gray-200 p-6 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
-            drawerOpen ? "translate-x-0 shadow-xl" : "-translate-x-full"
-          }`}
+          className={`fixed z-40 inset-y-0 left-0 bg-white/95 backdrop-blur border-r border-slate-200 transform transition-[transform,width] duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:h-dvh lg:shadow-none ${
+            drawerOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+          } ${sidebarCollapsed ? "lg:w-20 w-72" : "w-72"}`}
         >
-          <div className="mb-8 flex items-center justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                আল্ট্রা মাইক্রো
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">POS সিস্টেম</p>
-            </div>
-
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                online
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-red-100 text-red-700"
+          <div className="flex h-full flex-col">
+            <div
+              className={`flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 ${
+                sidebarCollapsed ? "lg:px-3" : ""
               }`}
             >
-              {online ? "অনলাইন" : "অফলাইন"}
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              প্রধান মেনু
-            </div>
-            <div className="flex flex-col gap-1">
-              {navItems
-                .filter((item) => hasPermission(routePermissionMap[item.href]))
-                .map((item) => {
-                  const targetHref =
-                    item.href === "/dashboard"
-                      ? effectiveDashboardHref
-                      : applyBasePath(item.href, roleBasePath);
-
-                  return (
-                    <Link
-                      key={item.href}
-                      href={targetHref}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setDrawerOpen(false);
-                        router.push(targetHref);
-                      }}
-                      className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
-                        isActive(targetHref)
-                          ? "bg-green-50 text-green-700 border border-green-100"
-                          : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                    >
-                      <span>{item.label}</span>
-                      {isActive(targetHref) ? (
-                        <span className="text-xs text-green-600">চলমান</span>
-                      ) : null}
-                    </Link>
-                  );
-                })}
-            </div>
-          </div>
-
-          {(canAccessRbacAdmin || canViewUserCreationLog) && (
-            <div className="mt-6 space-y-2">
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                অ্যাডমিন
+              <div className={sidebarCollapsed ? "lg:hidden" : ""}>
+                <h1 className="text-lg font-semibold tracking-tight text-slate-900">
+                  আল্ট্রা মাইক্রো
+                </h1>
+                <p className="text-xs text-slate-500 mt-1">POS সিস্টেম</p>
               </div>
-              {canViewUserCreationLog && (
-                <Link
-                  href={userCreationLogHref}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setDrawerOpen(false);
-                    router.push(userCreationLogHref);
-                  }}
-                  className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
-                    isActive(userCreationLogHref)
-                      ? "bg-green-50 text-green-700 border border-green-100"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  <span>ব্যবহারকারী তৈরি লগ</span>
-                  {isActive(userCreationLogHref) ? (
-                    <span className="text-xs text-green-600">চলমান</span>
-                  ) : null}
-                </Link>
-              )}
 
-              {canAccessRbacAdmin && (
-                <Link
-                  href={applyBasePath("/dashboard/admin/rbac", roleBasePath)}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setDrawerOpen(false);
-                    router.push(
-                      applyBasePath("/dashboard/admin/rbac", roleBasePath)
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                    online
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-red-100 text-red-700"
+                  } ${sidebarCollapsed ? "lg:hidden" : ""}`}
+                >
+                  {online ? "অনলাইন" : "অফলাইন"}
+                </span>
+
+                <button
+                  type="button"
+                  className="hidden lg:inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 h-9 w-9"
+                  aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-pressed={sidebarCollapsed}
+                  onClick={toggleSidebarCollapsed}
+                >
+                  {sidebarCollapsed ? (
+                    <Menu className="h-4 w-4" />
+                  ) : (
+                    <X className="h-4 w-4" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className="lg:hidden inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 h-9 w-9"
+                  aria-label="Close navigation"
+                  onClick={() => setDrawerOpen(false)}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <nav className="flex-1 min-h-0 px-2 py-3 overflow-y-auto">
+              <div
+                className={`px-2 pb-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider ${
+                  sidebarCollapsed ? "lg:hidden" : ""
+                }`}
+              >
+                প্রধান মেনু
+              </div>
+
+              <div className="flex flex-col gap-1">
+                {navItems
+                  .filter((item) => hasPermission(routePermissionMap[item.href]))
+                  .map((item) => {
+                    const targetHref =
+                      item.href === "/dashboard"
+                        ? effectiveDashboardHref
+                        : applyBasePath(item.href, roleBasePath);
+                    const active = isActive(targetHref);
+                    const Icon = item.Icon;
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={targetHref}
+                        onClick={() => setDrawerOpen(false)}
+                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                          active
+                            ? "bg-slate-900 text-white"
+                            : "text-slate-700 hover:bg-slate-100"
+                        } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                      >
+                        <span
+                          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                            active
+                              ? "bg-white/15"
+                              : "bg-slate-100 group-hover:bg-white"
+                          }`}
+                        >
+                          <Icon
+                            className={`h-4 w-4 ${
+                              active ? "text-white" : "text-slate-700"
+                            }`}
+                          />
+                        </span>
+
+                        <span
+                          className={
+                            sidebarCollapsed
+                              ? "lg:hidden truncate"
+                              : "truncate"
+                          }
+                        >
+                          {item.label}
+                        </span>
+                      </Link>
                     );
-                  }}
-                  className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
-                    isActive(
-                      applyBasePath("/dashboard/admin/rbac", roleBasePath)
-                    )
-                      ? "bg-green-50 text-green-700 border border-green-100"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  <span>RBAC ব্যবস্থাপনা</span>
-                  {isActive(
-                    applyBasePath("/dashboard/admin/rbac", roleBasePath)
-                  ) ? (
-                    <span className="text-xs text-green-600">চলমান</span>
-                  ) : null}
-                </Link>
-              )}
-            </div>
-          )}
-
-          {isSuperAdmin && (
-            <div className="mt-4 space-y-2">
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Settings
+                  })}
               </div>
-              <Link
-                href={applyBasePath(
-                  "/dashboard/admin/business-types",
-                  roleBasePath
+
+              {(canAccessRbacAdmin || canViewUserCreationLog) && (
+                <div className="mt-5">
+                  <div
+                    className={`px-2 pb-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider ${
+                      sidebarCollapsed ? "lg:hidden" : ""
+                    }`}
+                  >
+                    অ্যাডমিন
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    {canViewUserCreationLog && (
+                      <Link
+                        href={userCreationLogHref}
+                        onClick={() => setDrawerOpen(false)}
+                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                          isActive(userCreationLogHref)
+                            ? "bg-slate-900 text-white"
+                            : "text-slate-700 hover:bg-slate-100"
+                        } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                      >
+                        <span
+                          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                            isActive(userCreationLogHref)
+                              ? "bg-white/15"
+                              : "bg-slate-100 group-hover:bg-white"
+                          }`}
+                        >
+                          <Users
+                            className={`h-4 w-4 ${
+                              isActive(userCreationLogHref)
+                                ? "text-white"
+                                : "text-slate-700"
+                            }`}
+                          />
+                        </span>
+
+                        <span
+                          className={
+                            sidebarCollapsed
+                              ? "lg:hidden truncate"
+                              : "truncate"
+                          }
+                        >
+                          ব্যবহারকারী তৈরি লগ
+                        </span>
+                      </Link>
+                    )}
+
+                    {canAccessRbacAdmin && (
+                      <Link
+                        href={applyBasePath("/dashboard/admin/rbac", roleBasePath)}
+                        onClick={() => setDrawerOpen(false)}
+                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                          isActive(
+                            applyBasePath("/dashboard/admin/rbac", roleBasePath)
+                          )
+                            ? "bg-slate-900 text-white"
+                            : "text-slate-700 hover:bg-slate-100"
+                        } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                      >
+                        <span
+                          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                            isActive(
+                              applyBasePath(
+                                "/dashboard/admin/rbac",
+                                roleBasePath
+                              )
+                            )
+                              ? "bg-white/15"
+                              : "bg-slate-100 group-hover:bg-white"
+                          }`}
+                        >
+                          <Settings
+                            className={`h-4 w-4 ${
+                              isActive(
+                                applyBasePath(
+                                  "/dashboard/admin/rbac",
+                                  roleBasePath
+                                )
+                              )
+                                ? "text-white"
+                                : "text-slate-700"
+                            }`}
+                          />
+                        </span>
+
+                        <span
+                          className={
+                            sidebarCollapsed
+                              ? "lg:hidden truncate"
+                              : "truncate"
+                          }
+                        >
+                          RBAC ব্যবস্থাপনা
+                        </span>
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {isSuperAdmin && (
+                <div className="mt-5">
+                  <div
+                    className={`px-2 pb-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider ${
+                      sidebarCollapsed ? "lg:hidden" : ""
+                    }`}
+                  >
+                    Settings
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <Link
+                      href={applyBasePath(
+                        "/dashboard/admin/business-types",
+                        roleBasePath
+                      )}
+                      onClick={() => setDrawerOpen(false)}
+                      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                        isActive(
+                          applyBasePath(
+                            "/dashboard/admin/business-types",
+                            roleBasePath
+                          )
+                        )
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-700 hover:bg-slate-100"
+                      } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                    >
+                      <span
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                          isActive(
+                            applyBasePath(
+                              "/dashboard/admin/business-types",
+                              roleBasePath
+                            )
+                          )
+                            ? "bg-white/15"
+                            : "bg-slate-100 group-hover:bg-white"
+                        }`}
+                      >
+                        <Settings
+                          className={`h-4 w-4 ${
+                            isActive(
+                              applyBasePath(
+                                "/dashboard/admin/business-types",
+                                roleBasePath
+                              )
+                            )
+                              ? "text-white"
+                              : "text-slate-700"
+                          }`}
+                        />
+                      </span>
+
+                      <span
+                        className={
+                          sidebarCollapsed ? "lg:hidden truncate" : "truncate"
+                        }
+                      >
+                        Business Types
+                      </span>
+                    </Link>
+
+                    <Link
+                      href={systemSettingsHref}
+                      onClick={() => setDrawerOpen(false)}
+                      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                        pathname === systemSettingsHref
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-700 hover:bg-slate-100"
+                      } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                    >
+                      <span
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                          pathname === systemSettingsHref
+                            ? "bg-white/15"
+                            : "bg-slate-100 group-hover:bg-white"
+                        }`}
+                      >
+                        <Settings
+                          className={`h-4 w-4 ${
+                            pathname === systemSettingsHref
+                              ? "text-white"
+                              : "text-slate-700"
+                          }`}
+                        />
+                      </span>
+
+                      <span
+                        className={
+                          sidebarCollapsed ? "lg:hidden truncate" : "truncate"
+                        }
+                      >
+                        System Settings
+                      </span>
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </nav>
+
+            <div
+              className={`border-t border-slate-200 px-4 py-4 ${
+                sidebarCollapsed ? "lg:px-3" : ""
+              }`}
+            >
+              <div ref={userMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setUserMenuOpen((p) => !p)}
+                  className={`w-full flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                    sidebarCollapsed ? "lg:justify-center" : ""
+                  }`}
+                  aria-label="Open user menu"
+                  aria-expanded={userMenuOpen}
+                >
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white text-sm font-semibold">
+                    {userInitials}
+                  </span>
+
+                  <span className={sidebarCollapsed ? "hidden" : "min-w-0 flex-1"}>
+                    <span className="block truncate text-sm font-semibold text-slate-900">
+                      {userDisplayName}
+                    </span>
+                    {userEmail ? (
+                      <span className="block truncate text-xs text-slate-500">
+                        {userEmail}
+                      </span>
+                    ) : null}
+                  </span>
+
+                  <span className={sidebarCollapsed ? "hidden" : "flex items-center gap-2"}>
+                    {primaryRoleLabel ? (
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                        {primaryRoleLabel}
+                      </span>
+                    ) : null}
+                    <ChevronDown
+                      className={`h-4 w-4 text-slate-500 transition-transform ${
+                        userMenuOpen ? "rotate-180" : "rotate-0"
+                      }`}
+                    />
+                  </span>
+                </button>
+
+                {userMenuOpen && (
+                  <div
+                    className={`absolute bottom-[56px] z-50 rounded-xl border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.18)] overflow-hidden ${
+                      sidebarCollapsed
+                        ? "left-0 w-64"
+                        : "left-0 right-0"
+                    }`}
+                  >
+                    <div className="p-2">
+                      <Link
+                        href={profileHref}
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          setDrawerOpen(false);
+                        }}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+                      >
+                        <User className="h-4 w-4" />
+                        <span>Profile</span>
+                      </Link>
+
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2 px-3 pb-2 text-xs font-semibold text-slate-500">
+                          <LogOut className="h-4 w-4" />
+                          <span>Logout</span>
+                        </div>
+                        <LogoutButton variant="menu" />
+                      </div>
+                    </div>
+                  </div>
                 )}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setDrawerOpen(false);
-                  router.push(
-                    applyBasePath(
-                      "/dashboard/admin/business-types",
-                      roleBasePath
-                    )
-                  );
-                }}
-                className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
-                  isActive(
-                    applyBasePath(
-                      "/dashboard/admin/business-types",
-                      roleBasePath
-                    )
-                  )
-                    ? "bg-green-50 text-green-700 border border-green-100"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                <span>Business Types</span>
-                {isActive(
-                  applyBasePath("/dashboard/admin/business-types", roleBasePath)
-                ) ? (
-                  <span className="text-xs text-green-600">সক্রিয়</span>
-                ) : null}
-              </Link>
-
-              <Link
-                href={systemSettingsHref}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setDrawerOpen(false);
-                  router.push(systemSettingsHref);
-                }}
-                className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-base font-medium transition-colors cursor-pointer ${
-                  pathname === systemSettingsHref
-                    ? "bg-green-50 text-green-700 border border-green-100"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                <span>System Settings</span>
-                {pathname === systemSettingsHref ? (
-                  <span className="text-xs text-green-600">সক্রিয়</span>
-                ) : null}
-              </Link>
+              </div>
             </div>
-          )}
-
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <LogoutButton />
           </div>
         </aside>
 
         {/* Main content */}
         <div className="flex-1 flex flex-col h-full lg:pl-0 overflow-hidden">
-          <header className="sticky top-0 z-20 bg-linear-to-r from-slate-50 to-slate-100 border-b border-slate-200 shadow-sm">
+          <header className="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-slate-200">
             <div className="flex items-start gap-3 px-4 sm:px-6 lg:px-8 py-3">
               {/* Drawer toggle */}
               <button
-                className="lg:hidden rounded-lg border border-slate-200 px-3 py-2 text-gray-700 bg-white shadow-sm shrink-0 mt-1"
+                className="lg:hidden inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 shrink-0 mt-1 h-10 w-10"
                 onClick={() => setDrawerOpen((p) => !p)}
                 aria-label="Toggle navigation"
               >
-                ☰
+                <Menu className="h-5 w-5" />
               </button>
 
               {/* Left content */}
@@ -552,16 +873,19 @@ export function DashboardShell({
               item.href === "/dashboard"
                 ? effectiveDashboardHref
                 : applyBasePath(item.href, roleBasePath);
+            const Icon = item.Icon;
 
             return (
               <Link
                 key={item.href}
                 href={targetHref}
-                className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 ${
-                  isActive(targetHref) ? "text-blue-700" : "text-gray-500"
+                className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 rounded-xl transition-colors ${
+                  isActive(targetHref)
+                    ? "text-slate-900 bg-slate-100"
+                    : "text-slate-500"
                 }`}
               >
-                <span className="text-base leading-none">{item.icon}</span>
+                <Icon className="h-5 w-5" />
                 <span className="leading-none">{item.label}</span>
               </Link>
             );

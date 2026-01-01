@@ -6,17 +6,25 @@ import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 
 function parseTimestampRange(from?: string, to?: string) {
-  const startDate = from ? new Date(from) : undefined;
-  const endDate = to ? new Date(to) : undefined;
-
-  const start =
-    startDate && !Number.isNaN(startDate.getTime()) ? startDate : undefined;
-  const end = endDate && !Number.isNaN(endDate.getTime()) ? endDate : undefined;
-
-  if (start) start.setUTCHours(0, 0, 0, 0);
-  if (end) end.setUTCHours(23, 59, 59, 999);
-
-  return { start, end };
+  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const parse = (value?: string, mode?: "start" | "end") => {
+    if (!value) return undefined;
+    if (isDateOnly(value)) {
+      const tzOffset = "+06:00";
+      const iso =
+        mode === "end"
+          ? `${value}T23:59:59.999${tzOffset}`
+          : `${value}T00:00:00.000${tzOffset}`;
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? undefined : d;
+    }
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return undefined;
+    if (mode === "start") d.setUTCHours(0, 0, 0, 0);
+    if (mode === "end") d.setUTCHours(23, 59, 59, 999);
+    return d;
+  };
+  return { start: parse(from, "start"), end: parse(to, "end") };
 }
 
 export async function GET(request: NextRequest) {
@@ -34,16 +42,19 @@ export async function GET(request: NextRequest) {
     await assertShopAccess(shopId, user);
 
     const { start, end } = parseTimestampRange(from, to);
+    const useUnbounded = !from && !to;
 
     // Get all sales
     const sales = await prisma.sale.findMany({
       where: {
         shopId,
         status: { not: "VOIDED" },
-        saleDate: {
-          gte: start,
-          lte: end,
-        },
+        saleDate: useUnbounded
+          ? undefined
+          : {
+              gte: start,
+              lte: end,
+            },
       },
       select: {
         saleDate: true,
@@ -55,10 +66,12 @@ export async function GET(request: NextRequest) {
     const expenses = await prisma.expense.findMany({
       where: {
         shopId,
-        expenseDate: {
-          gte: start,
-          lte: end,
-        },
+        expenseDate: useUnbounded
+          ? undefined
+          : {
+              gte: start,
+              lte: end,
+            },
       },
       select: {
         expenseDate: true,
@@ -70,14 +83,22 @@ export async function GET(request: NextRequest) {
     const salesByDate = new Map<string, number>();
     const expensesByDate = new Map<string, number>();
 
+    const dhakaKey = (d: Date) =>
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Dhaka",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(d);
+
     sales.forEach((sale) => {
-      const dateKey = new Date(sale.saleDate).toISOString().split("T")[0];
+      const dateKey = dhakaKey(new Date(sale.saleDate));
       const current = salesByDate.get(dateKey) || 0;
       salesByDate.set(dateKey, current + Number(sale.totalAmount));
     });
 
     expenses.forEach((expense) => {
-      const dateKey = new Date(expense.expenseDate).toISOString().split("T")[0];
+      const dateKey = dhakaKey(new Date(expense.expenseDate));
       const current = expensesByDate.get(dateKey) || 0;
       expensesByDate.set(dateKey, current + Number(expense.amount));
     });

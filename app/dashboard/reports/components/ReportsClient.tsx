@@ -54,25 +54,37 @@ function computeRange(
   customFrom?: string,
   customTo?: string
 ) {
-  const toStr = (d: Date) => d.toISOString().split("T")[0];
+  const toDhakaDateStr = (d: Date) => {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Dhaka",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    return fmt.format(d);
+  };
   const today = new Date();
   if (preset === "custom") {
     return { from: customFrom, to: customTo };
   }
-  if (preset === "today") return { from: toStr(today), to: toStr(today) };
+  if (preset === "today") {
+    const t = toDhakaDateStr(today);
+    return { from: t, to: t };
+  }
   if (preset === "yesterday") {
     const y = new Date(today);
     y.setDate(y.getDate() - 1);
-    return { from: toStr(y), to: toStr(y) };
+    const d = toDhakaDateStr(y);
+    return { from: d, to: d };
   }
   if (preset === "7d") {
     const start = new Date(today);
     start.setDate(start.getDate() - 6);
-    return { from: toStr(start), to: toStr(today) };
+    return { from: toDhakaDateStr(start), to: toDhakaDateStr(today) };
   }
   if (preset === "month") {
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    return { from: toStr(start), to: toStr(today) };
+    return { from: toDhakaDateStr(start), to: toDhakaDateStr(today) };
   }
   return { from: undefined, to: undefined };
 }
@@ -135,8 +147,10 @@ export default function ReportsClient({
             <StatCard
               title="মোট বিক্রি"
               value={`${liveSummary.sales.totalAmount.toFixed(2)} ৳`}
-              subtitle={`মোট বিল: ${
-                liveSummary.sales.completedCount ?? liveSummary.sales.totalAmount
+              subtitle={`মোট বিল: ${liveSummary.sales.completedCount ?? 0}${
+                typeof liveSummary.sales.voidedCount === "number"
+                  ? ` · বাতিল: ${liveSummary.sales.voidedCount}`
+                  : ""
               }`}
               icon="💰"
             />
@@ -349,8 +363,10 @@ export default function ReportsClient({
             <StatCard
               title="মোট বিক্রি"
               value={`${liveSummary.sales.totalAmount.toFixed(2)} ৳`}
-              subtitle={`মোট বিল: ${
-                liveSummary.sales.completedCount ?? liveSummary.sales.totalAmount
+              subtitle={`মোট বিল: ${liveSummary.sales.completedCount ?? 0}${
+                typeof liveSummary.sales.voidedCount === "number"
+                  ? ` · বাতিল: ${liveSummary.sales.voidedCount}`
+                  : ""
               }`}
               icon="💰"
             />
