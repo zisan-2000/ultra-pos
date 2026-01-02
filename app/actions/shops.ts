@@ -22,13 +22,30 @@ export async function createShop(data: {
 }) {
   const user = await getCurrentUser();
   const isSuperAdmin = user.roles?.includes("super_admin") ?? false;
+  const isOwner = user.roles?.includes("owner") ?? false;
   const requestedOwnerId = data.ownerId?.trim() || undefined;
 
   if (!isSuperAdmin) {
-    throw new Error("Only super admin can create shops");
+    if (!isOwner) {
+      throw new Error("Only super admin can create shops");
+    }
+
+    if (requestedOwnerId && requestedOwnerId !== user.id) {
+      throw new Error("Owner cannot create shop for another user");
+    }
+
+    const existingCount = await prisma.shop.count({
+      where: { ownerId: user.id },
+    });
+
+    if (existingCount > 0) {
+      throw new Error(
+        "Owner can only create the first shop. Please contact super admin to create additional shops."
+      );
+    }
   }
 
-  if (requestedOwnerId) {
+  if (requestedOwnerId && isSuperAdmin) {
     const targetOwner = await prisma.user.findUnique({
       where: { id: requestedOwnerId },
       select: { id: true, roles: { select: { name: true } } },
@@ -38,7 +55,7 @@ export async function createShop(data: {
     }
   }
 
-  const targetOwnerId = requestedOwnerId ?? user.id;
+  const targetOwnerId = isSuperAdmin ? requestedOwnerId ?? user.id : user.id;
 
   await prisma.shop.create({
     data: {

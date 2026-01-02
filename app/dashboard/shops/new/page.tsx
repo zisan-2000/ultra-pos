@@ -4,7 +4,7 @@ import ShopFormClient from "../ShopFormClient";
 import { handleCreateShop } from "./actions";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth-session";
-import { getOwnerOptions } from "@/app/actions/shops";
+import { getOwnerOptions, getShopsByUser } from "@/app/actions/shops";
 import { listActiveBusinessTypes } from "@/app/actions/business-types";
 import { businessOptions } from "@/lib/productFormConfig";
 
@@ -12,14 +12,17 @@ export default async function NewShopPage() {
   const backHref = "/dashboard/shops";
   const user = await getCurrentUser();
   const isSuperAdmin = user?.roles?.includes("super_admin") ?? false;
+  const isOwner = user?.roles?.includes("owner") ?? false;
+  const shops = isSuperAdmin ? [] : await getShopsByUser();
+  const canOwnerCreateFirstShop = isOwner && shops.length === 0;
 
-  if (!isSuperAdmin) {
+  if (!isSuperAdmin && !canOwnerCreateFirstShop) {
     return (
       <div className="max-w-2xl mx-auto">
         <div className="bg-white border border-slate-200 rounded-xl p-6 text-center">
           <h1 className="text-2xl font-bold text-gray-900">অনুমতি নেই</h1>
           <p className="mt-2 text-sm text-gray-600">
-            শুধুমাত্র সুপার অ্যাডমিন নতুন দোকান যোগ করতে পারেন।
+            শুধুমাত্র সুপার অ্যাডমিন নতুন দোকান যোগ করতে পারেন। Owner শুধু প্রথম দোকান তৈরি করতে পারবেন।
           </p>
           <Link
             href={backHref}
@@ -32,7 +35,7 @@ export default async function NewShopPage() {
     );
   }
 
-  const ownerOptions = await getOwnerOptions();
+  const ownerOptions = isSuperAdmin ? await getOwnerOptions() : undefined;
   const dbBusinessTypes = await listActiveBusinessTypes().catch(() => []);
   const mergedBusinessTypes = [
     ...dbBusinessTypes.map((t) => ({ id: t.key, label: t.label })),

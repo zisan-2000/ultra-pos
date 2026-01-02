@@ -12,7 +12,8 @@ export default async function ShopsPage() {
   ]);
 
   const isSuperAdmin = user?.roles?.includes("super_admin") ?? false;
-  const canCreateShop = isSuperAdmin;
+  const isOwner = user?.roles?.includes("owner") ?? false;
+  const canCreateShop = isSuperAdmin || (isOwner && data.length === 0);
 
   const phoneDisplay = support.supportPhone || "ফোন নম্বর পাওয়া যায়নি";
   const waDisplay = support.supportWhatsapp || "WhatsApp নম্বর পাওয়া যায়নি";
