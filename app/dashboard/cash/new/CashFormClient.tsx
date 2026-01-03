@@ -252,10 +252,10 @@ export default function CashFormClient({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
+    <form onSubmit={handleSubmit} className="bg-card rounded-lg border border-border p-8 space-y-6">
       {/* Entry Type */}
       <div className="space-y-2">
-        <label className="block text-base font-medium text-gray-900">ক্যাশ টাইপ *</label>
+        <label className="block text-base font-medium text-foreground">ক্যাশ টাইপ *</label>
         <div className="flex flex-wrap gap-2">
           {["IN", "OUT"].map((type) => (
             <button
@@ -264,8 +264,10 @@ export default function CashFormClient({
               onClick={() => setEntryType(type as "IN" | "OUT")}
               className={`px-3 py-2 rounded-full border text-sm ${
                 entryType === type
-                  ? "bg-emerald-50 border-emerald-400 text-emerald-800"
-                  : "bg-white border-gray-200 text-gray-700 hover:border-emerald-200"
+                  ? type === "IN"
+                    ? "bg-success-soft border-success/30 text-success"
+                    : "bg-danger-soft border-danger/30 text-danger"
+                  : "bg-card border-border text-muted-foreground hover:border-primary/30"
               }`}
             >
               {type === "IN" ? "ক্যাশ ইন" : "ক্যাশ আউট"}
@@ -273,12 +275,12 @@ export default function CashFormClient({
           ))}
         </div>
         <input type="hidden" name="entryType" value={entryType} />
-        <p className="text-sm text-gray-500">সর্বশেষ ব্যবহৃত টাইপ নির্বাচিত থাকে</p>
+        <p className="text-sm text-muted-foreground">সর্বশেষ ব্যবহৃত টাইপ নির্বাচিত থাকে</p>
       </div>
 
       {/* Amount */}
       <div className="space-y-2">
-        <label className="block text-base font-medium text-gray-900">পরিমাণ (৳) *</label>
+        <label className="block text-base font-medium text-foreground">পরিমাণ (৳) *</label>
         <div className="flex gap-3">
           <input
             name="amount"
@@ -287,7 +289,7 @@ export default function CashFormClient({
             min="0"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="যেমন: 500, 1000.50"
             required
           />
@@ -297,8 +299,8 @@ export default function CashFormClient({
             disabled={!voiceReady}
             className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
               listening
-                ? "bg-red-50 border-red-300 text-red-700"
-                : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                ? "bg-primary-soft text-primary border-primary/40"
+                : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
             } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
           >
             {listening ? "থামান" : "ভয়েস"}
@@ -311,25 +313,25 @@ export default function CashFormClient({
                 key={a}
                 type="button"
                 onClick={() => setAmount(a)}
-                className="px-3 py-2 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm hover:border-emerald-300"
+                className="px-3 py-2 rounded-full border border-primary/30 bg-primary-soft text-primary text-sm hover:border-primary/50"
               >
                 ৳ {a}
               </button>
             ))}
           </div>
         )}
-        <p className="text-sm text-gray-500">“ক্যাশ ইন ৫০০” বললেই পরিমাণ ফিল হবে</p>
+        <p className="text-sm text-muted-foreground">“ক্যাশ ইন ৫০০” বললেই পরিমাণ ফিল হবে</p>
       </div>
 
       {/* Reason */}
       <div className="space-y-2">
-        <label className="block text-base font-medium text-gray-900">কারণ (ঐচ্ছিক)</label>
+        <label className="block text-base font-medium text-foreground">কারণ (ঐচ্ছিক)</label>
         <div className="flex gap-3">
           <input
             name="reason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="যেমন: বিক্রয় টাকা, মালিককে ক্যাশ"
           />
           <button
@@ -338,8 +340,8 @@ export default function CashFormClient({
             disabled={!voiceReady}
             className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
               listening
-                ? "bg-red-50 border-red-300 text-red-700"
-                : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                ? "bg-primary-soft text-primary border-primary/40"
+                : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
             } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
           >
             {listening ? "থামান" : "ভয়েস"}
@@ -351,21 +353,21 @@ export default function CashFormClient({
               key={r}
               type="button"
               onClick={() => setReason(r)}
-              className="px-3 py-2 rounded-full border border-gray-200 bg-white text-sm hover:border-emerald-200"
+              className="px-3 py-2 rounded-full border border-border bg-card text-sm text-foreground hover:border-primary/30"
             >
               {r}
             </button>
           ))}
         </div>
-        <p className="text-sm text-gray-500">বেশি ব্যবহৃত কারণগুলো এক ট্যাপে পাওয়া যাবে</p>
+        <p className="text-sm text-muted-foreground">বেশি ব্যবহৃত কারণগুলো এক ট্যাপে পাওয়া যাবে</p>
       </div>
 
       {/* Recent templates */}
       {recentTemplates.length > 0 && (
-        <div className="border border-emerald-100 bg-emerald-50 rounded-lg p-4 space-y-2">
+        <div className="border border-border bg-muted rounded-lg p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-emerald-800">রিসেন্ট ক্যাশ</h3>
-            <span className="text-xs text-emerald-700">এক ট্যাপে অটো-ফিল</span>
+            <h3 className="text-base font-semibold text-foreground">রিসেন্ট ক্যাশ</h3>
+            <span className="text-xs text-muted-foreground">এক ট্যাপে অটো-ফিল</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {recentTemplates.slice(0, 4).map((t) => (
@@ -373,13 +375,13 @@ export default function CashFormClient({
                 key={`${t.entryType}-${t.amount}-${t.lastUsed}`}
                 type="button"
                 onClick={() => applyTemplate(t)}
-                className="flex items-center justify-between gap-3 bg-white border border-emerald-100 rounded-lg px-3 py-2 text-left hover:border-emerald-300 transition-colors"
+                className="flex items-center justify-between gap-3 bg-card border border-border rounded-lg px-3 py-2 text-left hover:border-primary/40 transition-colors"
               >
                 <div>
-                  <p className="font-semibold text-gray-900">
+                  <p className="font-semibold text-foreground">
                     {t.entryType === "IN" ? "ক্যাশ ইন" : "ক্যাশ আউট"} • ৳ {t.amount}
                   </p>
-                  <p className="text-xs text-gray-500">{t.reason || "কারণ নেই"}</p>
+                  <p className="text-xs text-muted-foreground">{t.reason || "কারণ নেই"}</p>
                 </div>
               </button>
             ))}
@@ -391,18 +393,18 @@ export default function CashFormClient({
       <div className="flex gap-3 pt-4">
         <button
           type="submit"
-          className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
+          className="flex-1 bg-primary-soft text-primary border border-primary/30 hover:bg-primary/15 hover:border-primary/40 font-bold py-4 px-6 rounded-lg text-lg transition-colors"
         >
           {submitLabel}
         </button>
         <Link
           href={backHref}
-          className="flex-1 border border-gray-300 text-gray-900 font-medium py-4 px-6 rounded-lg text-lg hover:bg-gray-100 transition-colors text-center"
+          className="flex-1 border border-border text-foreground font-medium py-4 px-6 rounded-lg text-lg hover:bg-muted transition-colors text-center"
         >
           পিছনে যান
         </Link>
       </div>
-      {voiceError ? <p className="text-xs text-red-600">{voiceError}</p> : null}
+      {voiceError ? <p className="text-xs text-danger">{voiceError}</p> : null}
     </form>
   );
 }

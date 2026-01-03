@@ -17,10 +17,10 @@ export function VoidSaleButton({ isVoided }: VoidSaleButtonProps) {
       disabled={disabled}
       className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${
         isVoided
-          ? "border-slate-200 text-slate-400 bg-slate-50 cursor-not-allowed"
+          ? "border-border text-muted-foreground bg-muted cursor-not-allowed"
           : pending
-          ? "border-red-200 text-red-700 bg-red-50 cursor-wait"
-          : "border-red-200 text-red-700 bg-red-50 hover:bg-red-100 hover:border-red-300"
+          ? "border-danger/30 text-danger bg-danger-soft cursor-wait"
+          : "border-danger/30 text-danger bg-danger-soft hover:bg-danger-soft/70 hover:border-danger/50"
       }`}
     >
       {isVoided ? "বাতিল হয়েছে" : pending ? "বাতিল হচ্ছে..." : "বিক্রি বাতিল করুন"}

@@ -46,11 +46,11 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-50 px-4">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-4">
+    <div className="flex items-center justify-center min-h-screen bg-background px-4">
+      <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-sm p-6 space-y-4">
         <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold text-slate-900">পাসওয়ার্ড রিসেট</h1>
-          <p className="text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-foreground">পাসওয়ার্ড রিসেট</h1>
+          <p className="text-sm text-muted-foreground">
             আপনার একাউন্টের সাথে যুক্ত ইমেইল লিখুন। যদি ইমেইলটি থাকে, রিসেট লিঙ্ক
             পাঠানো হবে।
           </p>
@@ -58,11 +58,11 @@ export default function ForgotPasswordPage() {
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">ইমেইল</label>
+            <label className="text-sm font-medium text-foreground">ইমেইল</label>
             <input
               type="email"
               required
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -72,20 +72,20 @@ export default function ForgotPasswordPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white rounded-lg py-2.5 font-semibold text-sm hover:bg-blue-700 disabled:opacity-60 transition"
+          className="w-full bg-primary-soft text-primary border border-primary/30 rounded-lg py-2.5 font-semibold text-sm hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60 transition"
           >
             {loading ? "পাঠানো হচ্ছে..." : "রিসেট লিঙ্ক পাঠান"}
           </button>
         </form>
 
         {message ? (
-          <div className="text-sm text-gray-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
+          <div className="text-sm text-muted-foreground bg-muted border border-border rounded-lg p-3">
             {message}
           </div>
         ) : null}
 
         {devResetUrl ? (
-          <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+          <div className="text-xs text-success bg-success-soft border border-success/30 rounded-lg p-3">
             ডেভ মোড লিঙ্ক:{" "}
             <Link className="underline font-semibold" href={devResetUrl}>
               {devResetUrl}
@@ -93,11 +93,11 @@ export default function ForgotPasswordPage() {
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between text-sm text-blue-600">
-          <Link href="/login" className="hover:underline">
+        <div className="flex items-center justify-between text-sm text-primary">
+          <Link href="/login" className="hover:underline hover:text-primary-hover">
             লগইন পাতায় ফিরে যান
           </Link>
-          <Link href="/register" className="hover:underline">
+          <Link href="/register" className="hover:underline hover:text-primary-hover">
             নতুন একাউন্ট খুলুন
           </Link>
         </div>
@@ -105,3 +105,4 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
+

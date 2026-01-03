@@ -19,11 +19,11 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
   if (!shops || shops.length === 0) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">নতুন বিক্রি</h1>
-        <p className="mb-6 text-gray-600">এখনও কোনো দোকান নেই।</p>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">নতুন বিক্রি</h1>
+        <p className="mb-6 text-muted-foreground">এখনও কোনো দোকান নেই।</p>
         <Link
           href="/dashboard/shops/new"
-          className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
         >
           প্রথম দোকান তৈরি করুন
         </Link>

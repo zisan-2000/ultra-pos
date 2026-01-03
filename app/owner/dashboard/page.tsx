@@ -38,8 +38,8 @@ export default async function OwnerDashboardPage({
   if (!shops || shops.length === 0) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold text-gray-900">ড্যাশবোর্ড</h1>
-        <p className="mt-4 text-gray-600">প্রথমে একটি দোকান তৈরি করুন।</p>
+        <h1 className="text-2xl font-bold text-foreground">ড্যাশবোর্ড</h1>
+        <p className="mt-4 text-muted-foreground">প্রথমে একটি দোকান তৈরি করুন।</p>
       </div>
     );
   }
@@ -66,57 +66,57 @@ export default async function OwnerDashboardPage({
 
   return (
     <div className="space-y-6 section-gap">
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 leading-tight">
+            <h1 className="text-3xl font-bold text-foreground leading-tight">
               ড্যাশবোর্ড
             </h1>
-            <p className="text-sm text-gray-500 mt-1 leading-snug">
+            <p className="text-sm text-muted-foreground mt-1 leading-snug">
               আজকের সারসংক্ষেপ, বিক্রি ও খরচ
             </p>
           </div>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-4">
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card
             title="আজকের বিক্রি"
             value={`${Number(summary?.sales?.total ?? summary?.sales ?? 0).toFixed(2)} ৳`}
-            color="bg-emerald-500"
+            color="success"
             icon="💰"
           />
 
           <Card
             title="আজকের খরচ"
             value={`${Number(summary?.expenses?.total ?? summary?.expenses ?? 0).toFixed(2)} ৳`}
-            color="bg-red-500"
+            color="danger"
             icon="💸"
           />
 
           <Card
             title="আজকের লাভ"
             value={`${Number(summary?.profit ?? 0).toFixed(2)} ৳`}
-            color="bg-blue-600"
+            color="primary"
             icon="📈"
           />
 
           <Card
             title="ক্যাশ ব্যালেন্স"
             value={`${Number(summary?.cash?.balance ?? summary?.balance ?? 0).toFixed(2)} ৳`}
-            color="bg-amber-400"
+            color="warning"
             icon="🏦"
           />
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900 mb-3">দ্রুত কাজ</h2>
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+        <h2 className="text-lg font-semibold text-foreground mb-3">দ্রুত কাজ</h2>
         <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
           <Link
             href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-            className="block bg-blue-50 border border-blue-100 text-blue-800 font-semibold rounded-lg py-4 px-3 text-base text-center transition-colors hover:border-blue-200 hover:bg-blue-100 pressable card-lift h-full"
+            className="block bg-primary-soft border border-primary/30 text-primary font-semibold rounded-lg py-4 px-3 text-base text-center transition-colors hover:border-primary/50 hover:bg-primary/20 pressable card-lift h-full"
           >
             <span className="flex flex-col items-center gap-1">
               <span className="text-xl">⚡</span>
@@ -125,7 +125,7 @@ export default async function OwnerDashboardPage({
           </Link>
           <Link
             href={`/dashboard/due?shopId=${selectedShopId}`}
-            className="block bg-emerald-50 border border-emerald-100 text-emerald-800 font-semibold rounded-lg py-4 px-3 text-base text-center transition-colors hover:border-emerald-200 hover:bg-emerald-100 pressable card-lift h-full"
+            className="block bg-warning-soft border border-warning/30 text-warning font-semibold rounded-lg py-4 px-3 text-base text-center transition-colors hover:border-warning/50 hover:bg-warning/20 pressable card-lift h-full"
           >
             <span className="flex flex-col items-center gap-1">
               <span className="text-xl">🧾</span>
@@ -150,37 +150,48 @@ function Card({
   icon?: string;
 }) {
   const styles: Record<string, string> = {
-    "bg-emerald-500": "bg-emerald-50 text-emerald-900",
-    "bg-red-500": "bg-red-50 text-red-900",
-    "bg-blue-600": "bg-blue-50 text-blue-900",
-    "bg-amber-400": "bg-amber-50 text-amber-900",
+    success: "bg-success-soft",
+    danger: "bg-danger-soft",
+    primary: "bg-primary-soft",
+    warning: "bg-warning-soft",
   };
   const iconBg: Record<string, string> = {
-    "bg-emerald-500": "bg-emerald-100 text-emerald-700",
-    "bg-red-500": "bg-red-100 text-red-700",
-    "bg-blue-600": "bg-blue-100 text-blue-700",
-    "bg-amber-400": "bg-amber-100 text-amber-700",
+    success: "bg-success/15 text-success",
+    danger: "bg-danger/15 text-danger",
+    primary: "bg-primary/15 text-primary",
+    warning: "bg-warning/15 text-warning",
   };
+  const trimmed = value.trim();
+  const parts = trimmed.split(/\s+/);
+  const currency = parts.length > 1 ? parts.pop() || "" : "";
+  const amount = parts.join(" ");
 
   return (
     <div
-      className={`p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all pressable ${
-        styles[color] ?? "bg-white text-slate-900"
+      className={`p-5 rounded-2xl border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all pressable ${
+        styles[color] ?? "bg-card text-foreground"
       }`}
     >
       <div className="flex items-start gap-3">
         {icon ? (
           <span
-            className={`inline-flex items-center justify-center h-9 w-9 rounded-full ${
-              iconBg[color] ?? "bg-slate-100 text-slate-700"
+            className={`inline-flex items-center justify-center h-8 w-8 rounded-full text-[18px] ${
+              iconBg[color] ?? "bg-muted text-muted-foreground"
             }`}
           >
             {icon}
           </span>
         ) : null}
-        <div>
-          <p className="text-sm font-semibold opacity-80 mb-1">{title}</p>
-          <h2 className="text-2xl font-bold leading-tight">{value}</h2>
+        <div className="space-y-3">
+          <p className="text-[13px] font-medium text-foreground/80">{title}</p>
+          <div className="flex items-end gap-1">
+            <span className="text-[30px] font-extrabold text-foreground leading-none">
+              {amount}
+            </span>
+            {currency ? (
+              <span className="text-xs text-muted-foreground pb-1">{currency}</span>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

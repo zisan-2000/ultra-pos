@@ -173,23 +173,23 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
           <button
             key={key}
             onClick={() => setPreset(key)}
-            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${
+            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
               preset === key
-                ? "bg-emerald-600 text-white shadow-sm"
-                : "bg-slate-100 text-slate-800"
+                ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
+                : "bg-muted text-foreground border-transparent"
             }`}
           >
             {label}
           </button>
         ))}
       </div>
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
     </div>
   );
 
   if (rendered.length === 0) {
     return (
-      <p className="text-center text-gray-600 py-8 bg-white border border-slate-200 rounded-xl">
+      <p className="text-center text-muted-foreground py-8 bg-card border border-border rounded-xl">
         {online
           ? "এখনো কোনো এন্ট্রি নেই।"
           : "Offline: ক্যাশ এন্ট্রি ক্যাশে নেই"}
@@ -200,38 +200,38 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
   return (
     <div className="space-y-4 pb-16">
       {/* Sticky mobile header */}
-      <div className="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-100 py-2 space-y-2">
+      <div className="md:hidden sticky top-0 z-30 bg-card/95 backdrop-blur border-b border-border py-2 space-y-2">
         <div className="px-3 flex items-center justify-between">
           <div>
-            <p className="text-[11px] text-slate-500 font-semibold">
+            <p className="text-[11px] text-muted-foreground font-semibold">
               {shopName || "দোকান"}
             </p>
-            <p className="text-xl font-bold text-slate-900 leading-tight">
+            <p className="text-xl font-bold text-foreground leading-tight">
               {totals.net.toFixed(2)} ৳
             </p>
-            <p className="text-[11px] text-slate-500">{rendered.length} এন্ট্রি</p>
+            <p className="text-[11px] text-muted-foreground">{rendered.length} এন্ট্রি</p>
           </div>
           <Link
             href={`/dashboard/cash/new?shopId=${shopId}`}
-            className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700"
+            className="px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
           >
             + নতুন এন্ট্রি
           </Link>
         </div>
         <div className="px-2 space-y-2">
-          <p className="text-[11px] font-semibold text-slate-500">📅 সময়</p>
+          <p className="text-[11px] font-semibold text-muted-foreground"> সময়</p>
           <DateFilterRow />
           {preset === "custom" && (
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="date"
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                className="border border-border rounded-lg px-3 py-2 text-sm"
                 value={customFrom ?? ""}
                 onChange={(e) => setCustomFrom(e.target.value)}
               />
               <input
                 type="date"
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                className="border border-border rounded-lg px-3 py-2 text-sm"
                 value={customTo ?? ""}
                 onChange={(e) => setCustomTo(e.target.value)}
               />
@@ -242,20 +242,20 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
 
       {/* Desktop filter */}
       <div className="hidden md:block space-y-2">
-        <div className="rounded-xl bg-white border border-slate-200 shadow-sm px-4 py-3">
-          <p className="text-xs font-semibold text-slate-500 mb-2">📅 সময়</p>
+        <div className="rounded-xl bg-card border border-border shadow-sm px-4 py-3">
+          <p className="text-xs font-semibold text-muted-foreground mb-2"> সময়</p>
           <DateFilterRow />
           {preset === "custom" && (
             <div className="flex items-center gap-2 mt-2">
               <input
                 type="date"
-                className="border border-slate-200 rounded px-2 py-1 text-sm"
+                className="border border-border rounded px-2 py-1 text-sm"
                 value={customFrom ?? ""}
                 onChange={(e) => setCustomFrom(e.target.value)}
               />
               <input
                 type="date"
-                className="border border-slate-200 rounded px-2 py-1 text-sm"
+                className="border border-border rounded px-2 py-1 text-sm"
                 value={customTo ?? ""}
                 onChange={(e) => setCustomTo(e.target.value)}
               />
@@ -266,23 +266,23 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
 
       {/* KPI pills */}
       <div className="grid grid-cols-3 gap-2 md:gap-3">
-        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
-          <p className="text-xs font-semibold text-emerald-700">মোট ইন</p>
-          <p className="text-lg font-bold text-emerald-800">
+        <div className="bg-success-soft border border-success/30 rounded-xl p-3 text-center">
+          <p className="text-xs font-semibold text-success">মোট ইন</p>
+          <p className="text-lg font-bold text-success">
             + {totals.in.toFixed(2)} ৳
           </p>
         </div>
-        <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-center">
-          <p className="text-xs font-semibold text-red-700">মোট আউট</p>
-          <p className="text-lg font-bold text-red-700">
+        <div className="bg-danger-soft border border-danger/30 rounded-xl p-3 text-center">
+          <p className="text-xs font-semibold text-danger">মোট আউট</p>
+          <p className="text-lg font-bold text-danger">
             - {totals.out.toFixed(2)} ৳
           </p>
         </div>
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
-          <p className="text-xs font-semibold text-slate-700">নেট ব্যালেন্স</p>
+        <div className="bg-muted border border-border rounded-xl p-3 text-center">
+          <p className="text-xs font-semibold text-muted-foreground">নেট ব্যালেন্স</p>
           <p
             className={`text-lg font-bold ${
-              totals.net >= 0 ? "text-emerald-700" : "text-red-700"
+              totals.net >= 0 ? "text-success" : "text-danger"
             }`}
           >
             {totals.net >= 0 ? "+" : ""}
@@ -301,10 +301,10 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
             return (
               <div key={dateKey} className="space-y-2">
                 <div className="flex items-center justify-between px-1">
-                  <p className="text-sm font-semibold text-slate-800">
+                  <p className="text-sm font-semibold text-foreground">
                     {friendly}
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     {entries.length} এন্ট্রি
                   </p>
                 </div>
@@ -327,23 +327,23 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
                     return (
                       <div
                         key={e.id}
-                        className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all card-lift"
+                        className="bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-all card-lift"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p
                               className={`text-2xl font-bold ${
-                                inFlow ? "text-emerald-700" : "text-red-600"
+                                inFlow ? "text-success" : "text-danger"
                               }`}
                             >
                               {inFlow ? "+" : "-"}
                               {val} ৳
                             </p>
-                            <p className="text-sm text-gray-700 mt-1 truncate max-w-[240px]">
+                            <p className="text-sm text-muted-foreground mt-1 truncate max-w-[240px]">
                               {e.reason || "—"}
                             </p>
                             {timeStr ? (
-                              <p className="text-xs text-gray-500 mt-1">
+                              <p className="text-xs text-muted-foreground mt-1">
                                 {timeStr}
                               </p>
                             ) : null}
@@ -352,12 +352,12 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
                             {online ? (
                               <Link
                                 href={`/dashboard/cash/${e.id}`}
-                                className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-800 rounded-full text-xs font-semibold hover:border-blue-300 hover:bg-blue-100 transition-colors"
+                                className="px-3 py-1.5 bg-primary-soft border border-primary/30 text-primary rounded-full text-xs font-semibold hover:border-primary/50 hover:bg-primary-soft transition-colors"
                               >
                                 এডিট
                               </Link>
                             ) : (
-                              <span className="text-[11px] text-slate-400">
+                              <span className="text-[11px] text-muted-foreground">
                                 Offline
                               </span>
                             )}

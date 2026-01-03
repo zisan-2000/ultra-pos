@@ -17,8 +17,8 @@ export default async function DuePage({ searchParams }: DuePageProps) {
   if (!shops || shops.length === 0) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">ধার / বাকি</h1>
-        <p className="text-gray-600">প্রথমে একটি দোকান তৈরি করুন।</p>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">ধার / বাকি</h1>
+        <p className="text-muted-foreground">প্রথমে একটি দোকান তৈরি করুন।</p>
       </div>
     );
   }
@@ -45,20 +45,20 @@ export default async function DuePage({ searchParams }: DuePageProps) {
 
   return (
     <div className="space-y-6 section-gap">
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-success-soft text-success">
               🤝
             </span>
-            <h1 className="text-3xl font-bold text-gray-900 leading-tight">
+            <h1 className="text-3xl font-bold text-foreground leading-tight">
               ধার / বাকি
             </h1>
           </div>
-          <p className="text-sm text-gray-500 mt-2 leading-snug">
-            দোকান: <span className="font-semibold">{selectedShop.name}</span>
+          <p className="text-sm text-muted-foreground mt-2 leading-snug">
+            দোকান: <span className="font-semibold text-foreground">{selectedShop.name}</span>
           </p>
-          <p className="text-base text-gray-600 mt-2 leading-snug">
+          <p className="text-base text-muted-foreground mt-2 leading-snug">
             গ্রাহকদের ধার-বাকি লিখে রাখুন এবং পেমেন্ট নিন।
           </p>
         </div>
@@ -66,7 +66,7 @@ export default async function DuePage({ searchParams }: DuePageProps) {
         <DueShopSelector shops={shops} selectedShopId={selectedShopId} />
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
         <DuePageClient
           key={selectedShopId}
           shopId={selectedShopId}
@@ -78,3 +78,5 @@ export default async function DuePage({ searchParams }: DuePageProps) {
     </div>
   );
 }
+
+

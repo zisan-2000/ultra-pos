@@ -184,11 +184,11 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   if (!shops || shops.length === 0) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">কোন দোকান নেই</h1>
-        <p className="mb-6 text-gray-600">বিক্রি দেখতে প্রথমে দোকান যুক্ত করুন</p>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">কোন দোকান নেই</h1>
+        <p className="mb-6 text-muted-foreground">বিক্রি দেখতে প্রথমে দোকান যুক্ত করুন</p>
         <Link
           href="/dashboard/shops/new"
-          className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
         >
           নতুন দোকান তৈরি করুন
         </Link>
@@ -339,13 +339,13 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
 
   return (
     <div className="space-y-5 section-gap pb-[110px]">
-      <div className="sticky top-0 z-30 bg-white/90 backdrop-blur-sm border-b border-slate-100">
+      <div className="sticky top-0 z-30 bg-background/90 backdrop-blur-sm border-b border-border">
         <div className="flex items-center justify-between gap-3 py-3">
           <div className="leading-tight">
-            <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               দোকান
             </p>
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="text-sm font-semibold text-foreground">
               {selectedShop.name}
             </p>
           </div>
@@ -354,18 +354,18 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
       </div>
 
       <div className="space-y-3">
-        <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
+        <div className="rounded-2xl bg-card border border-border p-4 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
-              <p className="text-xs text-slate-600">আজকের বিক্রি</p>
-              <p className="text-3xl font-bold text-slate-900 leading-tight">
+              <p className="text-xs text-muted-foreground">আজকের বিক্রি</p>
+              <p className="text-3xl font-bold text-foreground leading-tight">
                 ৳ {summaryTotalDisplay}
               </p>
-              <p className="text-sm text-slate-700 flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 text-slate-800 font-semibold text-xs border border-slate-200 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-foreground font-semibold text-xs border border-border shadow-[0_1px_0_rgba(0,0,0,0.02)]">
                   {summary.count} বিল
                 </span>
-                <span className="text-slate-600 text-xs">{rangeLabel}</span>
+                <span className="text-muted-foreground text-xs">{rangeLabel}</span>
               </p>
             </div>
             <div className="flex flex-col items-end gap-2">
@@ -377,7 +377,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
               />
               <Link
                 href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition"
+                className="inline-flex items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-3 py-2 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
               >
                 ➕ নতুন বিক্রি
               </Link>
@@ -398,7 +398,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
 
       <Link
         href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-        className="fixed bottom-6 right-5 inline-flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white text-2xl font-bold shadow-lg shadow-blue-300/40 hover:bg-blue-700 active:scale-[0.98] transition"
+        className="fixed bottom-6 right-5 inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 text-2xl font-bold shadow-lg hover:bg-primary/15 hover:border-primary/40 active:scale-[0.98] transition"
         aria-label="নতুন বিক্রি যোগ করুন"
       >
         +

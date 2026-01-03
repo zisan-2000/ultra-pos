@@ -35,12 +35,12 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">স্টক কম</h2>
-          <p className="text-xs text-gray-500">থ্রেশহোল্ডের নিচের পণ্যগুলো</p>
+          <h2 className="text-lg font-bold text-foreground">স্টক কম</h2>
+          <p className="text-xs text-muted-foreground">থ্রেশহোল্ডের নিচের পণ্যগুলো</p>
         </div>
 
         <select
-          className="border border-gray-300 px-3 py-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="border border-border bg-card text-foreground px-3 py-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
           value={threshold}
           onChange={(e) => {
             const th = Number(e.target.value);
@@ -53,20 +53,20 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
         </select>
       </div>
 
-      <div className="border border-gray-200 rounded-lg overflow-x-auto hidden md:block">
+      <div className="border border-border rounded-lg overflow-x-auto hidden md:block">
         <table className="w-full text-sm">
-          <thead className="bg-gray-100">
+          <thead className="bg-muted">
             <tr>
-              <th className="p-3 text-left text-gray-900">পণ্য</th>
-              <th className="p-3 text-right text-gray-900">মজুত সংখ্যা</th>
-              <th className="p-3 text-right text-gray-900">অবস্থা</th>
+              <th className="p-3 text-left text-foreground">পণ্য</th>
+              <th className="p-3 text-right text-foreground">মজুত সংখ্যা</th>
+              <th className="p-3 text-right text-foreground">অবস্থা</th>
             </tr>
           </thead>
 
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td className="p-3 text-center text-gray-500" colSpan={3}>
+                <td className="p-3 text-center text-muted-foreground" colSpan={3}>
                   {loading ? "লোড হচ্ছে..." : "কোনো পণ্য মজুত শূন্য নয়"}
                 </td>
               </tr>
@@ -74,15 +74,15 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
               items.map((p, i) => (
                 <tr
                   key={i}
-                  className="border-t hover:bg-gray-50 transition-colors"
+                  className="border-t hover:bg-muted transition-colors"
                 >
-                  <td className="p-3 text-gray-900">{p.name}</td>
-                  <td className="p-3 text-right text-gray-900">{p.stockQty}</td>
+                  <td className="p-3 text-foreground">{p.name}</td>
+                  <td className="p-3 text-right text-foreground">{p.stockQty}</td>
                   <td
                     className={`p-3 text-right font-semibold ${
                       Number(p.stockQty) <= 5
-                        ? "text-red-600"
-                        : "text-orange-500"
+                        ? "text-danger"
+                        : "text-warning"
                     }`}
                   >
                     {renderStatus(Number(p.stockQty))}
@@ -96,7 +96,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
 
       <div className="space-y-3 md:hidden">
         {items.length === 0 ? (
-          <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
+          <p className="text-center text-muted-foreground bg-card border border-border rounded-lg p-4">
             {loading ? "লোড হচ্ছে..." : "কোনো পণ্য মজুত শূন্য নয়"}
           </p>
         ) : (
@@ -106,28 +106,28 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
             return (
               <div
                 key={i}
-                className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm"
+                className="bg-card border border-border rounded-xl p-4 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs text-gray-500">#{i + 1}</p>
-                    <h3 className="text-base font-semibold text-gray-900 mt-1">
+                    <p className="text-xs text-muted-foreground">#{i + 1}</p>
+                    <h3 className="text-base font-semibold text-foreground mt-1">
                       {p.name}
                     </h3>
                   </div>
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-semibold ${
                       critical
-                        ? "bg-red-100 text-red-700"
-                        : "bg-orange-100 text-orange-700"
+                        ? "bg-danger-soft text-danger"
+                        : "bg-warning-soft text-warning"
                     }`}
                   >
                     {renderStatus(qty)}
                   </span>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
+                <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
                   <span>মজুত সংখ্যা</span>
-                  <span className="font-semibold text-gray-900">{qty}</span>
+                  <span className="font-semibold text-foreground">{qty}</span>
                 </div>
               </div>
             );

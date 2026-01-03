@@ -39,11 +39,11 @@ export default async function ProductsPage({ searchParams }: PageProps) {
   if (!shops || shops.length === 0) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">কোন দোকান নেই</h1>
-        <p className="mb-6 text-gray-600">আগে একটি দোকান তৈরি করুন</p>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">কোন দোকান নেই</h1>
+        <p className="mb-6 text-muted-foreground">আগে একটি দোকান তৈরি করুন</p>
         <Link
           href="/dashboard/shops/new"
-          className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
         >
           নতুন দোকান তৈরি করুন
         </Link>
@@ -86,13 +86,10 @@ export default async function ProductsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6 section-gap">
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-700">
-              📦
-            </span>
-            <h1 className="text-3xl font-bold text-gray-900 leading-tight">
+            <h1 className="text-3xl font-bold text-foreground leading-tight">
               পণ্য তালিকা
             </h1>
           </div>

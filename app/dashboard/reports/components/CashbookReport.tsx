@@ -55,28 +55,28 @@ export default function CashbookReport({ shopId, from, to }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">ক্যাশ রিপোর্ট</h2>
-          <p className="text-xs text-gray-500">ক্যাশ ইন/আউট</p>
+          <h2 className="text-lg font-bold text-foreground">ক্যাশ রিপোর্ট</h2>
+          <p className="text-xs text-muted-foreground">ক্যাশ ইন/আউট</p>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-sm">
-        <div className="rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-100 px-3 py-2">
+        <div className="rounded-lg bg-success-soft text-success border border-success/30 px-3 py-2">
           ইন: {totals.inbound.toFixed(2)} ৳
         </div>
-        <div className="rounded-lg bg-red-50 text-red-700 border border-red-100 px-3 py-2 text-right">
+        <div className="rounded-lg bg-danger-soft text-danger border border-danger/30 px-3 py-2 text-right">
           আউট: {totals.outbound.toFixed(2)} ৳
         </div>
-        <div className="rounded-lg bg-slate-50 text-slate-800 border border-slate-200 px-3 py-2 text-right">
+        <div className="rounded-lg bg-muted text-foreground border border-border px-3 py-2 text-right">
           ব্যালান্স: {totals.balance.toFixed(2)} ৳
         </div>
       </div>
 
-      <div className="border border-gray-200 rounded-lg p-4 space-y-2">
+      <div className="border border-border rounded-lg bg-card p-4 space-y-2">
         {loading ? (
-          <p className="text-sm text-gray-500 text-center py-4">লোড হচ্ছে...</p>
+          <p className="text-sm text-muted-foreground text-center py-4">লোড হচ্ছে...</p>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">
+          <p className="text-sm text-muted-foreground text-center py-4">
             কোনো এন্ট্রি নেই
           </p>
         ) : (
@@ -85,19 +85,19 @@ export default function CashbookReport({ shopId, from, to }: Props) {
             return (
               <div
                 key={r.id}
-                className="border border-gray-200 p-3 rounded-lg flex justify-between items-center hover:bg-gray-50 transition-colors"
+                className="border border-border bg-card p-3 rounded-lg flex justify-between items-center hover:bg-muted transition-colors"
               >
                 <div>
                   <p
                     className={`text-sm font-semibold ${
-                      isIn ? "text-emerald-700" : "text-red-700"
+                      isIn ? "text-success" : "text-danger"
                     }`}
                   >
                     {isIn ? "+" : "-"} {Number(r.amount || 0).toFixed(2)} ৳
                   </p>
-                  <p className="text-xs text-gray-500">{r.reason || "অন্যান্য"}</p>
+                  <p className="text-xs text-muted-foreground">{r.reason || "অন্যান্য"}</p>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   {new Date(r.createdAt).toLocaleDateString("bn-BD")}
                 </p>
               </div>

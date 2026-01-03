@@ -239,29 +239,29 @@ export function RolesPermissionsPanel({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+    <div className="bg-card rounded-2xl border border-border shadow-sm p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
             🛡️ Roles & Permissions
           </div>
-          <h2 className="text-lg font-semibold text-slate-900">রোলের পারমিশন</h2>
-          <p className="text-[12px] text-slate-600">
+          <h2 className="text-lg font-semibold text-foreground">রোলের পারমিশন</h2>
+          <p className="text-[12px] text-muted-foreground">
             মডিউল অনুযায়ী পারমিশন সাজানো। রোল সিলেক্ট করুন, খুঁজে টিক/আনটিক করুন। সেভ করলে সঙ্গে সঙ্গে প্রয়োগ হবে।
           </p>
         </div>
-        <span className="text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+        <span className="text-xs font-semibold text-muted-foreground bg-muted border border-border rounded-lg px-3 py-1.5">
           {roles.length} roles
         </span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 text-xs sm:text-sm">
         {/* Roles list */}
-        <div className="sm:col-span-2 border border-slate-200 rounded-xl overflow-hidden max-h-[480px] overflow-y-auto shadow-inner">
-          <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
+        <div className="sm:col-span-2 border border-border rounded-xl overflow-hidden max-h-[480px] overflow-y-auto shadow-inner">
+          <div className="bg-muted px-3 py-2 border-b border-border text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
             Role
           </div>
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-border">
             {roles.map((r) => {
               const isActive = r.id === selectedRoleId;
               const enabledCount = localAssignments[r.id]?.size ?? 0;
@@ -272,19 +272,19 @@ export function RolesPermissionsPanel({
                   onClick={() => setSelectedRoleId(r.id)}
                   className={`w-full text-left px-3 py-2.5 transition-colors flex items-start justify-between gap-3 ${
                     isActive
-                      ? "bg-emerald-50 border-l-4 border-emerald-400"
-                      : "hover:bg-slate-50"
+                      ? "bg-success-soft border-l-4 border-success/50"
+                      : "hover:bg-muted"
                   }`}
                 >
                   <div>
-                    <div className="font-semibold text-slate-900 text-xs sm:text-sm">
+                    <div className="font-semibold text-foreground text-xs sm:text-sm">
                       {r.name}
                     </div>
                     {r.description ? (
-                      <div className="text-[11px] text-slate-500">{r.description}</div>
+                      <div className="text-[11px] text-muted-foreground">{r.description}</div>
                     ) : null}
                   </div>
-                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground bg-muted rounded-full px-2 py-0.5">
                     {enabledCount}
                   </span>
                 </button>
@@ -294,11 +294,11 @@ export function RolesPermissionsPanel({
         </div>
 
         {/* Permissions for selected role */}
-        <div className="sm:col-span-3 border border-slate-200 rounded-xl overflow-hidden max-h-[480px] flex flex-col shadow-inner">
+        <div className="sm:col-span-3 border border-border rounded-xl overflow-hidden max-h-[480px] flex flex-col shadow-inner">
           {selectedRole ? (
             <>
-              <div className="flex flex-wrap items-center gap-3 px-3 py-3 border-b bg-slate-50">
-                <div className="text-[12px] font-semibold text-slate-700 flex-1">
+              <div className="flex flex-wrap items-center gap-3 px-3 py-3 border-b bg-muted">
+                <div className="text-[12px] font-semibold text-foreground flex-1">
                   Permissions for: <span className="font-mono">{selectedRole.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -307,18 +307,18 @@ export function RolesPermissionsPanel({
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="পারমিশন সার্চ করুন"
-                    className="w-44 md:w-56 lg:w-64 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-44 md:w-56 lg:w-64 rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
-                  <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+                  <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
                     {(["all", "on", "off"] as const).map((mode) => (
                       <button
                         key={mode}
                         type="button"
                         onClick={() => setFilterMode(mode)}
-                        className={`px-2.5 py-1 text-[11px] font-semibold rounded-md ${
+                        className={`px-2.5 py-1 text-[11px] font-semibold rounded-md border ${
                           filterMode === mode
-                            ? "bg-blue-600 text-white"
-                            : "text-slate-600 hover:bg-slate-100"
+                            ? "bg-primary-soft text-primary border-primary/30"
+                            : "text-muted-foreground border-transparent hover:bg-muted"
                         }`}
                       >
                         {mode === "all"
@@ -333,16 +333,16 @@ export function RolesPermissionsPanel({
                     type="button"
                     onClick={handleSave}
                     disabled={saving}
-                    className="inline-flex items-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="inline-flex items-center rounded-lg bg-primary-soft text-primary border border-primary/30 px-3.5 py-1.5 text-[12px] font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {saving ? "Saving..." : "Save"}
                   </button>
                 </div>
               </div>
 
-              <div className="divide-y divide-slate-100 overflow-y-auto">
+              <div className="divide-y divide-border overflow-y-auto">
                 {groupedPermissions.length === 0 ? (
-                  <div className="p-4 text-xs text-slate-500">
+                  <div className="p-4 text-xs text-muted-foreground">
                     সার্চ / ফিল্টার মিলে কোনো পারমিশন পাওয়া যায়নি।
                   </div>
                 ) : (
@@ -356,10 +356,10 @@ export function RolesPermissionsPanel({
                       <div key={module.key} className="px-3 py-2.5">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2">
-                            <div className="text-sm font-semibold text-slate-900">
+                            <div className="text-sm font-semibold text-foreground">
                               {module.label}
                             </div>
-                            <span className="text-[11px] text-slate-500">
+                            <span className="text-[11px] text-muted-foreground">
                               {enabled}/{total}
                             </span>
                           </div>
@@ -367,14 +367,14 @@ export function RolesPermissionsPanel({
                             <button
                               type="button"
                               onClick={() => bulkSet(ids, true)}
-                              className="px-2 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100"
+                              className="px-2 py-1 rounded-md border border-border text-foreground hover:bg-muted"
                             >
                               Select all
                             </button>
                             <button
                               type="button"
                               onClick={() => bulkSet(ids, false)}
-                              className="px-2 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100"
+                              className="px-2 py-1 rounded-md border border-border text-foreground hover:bg-muted"
                             >
                               Clear
                             </button>
@@ -387,30 +387,30 @@ export function RolesPermissionsPanel({
                             return (
                               <label
                                 key={p.id}
-                                className="flex items-start gap-3 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer"
+                                className="flex items-start gap-3 px-2 py-1.5 rounded-lg hover:bg-muted cursor-pointer"
                               >
                                 <input
                                   type="checkbox"
-                                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                  className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
                                   checked={checked}
                                   onChange={() => togglePermission(p.id)}
                                 />
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-sm font-semibold text-slate-900">
+                                    <span className="text-sm font-semibold text-foreground">
                                       {p.meta.label}
                                     </span>
-                                    <span className="text-[11px] font-mono text-slate-500">
+                                    <span className="text-[11px] font-mono text-muted-foreground">
                                       {p.name}
                                     </span>
                                     {p.meta.critical ? (
-                                      <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                                      <span className="text-[10px] font-semibold text-warning bg-warning-soft border border-warning/30 rounded-full px-2 py-0.5">
                                         Critical
                                       </span>
                                     ) : null}
                                   </div>
                                   {p.description || p.meta.description ? (
-                                    <div className="text-[11px] text-slate-600">
+                                    <div className="text-[11px] text-muted-foreground">
                                       {p.description || p.meta.description}
                                     </div>
                                   ) : null}
@@ -426,12 +426,12 @@ export function RolesPermissionsPanel({
               </div>
             </>
           ) : (
-            <div className="p-4 text-xs text-slate-500">Select a role to manage its permissions.</div>
+            <div className="p-4 text-xs text-muted-foreground">Select a role to manage its permissions.</div>
           )}
         </div>
       </div>
 
-      <p className="text-[11px] text-slate-500">
+      <p className="text-[11px] text-muted-foreground">
         নোট: সুপার অ্যাডমিন সবসময় সব পারমিশন রাখবে—এখানে পরিবর্তন হলেও তার ওপর প্রভাব ফেলবে না।
       </p>
     </div>

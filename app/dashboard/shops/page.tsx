@@ -29,17 +29,17 @@ export default async function ShopsPage() {
   return (
     <div className="space-y-8 section-gap">
       {/* HEADER */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-700">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-primary">
               🏪
             </span>
-            <h1 className="text-xl md:text-3xl font-bold text-gray-900">
+            <h1 className="text-xl md:text-3xl font-bold text-foreground">
               দোকানসমূহ
             </h1>
           </div>
-          {/* <p className="text-sm md:text-base text-gray-600">
+          {/* <p className="text-sm md:text-base text-muted-foreground">
             এক জায়গায় সব দোকান পরিচালনা করুন
           </p> */}
         </div>
@@ -51,11 +51,11 @@ export default async function ShopsPage() {
             className="
               w-full md:w-auto
               inline-flex items-center justify-center gap-2
-              bg-blue-50 border border-blue-200
-              text-blue-800 font-bold
+              bg-primary-soft border border-primary/30
+              text-primary font-bold
               py-3 px-6
               rounded-lg
-              hover:bg-blue-100 hover:border-blue-300
+              hover:bg-primary/20 hover:border-primary/50
               transition
             "
           >
@@ -63,12 +63,12 @@ export default async function ShopsPage() {
             নতুন দোকান
           </Link>
         ) : (
-          <div className="w-full md:w-auto bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2 font-semibold text-slate-800">
+          <div className="w-full md:w-auto bg-muted border border-border rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2 font-semibold text-foreground">
               🔒 নতুন দোকান যোগ করতে সুপার অ্যাডমিন অনুমোদন প্রয়োজন
             </div>
 
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               দোকান যোগ করার জন্য সাপোর্টে যোগাযোগ করুন
             </p>
 
@@ -78,8 +78,8 @@ export default async function ShopsPage() {
               className="
                 w-full
                 inline-flex items-center justify-center gap-2
-                bg-blue-50 border border-blue-200
-                text-blue-800 font-semibold
+                bg-primary-soft border border-primary/30
+                text-primary font-semibold
                 py-3
                 rounded-lg
                 opacity-60
@@ -97,12 +97,12 @@ export default async function ShopsPage() {
                 {phoneHref ? (
                   <a
                     href={phoneHref}
-                    className="font-semibold text-blue-700 hover:underline"
+                    className="font-semibold text-primary hover:underline"
                   >
                     {phoneDisplay}
                   </a>
                 ) : (
-                  <span className="text-slate-500">{phoneDisplay}</span>
+                  <span className="text-muted-foreground">{phoneDisplay}</span>
                 )}
               </div>
 
@@ -113,12 +113,12 @@ export default async function ShopsPage() {
                     href={whatsappHref}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-semibold text-green-700 hover:underline"
+                    className="font-semibold text-success hover:underline"
                   >
                     {waDisplay}
                   </a>
                 ) : (
-                  <span className="text-slate-500">{waDisplay}</span>
+                  <span className="text-muted-foreground">{waDisplay}</span>
                 )}
               </div>
             </div>
@@ -128,17 +128,17 @@ export default async function ShopsPage() {
 
       {/* EMPTY STATE */}
       {data.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <p className="text-gray-600 mb-4">এখনও কোনো দোকান যোগ করা হয়নি</p>
+        <div className="text-center py-12 bg-card rounded-lg border border-border">
+          <p className="text-muted-foreground mb-4">এখনও কোনো দোকান যোগ করা হয়নি</p>
           {canCreateShop && (
             <Link
               href="/dashboard/shops/new"
               className="
                 inline-flex items-center justify-center gap-2
-                bg-blue-50 border border-blue-200
-                text-blue-800 font-bold
+                bg-primary-soft border border-primary/30
+                text-primary font-bold
                 py-3 px-6 rounded-lg
-                hover:bg-blue-100
+                hover:bg-primary/20
               "
             >
               ＋ নতুন দোকান যোগ করুন
@@ -151,31 +151,31 @@ export default async function ShopsPage() {
           {data.map((shop) => (
             <div
               key={shop.id}
-              className="bg-white rounded-lg border border-gray-200 p-4 md:p-6 space-y-4 hover:shadow-md transition"
+              className="bg-card rounded-lg border border-border p-4 md:p-6 space-y-4 hover:shadow-md transition"
             >
               <div>
-                <h2 className="text-lg md:text-xl font-bold text-gray-900">
+                <h2 className="text-lg md:text-xl font-bold text-foreground">
                   {shop.name}
                 </h2>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   ঠিকানা: {shop.address || "উপলব্ধ নয়"}
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   ফোন: {shop.phone || "উপলব্ধ নয়"}
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2 md:pt-4 md:border-t md:border-slate-200">
+              <div className="grid grid-cols-2 gap-3 pt-2 md:pt-4 md:border-t md:border-border">
                 <Link
                   href={`/dashboard/shops/${shop.id}`}
                   className="
                     w-full
                     inline-flex items-center justify-center gap-2
-                    bg-blue-50 border border-blue-200
-                    text-blue-800 font-semibold
+                    bg-primary-soft border border-primary/30
+                    text-primary font-semibold
                     py-3 px-4
                     rounded-lg
-                    hover:bg-blue-100
+                    hover:bg-primary/20
                   "
                 >
                   ✏️ দেখুন / সম্পাদনা
@@ -193,11 +193,11 @@ export default async function ShopsPage() {
                     className="
                       w-full
                       inline-flex items-center justify-center gap-2
-                      bg-red-50 border border-red-200
-                      text-red-800 font-semibold
+                      bg-danger-soft border border-danger/30
+                      text-danger font-semibold
                       py-3 px-4
                       rounded-lg
-                      hover:bg-red-100
+                      hover:bg-danger-soft
                     "
                   >
                     🗑️ মুছুন

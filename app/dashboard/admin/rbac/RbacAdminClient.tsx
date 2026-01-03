@@ -38,38 +38,38 @@ export default function RbacAdminClient({ users, roleOptions, roles, permissions
 
   return (
     <main className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-6">
-      <header className="bg-white/80 border border-slate-200 rounded-2xl shadow-sm p-5 flex flex-col gap-3">
+      <header className="bg-card/80 border border-border rounded-2xl shadow-sm p-5 flex flex-col gap-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-muted text-foreground text-xs font-semibold">
               🔒 Role-Based Access Control
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">RBAC Control Center</h1>
-            <p className="text-sm text-slate-600">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">RBAC Control Center</h1>
+            <p className="text-sm text-muted-foreground">
               কম ভিউতে কাজ করার জন্য ট্যাবে ভাগ করা হয়েছে। টিম অ্যাক্সেস ও পারমিশন আলাদা ট্যাবে দেখুন।
             </p>
           </div>
-          <div className="flex items-center gap-3 text-sm text-slate-700">
-            <div className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
-              <div className="text-[11px] text-slate-500 uppercase tracking-wide">মোট ব্যবহারকারী</div>
-              <div className="text-lg font-semibold text-slate-900">{stats.users}</div>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <div className="px-3 py-2 rounded-xl border border-border bg-muted shadow-sm">
+              <div className="text-[11px] text-muted-foreground uppercase tracking-wide">মোট ব্যবহারকারী</div>
+              <div className="text-lg font-semibold text-foreground">{stats.users}</div>
             </div>
-            <div className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
-              <div className="text-[11px] text-slate-500 uppercase tracking-wide">মোট রোল</div>
-              <div className="text-lg font-semibold text-slate-900">{stats.roles}</div>
+            <div className="px-3 py-2 rounded-xl border border-border bg-muted shadow-sm">
+              <div className="text-[11px] text-muted-foreground uppercase tracking-wide">মোট রোল</div>
+              <div className="text-lg font-semibold text-foreground">{stats.roles}</div>
             </div>
           </div>
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
+        <div className="inline-flex items-center gap-2 rounded-xl border border-border bg-muted p-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors border ${
                 activeTab === tab.id
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-700 hover:bg-white"
+                  ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
+                  : "text-muted-foreground border-transparent hover:bg-card"
               }`}
             >
               {tab.label}

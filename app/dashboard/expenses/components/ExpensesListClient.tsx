@@ -153,17 +153,17 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
           <button
             key={key}
             onClick={() => setPreset(key)}
-            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${
+            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
               preset === key
-                ? "bg-emerald-600 text-white shadow-sm"
-                : "bg-slate-100 text-slate-800"
+                ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
+                : "bg-muted text-foreground border-transparent"
             }`}
           >
             {label}
           </button>
         ))}
       </div>
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
     </div>
   );
 
@@ -172,13 +172,13 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
       <div className="grid grid-cols-2 gap-2">
         <input
           type="date"
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
+          className="border border-border rounded-lg px-3 py-2 text-sm"
           value={customFrom ?? ""}
           onChange={(e) => setCustomFrom(e.target.value)}
         />
         <input
           type="date"
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
+          className="border border-border rounded-lg px-3 py-2 text-sm"
           value={customTo ?? ""}
           onChange={(e) => setCustomTo(e.target.value)}
         />
@@ -187,12 +187,12 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
 
   if (filteredItems.length === 0) {
     return (
-      <div className="bg-white border border-slate-200 rounded-xl p-6 text-center space-y-2">
-        <p className="text-lg font-semibold text-gray-800">এখনো কোনো খরচ নেই</p>
-        <p className="text-sm text-gray-500">প্রথম খরচ যোগ করুন</p>
+      <div className="bg-card border border-border rounded-xl p-6 text-center space-y-2">
+        <p className="text-lg font-semibold text-foreground">এখনো কোনো খরচ নেই</p>
+        <p className="text-sm text-muted-foreground">প্রথম খরচ যোগ করুন</p>
         <Link
           href={`/dashboard/expenses/new?shopId=${shopId}`}
-          className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700"
+          className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
         >
           + নতুন খরচ
         </Link>
@@ -203,28 +203,28 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
   return (
     <div className="space-y-4">
       {/* Mobile sticky summary */}
-      <div className="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-100 py-2 space-y-2">
+      <div className="md:hidden sticky top-0 z-30 bg-card/95 backdrop-blur border-b border-border py-2 space-y-2">
         <div className="px-3 flex items-center justify-between">
           <div>
-            <p className="text-[11px] text-slate-500 font-semibold">
+            <p className="text-[11px] text-muted-foreground font-semibold">
               মোট খরচ (নির্বাচিত সময়)
             </p>
-            <p className="text-xl font-bold text-slate-900 leading-tight">
+            <p className="text-xl font-bold text-foreground leading-tight">
               {totalAmount.toFixed(2)} ৳
             </p>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-muted-foreground">
               {filteredItems.length} খরচ
             </p>
           </div>
           <Link
             href={`/dashboard/expenses/new?shopId=${shopId}`}
-            className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow-sm"
+            className="px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold shadow-sm"
           >
             + নতুন খরচ
           </Link>
         </div>
         <div className="px-2 space-y-2">
-          <p className="text-[11px] font-semibold text-slate-500">📅 সময়</p>
+          <p className="text-[11px] font-semibold text-muted-foreground">📅 সময়</p>
           <DateFilterRow />
           <CustomRangeInputs />
         </div>
@@ -234,21 +234,21 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
       <div className="hidden md:block space-y-2">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-slate-700">মোট খরচ</p>
-            <p className="text-2xl font-bold text-slate-900">
+            <p className="text-sm font-semibold text-foreground">মোট খরচ</p>
+            <p className="text-2xl font-bold text-foreground">
               {totalAmount.toFixed(2)} ৳
             </p>
-            <p className="text-xs text-slate-500">{filteredItems.length} খরচ</p>
+            <p className="text-xs text-muted-foreground">{filteredItems.length} খরচ</p>
           </div>
           <Link
             href={`/dashboard/expenses/new?shopId=${shopId}`}
-            className="px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700"
+            className="px-5 py-2.5 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
           >
             + নতুন খরচ
           </Link>
         </div>
-        <div className="rounded-xl bg-white border border-slate-200 shadow-sm px-4 py-3 space-y-2">
-          <p className="text-xs font-semibold text-slate-500">📅 সময়</p>
+        <div className="rounded-xl bg-card border border-border shadow-sm px-4 py-3 space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground">📅 সময়</p>
           <DateFilterRow />
           <CustomRangeInputs />
         </div>
@@ -267,19 +267,19 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
           return (
             <div
               key={e.id}
-              className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all"
+              className="bg-card border border-border rounded-xl p-5 shadow-sm hover:shadow-md transition-all"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <p className="text-2xl font-bold text-slate-900">
+                  <p className="text-2xl font-bold text-foreground">
                     {formattedAmount} ৳
                   </p>
-                  <p className="text-sm font-semibold text-slate-700">
+                  <p className="text-sm font-semibold text-foreground">
                     {e.category}
                   </p>
-                  <p className="text-xs text-slate-500">তারিখ: {expenseDateStr}</p>
+                  <p className="text-xs text-muted-foreground">তারিখ: {expenseDateStr}</p>
                   {e.note ? (
-                    <p className="text-xs text-slate-500 leading-snug">
+                    <p className="text-xs text-muted-foreground leading-snug">
                       নোট: {e.note}
                     </p>
                   ) : null}
@@ -288,12 +288,12 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
                   {online ? (
                     <Link
                       href={`/dashboard/expenses/${e.id}`}
-                      className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-800 text-xs font-semibold border border-blue-100 hover:bg-blue-100"
+                      className="px-3 py-1.5 rounded-full bg-primary-soft text-primary text-xs font-semibold border border-primary/30 hover:bg-primary-soft/70"
                     >
                       দেখুন
                     </Link>
                   ) : (
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-[11px] text-muted-foreground">
                       Offline মোড
                     </span>
                   )}
@@ -308,3 +308,5 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
     </div>
   );
 }
+
+

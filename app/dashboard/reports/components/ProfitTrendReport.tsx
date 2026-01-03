@@ -47,36 +47,36 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">লাভের প্রবণতা</h2>
-          <p className="text-xs text-gray-500">দিনওয়ারি লাভ/খরচ</p>
+          <h2 className="text-lg font-bold text-foreground">লাভের প্রবণতা</h2>
+          <p className="text-xs text-muted-foreground">দিনওয়ারি লাভ/খরচ</p>
         </div>
       </div>
 
-      <p className="text-sm font-semibold text-gray-900">
+      <p className="text-sm font-semibold text-foreground">
         মোট লাভ: {totalProfit.toFixed(2)} ৳
       </p>
 
-      <div className="border border-gray-200 rounded-lg overflow-x-auto hidden md:block">
+      <div className="border border-border rounded-lg overflow-x-auto hidden md:block">
         <table className="w-full text-sm">
-          <thead className="bg-gray-100">
+          <thead className="bg-muted">
             <tr>
-              <th className="p-3 text-left text-gray-900">তারিখ</th>
-              <th className="p-3 text-right text-gray-900">বিক্রি (৳)</th>
-              <th className="p-3 text-right text-gray-900">খরচ (৳)</th>
-              <th className="p-3 text-right text-gray-900">লাভ (৳)</th>
+              <th className="p-3 text-left text-foreground">তারিখ</th>
+              <th className="p-3 text-right text-foreground">বিক্রি (৳)</th>
+              <th className="p-3 text-right text-foreground">খরচ (৳)</th>
+              <th className="p-3 text-right text-foreground">লাভ (৳)</th>
             </tr>
           </thead>
 
           <tbody>
             {loading ? (
               <tr>
-                <td className="p-3 text-center text-gray-500" colSpan={4}>
+                <td className="p-3 text-center text-muted-foreground" colSpan={4}>
                   লোড হচ্ছে...
                 </td>
               </tr>
             ) : data.length === 0 ? (
               <tr>
-                <td className="p-3 text-center text-gray-500" colSpan={4}>
+                <td className="p-3 text-center text-muted-foreground" colSpan={4}>
                   কোনো তথ্য নেই
                 </td>
               </tr>
@@ -87,20 +87,20 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
                 return (
                   <tr
                     key={`${row.date}-${idx}`}
-                    className="border-t hover:bg-gray-50 transition-colors"
+                    className="border-t hover:bg-muted transition-colors"
                   >
-                    <td className="p-3 text-gray-900">
+                    <td className="p-3 text-foreground">
                       {new Date(row.date).toLocaleDateString("bn-BD")}
                     </td>
-                    <td className="p-3 text-right text-gray-900">
+                    <td className="p-3 text-right text-foreground">
                       {Number(row.sales || 0).toFixed(2)}
                     </td>
-                    <td className="p-3 text-right text-gray-900">
+                    <td className="p-3 text-right text-foreground">
                       {Number(row.expense || 0).toFixed(2)}
                     </td>
                     <td
                       className={`p-2 text-right font-semibold ${
-                        profit >= 0 ? "text-green-700" : "text-red-600"
+                        profit >= 0 ? "text-success" : "text-danger"
                       }`}
                     >
                       {profit.toFixed(2)}
@@ -115,11 +115,11 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
 
       <div className="space-y-3 md:hidden">
         {loading ? (
-          <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
+          <p className="text-center text-muted-foreground bg-card border border-border rounded-lg p-4">
             লোড হচ্ছে...
           </p>
         ) : data.length === 0 ? (
-          <p className="text-center text-gray-500 bg-white border border-gray-200 rounded-lg p-4">
+          <p className="text-center text-muted-foreground bg-card border border-border rounded-lg p-4">
             কোনো তথ্য নেই
           </p>
         ) : (
@@ -129,52 +129,52 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
             return (
               <div
                 key={`${row.date}-${idx}`}
-                className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex gap-3"
+                className="bg-card border border-border rounded-xl p-4 shadow-sm flex gap-3"
               >
                 <div
                   className={`w-1 rounded-full ${
-                    positive ? "bg-emerald-500" : "bg-red-500"
+                    positive ? "bg-success" : "bg-danger"
                   }`}
                 />
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-gray-500">#{idx + 1}</p>
-                      <h3 className="text-base font-semibold text-gray-900 mt-1">
+                      <p className="text-xs text-muted-foreground">#{idx + 1}</p>
+                      <h3 className="text-base font-semibold text-foreground mt-1">
                         {new Date(row.date).toLocaleDateString("bn-BD")}
                       </h3>
                     </div>
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-semibold ${
                         positive
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-red-100 text-red-700"
+                          ? "bg-success-soft text-success"
+                          : "bg-danger-soft text-danger"
                       }`}
                     >
                       {positive ? "লাভ" : "ক্ষতি"}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 text-sm text-gray-600">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">বিক্রি</p>
-                      <p className="text-base font-semibold text-gray-900">
+                  <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+                    <div className="bg-muted rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground">বিক্রি</p>
+                      <p className="text-base font-semibold text-foreground">
                         {Number(row.sales || 0).toFixed(2)} ৳
                       </p>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">খরচ</p>
-                      <p className="text-base font-semibold text-gray-900">
+                    <div className="bg-muted rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground">খরচ</p>
+                      <p className="text-base font-semibold text-foreground">
                         {Number(row.expense || 0).toFixed(2)} ৳
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-sm text-gray-600">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>লাভ</span>
                     <span
                       className={`font-semibold ${
-                        positive ? "text-emerald-700" : "text-red-700"
+                        positive ? "text-success" : "text-danger"
                       }`}
                     >
                       {profit.toFixed(2)} ৳

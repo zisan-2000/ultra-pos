@@ -177,14 +177,14 @@ export default async function BusinessTypesAdminPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 py-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Business Types (Admin)</h1>
-        <p className="text-gray-600">
+        <h1 className="text-2xl font-bold text-foreground">Business Types (Admin)</h1>
+        <p className="text-muted-foreground">
           Super Admin can manage business type rules without redeploy. Changes apply immediately.
         </p>
       </div>
 
       {error ? (
-        <div className="border border-red-200 bg-red-50 text-red-800 rounded-lg p-4">
+        <div className="border border-danger/30 bg-danger-soft text-danger rounded-lg p-4">
           {error}
         </div>
       ) : null}
@@ -192,61 +192,61 @@ export default async function BusinessTypesAdminPage() {
       <form action={handleSyncDefaults} className="flex flex-wrap gap-3 items-center">
         <button
           type="submit"
-          className="px-4 py-2 rounded-md bg-slate-900 text-white font-semibold hover:bg-slate-800"
+          className="px-4 py-2 rounded-md bg-primary-soft text-primary border border-primary/30 font-semibold hover:bg-primary/15 hover:border-primary/40"
         >
           Sync default configs from code
         </button>
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-muted-foreground">
           Pulls current code configs into DB (upsert).
         </span>
       </form>
 
       {missingKeys.length > 0 ? (
-        <div className="border border-amber-200 bg-amber-50 text-amber-800 rounded-lg p-3 text-sm">
+        <div className="border border-warning/30 bg-warning-soft text-warning rounded-lg p-3 text-sm">
           Missing in DB: {missingKeys.join(", ")}
         </div>
       ) : null}
 
-      <div className="border border-gray-200 rounded-xl overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="border border-border rounded-xl overflow-hidden">
+        <table className="min-w-full divide-y divide-border">
+          <thead className="bg-muted">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Key
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Label
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Active
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Updated
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-card divide-y divide-border">
             {types?.map((t) => (
               <tr key={t.id}>
-                <td className="px-4 py-3 text-sm font-mono text-gray-900">{t.key}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{t.label}</td>
+                <td className="px-4 py-3 text-sm font-mono text-foreground">{t.key}</td>
+                <td className="px-4 py-3 text-sm text-foreground">{t.label}</td>
                 <td className="px-4 py-3 text-sm">
                   <span
                     className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
-                      t.isActive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                      t.isActive ? "bg-success-soft text-success" : "bg-danger-soft text-danger"
                     }`}
                   >
                     {t.isActive ? "Active" : "Disabled"}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-600">
+                <td className="px-4 py-3 text-sm text-muted-foreground">
                   {new Date(t.updatedAt).toLocaleString()}
                 </td>
               </tr>
             ))}
             {!types?.length ? (
               <tr>
-                <td className="px-4 py-4 text-sm text-gray-500" colSpan={4}>
+                <td className="px-4 py-4 text-sm text-muted-foreground" colSpan={4}>
                   No business types in database yet.
                 </td>
               </tr>
@@ -255,15 +255,15 @@ export default async function BusinessTypesAdminPage() {
         </table>
       </div>
 
-      <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-        <h2 className="text-lg font-semibold text-gray-900">Add from static config</h2>
-        <p className="text-sm text-gray-600">
+      <div className="border border-border rounded-xl p-4 space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">Add from static config</h2>
+        <p className="text-sm text-muted-foreground">
           Pick an existing code config and push it to DB (edit later via DB/UI).
         </p>
         <form action={handleCreateFromStatic} className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <select
             name="key"
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+            className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
             defaultValue=""
           >
             <option value="" disabled>
@@ -278,12 +278,12 @@ export default async function BusinessTypesAdminPage() {
           <input
             name="label"
             type="text"
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm flex-1"
+            className="border border-border rounded-md px-3 py-2 text-sm flex-1 bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="Label (optional, defaults to code label)"
           />
           <button
             type="submit"
-            className="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
+            className="px-4 py-2 rounded-md bg-primary-soft text-primary border border-primary/30 font-semibold hover:bg-primary/15 hover:border-primary/40"
           >
             Upsert
           </button>
@@ -291,18 +291,18 @@ export default async function BusinessTypesAdminPage() {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">Manage configs</h2>
-        <p className="text-sm text-gray-600">
+        <h2 className="text-lg font-semibold text-foreground">Manage configs</h2>
+        <p className="text-sm text-muted-foreground">
           Edit label/active, and adjust field/stock/unit rules inline. Save applies immediately
           (validation enforced).
         </p>
 
         {/* Create new business type */}
-        <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-4 space-y-3 shadow-sm">
+        <div className="border border-success/30 bg-success-soft rounded-xl p-4 space-y-3 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <div className="text-sm text-emerald-700 font-semibold">Create new business type</div>
-              <p className="text-xs text-emerald-700/80">
+              <div className="text-sm text-success font-semibold">Create new business type</div>
+              <p className="text-xs text-success/80">
                 Key is unique. Defaults: name & sellPrice required; others optional.
               </p>
             </div>
@@ -312,32 +312,32 @@ export default async function BusinessTypesAdminPage() {
               <input
                 name="key"
                 type="text"
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder="unique key (e.g., bakery)"
                 required
               />
               <input
                 name="label"
                 type="text"
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder="Display label"
               />
-              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <label className="inline-flex items-center gap-2 text-sm text-foreground">
                 <input type="checkbox" name="isActive" className="w-4 h-4" defaultChecked />
                 <span>Active</span>
               </label>
             </div>
 
-            <div className="border border-gray-100 rounded-lg p-3 space-y-2 bg-white">
-              <div className="text-sm font-semibold text-gray-800">Fields</div>
+            <div className="border border-border rounded-lg p-3 space-y-2 bg-card">
+              <div className="text-sm font-semibold text-foreground">Fields</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {ALL_FIELDS.map((f) => (
                   <div
                     key={`create-${f}`}
-                    className="border border-gray-200 rounded-md px-3 py-2 flex flex-col gap-1"
+                    className="border border-border rounded-md px-3 py-2 flex flex-col gap-1"
                   >
-                    <div className="text-sm font-medium text-gray-900">{f}</div>
-                    <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                    <div className="text-sm font-medium text-foreground">{f}</div>
+                    <label className="inline-flex items-center gap-2 text-xs text-foreground">
                       <input
                         type="checkbox"
                         name={`req:${f}`}
@@ -346,7 +346,7 @@ export default async function BusinessTypesAdminPage() {
                       />
                       <span>Required</span>
                     </label>
-                    <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                    <label className="inline-flex items-center gap-2 text-xs text-foreground">
                       <input type="checkbox" name={`hid:${f}`} className="w-4 h-4" />
                       <span>Hidden</span>
                     </label>
@@ -356,39 +356,39 @@ export default async function BusinessTypesAdminPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div className="border border-gray-100 rounded-lg p-3 space-y-2 bg-white">
-                <div className="text-sm font-semibold text-gray-800">Stock</div>
-                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <div className="border border-border rounded-lg p-3 space-y-2 bg-card">
+                <div className="text-sm font-semibold text-foreground">Stock</div>
+                <label className="inline-flex items-center gap-2 text-sm text-foreground">
                   <input type="checkbox" name="stock:enabledByDefault" className="w-4 h-4" />
                   <span>Enabled by default</span>
                 </label>
-                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <label className="inline-flex items-center gap-2 text-sm text-foreground">
                   <input type="checkbox" name="stock:requiredWhenEnabled" className="w-4 h-4" />
                   <span>Quantity required when enabled</span>
                 </label>
               </div>
 
-              <div className="border border-gray-100 rounded-lg p-3 space-y-2 bg-white">
+              <div className="border border-border rounded-lg p-3 space-y-2 bg-card">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-gray-800">Unit</div>
-                  <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <div className="text-sm font-semibold text-foreground">Unit</div>
+                  <label className="inline-flex items-center gap-2 text-sm text-foreground">
                     <input type="checkbox" name="unit:enabled" className="w-4 h-4" />
                     <span>Enable unit field</span>
                   </label>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs text-gray-600">Options (comma separated)</label>
+                  <label className="text-xs text-muted-foreground">Options (comma separated)</label>
                   <input
                     name="unitOptions"
                     type="text"
-                    className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="pcs, kg, liter"
                   />
-                  <label className="text-xs text-gray-600">Default unit</label>
+                  <label className="text-xs text-muted-foreground">Default unit</label>
                   <input
                     name="unitDefault"
                     type="text"
-                    className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="pcs"
                   />
                 </div>
@@ -398,7 +398,7 @@ export default async function BusinessTypesAdminPage() {
             <div className="flex gap-3">
               <button
                 type="submit"
-                className="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
+                className="px-4 py-2 rounded-md bg-primary-soft text-primary border border-primary/30 font-semibold hover:bg-primary/15 hover:border-primary/40"
               >
                 Create & save
               </button>
@@ -416,12 +416,12 @@ export default async function BusinessTypesAdminPage() {
             return (
               <div
                 key={t.key}
-                className="border border-gray-200 rounded-xl p-4 space-y-3 bg-white shadow-sm"
+                className="border border-border rounded-xl p-4 space-y-3 bg-card shadow-sm"
               >
                 <div className="flex flex-wrap items-center gap-3 justify-between">
                   <div>
-                    <div className="text-sm text-gray-500 font-mono">{t.key}</div>
-                    <div className="text-lg font-semibold text-gray-900">{t.label}</div>
+                    <div className="text-sm text-muted-foreground font-mono">{t.key}</div>
+                    <div className="text-lg font-semibold text-foreground">{t.label}</div>
                   </div>
                   <form action={handleToggleActive}>
                     <input type="hidden" name="key" value={t.key} />
@@ -430,8 +430,8 @@ export default async function BusinessTypesAdminPage() {
                       type="submit"
                       className={`px-3 py-2 text-sm rounded-md border ${
                         t.isActive
-                          ? "border-red-200 text-red-700 bg-red-50 hover:border-red-300"
-                          : "border-emerald-200 text-emerald-700 bg-emerald-50 hover:border-emerald-300"
+                          ? "border-danger/30 text-danger bg-danger-soft hover:border-danger/50"
+                          : "border-success/30 text-success bg-success-soft hover:border-success/50"
                       }`}
                     >
                       {t.isActive ? "Disable" : "Enable"}
@@ -446,35 +446,35 @@ export default async function BusinessTypesAdminPage() {
                     <input
                       name="label"
                       type="text"
-                      className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                      className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                       placeholder="Label"
                       defaultValue={t.label}
                     />
-                    <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                    <label className="inline-flex items-center gap-2 text-sm text-foreground">
                       <input type="checkbox" name="isActive" className="w-4 h-4" defaultChecked={t.isActive} />
                       <span>Active</span>
                     </label>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted-foreground">
                       Save will validate and upsert this config.
                     </div>
                   </div>
 
-                  <div className="border border-gray-100 rounded-lg p-3 space-y-2">
-                    <div className="text-sm font-semibold text-gray-800">Fields</div>
+                  <div className="border border-border rounded-lg p-3 space-y-2">
+                    <div className="text-sm font-semibold text-foreground">Fields</div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                       {ALL_FIELDS.map((f) => {
                         const rule = (fields as any)[f] || {};
                         return (
                           <div
                             key={f}
-                            className="border border-gray-200 rounded-md px-3 py-2 flex flex-col gap-1"
+                            className="border border-border rounded-md px-3 py-2 flex flex-col gap-1"
                           >
-                            <div className="text-sm font-medium text-gray-900">{f}</div>
-                            <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                            <div className="text-sm font-medium text-foreground">{f}</div>
+                            <label className="inline-flex items-center gap-2 text-xs text-foreground">
                               <input type="checkbox" name={`req:${f}`} className="w-4 h-4" defaultChecked={!!rule.required} />
                               <span>Required</span>
                             </label>
-                            <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                            <label className="inline-flex items-center gap-2 text-xs text-foreground">
                               <input type="checkbox" name={`hid:${f}`} className="w-4 h-4" defaultChecked={!!rule.hidden} />
                               <span>Hidden</span>
                             </label>
@@ -485,11 +485,11 @@ export default async function BusinessTypesAdminPage() {
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    <div className="border border-gray-100 rounded-lg p-3 space-y-2">
+                    <div className="border border-border rounded-lg p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold text-gray-800">Stock</div>
+                        <div className="text-sm font-semibold text-foreground">Stock</div>
                       </div>
-                      <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                      <label className="inline-flex items-center gap-2 text-sm text-foreground">
                         <input
                           type="checkbox"
                           name="stock:enabledByDefault"
@@ -498,7 +498,7 @@ export default async function BusinessTypesAdminPage() {
                         />
                         <span>Enabled by default</span>
                       </label>
-                      <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                      <label className="inline-flex items-center gap-2 text-sm text-foreground">
                         <input
                           type="checkbox"
                           name="stock:requiredWhenEnabled"
@@ -509,10 +509,10 @@ export default async function BusinessTypesAdminPage() {
                       </label>
                     </div>
 
-                    <div className="border border-gray-100 rounded-lg p-3 space-y-2">
+                    <div className="border border-border rounded-lg p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold text-gray-800">Unit</div>
-                        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                        <div className="text-sm font-semibold text-foreground">Unit</div>
+                        <label className="inline-flex items-center gap-2 text-sm text-foreground">
                           <input
                             type="checkbox"
                             name="unit:enabled"
@@ -523,18 +523,18 @@ export default async function BusinessTypesAdminPage() {
                         </label>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs text-gray-600">Options (comma separated)</label>
+                        <label className="text-xs text-muted-foreground">Options (comma separated)</label>
                         <input
                           name="unitOptions"
                           type="text"
-                          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                          className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                           placeholder="kg, gm, pcs"
                           defaultValue={unitOptions.join(", ")}
                         />
-                        <label className="text-xs text-gray-600">Default unit</label>
+                        <label className="text-xs text-muted-foreground">Default unit</label>
                         <select
                           name="unitDefault"
-                          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                          className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                           defaultValue={unit.default || unitOptions[0] || ""}
                         >
                           <option value="">(auto)</option>
@@ -551,7 +551,7 @@ export default async function BusinessTypesAdminPage() {
                   <div className="flex gap-3">
                     <button
                       type="submit"
-                      className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700"
+                      className="px-4 py-2 rounded-md bg-primary-soft text-primary border border-primary/30 font-semibold hover:bg-primary/15 hover:border-primary/40"
                     >
                       Save changes
                     </button>

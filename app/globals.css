@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 @plugin "tailwindcss-animate";
@@ -17,63 +18,118 @@
 
 @layer base {
   :root {
-    /* ICONIC POS Color Palette - Light Mode */
+    /* Core palette aligned with POS UI rules */
+    --radius: 0.625rem;
 
-    /* Background & Cards */
+    /* Surface and text */
     --background: #F8FAFC;
+    --foreground: #0F172A;
     --card: #FFFFFF;
     --card-foreground: #0F172A;
-    --foreground: #0F172A;
+    --popover: #FFFFFF;
+    --popover-foreground: #0F172A;
 
-    /* Primary Blue (Soft, Premium) */
-    --primary: #3B82F6;
-    --primary-hover: #2563EB;
+    /* Brand and status */
+    --primary: #16A34A;
+    --primary-hover: #15803D;
+    --primary-soft: #DCFCE7;
     --primary-foreground: #FFFFFF;
 
-    /* Accent Colors */
-    --accent-sky: #0EA5E9;
-    --success: #10B981;
-    --destructive: #EF4444;
-    --warning: #F59E0B;
-    --info: #06B6D4;
-    --highlight: #8B5CF6;
+    --success: #22C55E;
+    --success-soft: #EAFBF1;
 
-    /* Neutral Colors */
+    --warning: #F59E0B;
+    --warning-soft: #FEF3C7;
+
+    --destructive: #DC2626;
+    --danger: #DC2626;
+    --danger-soft: #FEE2E2;
+
+    /* Neutral system */
+    --secondary: #F1F5F9;
+    --secondary-foreground: #0F172A;
+    --muted: #F1F5F9;
+    --muted-foreground: #475569;
+    --border: #E5E7EB;
+    --input: #E5E7EB;
+    --ring: #16A34A;
     --header-gray: #F1F5F9;
-    --border: #E2E8F0;
     --text-medium: #475569;
     --text-muted: #94A3B8;
 
-    /* Legacy support */
-    --muted: #F1F5F9;
-    --muted-foreground: #475569;
+    /* Accent for focus and selection */
+    --accent: #DCFCE7;
+    --accent-foreground: #15803D;
+
+    /* Sidebar */
+    --sidebar: #064E3B;
+    --sidebar-foreground: #ECFDF5;
+    --sidebar-primary: #047857;
+    --sidebar-primary-foreground: #ECFDF5;
+    --sidebar-accent: #065F46;
+    --sidebar-accent-foreground: #A7F3D0;
+    --sidebar-border: #065F46;
+    --sidebar-ring: #047857;
+
+    /* Charts */
+    --chart-1: #16A34A;
+    --chart-2: #22C55E;
+    --chart-3: #F59E0B;
+    --chart-4: #DC2626;
+    --chart-5: #94A3B8;
   }
 
-  /* Dark Mode - Optional but recommended for night POS counters */
   .dark {
-    --background: #0F172A;
-    --card: #1E293B;
-    --card-foreground: #F8FAFC;
+    --background: #0B1220;
     --foreground: #F8FAFC;
+    --card: #0F172A;
+    --card-foreground: #F8FAFC;
+    --popover: #0F172A;
+    --popover-foreground: #F8FAFC;
 
-    --primary: #2563EB;
-    --primary-hover: #1D4ED8;
+    --primary: #22C55E;
+    --primary-hover: #16A34A;
+    --primary-soft: #14532D;
     --primary-foreground: #FFFFFF;
 
-    --accent-sky: #0EA5E9;
-    --success: #10B981;
-    --destructive: #EF4444;
-    --warning: #FBBF24;
-    --info: #06B6D4;
-    --highlight: #8B5CF6;
+    --success: #4ADE80;
+    --success-soft: #064E3B;
 
-    --header-gray: #334155;
-    --border: #334155;
+    --warning: #F59E0B;
+    --warning-soft: #78350F;
+
+    --destructive: #F87171;
+    --danger: #F87171;
+    --danger-soft: #7F1D1D;
+
+    --secondary: #1E293B;
+    --secondary-foreground: #F8FAFC;
+    --muted: #1E293B;
+    --muted-foreground: #CBD5E1;
+    --border: #1E293B;
+    --input: #1E293B;
+    --ring: #22C55E;
+    --header-gray: #111827;
     --text-medium: #CBD5E1;
     --text-muted: #94A3B8;
 
-    --muted: #1E293B;
-    --muted-foreground: #CBD5E1;
+    --accent: #14532D;
+    --accent-foreground: #DCFCE7;
+
+    --sidebar: #064E3B;
+    --sidebar-foreground: #ECFDF5;
+    --sidebar-primary: #047857;
+    --sidebar-primary-foreground: #ECFDF5;
+    --sidebar-accent: #065F46;
+    --sidebar-accent-foreground: #A7F3D0;
+    --sidebar-border: #065F46;
+    --sidebar-ring: #047857;
+
+    --chart-1: #22C55E;
+    --chart-2: #4ADE80;
+    --chart-3: #FBBF24;
+    --chart-4: #F87171;
+    --chart-5: #94A3B8;
   }
 }
 
@@ -81,6 +137,8 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
   --color-primary-foreground: var(--primary-foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
@@ -88,9 +146,13 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
   --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
   --color-destructive: var(--destructive);
-  --font-sans: 'SutonnyMJ', 'Noto Sans Bengali', sans-serif;
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-sans: 'Inter', 'SutonnyMJ', 'Noto Sans Bengali', sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -123,7 +185,7 @@
 }
 
 body {
-  font-family: 'SutonnyMJ', 'Noto Sans Bengali', sans-serif;
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.6;
 }
@@ -154,8 +216,8 @@ body {
 }
 
 @keyframes flash-bar {
-  0% { box-shadow: 0 -6px 24px rgba(16,185,129,0.15); }
-  50% { box-shadow: 0 -8px 28px rgba(16,185,129,0.25); }
+  0% { box-shadow: 0 -6px 24px rgba(22,163,74,0.15); }
+  50% { box-shadow: 0 -8px 28px rgba(22,163,74,0.25); }
   100% { box-shadow: 0 -6px 24px rgba(15,23,42,0.12); }
 }
 
@@ -236,19 +298,19 @@ p, span, label, button {
 
 /* Button Styles - ICONIC POS Palette */
 .btn-primary {
-  @apply px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors text-base;
+  @apply px-6 py-3 bg-primary-soft text-primary border border-primary/30 font-medium rounded-lg hover:bg-primary/15 hover:border-primary/40 transition-colors text-base;
 }
 
 .btn-secondary {
-  @apply px-6 py-3 bg-slate-100 text-slate-900 font-medium rounded-lg hover:bg-slate-200 transition-colors text-base;
+  @apply px-6 py-3 bg-secondary text-secondary-foreground font-medium rounded-lg hover:bg-muted transition-colors text-base;
 }
 
 .btn-danger {
-  @apply px-6 py-3 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition-colors text-base;
+  @apply px-6 py-3 bg-destructive text-primary-foreground font-medium rounded-lg hover:bg-destructive/90 transition-colors text-base;
 }
 
 .btn-success {
-  @apply px-6 py-3 bg-emerald-500 text-white font-medium rounded-lg hover:bg-emerald-600 transition-colors text-base;
+  @apply px-6 py-3 bg-success text-primary-foreground font-medium rounded-lg hover:bg-success/90 transition-colors text-base;
 }
 
 .btn-small {
@@ -257,76 +319,7 @@ p, span, label, button {
 
 /* Card Styles */
 .card {
-  @apply bg-white rounded-lg border border-slate-200 p-6 shadow-sm;
-}
-
-:root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  @apply bg-card rounded-lg border border-border p-6 shadow-sm;
 }
 
 @layer base {

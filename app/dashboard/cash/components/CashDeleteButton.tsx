@@ -24,7 +24,7 @@ export function CashDeleteButton({ id }: Props) {
     <button
       type="button"
       onClick={handleDelete}
-      className="w-full md:w-auto px-4 py-2 bg-red-50 border border-red-200 text-red-800 rounded-lg font-semibold hover:border-red-300 hover:bg-red-100 transition-colors"
+      className="w-full md:w-auto px-4 py-2 bg-danger-soft border border-danger/30 text-danger rounded-lg font-semibold hover:border-danger/50 hover:bg-danger-soft transition-colors"
     >
       ডিলিট
     </button>

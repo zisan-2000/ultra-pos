@@ -12,7 +12,7 @@ export default async function EditShop({ params }: PageProps) {
   const { id } = await params;
   const shop = await getShop(id);
   if (!shop) {
-    return <div className="p-6 text-center text-red-600">Shop not found</div>;
+    return <div className="p-6 text-center text-danger">Shop not found</div>;
   }
 
   const dbBusinessTypes = await listActiveBusinessTypes().catch(() => []);
@@ -39,8 +39,8 @@ export default async function EditShop({ params }: PageProps) {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">দোকানের তথ্য সম্পাদনা</h1>
-        <p className="text-gray-600 mt-2">নাম + ঠিকানা আপডেট করুন</p>
+        <h1 className="text-3xl font-bold text-foreground">দোকানের তথ্য সম্পাদনা</h1>
+        <p className="text-muted-foreground mt-2">নাম + ঠিকানা আপডেট করুন</p>
       </div>
 
       <ShopFormClient

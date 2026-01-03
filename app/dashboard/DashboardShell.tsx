@@ -317,10 +317,7 @@ export function DashboardShell({
   const userInitials = useMemo(() => {
     const source = (rbacUser?.name || rbacUser?.email || "").trim();
     if (!source) return "U";
-    const parts = source
-      .replace(/\s+/g, " ")
-      .split(" ")
-      .filter(Boolean);
+    const parts = source.replace(/\s+/g, " ").split(" ").filter(Boolean);
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }, [rbacUser?.name, rbacUser?.email]);
@@ -364,12 +361,12 @@ export function DashboardShell({
       : "grid-cols-1";
 
   return (
-    <div className="h-screen overflow-x-hidden bg-slate-50">
+    <div className="h-screen overflow-x-hidden bg-background">
       {/* Overlay for drawer on mobile */}
       {drawerOpen && (
         <button
           aria-label="Close navigation"
-          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          className="fixed inset-0 bg-foreground/30 z-30 lg:hidden"
           onClick={() => setDrawerOpen(false)}
         />
       )}
@@ -377,29 +374,31 @@ export function DashboardShell({
       <div className="flex h-full">
         {/* Sidebar / Drawer */}
         <aside
-          className={`fixed z-40 inset-y-0 left-0 bg-white/95 backdrop-blur border-r border-slate-200 transform transition-[transform,width] duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:h-dvh lg:shadow-none ${
+          className={`fixed z-40 inset-y-0 left-0 bg-sidebar backdrop-blur border-r border-sidebar-border transform transition-[transform,width] duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:h-dvh lg:shadow-none ${
             drawerOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
           } ${sidebarCollapsed ? "lg:w-20 w-72" : "w-72"}`}
         >
           <div className="flex h-full flex-col">
             <div
-              className={`flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 ${
+              className={`flex items-start justify-between gap-3 border-b border-sidebar-border px-4 py-4 ${
                 sidebarCollapsed ? "lg:px-3" : ""
               }`}
             >
               <div className={sidebarCollapsed ? "lg:hidden" : ""}>
-                <h1 className="text-lg font-semibold tracking-tight text-slate-900">
-                  আল্ট্রা মাইক্রো
+                <h1 className="text-lg font-semibold tracking-tight text-sidebar-foreground">
+                  মাইক্রো
                 </h1>
-                <p className="text-xs text-slate-500 mt-1">POS সিস্টেম</p>
+                <p className="text-xs text-sidebar-accent-foreground mt-1">
+                  POS সিস্টেম
+                </p>
               </div>
 
               <div className="flex items-center gap-2">
                 <span
                   className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                     online
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-red-100 text-red-700"
+                      ? "bg-success-soft text-success"
+                      : "bg-muted text-muted-foreground"
                   } ${sidebarCollapsed ? "lg:hidden" : ""}`}
                 >
                   {online ? "অনলাইন" : "অফলাইন"}
@@ -407,8 +406,10 @@ export function DashboardShell({
 
                 <button
                   type="button"
-                  className="hidden lg:inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 h-9 w-9"
-                  aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  className="hidden lg:inline-flex items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground shadow-sm hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar h-9 w-9"
+                  aria-label={
+                    sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                  }
                   aria-pressed={sidebarCollapsed}
                   onClick={toggleSidebarCollapsed}
                 >
@@ -421,7 +422,7 @@ export function DashboardShell({
 
                 <button
                   type="button"
-                  className="lg:hidden inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 h-9 w-9"
+                  className="lg:hidden inline-flex items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground shadow-sm hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar h-9 w-9"
                   aria-label="Close navigation"
                   onClick={() => setDrawerOpen(false)}
                 >
@@ -432,7 +433,7 @@ export function DashboardShell({
 
             <nav className="flex-1 min-h-0 px-2 py-3 overflow-y-auto">
               <div
-                className={`px-2 pb-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider ${
+                className={`px-2 pb-2 text-[11px] font-semibold text-sidebar-accent-foreground uppercase tracking-wider ${
                   sidebarCollapsed ? "lg:hidden" : ""
                 }`}
               >
@@ -441,7 +442,9 @@ export function DashboardShell({
 
               <div className="flex flex-col gap-1">
                 {navItems
-                  .filter((item) => hasPermission(routePermissionMap[item.href]))
+                  .filter((item) =>
+                    hasPermission(routePermissionMap[item.href])
+                  )
                   .map((item) => {
                     const targetHref =
                       item.href === "/dashboard"
@@ -455,31 +458,31 @@ export function DashboardShell({
                         key={item.href}
                         href={targetHref}
                         onClick={() => setDrawerOpen(false)}
-                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                           active
-                            ? "bg-slate-900 text-white"
-                            : "text-slate-700 hover:bg-slate-100"
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent"
                         } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                       >
                         <span
                           className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
                             active
-                              ? "bg-white/15"
-                              : "bg-slate-100 group-hover:bg-white"
+                              ? "bg-sidebar-primary/20"
+                              : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
                           }`}
                         >
                           <Icon
                             className={`h-4 w-4 ${
-                              active ? "text-white" : "text-slate-700"
+                              active
+                                ? "text-sidebar-primary-foreground"
+                                : "text-sidebar-foreground"
                             }`}
                           />
                         </span>
 
                         <span
                           className={
-                            sidebarCollapsed
-                              ? "lg:hidden truncate"
-                              : "truncate"
+                            sidebarCollapsed ? "lg:hidden truncate" : "truncate"
                           }
                         >
                           {item.label}
@@ -492,7 +495,7 @@ export function DashboardShell({
               {(canAccessRbacAdmin || canViewUserCreationLog) && (
                 <div className="mt-5">
                   <div
-                    className={`px-2 pb-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider ${
+                    className={`px-2 pb-2 text-[11px] font-semibold text-sidebar-accent-foreground uppercase tracking-wider ${
                       sidebarCollapsed ? "lg:hidden" : ""
                     }`}
                   >
@@ -504,33 +507,31 @@ export function DashboardShell({
                       <Link
                         href={userCreationLogHref}
                         onClick={() => setDrawerOpen(false)}
-                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                           isActive(userCreationLogHref)
-                            ? "bg-slate-900 text-white"
-                            : "text-slate-700 hover:bg-slate-100"
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent"
                         } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                       >
                         <span
                           className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
                             isActive(userCreationLogHref)
-                              ? "bg-white/15"
-                              : "bg-slate-100 group-hover:bg-white"
+                              ? "bg-sidebar-primary/20"
+                              : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
                           }`}
                         >
                           <Users
                             className={`h-4 w-4 ${
                               isActive(userCreationLogHref)
-                                ? "text-white"
-                                : "text-slate-700"
+                                ? "text-sidebar-primary-foreground"
+                                : "text-sidebar-foreground"
                             }`}
                           />
                         </span>
 
                         <span
                           className={
-                            sidebarCollapsed
-                              ? "lg:hidden truncate"
-                              : "truncate"
+                            sidebarCollapsed ? "lg:hidden truncate" : "truncate"
                           }
                         >
                           ব্যবহারকারী তৈরি লগ
@@ -540,14 +541,17 @@ export function DashboardShell({
 
                     {canAccessRbacAdmin && (
                       <Link
-                        href={applyBasePath("/dashboard/admin/rbac", roleBasePath)}
+                        href={applyBasePath(
+                          "/dashboard/admin/rbac",
+                          roleBasePath
+                        )}
                         onClick={() => setDrawerOpen(false)}
-                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                           isActive(
                             applyBasePath("/dashboard/admin/rbac", roleBasePath)
                           )
-                            ? "bg-slate-900 text-white"
-                            : "text-slate-700 hover:bg-slate-100"
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent"
                         } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                       >
                         <span
@@ -558,8 +562,8 @@ export function DashboardShell({
                                 roleBasePath
                               )
                             )
-                              ? "bg-white/15"
-                              : "bg-slate-100 group-hover:bg-white"
+                              ? "bg-sidebar-primary/20"
+                              : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
                           }`}
                         >
                           <Settings
@@ -570,17 +574,15 @@ export function DashboardShell({
                                   roleBasePath
                                 )
                               )
-                                ? "text-white"
-                                : "text-slate-700"
+                                ? "text-sidebar-primary-foreground"
+                                : "text-sidebar-foreground"
                             }`}
                           />
                         </span>
 
                         <span
                           className={
-                            sidebarCollapsed
-                              ? "lg:hidden truncate"
-                              : "truncate"
+                            sidebarCollapsed ? "lg:hidden truncate" : "truncate"
                           }
                         >
                           RBAC ব্যবস্থাপনা
@@ -594,7 +596,7 @@ export function DashboardShell({
               {isSuperAdmin && (
                 <div className="mt-5">
                   <div
-                    className={`px-2 pb-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider ${
+                    className={`px-2 pb-2 text-[11px] font-semibold text-sidebar-accent-foreground uppercase tracking-wider ${
                       sidebarCollapsed ? "lg:hidden" : ""
                     }`}
                   >
@@ -608,15 +610,15 @@ export function DashboardShell({
                         roleBasePath
                       )}
                       onClick={() => setDrawerOpen(false)}
-                      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                         isActive(
                           applyBasePath(
                             "/dashboard/admin/business-types",
                             roleBasePath
                           )
                         )
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-700 hover:bg-slate-100"
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent"
                       } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                     >
                       <span
@@ -627,8 +629,8 @@ export function DashboardShell({
                               roleBasePath
                             )
                           )
-                            ? "bg-white/15"
-                            : "bg-slate-100 group-hover:bg-white"
+                            ? "bg-sidebar-primary/20"
+                            : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
                         }`}
                       >
                         <Settings
@@ -639,8 +641,8 @@ export function DashboardShell({
                                 roleBasePath
                               )
                             )
-                              ? "text-white"
-                              : "text-slate-700"
+                              ? "text-sidebar-primary-foreground"
+                              : "text-sidebar-foreground"
                           }`}
                         />
                       </span>
@@ -657,24 +659,24 @@ export function DashboardShell({
                     <Link
                       href={systemSettingsHref}
                       onClick={() => setDrawerOpen(false)}
-                      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                         pathname === systemSettingsHref
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-700 hover:bg-slate-100"
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent"
                       } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                     >
                       <span
                         className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
                           pathname === systemSettingsHref
-                            ? "bg-white/15"
-                            : "bg-slate-100 group-hover:bg-white"
+                            ? "bg-sidebar-primary/20"
+                            : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
                         }`}
                       >
                         <Settings
                           className={`h-4 w-4 ${
                             pathname === systemSettingsHref
-                              ? "text-white"
-                              : "text-slate-700"
+                              ? "text-sidebar-primary-foreground"
+                              : "text-sidebar-foreground"
                           }`}
                         />
                       </span>
@@ -693,7 +695,7 @@ export function DashboardShell({
             </nav>
 
             <div
-              className={`border-t border-slate-200 px-4 py-4 ${
+              className={`border-t border-sidebar-border px-4 py-4 ${
                 sidebarCollapsed ? "lg:px-3" : ""
               }`}
             >
@@ -701,35 +703,41 @@ export function DashboardShell({
                 <button
                   type="button"
                   onClick={() => setUserMenuOpen((p) => !p)}
-                  className={`w-full flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                  className={`w-full flex items-center gap-3 rounded-xl border border-sidebar-border bg-sidebar-accent px-3 py-2 text-left shadow-sm hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                     sidebarCollapsed ? "lg:justify-center" : ""
                   }`}
                   aria-label="Open user menu"
                   aria-expanded={userMenuOpen}
                 >
-                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white text-sm font-semibold">
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-sm font-semibold">
                     {userInitials}
                   </span>
 
-                  <span className={sidebarCollapsed ? "hidden" : "min-w-0 flex-1"}>
-                    <span className="block truncate text-sm font-semibold text-slate-900">
+                  <span
+                    className={sidebarCollapsed ? "hidden" : "min-w-0 flex-1"}
+                  >
+                    <span className="block truncate text-sm font-semibold text-sidebar-foreground">
                       {userDisplayName}
                     </span>
                     {userEmail ? (
-                      <span className="block truncate text-xs text-slate-500">
+                      <span className="block truncate text-xs text-sidebar-accent-foreground">
                         {userEmail}
                       </span>
                     ) : null}
                   </span>
 
-                  <span className={sidebarCollapsed ? "hidden" : "flex items-center gap-2"}>
+                  <span
+                    className={
+                      sidebarCollapsed ? "hidden" : "flex items-center gap-2"
+                    }
+                  >
                     {primaryRoleLabel ? (
-                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                      <span className="inline-flex items-center rounded-full border border-sidebar-border bg-sidebar-accent px-2 py-0.5 text-[11px] font-semibold text-sidebar-accent-foreground">
                         {primaryRoleLabel}
                       </span>
                     ) : null}
                     <ChevronDown
-                      className={`h-4 w-4 text-slate-500 transition-transform ${
+                      className={`h-4 w-4 text-sidebar-accent-foreground transition-transform ${
                         userMenuOpen ? "rotate-180" : "rotate-0"
                       }`}
                     />
@@ -738,10 +746,8 @@ export function DashboardShell({
 
                 {userMenuOpen && (
                   <div
-                    className={`absolute bottom-[56px] z-50 rounded-xl border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.18)] overflow-hidden ${
-                      sidebarCollapsed
-                        ? "left-0 w-64"
-                        : "left-0 right-0"
+                    className={`absolute bottom-[56px] z-50 rounded-xl border border-border bg-card shadow-[0_16px_40px_rgba(15,23,42,0.18)] overflow-hidden ${
+                      sidebarCollapsed ? "left-0 w-64" : "left-0 right-0"
                     }`}
                   >
                     <div className="p-2">
@@ -751,14 +757,14 @@ export function DashboardShell({
                           setUserMenuOpen(false);
                           setDrawerOpen(false);
                         }}
-                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       >
                         <User className="h-4 w-4" />
                         <span>Profile</span>
                       </Link>
 
                       <div className="mt-2">
-                        <div className="flex items-center gap-2 px-3 pb-2 text-xs font-semibold text-slate-500">
+                        <div className="flex items-center gap-2 px-3 pb-2 text-xs font-semibold text-muted-foreground">
                           <LogOut className="h-4 w-4" />
                           <span>Logout</span>
                         </div>
@@ -774,11 +780,11 @@ export function DashboardShell({
 
         {/* Main content */}
         <div className="flex-1 flex flex-col h-full lg:pl-0 overflow-hidden">
-          <header className="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-slate-200">
+          <header className="sticky top-0 z-20 bg-card/80 backdrop-blur border-b border-border">
             <div className="flex items-start gap-3 px-4 sm:px-6 lg:px-8 py-3">
               {/* Drawer toggle */}
               <button
-                className="lg:hidden inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 shrink-0 mt-1 h-10 w-10"
+                className="lg:hidden inline-flex items-center justify-center rounded-lg border border-border bg-card text-foreground shadow-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background shrink-0 mt-1 h-10 w-10"
                 onClick={() => setDrawerOpen((p) => !p)}
                 aria-label="Toggle navigation"
               >
@@ -787,14 +793,14 @@ export function DashboardShell({
 
               {/* Left content */}
               <div className="flex-1 min-w-0">
-                {/* <p className="text-[11px] text-gray-500 mb-1">বর্তমান দোকান</p> */}
+                {/* <p className="text-[11px] text-muted-foreground mb-1">বর্তমান দোকান</p> */}
 
                 {/* Shop name (click to view full name) */}
                 <button
                   onClick={() => setShopNameOpen(true)}
                   className="text-left w-full"
                 >
-                  <h2 className="text-base font-bold text-gray-900 leading-snug line-clamp-2 hover:underline">
+                  <h2 className="text-base font-bold text-foreground leading-snug line-clamp-2 hover:underline">
                     {currentShopName}
                   </h2>
                 </button>
@@ -807,7 +813,7 @@ export function DashboardShell({
                     value={safeShopId ?? undefined}
                     onValueChange={(value) => handleShopChange(value)}
                   >
-                    <SelectTrigger className="w-[200px] border border-slate-200 bg-white text-left shadow-sm focus:ring-2 focus:ring-green-500">
+                    <SelectTrigger className="w-[200px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
                       <SelectValue placeholder="দোকান নির্বাচন" />
                     </SelectTrigger>
                     <SelectContent align="end" className="w-[220px]">
@@ -821,7 +827,7 @@ export function DashboardShell({
                 ) : (
                   <Link
                     href={applyBasePath("/dashboard/shops/new", roleBasePath)}
-                    className="text-sm font-semibold text-blue-600"
+                    className="text-sm font-semibold text-primary hover:text-primary-hover"
                   >
                     দোকান তৈরি করুন
                   </Link>
@@ -831,11 +837,13 @@ export function DashboardShell({
                 <div className="flex items-center gap-1 text-xs font-semibold mt-2">
                   <span
                     className={`inline-flex h-2 w-2 rounded-full ${
-                      online ? "bg-emerald-500" : "bg-red-500"
+                      online ? "bg-success" : "bg-muted-foreground"
                     }`}
                   />
                   <span
-                    className={online ? "text-emerald-700" : "text-red-700"}
+                    className={
+                      online ? "text-success" : "text-muted-foreground"
+                    }
                   >
                     {online ? "অনলাইন" : "অফলাইন"}
                   </span>
@@ -850,7 +858,7 @@ export function DashboardShell({
                   <DialogTitle>বর্তমান দোকান</DialogTitle>
                 </DialogHeader>
 
-                <p className="text-base font-semibold text-gray-900 leading-relaxed break-words">
+                <p className="text-base font-semibold text-foreground leading-relaxed break-words">
                   {currentShopName}
                 </p>
               </DialogContent>
@@ -866,7 +874,7 @@ export function DashboardShell({
       {/* Bottom nav for mobile */}
       <nav className="fixed bottom-0 inset-x-0 z-30 lg:hidden px-3 pb-3">
         <div
-          className={`relative grid ${bottomGridClass} rounded-t-2xl bg-white/90 backdrop-blur-sm border border-slate-200 shadow-[0_-4px_18px_rgba(15,23,42,0.12)] px-3 pt-4 pb-3`}
+          className={`relative grid ${bottomGridClass} rounded-t-2xl bg-card/90 backdrop-blur-sm border border-border shadow-[0_-4px_18px_rgba(15,23,42,0.12)] px-3 pt-4 pb-3`}
         >
           {mobileNavItems.map((item) => {
             const targetHref =
@@ -881,8 +889,8 @@ export function DashboardShell({
                 href={targetHref}
                 className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 rounded-xl transition-colors ${
                   isActive(targetHref)
-                    ? "text-slate-900 bg-slate-100"
-                    : "text-slate-500"
+                    ? "text-primary bg-primary-soft"
+                    : "text-muted-foreground"
                 }`}
               >
                 <Icon className="h-5 w-5" />
@@ -896,7 +904,7 @@ export function DashboardShell({
       {/* ✅ Floating primary action: now self-explanatory (problem #3) */}
 
       {/* Smart Floating Action Button */}
-      {fabConfig && safeShopId ? (
+      {fabConfig && safeShopId && !drawerOpen ? (
         <Link
           href={`${applyBasePath(
             fabConfig.href,
@@ -909,9 +917,8 @@ export function DashboardShell({
  left-1/2 -translate-x-1/2 z-40 lg:hidden
       flex items-center justify-center
       rounded-full
-      bg-indigo-500 hover:bg-indigo-600
-      text-white
-      shadow-[0_10px_24px_rgba(15,23,42,0.18)]
+      bg-[#0D9488] text-[#ECFEFF] hover:bg-[#0B877B]
+      shadow-[0_10px_24px_rgba(13,148,136,0.35)]
       active:scale-[0.97]
       transition-all duration-200
       ${showFabLabel ? "px-5 py-3 gap-2" : "h-14 w-14"}
@@ -919,7 +926,7 @@ export function DashboardShell({
         >
           {/* Icon */}
           <span
-            className={`flex items-center justify-center rounded-full bg-white/20 ${
+            className={`flex items-center justify-center rounded-full bg-[#ECFEFF]/20 ${
               showFabLabel ? "h-8 w-8" : "h-10 w-10 bg-transparent"
             }`}
           >

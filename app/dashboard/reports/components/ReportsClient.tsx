@@ -152,13 +152,11 @@ export default function ReportsClient({
                   ? ` · বাতিল: ${liveSummary.sales.voidedCount}`
                   : ""
               }`}
-              icon="💰"
             />
             <StatCard
               title="খরচ"
               value={`${liveSummary.expense.totalAmount.toFixed(2)} ৳`}
               subtitle={`মোট খরচ: ${liveSummary.expense.count ?? 0}`}
-              icon="💸"
             />
             <StatCard
               title="ক্যাশ ব্যালান্স"
@@ -166,7 +164,6 @@ export default function ReportsClient({
               subtitle={`ইন: ${liveSummary.cash.totalIn.toFixed(
                 2
               )} ৳ | আউট: ${liveSummary.cash.totalOut.toFixed(2)} ৳`}
-              icon="🏦"
             />
             <StatCard
               title="লাভ"
@@ -174,7 +171,6 @@ export default function ReportsClient({
               subtitle={`বিক্রি: ${liveSummary.profit.salesTotal.toFixed(
                 2
               )} ৳ | খরচ: ${liveSummary.profit.expenseTotal.toFixed(2)} ৳`}
-              icon="📈"
             />
           </div>
         );
@@ -205,15 +201,15 @@ export default function ReportsClient({
 
   return (
     <div className="space-y-5">
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 leading-tight">
+          <h1 className="text-3xl font-bold text-foreground leading-tight">
             রিপোর্ট ও বিশ্লেষণ
           </h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             দোকান: <span className="font-semibold">{shopName}</span>
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             বিক্রি, খরচ, ক্যাশ, লাভ এক জায়গায়
           </p>
         </div>
@@ -224,67 +220,67 @@ export default function ReportsClient({
       </div>
 
       {/* Mobile sticky controls */}
-      <div className="md:hidden sticky top-0 z-30 space-y-3 bg-white/95 backdrop-blur border-b border-slate-100 py-2">
+      <div className="md:hidden sticky top-0 z-30 space-y-3 bg-card/95 backdrop-blur border-b border-border py-2">
         <div className="px-2 space-y-1">
-          <p className="text-[11px] font-semibold text-slate-500">📊 রিপোর্ট</p>
+          <p className="text-[11px] font-semibold text-muted-foreground"> রিপোর্ট</p>
           <div className="relative">
             <div className="overflow-x-auto flex gap-2 pr-6">
               {NAV.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => setActive(item.key)}
-                  className={`px-3 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${
+                  className={`px-3 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
                     active === item.key
-                      ? "bg-emerald-600 text-white shadow-sm"
-                      : "bg-slate-100 text-slate-800"
+                      ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
+                      : "bg-muted text-foreground border-transparent"
                   }`}
                 >
                   {item.label}
                 </button>
               ))}
             </div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
           </div>
         </div>
 
         <div className="px-2 space-y-2">
-          <p className="text-[11px] font-semibold text-slate-500">📅 সময়</p>
+          <p className="text-[11px] font-semibold text-muted-foreground"> সময়</p>
           <div className="relative">
             <div className="overflow-x-auto flex gap-2 pr-8 pb-1">
               {PRESETS.map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setPreset(key)}
-                  className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${
+                  className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
                     preset === key
-                      ? "bg-emerald-600 text-white shadow-sm"
-                      : "bg-slate-100 text-slate-800"
+                      ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
+                      : "bg-muted text-foreground border-transparent"
                   }`}
                 >
                   {label}
                 </button>
               ))}
             </div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
           </div>
           {preset === "custom" && (
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="date"
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                className="border border-border rounded-lg bg-card text-foreground px-3 py-2 text-sm"
                 value={customFrom ?? ""}
                 onChange={(e) => setCustomFrom(e.target.value)}
               />
               <input
                 type="date"
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                className="border border-border rounded-lg bg-card text-foreground px-3 py-2 text-sm"
                 value={customTo ?? ""}
                 onChange={(e) => setCustomTo(e.target.value)}
               />
             </div>
           )}
           <div>
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+            <div className="rounded-lg border border-primary/30 bg-primary-soft px-3 py-2 text-xs font-semibold text-primary">
               {summarySnapshot}
             </div>
           </div>
@@ -293,72 +289,72 @@ export default function ReportsClient({
 
       {/* Desktop: primary tabs + date filter separated */}
       <div className="hidden md:block space-y-3">
-        <div className="rounded-xl bg-white border border-slate-200 shadow-sm px-4 py-3 relative">
-          <p className="text-xs font-semibold text-slate-500 mb-2">📊 রিপোর্ট</p>
+        <div className="rounded-xl bg-card border border-border shadow-sm px-4 py-3 relative">
+          <p className="text-xs font-semibold text-muted-foreground mb-2"> রিপোর্ট</p>
           <div className="relative">
             <div className="overflow-x-auto flex gap-2 pr-10">
               {NAV.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => setActive(item.key)}
-                  className={`px-3 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${
+                  className={`px-3 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
                     active === item.key
-                      ? "bg-emerald-600 text-white shadow-sm"
-                      : "bg-slate-100 text-slate-800 hover:bg-slate-200"
+                      ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
+                      : "bg-muted text-foreground border-transparent hover:bg-muted"
                   }`}
                 >
                   {item.label}
                 </button>
               ))}
             </div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-card to-transparent" />
           </div>
         </div>
 
-        <div className="rounded-xl bg-white border border-slate-200 shadow-sm px-4 py-3 space-y-3">
-          <p className="text-xs font-semibold text-slate-500">📅 সময়</p>
+        <div className="rounded-xl bg-card border border-border shadow-sm px-4 py-3 space-y-3">
+          <p className="text-xs font-semibold text-muted-foreground"> সময়</p>
           <div className="relative">
             <div className="overflow-x-auto flex items-center gap-2 pr-12 pb-1">
               {PRESETS.map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setPreset(key)}
-                  className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${
+                  className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
                     preset === key
-                      ? "bg-emerald-600 text-white"
-                      : "bg-slate-50 text-slate-800 hover:bg-slate-100"
+                      ? "bg-primary-soft text-primary border-primary/30"
+                      : "bg-muted text-foreground border-transparent hover:bg-muted"
                   }`}
                 >
                   {label}
                 </button>
               ))}
             </div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-card to-transparent" />
           </div>
           {preset === "custom" && (
             <div className="flex items-center gap-2 flex-wrap">
               <input
                 type="date"
-                className="border border-slate-200 rounded px-2 py-1 text-sm"
+                className="border border-border rounded bg-card text-foreground px-2 py-1 text-sm"
                 value={customFrom ?? ""}
                 onChange={(e) => setCustomFrom(e.target.value)}
               />
               <input
                 type="date"
-                className="border border-slate-200 rounded px-2 py-1 text-sm"
+                className="border border-border rounded bg-card text-foreground px-2 py-1 text-sm"
                 value={customTo ?? ""}
                 onChange={(e) => setCustomTo(e.target.value)}
               />
             </div>
           )}
           {summaryLoading && (
-            <span className="text-xs text-slate-500">রিফ্রেশ হচ্ছে...</span>
+            <span className="text-xs text-muted-foreground">রিফ্রেশ হচ্ছে...</span>
           )}
         </div>
       </div>
       {/* Desktop grid */}
       <div className="hidden md:block space-y-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <StatCard
               title="মোট বিক্রি"
@@ -368,13 +364,11 @@ export default function ReportsClient({
                   ? ` · বাতিল: ${liveSummary.sales.voidedCount}`
                   : ""
               }`}
-              icon="💰"
             />
             <StatCard
               title="খরচ"
               value={`${liveSummary.expense.totalAmount.toFixed(2)} ৳`}
               subtitle={`মোট খরচ: ${liveSummary.expense.count ?? 0}`}
-              icon="💸"
             />
             <StatCard
               title="ক্যাশ ব্যালান্স"
@@ -382,7 +376,6 @@ export default function ReportsClient({
               subtitle={`ইন: ${liveSummary.cash.totalIn.toFixed(
                 2
               )} ৳ | আউট: ${liveSummary.cash.totalOut.toFixed(2)} ৳`}
-              icon="🏦"
             />
             <StatCard
               title="লাভ"
@@ -390,41 +383,40 @@ export default function ReportsClient({
               subtitle={`বিক্রি: ${liveSummary.profit.salesTotal.toFixed(
                 2
               )} ৳ | খরচ: ${liveSummary.profit.expenseTotal.toFixed(2)} ৳`}
-              icon="📈"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
+          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
             <SalesReport shopId={shopId} from={range.from} to={range.to} />
           </div>
 
-          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
+          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
             <ExpenseReport shopId={shopId} from={range.from} to={range.to} />
           </div>
 
-          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
+          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
             <CashbookReport shopId={shopId} from={range.from} to={range.to} />
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
+          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
             <PaymentMethodReport shopId={shopId} from={range.from} to={range.to} />
           </div>
 
-          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
+          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
             <ProfitTrendReport shopId={shopId} from={range.from} to={range.to} />
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
+          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
             <TopProductsReport shopId={shopId} />
           </div>
 
-          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
+          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
             <LowStockReport shopId={shopId} />
           </div>
         </div>

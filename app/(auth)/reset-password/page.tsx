@@ -70,25 +70,25 @@ function ResetPasswordPageInner() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-50 px-4">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-4">
+    <div className="flex items-center justify-center min-h-screen bg-background px-4">
+      <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-sm p-6 space-y-4">
         <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold text-slate-900">নতুন পাসওয়ার্ড</h1>
-          <p className="text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-foreground">নতুন পাসওয়ার্ড</h1>
+          <p className="text-sm text-muted-foreground">
             লিঙ্কটি বৈধ হলে আপনার নতুন পাসওয়ার্ড সেট করুন।
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-sm font-medium text-foreground">
               নতুন পাসওয়ার্ড
             </label>
             <input
               type="password"
               required
               minLength={8}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               placeholder="কমপক্ষে ৮ অক্ষর"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -96,14 +96,14 @@ function ResetPasswordPageInner() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-sm font-medium text-foreground">
               কনফার্ম পাসওয়ার্ড
             </label>
             <input
               type="password"
               required
               minLength={8}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               placeholder="আবার লিখুন"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
@@ -113,7 +113,7 @@ function ResetPasswordPageInner() {
           <button
             type="submit"
             disabled={loading || !token}
-            className="w-full bg-emerald-600 text-white rounded-lg py-2.5 font-semibold text-sm hover:bg-emerald-700 disabled:opacity-60 transition"
+            className="w-full bg-primary-soft text-primary border border-primary/30 rounded-lg py-2.5 font-semibold text-sm hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60 transition"
           >
             {loading ? "সংরক্ষণ হচ্ছে..." : "পাসওয়ার্ড রিসেট করুন"}
           </button>
@@ -123,19 +123,19 @@ function ResetPasswordPageInner() {
           <div
             className={`text-sm rounded-lg p-3 border ${
               success
-                ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                : "text-red-700 bg-red-50 border-red-200"
+                ? "text-success bg-success-soft border-success/30"
+                : "text-danger bg-danger-soft border-danger/30"
             }`}
           >
             {message}
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between text-sm text-blue-600">
-          <Link href="/login" className="hover:underline">
+        <div className="flex items-center justify-between text-sm text-primary">
+          <Link href="/login" className="hover:underline hover:text-primary-hover">
             লগইন পাতায় ফিরে যান
           </Link>
-          <Link href="/forgot-password" className="hover:underline">
+          <Link href="/forgot-password" className="hover:underline hover:text-primary-hover">
             নতুন লিঙ্ক পাঠান
           </Link>
         </div>
@@ -143,3 +143,4 @@ function ResetPasswordPageInner() {
     </div>
   );
 }
+

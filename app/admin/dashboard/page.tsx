@@ -12,7 +12,7 @@ export default async function AdminDashboardPage() {
   return (
     <div className="py-8">
       <h1 className="text-2xl font-bold mb-2">Welcome to the Admin Dashboard</h1>
-      <p className="text-sm text-gray-600">Here you can oversee shop performance and manage operations.</p>
+      <p className="text-sm text-muted-foreground">Here you can oversee shop performance and manage operations.</p>
     </div>
   );
 }

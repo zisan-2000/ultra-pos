@@ -21,8 +21,8 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   if (!shops || shops.length === 0) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">কোন দোকান নেই</h1>
-        <p className="text-gray-600">রিপোর্ট দেখতে দোকান যুক্ত করুন</p>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">কোন দোকান নেই</h1>
+        <p className="text-muted-foreground">রিপোর্ট দেখতে দোকান যুক্ত করুন</p>
       </div>
     );
   }

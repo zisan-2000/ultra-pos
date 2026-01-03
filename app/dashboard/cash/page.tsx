@@ -18,11 +18,11 @@ export default async function CashPage({ searchParams }: CashPageProps) {
   if (!shops || shops.length === 0) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">ক্যাশ খাতা</h1>
-        <p className="mb-6 text-gray-600">প্রথমে একটি দোকান তৈরি করুন।</p>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">ক্যাশ খাতা</h1>
+        <p className="mb-6 text-muted-foreground">প্রথমে একটি দোকান তৈরি করুন।</p>
         <Link
           href="/dashboard/shops/new"
-          className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
         >
           দোকান তৈরি করুন
         </Link>
@@ -63,19 +63,18 @@ export default async function CashPage({ searchParams }: CashPageProps) {
 
   return (
     <div className="space-y-6 section-gap">
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">🏦</span>
-              <h1 className="text-3xl font-bold text-gray-900 leading-tight">ক্যাশ খাতা</h1>
+              <h1 className="text-3xl font-bold text-foreground leading-tight">ক্যাশ খাতা</h1>
             </div>
-            <p className="text-sm text-gray-500 mt-1 leading-snug">
+            <p className="text-sm text-muted-foreground mt-1 leading-snug">
               দোকান: <b>{selectedShop.name}</b>
             </p>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-2">
-              <p className="text-lg text-gray-600 leading-snug">
-                বর্তমান ব্যালেন্স: <span className="text-2xl font-bold text-green-700">{balance.toFixed(2)} ৳</span>
+            <div className="bg-muted border border-border rounded-lg p-4 mt-2">
+              <p className="text-lg text-muted-foreground leading-snug">
+                বর্তমান ব্যালেন্স: <span className={`text-2xl font-bold ${balance >= 0 ? "text-success" : "text-danger"}`}>{balance.toFixed(2)} ৳</span>
               </p>
             </div>
           </div>
@@ -85,7 +84,7 @@ export default async function CashPage({ searchParams }: CashPageProps) {
 
             <Link
               href={`/dashboard/cash/new?shopId=${selectedShopId}`}
-              className="w-full sm:w-auto px-6 py-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg font-semibold hover:border-emerald-300 hover:bg-emerald-100 transition-colors text-center"
+              className="w-full sm:w-auto px-6 py-3 bg-primary-soft border border-primary/30 text-primary rounded-lg font-semibold hover:border-primary/50 hover:bg-primary-soft transition-colors text-center"
             >
               ➕ নতুন এন্ট্রি
             </Link>

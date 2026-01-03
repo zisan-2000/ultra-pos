@@ -255,38 +255,38 @@ const ensuredShopId = shop.id;
 const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
     buyPrice: () => (
       <div className="space-y-2">
-        <label className="block text-base font-medium text-gray-900">ক্রয়মূল্য (ঐচ্ছিক)</label>
+        <label className="block text-base font-medium text-foreground">ক্রয়মূল্য (ঐচ্ছিক)</label>
         <input
           name="buyPrice"
           type="number"
           step="0.01"
           min="0"
           required={isFieldRequired("buyPrice")}
-          className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
           placeholder="যেমন: ৫৫.০০"
         />
-        <p className="text-sm text-gray-500">চাইলে লাভ হিসাবের জন্য ক্রয়মূল্য দিন</p>
+        <p className="text-sm text-muted-foreground">চাইলে লাভ হিসাবের জন্য ক্রয়মূল্য দিন</p>
       </div>
     ),
     expiry: () => (
       <div className="space-y-2">
-        <label className="block text-base font-medium text-gray-900">মেয়াদোত্তীর্ণের তারিখ</label>
+        <label className="block text-base font-medium text-foreground">মেয়াদোত্তীর্ণের তারিখ</label>
         <input
           name="expiryDate"
           type="date"
           required={isFieldRequired("expiry")}
-          className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>
     ),
     size: () => (
       <div className="space-y-2">
-        <label className="block text-base font-medium text-gray-900">সাইজ / ভ্যারিয়েন্ট</label>
+        <label className="block text-base font-medium text-foreground">সাইজ / ভ্যারিয়েন্ট</label>
         <input
           name="size"
           type="text"
           required={isFieldRequired("size")}
-          className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
           placeholder="যেমন: L, XL, 100ml"
         />
       </div>
@@ -656,23 +656,23 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">নতুন পণ্য যোগ করুন</h1>
-        <p className="text-gray-600 mt-2">কয়েক ট্যাপেই সব তথ্য ভর্তি করার জন্য স্মার্ট ফর্ম</p>
-        <p className="text-sm text-gray-500 mt-1">দোকান: {shop.name}</p>
+        <h1 className="text-3xl font-bold text-foreground">নতুন পণ্য যোগ করুন</h1>
+        <p className="text-muted-foreground mt-2">কয়েক ট্যাপেই সব তথ্য ভর্তি করার জন্য স্মার্ট ফর্ম</p>
+        <p className="text-sm text-muted-foreground mt-1">দোকান: {shop.name}</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
+      <form onSubmit={handleSubmit} className="bg-card rounded-lg border border-border p-8 space-y-6">
         
         {/* Product Name */}
         {isFieldVisible("name") && (
           <div className="space-y-2">
-            <label className="block text-base font-medium text-gray-900">পণ্যের নাম *</label>
+            <label className="block text-base font-medium text-foreground">পণ্যের নাম *</label>
             <div className="flex gap-3">
               <input
                 name="name"
                 value={name}
                 onChange={(e) => setNameWithSmartDefaults(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder="যেমন: চা, ডিম, বিস্কুট..."
                 required={isFieldRequired("name")}
                 autoComplete="off"
@@ -681,16 +681,16 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
                 type="button"
                 onClick={listening ? stopVoice : startVoice}
                 disabled={!voiceReady}
-                className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
-                  listening
-                    ? "bg-red-50 border-red-300 text-red-700"
-                    : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
-                } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                  className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                    listening
+                      ? "bg-primary-soft text-primary border-primary/40"
+                      : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
+                  } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 {listening ? "থামান" : "ভয়েস"}
               </button>
             </div>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               {listening
                 ? "Listening... say product name and price"
                 : voiceReady
@@ -706,7 +706,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
                     key={title}
                     type="button"
                     onClick={() => setNameWithSmartDefaults(title)}
-                    className="px-3 py-2 rounded-full border border-emerald-200 text-emerald-800 bg-emerald-50 text-sm hover:border-emerald-300"
+                    className="px-3 py-2 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
                   >
                     {title}
                   </button>
@@ -718,7 +718,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
 
         {/* Sell Price */}
         <div className="space-y-2">
-          <label className="block text-base font-medium text-gray-900">বিক্রয় মূল্য (৳) *</label>
+          <label className="block text-base font-medium text-foreground">বিক্রয় মূল্য (৳) *</label>
           <input
             name="sellPrice"
             type="number"
@@ -726,7 +726,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
             min="0"
             value={sellPrice}
             onChange={(e) => setSellPrice(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="যেমন: ১০, ২৫.৫০"
             required={isFieldRequired("sellPrice")}
           />
@@ -737,25 +737,25 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
                   key={p}
                   type="button"
                   onClick={() => setSellPrice(p)}
-                  className="px-3 py-2 rounded-full border border-blue-200 bg-blue-50 text-blue-800 text-sm hover:border-blue-300"
+                  className="px-3 py-2 rounded-full border border-primary/30 bg-primary-soft text-primary text-sm hover:border-primary/50"
                 >
                   ৳ {p}
                 </button>
               ))}
             </div>
           )}
-          <p className="text-sm text-gray-500">শুধু দাম বললেও/লিখলেও অটো শনাক্ত হবে</p>
+          <p className="text-sm text-muted-foreground">শুধু দাম বললেও/লিখলেও অটো শনাক্ত হবে</p>
         </div>
 
         {/* Category (optional with custom) */}
         <div className="space-y-2">
-          <label className="block text-base font-medium text-gray-900">ক্যাটাগরি (ঐচ্ছিক)</label>
+          <label className="block text-base font-medium text-foreground">ক্যাটাগরি (ঐচ্ছিক)</label>
           <div className="flex gap-3">
             <select
               name="category"
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
               <option value="">ক্যাটাগরি বাছাই করুন</option>
               {categoryOptions.map((c) => (
@@ -767,7 +767,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
             <button
               type="button"
               onClick={handleAddCustomCategory}
-              className="shrink-0 px-4 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-900 hover:bg-gray-100 transition-colors"
+              className="shrink-0 px-4 py-3 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
             >
               + কাস্টম যোগ করুন
             </button>
@@ -782,14 +782,14 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
                     setCategoryOptions((prev) => (prev.includes(c) ? prev : [...prev, c]));
                     setSelectedCategory(c);
                   }}
-                  className="px-3 py-2 rounded-full border border-emerald-200 text-emerald-700 bg-emerald-50 text-sm hover:border-emerald-300"
+                  className="px-3 py-2 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
                 >
                   {c}
                 </button>
               ))}
             </div>
           ) : null}
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             এক ট্যাপে ক্যাটাগরি/ইউনিট সিলেক্ট করুন; ভয়েস বা নাম লিখলে স্মার্ট ফিল হবে
           </p>
         </div>
@@ -797,14 +797,14 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
         {/* Unit (conditional) */}
         {isFieldVisible("unit") && (
           <div className="space-y-2">
-            <label className="block text-base font-medium text-gray-900">ইউনিট (ঐচ্ছিক)</label>
+            <label className="block text-base font-medium text-foreground">ইউনিট (ঐচ্ছিক)</label>
             <div className="flex gap-3">
               <select
                 name="baseUnit"
                 value={selectedUnit}
                 onChange={(e) => setSelectedUnit(e.target.value)}
                 required={isFieldRequired("unit")}
-                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 {unitOptions.map((u) => (
                   <option key={u} value={u}>
@@ -815,7 +815,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
               <button
                 type="button"
                 onClick={handleAddCustomUnit}
-                className="shrink-0 px-4 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-900 hover:bg-gray-100 transition-colors"
+                className="shrink-0 px-4 py-3 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
               >
                 + কাস্টম যোগ করুন
               </button>
@@ -826,13 +826,13 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
                   key={u}
                   type="button"
                   onClick={() => setSelectedUnit(u)}
-                  className="px-3 py-2 rounded-full border border-orange-200 text-orange-700 bg-orange-50 text-sm hover:border-orange-300"
+                  className="px-3 py-2 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
                 >
                   {unitLabels[u as keyof typeof unitLabels] || u}
                 </button>
               ))}
             </div>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               নাম থেকেই ইউনিট অনুমান হবে: ডিম → পিস, তেল → লিটার, চিনি → কেজি
             </p>
           </div>
@@ -845,11 +845,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
               type="checkbox" 
               checked={stockEnabled}
               onChange={(e) => setStockEnabled(e.target.checked)}
-              className="w-5 h-5 border border-gray-300 rounded cursor-pointer"
+              className="w-5 h-5 border border-border rounded cursor-pointer"
             />
-            <span className="text-base font-medium text-gray-900">স্টক ট্র্যাক (অন/অফ)</span>
+            <span className="text-base font-medium text-foreground">স্টক ট্র্যাক (অন/অফ)</span>
           </label>
-          <p className="text-sm text-gray-500">দোকানের ধরন দেখে ডিফল্ট অন/অফ সেট হয়; লাগলে বন্ধ করুন</p>
+          <p className="text-sm text-muted-foreground">দোকানের ধরন দেখে ডিফল্ট অন/অফ সেট হয়; লাগলে বন্ধ করুন</p>
           <div className="pt-2">
             <input
               name="stockQty"
@@ -859,7 +859,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
               defaultValue="0"
               required={stockEnabled && stock.requiredWhenEnabled}
               disabled={!stockEnabled}
-              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100 disabled:text-gray-500"
+              className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
               placeholder="যেমন: 10, 5.50"
             />
           </div>
@@ -867,10 +867,10 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
 
         {/* Recent templates */}
         {recentTemplates.length > 0 && (
-          <div className="border border-emerald-100 bg-emerald-50 rounded-lg p-4 space-y-2">
+          <div className="border border-border bg-muted rounded-lg p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-emerald-800">রিসেন্ট টেমপ্লেট</h3>
-              <span className="text-xs text-emerald-700">এক ট্যাপে অটো-ফিল</span>
+              <h3 className="text-base font-semibold text-foreground">রিসেন্ট টেমপ্লেট</h3>
+              <span className="text-xs text-muted-foreground">এক ট্যাপে অটো-ফিল</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {recentTemplates.slice(0, 4).map((t) => (
@@ -878,16 +878,16 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
                   key={`${t.name}-${t.lastUsed}`}
                   type="button"
                   onClick={() => applyTemplate(t)}
-                  className="flex items-center justify-between gap-3 bg-white border border-emerald-100 rounded-lg px-3 py-2 text-left hover:border-emerald-300 transition-colors"
+                  className="flex items-center justify-between gap-3 bg-card border border-border rounded-lg px-3 py-2 text-left hover:border-primary/40 transition-colors"
                 >
                   <div>
-                    <p className="font-semibold text-gray-900">{t.name}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="font-semibold text-foreground">{t.name}</p>
+                    <p className="text-xs text-muted-foreground">
                       {t.category || "ক্যাটাগরি নেই"} • {t.unit || "ইউনিট নেই"}
                     </p>
                   </div>
                   {t.price ? (
-                    <span className="text-sm font-bold text-emerald-700">৳ {t.price}</span>
+                    <span className="text-sm font-bold text-primary">৳ {t.price}</span>
                   ) : null}
                 </button>
               ))}
@@ -897,10 +897,10 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
 
         {/* Quick product buttons */}
         {businessAssist?.quickNames?.length ? (
-          <div className="border border-gray-100 bg-gray-50 rounded-lg p-4 space-y-2">
+          <div className="border border-border bg-muted rounded-lg p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-gray-900">এক ট্যাপ পণ্য</h3>
-              <span className="text-xs text-gray-500">ব্যবসার ধরন অনুযায়ী সাজেশন</span>
+              <h3 className="text-base font-semibold text-foreground">এক ট্যাপ পণ্য</h3>
+              <span className="text-xs text-muted-foreground">ব্যবসার ধরন অনুযায়ী সাজেশন</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {businessAssist.quickNames.slice(0, 8).map((n) => (
@@ -908,7 +908,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
                   key={n}
                   type="button"
                   onClick={() => setNameWithSmartDefaults(n)}
-                  className="px-3 py-2 rounded-full border border-gray-200 bg-white text-sm hover:border-emerald-200"
+                  className="px-3 py-2 rounded-full border border-border bg-card text-foreground text-sm hover:border-primary/30"
                 >
                   {n}
                 </button>
@@ -918,8 +918,8 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
         ) : null}
         {/* Advanced (optional) */}
         {visibleAdvancedFields.length > 0 && (
-          <details className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-            <summary className="cursor-pointer text-base font-semibold text-gray-900">
+          <details className="border border-border rounded-lg p-4 bg-muted">
+            <summary className="cursor-pointer text-base font-semibold text-foreground">
               অ্যাডভান্সড অপশন (ঐচ্ছিক)
             </summary>
             <div className="mt-4 space-y-4">
@@ -937,25 +937,25 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
               type="checkbox" 
               name="isActive" 
               defaultChecked
-              className="w-5 h-5 border border-gray-300 rounded cursor-pointer"
+              className="w-5 h-5 border border-border rounded cursor-pointer"
             />
-            <span className="text-base font-medium text-gray-900">পণ্য সক্রিয় রাখুন</span>
+            <span className="text-base font-medium text-foreground">পণ্য সক্রিয় রাখুন</span>
           </label>
-          <p className="text-sm text-gray-500">অফ-স্টক হলে চাইলে বন্ধ করতে পারেন</p>
+          <p className="text-sm text-muted-foreground">অফ-স্টক হলে চাইলে বন্ধ করতে পারেন</p>
         </div>
 
         {/* Buttons */}
         <div className="flex gap-3 pt-4">
-          <button 
+          <button
             type="submit"
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition-colors"
+            className="flex-1 bg-primary-soft text-primary border border-primary/30 hover:bg-primary/15 hover:border-primary/40 font-bold py-4 px-6 rounded-lg text-lg transition-colors"
           >
             + দ্রুত পণ্য যুক্ত করুন
           </button>
           <button 
             type="button"
             onClick={() => router.back()}
-            className="flex-1 border border-gray-300 text-gray-900 font-medium py-4 px-6 rounded-lg text-lg hover:bg-gray-100 transition-colors"
+            className="flex-1 border border-border text-foreground font-medium py-4 px-6 rounded-lg text-lg hover:bg-muted transition-colors"
           >
             পিছনে যান
           </button>

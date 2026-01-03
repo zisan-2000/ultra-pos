@@ -12,7 +12,7 @@ export default async function AgentDashboardPage() {
   return (
     <div className="py-8">
       <h1 className="text-2xl font-bold mb-2">Welcome to the Agent Dashboard</h1>
-      <p className="text-sm text-gray-600">Start new sales or follow up on dues from here.</p>
+      <p className="text-sm text-muted-foreground">Start new sales or follow up on dues from here.</p>
     </div>
   );
 }

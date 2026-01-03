@@ -56,16 +56,16 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">পেমেন্ট মাধ্যম</h2>
-          <p className="text-xs text-gray-500">শেয়ার ও পরিমাণ</p>
+          <h2 className="text-lg font-bold text-foreground">পেমেন্ট মাধ্যম</h2>
+          <p className="text-xs text-muted-foreground">শেয়ার ও পরিমাণ</p>
         </div>
       </div>
 
-      <div className="border border-gray-200 rounded-lg divide-y divide-gray-200">
+      <div className="border border-border rounded-lg bg-card divide-y divide-border">
         {loading ? (
-          <p className="p-4 text-sm text-gray-500 text-center">লোড হচ্ছে...</p>
+          <p className="p-4 text-sm text-muted-foreground text-center">লোড হচ্ছে...</p>
         ) : data.length === 0 ? (
-          <p className="p-4 text-sm text-gray-500 text-center">
+          <p className="p-4 text-sm text-muted-foreground text-center">
             কোনো পেমেন্ট ডেটা নেই
           </p>
         ) : (
@@ -78,29 +78,29 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
             return (
               <div
                 key={`${item.name}-${idx}`}
-                className="p-4 hover:bg-gray-50 transition-colors space-y-2"
+                className="p-4 hover:bg-muted transition-colors space-y-2"
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-semibold text-gray-900">
+                    <p className="font-semibold text-foreground">
                       {item.name || "নগদ"}
                     </p>
                     {typeof item.count === "number" && (
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         {item.count} টি লেনদেন
                       </p>
                     )}
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-gray-900">
+                    <p className="font-semibold text-foreground">
                       {Number(item.value || 0)} ৳
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">{percent}% শেয়ার</p>
+                    <p className="text-xs text-muted-foreground mt-1">{percent}% শেয়ার</p>
                   </div>
                 </div>
-                <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-emerald-500"
+                    className="h-full rounded-full bg-primary"
                     style={{ width: `${percent}%` }}
                   />
                 </div>

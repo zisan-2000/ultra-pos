@@ -175,24 +175,24 @@ export default function SalesListClient({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {!online && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-1 text-xs font-semibold text-orange-700 border border-orange-100">
+            <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-xs font-semibold text-warning border border-warning/30">
               📡 Offline - শুধু দেখা যাবে
             </span>
           )}
           {page > 1 && prevHref && (
             <Link
               href={prevHref}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted"
             >
               ⬆️ নতুনগুলো
             </Link>
           )}
         </div>
-        <span className="text-xs text-slate-500">পৃষ্ঠা {page}</span>
+        <span className="text-xs text-muted-foreground">পৃষ্ঠা {page}</span>
       </div>
 
       {renderedItems.length === 0 ? (
-        <p className="text-center text-gray-600 py-10">
+        <p className="text-center text-muted-foreground py-10">
           {online
             ? "এই তারিখে কোনো বিক্রি নেই"
             : "Offline: সর্বশেষ সিঙ্ককৃত বিক্রিগুলো দেখাচ্ছে"}
@@ -215,21 +215,21 @@ export default function SalesListClient({
           const dateStr = formatDate(s.createdAt);
           const formId = `void-sale-${s.id}`;
           const statusPill = isVoided
-            ? "bg-red-100 text-red-700 border-red-200"
-            : "bg-emerald-50 text-emerald-700 border-emerald-100";
+            ? "bg-danger-soft text-danger border-danger/30"
+            : "bg-success-soft text-success border-success/30";
           const statusText = isVoided ? "❌ বাতিল" : "✅ পরিশোধিত";
 
           return (
             <div
               key={s.id}
-              className={`rounded-2xl border bg-white p-4 shadow-sm hover:shadow-md transition card-lift ${
-                isVoided ? "opacity-90 border-red-100" : "border-slate-100"
+              className={`rounded-2xl border bg-card p-4 shadow-sm hover:shadow-md transition card-lift ${
+                isVoided ? "opacity-90 border-danger/30" : "border-border"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <p className="text-2xl font-bold text-gray-900">
+                    <p className="text-2xl font-bold text-foreground">
                       ৳ {totalStr}
                     </p>
                     <span
@@ -238,33 +238,33 @@ export default function SalesListClient({
                       {statusText}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-700 flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700 border border-slate-100">
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs font-semibold text-foreground border border-border">
                       {paymentText}
                     </span>
                     {s.customerName && (
-                      <span className="text-xs text-slate-500">
+                      <span className="text-xs text-muted-foreground">
                         👤 {s.customerName}
                       </span>
                     )}
                   </p>
-                  <p className="text-sm text-gray-600 flex items-center gap-2">
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
                     🧾 {itemLine}
                   </p>
                   {isVoided && voidReason && (
-                    <p className="text-xs text-red-600 mt-1">
+                    <p className="text-xs text-danger mt-1">
                       বাতিলের কারণ: {voidReason}
                     </p>
                   )}
                   {isDueSale && !isVoided && (
-                    <p className="text-xs text-amber-600">
+                    <p className="text-xs text-warning">
                       বাকির বিক্রি – কাস্টমার লেজারে পরিশোধ করুন
                     </p>
                   )}
                 </div>
 
                 <div className="flex flex-col items-end gap-2">
-                  <div className="text-right text-xs text-slate-500">
+                  <div className="text-right text-xs text-muted-foreground">
                     <p className="font-semibold flex items-center gap-1 justify-end">
                       ⏱ {timeStr}
                     </p>
@@ -272,14 +272,14 @@ export default function SalesListClient({
                   </div>
 
                   {!online && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700 border border-orange-100">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-[11px] font-semibold text-warning border border-warning/30">
                       বাতিল করা যাবে না (Offline)
                     </span>
                   )}
 
                   {online ? (
                     isDueSale ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 border border-amber-100">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-3 py-1 text-[11px] font-semibold text-warning border border-warning/30">
                         বাকির বিল – বাতিল নয়
                       </span>
                     ) : (
@@ -305,7 +305,7 @@ export default function SalesListClient({
           {online && nextHref ? (
             <Link
               href={nextHref}
-              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 transition"
+              className="inline-flex items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
             >
               ⬇️ আরও দেখুন
             </Link>
@@ -313,7 +313,7 @@ export default function SalesListClient({
             <button
               type="button"
               disabled
-              className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-400"
+              className="inline-flex items-center gap-2 rounded-full bg-muted px-4 py-2 text-sm font-semibold text-muted-foreground"
             >
               ⬇️ আরও দেখুন
             </button>

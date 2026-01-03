@@ -18,7 +18,7 @@ export default function ShopSelectorClient({ shops, selectedShopId }: Props) {
 
   return (
     <select
-      className="border p-2"
+      className="border border-border bg-card px-2 py-1 rounded text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       value={selectedShopId}
       onChange={(e) => {
         const id = e.target.value;

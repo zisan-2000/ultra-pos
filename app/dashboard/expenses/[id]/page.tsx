@@ -13,8 +13,8 @@ export default async function EditExpensePage({ params }: PageProps) {
   if (!expense) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">খরচ পাওয়া যায়নি</h1>
-        <p className="text-gray-600">তালিকা থেকে আবার চেষ্টা করুন</p>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">খরচ পাওয়া যায়নি</h1>
+        <p className="text-muted-foreground">তালিকা থেকে আবার চেষ্টা করুন</p>
       </div>
     );
   }
@@ -42,8 +42,8 @@ export default async function EditExpensePage({ params }: PageProps) {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">খরচ সম্পাদনা করুন</h1>
-        <p className="text-gray-600 mt-2">পরিমাণ ও ক্যাটাগরি ঠিক করে সংরক্ষণ করুন</p>
+        <h1 className="text-3xl font-bold text-foreground">খরচ সম্পাদনা করুন</h1>
+        <p className="text-muted-foreground mt-2">পরিমাণ ও ক্যাটাগরি ঠিক করে সংরক্ষণ করুন</p>
       </div>
 
       <ExpenseFormClient

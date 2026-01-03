@@ -89,7 +89,7 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-800 border border-slate-200 hover:bg-slate-200 transition"
+        className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-sm font-semibold text-foreground border border-border hover:bg-secondary transition"
       >
         <span>📅</span>
         <span className="text-sm">{rangeText}</span>
@@ -100,24 +100,24 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
         typeof document !== "undefined" &&
         createPortal(
           <div
-            className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-[1px]"
+            className="fixed inset-0 z-[9999] bg-foreground/30 backdrop-blur-[1px]"
             onClick={() => setOpen(false)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="absolute left-1/2 top-[72px] w-[92%] max-w-md -translate-x-1/2 rounded-2xl bg-white shadow-2xl p-4 space-y-4"
+              className="absolute left-1/2 top-[72px] w-[92%] max-w-md -translate-x-1/2 rounded-2xl bg-card border border-border shadow-2xl p-4 space-y-4"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">
+                  <p className="text-sm font-semibold text-foreground">
                     তারিখ বাছাই
                   </p>
-                  <p className="text-xs text-slate-500">{rangeText}</p>
+                  <p className="text-xs text-muted-foreground">{rangeText}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="text-slate-500 text-sm"
+                  className="text-muted-foreground text-sm"
                 >
                   ✕
                 </button>
@@ -127,28 +127,28 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
                 <button
                   type="button"
                   onClick={() => setPreset("today")}
-                  className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-800 hover:bg-slate-50"
+                  className="rounded-lg border border-border px-3 py-2 font-semibold text-foreground hover:bg-muted"
                 >
                   আজ
                 </button>
                 <button
                   type="button"
                   onClick={() => setPreset("yesterday")}
-                  className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-800 hover:bg-slate-50"
+                  className="rounded-lg border border-border px-3 py-2 font-semibold text-foreground hover:bg-muted"
                 >
                   গতকাল
                 </button>
                 <button
                   type="button"
                   onClick={() => setPreset("last7")}
-                  className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-800 hover:bg-slate-50"
+                  className="rounded-lg border border-border px-3 py-2 font-semibold text-foreground hover:bg-muted"
                 >
                   শেষ ৭ দিন
                 </button>
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-700">
+                <p className="text-xs font-semibold text-foreground">
                   Custom range
                 </p>
                 <div className="grid grid-cols-2 gap-2">
@@ -156,20 +156,20 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
                     type="date"
                     value={customFrom}
                     onChange={(e) => setCustomFrom(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                   />
                   <input
                     type="date"
                     value={customTo}
                     onChange={(e) => setCustomTo(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                   />
                 </div>
                 <button
                   type="button"
                   disabled={!canApplyCustom}
                   onClick={() => applyRange(customFrom, customTo)}
-                  className="w-full rounded-lg bg-slate-900 text-white py-2 text-sm font-semibold disabled:opacity-60"
+                  className="w-full rounded-lg bg-primary-soft text-primary border border-primary/30 py-2 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
                 >
                   রেঞ্জ প্রয়োগ করুন
                 </button>

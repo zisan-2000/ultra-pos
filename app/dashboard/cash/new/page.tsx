@@ -16,8 +16,8 @@ export default async function NewCashPage({ searchParams }: NewCashProps) {
   if (!shopId) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">ক্যাশ এন্ট্রির জন্য দোকান দরকার</h1>
-        <p className="text-gray-600">আগে দোকান নির্বাচন করে পুনরায় চেষ্টা করুন</p>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">ক্যাশ এন্ট্রির জন্য দোকান দরকার</h1>
+        <p className="text-muted-foreground">আগে দোকান নির্বাচন করে পুনরায় চেষ্টা করুন</p>
       </div>
     );
   }
@@ -40,8 +40,8 @@ export default async function NewCashPage({ searchParams }: NewCashProps) {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">দ্রুত ক্যাশ যোগ করুন</h1>
-        <p className="text-gray-600 mt-2">ভয়েস + এক-ট্যাপ টেমপ্লেট দিয়ে কয়েক সেকেন্ডে এন্ট্রি</p>
+        <h1 className="text-3xl font-bold text-foreground">দ্রুত ক্যাশ যোগ করুন</h1>
+        <p className="text-muted-foreground mt-2">ভয়েস + এক-ট্যাপ টেমপ্লেট দিয়ে কয়েক সেকেন্ডে এন্ট্রি</p>
       </div>
 
       <CashFormClient shopId={shopId} backHref={backHref} action={handleSubmit} />

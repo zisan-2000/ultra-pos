@@ -446,13 +446,13 @@ export default function ProductsListClient({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Offline Banner - Removed sticky */}
       {!online && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 text-center">
+        <div className="bg-warning-soft border-b border-warning/30 px-4 py-3 text-center">
           <div className="flex items-center justify-center gap-2">
             <span className="text-lg">📡</span>
-            <span className="text-sm font-medium text-amber-800">
+            <span className="text-sm font-medium text-warning">
               অফলাইন মোড - ডাটা লোকাল থেকে দেখানো হচ্ছে
             </span>
           </div>
@@ -460,16 +460,16 @@ export default function ProductsListClient({
       )}
 
       {/* Header Section - Now scrolls normally */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-card border-b border-border">
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               {/* <span className="text-2xl">📦</span> */}
               <div>
-                {/* <h1 className="text-xl font-bold text-gray-900">
+                {/* <h1 className="text-xl font-bold text-foreground">
                   পণ্যের তালিকা
                 </h1> */}
-                <p className="text-xs text-gray-500 mt-0.5">{activeShopName}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{activeShopName}</p>
               </div>
             </div>
             {/* New Product Button - STICKY */}
@@ -481,14 +481,15 @@ export default function ProductsListClient({
       sticky top-4
       inline-flex items-center gap-2
       px-4 h-11
-      bg-blue-600 text-white
-      rounded-full shadow-lg
-      hover:bg-blue-700
+      bg-primary-soft text-primary
+      border border-primary/30
+      rounded-xl shadow-lg
+      hover:bg-primary/15 hover:border-primary/40
       active:scale-95
       transition-all
     "
               >
-                <span className="text-2xl leading-none">＋</span>
+                <span className="text-2xl leading-none">+</span>
                 <span className="text-sm font-semibold whitespace-nowrap">
                   নতুন পণ্য
                 </span>
@@ -507,7 +508,7 @@ export default function ProductsListClient({
           </div>
 
           {/* Search Box Container - STICKY */}
-          <div className="sticky top-0 z-40 bg-white pt-2 pb-3 -mx-4 px-4">
+          <div className="sticky top-0 z-40 bg-card pt-2 pb-3 -mx-4 px-4">
             <div className="relative">
               <input
                 type="text"
@@ -518,19 +519,19 @@ export default function ProductsListClient({
                   if (!query) setSearchExpanded(false);
                 }}
                 placeholder="পণ্য খুঁজুন..."
-                className="w-full h-12 pl-11 pr-24 text-base border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-0 transition-colors"
+                className="w-full h-12 pl-11 pr-24 text-base border-2 border-border rounded-xl focus:border-primary focus:ring-0 transition-colors"
               />
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">
                 🔍
               </span>
               {voiceReady && (
                 <button
                   type="button"
                   onClick={listening ? stopListening : startListening}
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
                     listening
-                      ? "bg-red-500 text-white animate-pulse"
-                      : "bg-gray-100 text-gray-700 active:scale-95"
+                      ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                      : "bg-primary-soft text-primary border-primary/30 active:scale-95"
                   }`}
                 >
                   {listening ? "🔴" : "🎤"}
@@ -538,7 +539,7 @@ export default function ProductsListClient({
               )}
             </div>
             {voiceError && (
-              <p className="text-xs text-red-600 mt-1 px-1">{voiceError}</p>
+              <p className="text-xs text-danger mt-1 px-1">{voiceError}</p>
             )}
           </div>
 
@@ -551,8 +552,8 @@ export default function ProductsListClient({
                 onClick={() => handleStatusChange(filterStatus)}
                 className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-95 ${
                   status === filterStatus
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "bg-white text-gray-700 border-2 border-gray-200"
+                    ? "bg-primary-soft text-primary border-2 border-primary/40 shadow-sm"
+                    : "bg-card text-muted-foreground border-2 border-border"
                 }`}
               >
                 {filterStatus === "all" && "সবগুলো"}
@@ -564,7 +565,7 @@ export default function ProductsListClient({
               <button
                 type="button"
                 onClick={handleReset}
-                className="flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium bg-red-50 text-red-600 border-2 border-red-200 active:scale-95 transition-all"
+                className="flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium bg-danger-soft text-danger border-2 border-danger/30 active:scale-95 transition-all"
               >
                 ✕ রিসেট
               </button>
@@ -574,11 +575,11 @@ export default function ProductsListClient({
       </div>
 
       {/* Stats Bar - Scrolls normally */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
+      <div className="bg-card border-b border-border px-4 py-3">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-600">
+          <span className="text-muted-foreground">
             মোট{" "}
-            <span className="font-semibold text-gray-900">
+            <span className="font-semibold text-foreground">
               {effectiveTotalCount}
             </span>{" "}
             টি পণ্য
@@ -588,7 +589,7 @@ export default function ProductsListClient({
               type="button"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="text-blue-600 font-medium flex items-center gap-1 active:scale-95 transition-transform disabled:opacity-50"
+              className="text-primary font-medium flex items-center gap-1 active:scale-95 transition-transform disabled:opacity-50"
             >
               <span className={isRefreshing ? "animate-spin" : ""}>🔄</span>
               <span>রিফ্রেশ</span>
@@ -602,10 +603,10 @@ export default function ProductsListClient({
         {visibleProducts.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-6xl mb-4">📦</div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <h3 className="text-lg font-semibold text-foreground mb-2">
               কোনো পণ্য পাওয়া যায়নি
             </h3>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               {query || status !== "all"
                 ? "ফিল্টার পরিবর্তন করে আবার চেষ্টা করুন"
                 : "নতুন পণ্য যোগ করতে + বাটনে ক্লিক করুন"}
@@ -615,7 +616,7 @@ export default function ProductsListClient({
           visibleProducts.map((product) => (
             <div
               key={product.id}
-              className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden active:scale-[0.98] transition-transform"
+              className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden active:scale-[0.98] transition-transform"
               onClick={() => {
                 setSelectedProduct(product);
                 triggerHaptic("light");
@@ -625,23 +626,23 @@ export default function ProductsListClient({
                 {/* Product Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0 pr-3">
-                    <h3 className="text-base font-semibold text-gray-900 mb-1 line-clamp-2">
+                    <h3 className="text-base font-semibold text-foreground mb-1 line-clamp-2">
                       {product.name}
                     </h3>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       {product.category || "অনির্ধারিত"}
                     </p>
                   </div>
                   <span
                     className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${
                       product.isActive
-                        ? "bg-green-50 text-green-700 border border-green-200"
-                        : "bg-gray-100 text-gray-600 border border-gray-300"
+                        ? "bg-success-soft text-success border border-success/30"
+                        : "bg-muted text-muted-foreground border border-border"
                     }`}
                   >
                     <span
                       className={`w-2 h-2 rounded-full ${
-                        product.isActive ? "bg-green-500" : "bg-gray-400"
+                        product.isActive ? "bg-success" : "bg-muted-foreground"
                       }`}
                     />
                     {product.isActive ? "সক্রিয়" : "বন্ধ"}
@@ -650,19 +651,19 @@ export default function ProductsListClient({
 
                 {/* Product Info Grid */}
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-                    <p className="text-xs text-blue-600 font-medium mb-1">
+                  <div className="bg-primary-soft rounded-xl p-3 border border-primary/30">
+                    <p className="text-xs text-primary font-medium mb-1">
                       বিক্রয় মূল্য
                     </p>
-                    <p className="text-lg font-bold text-blue-900">
+                    <p className="text-lg font-bold text-foreground">
                       ৳ {product.sellPrice}
                     </p>
                   </div>
-                  <div className="bg-purple-50 rounded-xl p-3 border border-purple-100">
-                    <p className="text-xs text-purple-600 font-medium mb-1">
+                  <div className="bg-success-soft rounded-xl p-3 border border-success/30">
+                    <p className="text-xs text-success font-medium mb-1">
                       স্টক
                     </p>
-                    <p className="text-lg font-bold text-purple-900">
+                    <p className="text-lg font-bold text-foreground">
                       {product.stockQty}
                     </p>
                   </div>
@@ -676,7 +677,7 @@ export default function ProductsListClient({
                       e.stopPropagation();
                       triggerHaptic("medium");
                     }}
-                    className="flex items-center justify-center gap-2 h-11 bg-blue-50 border-2 border-blue-200 text-blue-700 rounded-xl font-semibold text-sm hover:bg-blue-100 active:scale-95 transition-all"
+                    className="flex items-center justify-center gap-2 h-11 bg-primary-soft border-2 border-primary/40 text-primary rounded-xl font-semibold text-sm hover:bg-primary-soft active:scale-95 transition-all"
                   >
                     <span>✏️</span>
                     <span>এডিট</span>
@@ -690,8 +691,8 @@ export default function ProductsListClient({
                     disabled={deletingId === product.id}
                     className={`flex items-center justify-center gap-2 h-11 border-2 rounded-xl font-semibold text-sm transition-all ${
                       deletingId === product.id
-                        ? "bg-red-50 border-red-200 text-red-400 cursor-not-allowed"
-                        : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100 active:scale-95"
+                        ? "bg-danger-soft border-danger/30 text-danger/60 cursor-not-allowed"
+                        : "bg-danger-soft border-danger/30 text-danger hover:bg-danger-soft active:scale-95"
                     }`}
                   >
                     <span>{deletingId === product.id ? "⏳" : "🗑️"}</span>
@@ -708,12 +709,12 @@ export default function ProductsListClient({
 
       {/* Pagination - Scrolls normally */}
       {showPagination && (
-        <div className="bg-white border-t border-gray-200 px-4 py-4">
+        <div className="bg-card border-t border-border px-4 py-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-muted-foreground">
               পৃষ্ঠা {effectivePage} / {effectiveTotalPages}
             </span>
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-muted-foreground">
               মোট {effectiveTotalCount} টি
             </span>
           </div>
@@ -723,9 +724,9 @@ export default function ProductsListClient({
               type="button"
               onClick={() => handleNavigate(effectivePage - 1)}
               disabled={effectivePage <= 1}
-              className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-gray-200 text-gray-700 font-medium disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+              className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-border text-muted-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
             >
-              ←
+              {"<"}
             </button>
 
             <div className="flex gap-1.5 overflow-x-auto max-w-[200px]">
@@ -736,8 +737,8 @@ export default function ProductsListClient({
                   onClick={() => handleNavigate(pageNumber)}
                   className={`flex-shrink-0 w-10 h-10 rounded-xl font-semibold text-sm transition-all active:scale-95 ${
                     pageNumber === effectivePage
-                      ? "bg-blue-600 text-white shadow-md"
-                      : "border-2 border-gray-200 text-gray-700"
+                      ? "bg-primary-soft text-primary border-2 border-primary/40 shadow-sm"
+                      : "border-2 border-border text-muted-foreground"
                   }`}
                 >
                   {pageNumber}
@@ -749,9 +750,9 @@ export default function ProductsListClient({
               type="button"
               onClick={() => handleNavigate(effectivePage + 1)}
               disabled={effectivePage >= effectiveTotalPages}
-              className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-gray-200 text-gray-700 font-medium disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+              className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-border text-muted-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
             >
-              →
+              {">"}
             </button>
           </div>
         </div>
@@ -760,65 +761,65 @@ export default function ProductsListClient({
       {/* Bottom Sheet for Product Details */}
       {selectedProduct && (
         <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-end"
+          className="fixed inset-0 bg-foreground/40 z-50 flex items-end"
           onClick={() => setSelectedProduct(null)}
         >
           <div
-            className="bg-white rounded-t-3xl w-full max-h-[80vh] overflow-y-auto animate-slide-up"
+            className="bg-card rounded-t-3xl w-full max-h-[80vh] overflow-y-auto animate-slide-up"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">পণ্যের বিস্তারিত</h3>
+            <div className="sticky top-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+              <h3 className="font-semibold text-foreground">পণ্যের বিস্তারিত</h3>
               <button
                 type="button"
                 onClick={() => setSelectedProduct(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 active:scale-95 transition-transform"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-muted text-muted-foreground active:scale-95 transition-transform"
               >
                 ✕
               </button>
             </div>
             <div className="p-4 space-y-4">
               <div>
-                <h4 className="text-2xl font-bold text-gray-900 mb-2">
+                <h4 className="text-2xl font-bold text-foreground mb-2">
                   {selectedProduct.name}
                 </h4>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground">
                   {selectedProduct.category}
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                  <p className="text-xs text-blue-600 font-medium mb-1">
+                <div className="bg-primary-soft rounded-xl p-4 border border-primary/30">
+                  <p className="text-xs text-primary font-medium mb-1">
                     বিক্রয় মূল্য
                   </p>
-                  <p className="text-2xl font-bold text-blue-900">
+                  <p className="text-2xl font-bold text-foreground">
                     ৳ {selectedProduct.sellPrice}
                   </p>
                 </div>
                 {selectedProduct.buyPrice && (
-                  <div className="bg-green-50 rounded-xl p-4 border border-green-100">
-                    <p className="text-xs text-green-600 font-medium mb-1">
+                  <div className="bg-success-soft rounded-xl p-4 border border-success/30">
+                    <p className="text-xs text-success font-medium mb-1">
                       ক্রয় মূল্য
                     </p>
-                    <p className="text-2xl font-bold text-green-900">
+                    <p className="text-2xl font-bold text-success">
                       ৳ {selectedProduct.buyPrice}
                     </p>
                   </div>
                 )}
-                <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
-                  <p className="text-xs text-purple-600 font-medium mb-1">
+                <div className="bg-success-soft rounded-xl p-4 border border-success/30">
+                  <p className="text-xs text-success font-medium mb-1">
                     স্টক
                   </p>
-                  <p className="text-2xl font-bold text-purple-900">
+                  <p className="text-2xl font-bold text-foreground">
                     {selectedProduct.stockQty}
                   </p>
                 </div>
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                  <p className="text-xs text-gray-600 font-medium mb-1">
+                <div className="bg-muted rounded-xl p-4 border border-border">
+                  <p className="text-xs text-muted-foreground font-medium mb-1">
                     স্ট্যাটাস
                   </p>
-                  <p className="text-lg font-bold text-gray-900">
+                  <p className="text-lg font-bold text-foreground">
                     {selectedProduct.isActive ? "✅ সক্রিয়" : "⏸️ বন্ধ"}
                   </p>
                 </div>
@@ -827,7 +828,7 @@ export default function ProductsListClient({
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <Link
                   href={`/dashboard/products/${selectedProduct.id}`}
-                  className="flex items-center justify-center gap-2 h-12 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 active:scale-95 transition-all"
+                  className="flex items-center justify-center gap-2 h-12 bg-primary-soft text-primary border border-primary/30 rounded-xl font-semibold hover:bg-primary/15 hover:border-primary/40 active:scale-95 transition-all"
                   onClick={() => triggerHaptic("medium")}
                 >
                   <span>✏️</span>
@@ -839,8 +840,8 @@ export default function ProductsListClient({
                   disabled={deletingId === selectedProduct.id}
                   className={`flex items-center justify-center gap-2 h-12 rounded-xl font-semibold transition-all ${
                     deletingId === selectedProduct.id
-                      ? "bg-red-200 text-red-400 cursor-not-allowed"
-                      : "bg-red-600 text-white hover:bg-red-700 active:scale-95"
+                      ? "bg-danger-soft text-danger/60 cursor-not-allowed"
+                      : "bg-danger text-primary-foreground hover:bg-danger/90 active:scale-95"
                   }`}
                 >
                   <span>🗑️</span>

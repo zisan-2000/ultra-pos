@@ -46,13 +46,13 @@ export default function SalesReport({ shopId, from, to }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">বিক্রি রিপোর্ট</h2>
-          <p className="text-xs text-gray-500">তারিখ, পেমেন্ট, নোট</p>
+          <h2 className="text-lg font-bold text-foreground">বিক্রি রিপোর্ট</h2>
+          <p className="text-xs text-muted-foreground">তারিখ, পেমেন্ট, নোট</p>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
-        <p className="text-sm font-semibold text-gray-900">
+        <p className="text-sm font-semibold text-foreground">
           মোট: {totalAmount.toFixed(2)} ৳
         </p>
         <button
@@ -63,31 +63,31 @@ export default function SalesReport({ shopId, from, to }: Props) {
             );
             downloadFile("sales-report.csv", csv);
           }}
-          className="px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-900 hover:bg-gray-100 transition-colors"
+          className="px-3 py-1 border border-border rounded text-sm font-medium text-foreground hover:bg-muted transition-colors"
         >
           CSV ডাউনলোড করুন
         </button>
       </div>
 
       {/* List */}
-      <div className="border border-gray-200 rounded-lg p-4 space-y-2">
+      <div className="border border-border rounded-lg bg-card p-4 space-y-2">
         {loading ? (
-          <p className="text-sm text-gray-500 text-center py-4">লোড হচ্ছে...</p>
+          <p className="text-sm text-muted-foreground text-center py-4">লোড হচ্ছে...</p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">
+          <p className="text-sm text-muted-foreground text-center py-4">
             কোনো বিক্রি পাওয়া যায়নি
           </p>
         ) : (
           items.map((s) => (
             <div
               key={s.id}
-              className="border border-gray-200 p-3 rounded-lg flex justify-between items-center hover:bg-gray-50 transition-colors"
+              className="border border-border bg-card p-3 rounded-lg flex justify-between items-center hover:bg-muted transition-colors"
             >
               <p>
-                <b className="text-gray-900">{s.totalAmount} ৳</b>{" "}
-                <span className="text-gray-600">- {s.paymentMethod}</span>
+                <b className="text-foreground">{s.totalAmount} ৳</b>{" "}
+                <span className="text-muted-foreground">- {s.paymentMethod}</span>
               </p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 {new Date(s.saleDate).toLocaleDateString("bn-BD")}
               </p>
             </div>

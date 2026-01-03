@@ -42,35 +42,35 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">খরচ রিপোর্ট</h2>
-          <p className="text-xs text-gray-500">বিভাগ, তারিখ, নোট</p>
+          <h2 className="text-lg font-bold text-foreground">খরচ রিপোর্ট</h2>
+          <p className="text-xs text-muted-foreground">বিভাগ, তারিখ, নোট</p>
         </div>
       </div>
 
-      <p className="text-sm font-semibold text-gray-900">
+      <p className="text-sm font-semibold text-foreground">
         মোট খরচ: {total.toFixed(2)} ৳
       </p>
 
-      <div className="border border-gray-200 rounded-lg p-4 space-y-2">
+      <div className="border border-border rounded-lg bg-card p-4 space-y-2">
         {loading ? (
-          <p className="text-sm text-gray-500 text-center py-4">লোড হচ্ছে...</p>
+          <p className="text-sm text-muted-foreground text-center py-4">লোড হচ্ছে...</p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">
+          <p className="text-sm text-muted-foreground text-center py-4">
             কোনো খরচ পাওয়া যায়নি
           </p>
         ) : (
           items.map((e) => (
             <div
               key={e.id}
-              className="border border-gray-200 p-3 rounded-lg flex justify-between items-center hover:bg-gray-50 transition-colors"
+              className="border border-border bg-card p-3 rounded-lg flex justify-between items-center hover:bg-muted transition-colors"
             >
               <div>
-                <p className="text-sm font-semibold text-gray-900">
+                <p className="text-sm font-semibold text-foreground">
                   {Number(e.amount).toFixed(2)} ৳
                 </p>
-                <p className="text-xs text-gray-500">{e.category}</p>
+                <p className="text-xs text-muted-foreground">{e.category}</p>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 {new Date(e.expenseDate).toLocaleDateString("bn-BD")}
               </p>
             </div>

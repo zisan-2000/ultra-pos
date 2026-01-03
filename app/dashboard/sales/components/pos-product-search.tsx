@@ -98,10 +98,10 @@ const ProductButton = memo(function ProductButton({
   const stock = toNumber(product.stockQty);
   const stockStyle =
     stock <= 0
-      ? "bg-red-100 text-red-700"
+      ? "bg-danger-soft text-danger"
       : stock < 3
-      ? "bg-orange-100 text-orange-700"
-      : "bg-emerald-100 text-emerald-700";
+      ? "bg-warning-soft text-warning"
+      : "bg-success-soft text-success";
 
   const inCooldown = cooldownProductId === product.id;
 
@@ -109,15 +109,15 @@ const ProductButton = memo(function ProductButton({
     <button
       key={product.id}
       type="button"
-      className={`w-full h-full min-h-[140px] text-left rounded-xl border bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm transition-all p-3.5 pressable active:scale-[0.97] active:translate-y-[1px] ${
-        recentlyAddedId === product.id ? "ring-2 ring-emerald-200" : ""
+      className={`w-full h-full min-h-[140px] text-left rounded-xl border bg-card border-border hover:border-primary/40 hover:shadow-sm transition-all p-3.5 pressable active:scale-[0.97] active:translate-y-[1px] ${
+        recentlyAddedId === product.id ? "ring-2 ring-success/30" : ""
       } ${stock <= 0 ? "opacity-80" : ""} ${
-        inCooldown ? "opacity-95 shadow-inner border-emerald-200" : ""
+        inCooldown ? "opacity-95 shadow-inner border-success/30" : ""
       }`}
       onClick={() => onAdd(product)}
     >
       <div className="flex items-start justify-between gap-2 relative">
-        <h3 className="flex-1 font-semibold text-slate-900 text-sm sm:text-base leading-snug line-clamp-2">
+        <h3 className="flex-1 font-semibold text-foreground text-sm sm:text-base leading-snug line-clamp-2">
           {product.name}
         </h3>
         <span
@@ -126,13 +126,13 @@ const ProductButton = memo(function ProductButton({
           {stock.toFixed(0)}
         </span>
         {recentlyAddedId === product.id && (
-          <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
+          <span className="absolute -top-1 -right-1 bg-success text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
             +1
           </span>
         )}
       </div>
-      <p className="text-base sm:text-lg font-bold text-emerald-600 mt-1">৳ {product.sellPrice}</p>
-      <p className="text-[11px] text-slate-500 mt-1 capitalize">
+      <p className="text-base sm:text-lg font-bold text-success mt-1">৳ {product.sellPrice}</p>
+      <p className="text-[11px] text-muted-foreground mt-1 capitalize">
         {(product.category || "Uncategorized").replace("&", "and")}
       </p>
     </button>
@@ -400,7 +400,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   const renderPlaceholderSlot = (index: number) => (
     <div
       key={`slot-${index}`}
-      className="w-full h-full min-h-[140px] rounded-xl border border-dashed border-slate-200 bg-white/70 flex items-center justify-center text-xs text-slate-400"
+      className="w-full h-full min-h-[140px] rounded-xl border border-dashed border-border bg-card/70 flex items-center justify-center text-xs text-muted-foreground"
     >
       Fixed slot
     </div>
@@ -409,10 +409,10 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   return (
     <div className="space-y-5">
       {/* Search + state toggles */}
-      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-3 sticky top-0 z-30 md:static md:top-auto">
+      <div className="bg-card border border-border rounded-xl p-3 shadow-sm space-y-3 sticky top-0 z-30 md:static md:top-auto">
         <div className="flex gap-2 items-center">
           <input
-            className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="flex-1 border border-border rounded-lg px-3 py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="পণ্য খুঁজুন (নাম/কোড)..."
             value={query}
             onFocus={() => setShowAllProducts(true)}
@@ -424,8 +424,8 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
             disabled={!voiceReady}
             className={`px-4 py-3 rounded-lg border font-semibold text-sm transition-colors ${
               listening
-                ? "bg-red-50 border-red-300 text-red-700"
-                : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                ? "bg-primary-soft text-primary border-primary/40"
+                : "bg-secondary border-border text-secondary-foreground hover:bg-muted"
             } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
           >
             {listening ? "বন্ধ করুন" : "ভয়েস"}
@@ -434,13 +434,13 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
             <button
               type="button"
               onClick={() => setQuery("")}
-              className="px-3 py-3 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm"
+              className="px-3 py-3 rounded-lg border border-border text-muted-foreground hover:bg-muted text-sm"
             >
               ক্লিয়ার
             </button>
           )}
         </div>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           {listening
             ? "শুনছে... পণ্যের নাম বলুন।"
             : voiceReady
@@ -452,12 +452,12 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
 
       {/* Quick buttons: visible only when not searching to prioritize results */}
       {query.trim().length === 0 && (
-        <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+        <div className="space-y-3 bg-card border border-border rounded-xl p-3 shadow-sm">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
+            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
               ⚡ দ্রুত বিক্রি (সেশন-লকড কুইক বাটন)
             </h3>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted-foreground">
               এই বাটনগুলোর অর্ডার সেশনে আর বদলাবে না
             </span>
           </div>
@@ -470,17 +470,17 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
       )}
 
       {(query.trim().length > 0 || items.length === 0) && (
-        <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+        <div className="space-y-3 bg-card border border-border rounded-xl p-3 shadow-sm">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
+            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
               Smart suggestions
             </h3>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted-foreground">
               শুধু সার্চ/ফাঁকা কার্টে হিন্ট দেখানো হচ্ছে
             </span>
           </div>
           {smartSuggestions.length === 0 ? (
-            <p className="text-sm text-slate-500">কোনো সাজেশন নেই।</p>
+            <p className="text-sm text-muted-foreground">কোনো সাজেশন নেই।</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 px-1 pb-1 text-sm">
               {smartSuggestions.map((p) => renderProductButton(p))}
@@ -489,15 +489,15 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
         </div>
       )}
 
-      <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+      <div className="space-y-3 bg-card border border-border rounded-xl p-3 shadow-sm">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
+          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
             সব পণ্য (অটো সাজানো)
           </h3>
           {!showAllProducts && (
             <button
               type="button"
-              className="text-xs font-semibold text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full hover:border-emerald-300"
+              className="text-xs font-semibold text-primary border border-primary/30 px-3 py-1 rounded-full hover:border-primary/50"
               onClick={() => setShowAllProducts(true)}
             >
               সব পণ্য দেখুন
@@ -506,7 +506,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
         </div>
         {showAllProducts ? (
           <>
-            <div className="bg-gray-50/80 border border-slate-200 rounded-xl p-3 flex flex-wrap gap-2">
+            <div className="bg-muted/60 border border-border rounded-xl p-3 flex flex-wrap gap-2">
               {availableCategories.map((cat) => (
                 <button
                   key={cat.key}
@@ -517,18 +517,18 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
                   }}
                   className={`px-3 py-2 rounded-full border text-sm transition-colors ${
                     activeCategory === cat.key
-                      ? "bg-emerald-50 border-emerald-400 text-emerald-800"
-                      : "bg-white border-slate-200 text-slate-700 hover:border-emerald-200"
+                      ? "bg-primary-soft border-primary/40 text-primary"
+                      : "bg-card border-border text-foreground hover:border-primary/30"
                   }`}
                 >
                   {cat.label}
-                  <span className="ml-2 text-xs text-slate-500">({cat.count})</span>
+                  <span className="ml-2 text-xs text-muted-foreground">({cat.count})</span>
                 </button>
               ))}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 px-1 pb-1 max-h-[520px] overflow-y-auto pr-1">
               {sortedResults.length === 0 ? (
-                <p className="text-center text-slate-500 py-8 col-span-full">
+                <p className="text-center text-muted-foreground py-8 col-span-full">
                   আপনার ফিল্টারে কোনো পণ্য নেই।
                 </p>
               ) : (
@@ -537,7 +537,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
             </div>
           </>
         ) : (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             এই সেকশন অন-ডিমান্ড। উপরের বোতাম বা সার্চে ফোকাস করলেই খুলবে।
           </p>
         )}
