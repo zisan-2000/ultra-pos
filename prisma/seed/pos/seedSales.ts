@@ -10,6 +10,7 @@ export async function seedSales(
   products: ProductMap,
   customers: CustomerMap
 ) {
+  const salesCountByShop = new Map<string, number>();
   const salesSeed: Array<{
     shopKey: string;
     customerKey?: string;
@@ -105,6 +106,27 @@ export async function seedSales(
 
   for (const sale of salesSeed) {
     const shop = shops[sale.shopKey];
+    if (!shop) continue;
+
+    let existingCount = salesCountByShop.get(shop.id);
+    if (existingCount === undefined) {
+      existingCount = await prisma.sale.count({ where: { shopId: shop.id } });
+      salesCountByShop.set(shop.id, existingCount);
+    }
+
+    if (existingCount > 0) {
+      continue;
+    }
+
+    const missingProducts = sale.items.filter(
+      (item) => !products[sale.shopKey]?.[item.productName]
+    );
+    if (missingProducts.length > 0) {
+      console.warn(
+        `WARN: Skipping seeded sale for ${sale.shopKey} (missing products).`
+      );
+      continue;
+    }
 
     const customerId =
       sale.customerKey && customers[sale.shopKey]?.[sale.customerKey]

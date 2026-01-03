@@ -34,16 +34,22 @@ export async function seedShops(
 
   const shops: ShopMap = {};
   for (const shop of shopsSeed) {
-    const row = await prisma.shop.create({
-      data: {
-        id: crypto.randomUUID(),
-        ownerId,
-        name: shop.name,
-        address: shop.address,
-        phone: shop.phone,
-        businessType: shop.businessType,
-      },
+    const existing = await prisma.shop.findFirst({
+      where: { ownerId, name: shop.name },
     });
+
+    const row =
+      existing ??
+      (await prisma.shop.create({
+        data: {
+          id: crypto.randomUUID(),
+          ownerId,
+          name: shop.name,
+          address: shop.address,
+          phone: shop.phone,
+          businessType: shop.businessType,
+        },
+      }));
     shops[shop.key] = row;
   }
   return shops;

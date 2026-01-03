@@ -5,6 +5,7 @@ import type { ShopMap } from "../utils";
 import { toMoney } from "../utils";
 
 export async function seedExpenses(prisma: PrismaClient, shops: ShopMap) {
+  const expenseCountByShop = new Map<string, number>();
   const expenseSeed: Record<
     string,
     Array<{
@@ -65,10 +66,23 @@ export async function seedExpenses(prisma: PrismaClient, shops: ShopMap) {
   };
 
   for (const [shopKey, entries] of Object.entries(expenseSeed)) {
+    const shop = shops[shopKey];
+    if (!shop) continue;
+
+    let existingCount = expenseCountByShop.get(shop.id);
+    if (existingCount === undefined) {
+      existingCount = await prisma.expense.count({ where: { shopId: shop.id } });
+      expenseCountByShop.set(shop.id, existingCount);
+    }
+
+    if (existingCount > 0) {
+      continue;
+    }
+
     for (const exp of entries) {
       await prisma.expense.create({
         data: {
-          shopId: shops[shopKey].id,
+          shopId: shop.id,
           amount: toMoney(exp.amount),
           category: exp.category,
           expenseDate: exp.expenseDate,

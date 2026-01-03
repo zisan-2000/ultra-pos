@@ -21,8 +21,10 @@ export async function seedRBACAndUsers(prisma: PrismaClient): Promise<{
 }> {
   const permissionsByName: Record<string, Permission> = {};
   for (const name of PERMISSION_NAMES) {
-    const perm = await prisma.permission.create({
-      data: {
+    const perm = await prisma.permission.upsert({
+      where: { name },
+      update: {},
+      create: {
         name,
         description: name.replace(/_/g, " "),
       },
@@ -32,8 +34,10 @@ export async function seedRBACAndUsers(prisma: PrismaClient): Promise<{
 
   const rolesByName = {} as Record<RoleName, Role>;
   for (const roleName of ROLE_NAMES) {
-    const role = await prisma.role.create({
-      data: {
+    const role = await prisma.role.upsert({
+      where: { name: roleName },
+      update: {},
+      create: {
         name: roleName,
         description: `${roleName} role`,
       },
@@ -193,6 +197,15 @@ export async function seedRBACAndUsers(prisma: PrismaClient): Promise<{
   const usersByRole = {} as Record<RoleName, User>;
 
   for (const demo of DEMO_USERS) {
+    const existingUser = await prisma.user.findUnique({
+      where: { email: demo.email },
+    });
+
+    if (existingUser) {
+      usersByRole[demo.role] = existingUser;
+      continue;
+    }
+
     const passwordHash = await hashPassword(demo.password);
 
     let createdByUserId: string | undefined;

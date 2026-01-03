@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts",
+    "seed": "tsx --tsconfig tsconfig.seed.json prisma/seed.ts",
     "ci:health": "bash scripts/ci-healthcheck.sh",
     "release:check-sw": "bash scripts/check-sw-cache-name.sh"
   },

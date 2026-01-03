@@ -129,19 +129,27 @@ export async function seedCustomers(
     for (const customer of entries) {
       const summary = summarizeLedger(customer.ledger);
 
-      const created = await prisma.customer.create({
-        data: {
-          id: crypto.randomUUID(),
-          shopId: shops[shopKey].id,
-          name: customer.name,
-          phone: customer.phone,
-          address: customer.address,
-          totalDue: summary.due,
-          lastPaymentAt: summary.lastPaymentAt ?? undefined,
-        },
+      const existing = await prisma.customer.findFirst({
+        where: customer.phone
+          ? { shopId: shops[shopKey].id, phone: customer.phone }
+          : { shopId: shops[shopKey].id, name: customer.name },
       });
 
-      if (customer.ledger.length) {
+      const created =
+        existing ??
+        (await prisma.customer.create({
+          data: {
+            id: crypto.randomUUID(),
+            shopId: shops[shopKey].id,
+            name: customer.name,
+            phone: customer.phone,
+            address: customer.address,
+            totalDue: summary.due,
+            lastPaymentAt: summary.lastPaymentAt ?? undefined,
+          },
+        }));
+
+      if (!existing && customer.ledger.length) {
         await prisma.customerLedger.createMany({
           data: customer.ledger.map((entry) => ({
             shopId: shops[shopKey].id,

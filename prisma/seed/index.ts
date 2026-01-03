@@ -13,9 +13,17 @@ import { seedCashEntries } from "./pos/seedCashEntries";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🔥 Resetting existing data...");
-  await resetDatabase(prisma);
+  const shouldReset =
+    process.env.SEED_RESET === "1" || process.env.SEED_RESET === "true";
 
+  if (shouldReset) {
+    console.log("INFO: Resetting existing data (SEED_RESET enabled)...");
+    await resetDatabase(prisma);
+  } else {
+    console.log(
+      "INFO: Skipping database reset. Set SEED_RESET=1 to wipe and reseed."
+    );
+  }
   console.log("🔥 Seeding RBAC (roles, permissions, demo users)...");
   const { usersByRole } = await seedRBACAndUsers(prisma);
 
@@ -75,3 +83,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

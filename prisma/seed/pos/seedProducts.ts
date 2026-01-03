@@ -169,19 +169,25 @@ export async function seedProducts(
     products[shopKey] = {};
 
     for (const product of entries) {
-      const row = await prisma.product.create({
-        data: {
-          shopId: shops[shopKey].id,
-          name: product.name,
-          category: product.category,
-          buyPrice:
-            product.buyPrice === null ? null : toMoney(product.buyPrice),
-          sellPrice: toMoney(product.sellPrice),
-          stockQty: toMoney(product.stockQty),
-          trackStock: product.trackStock,
-          isActive: true,
-        },
+      const existing = await prisma.product.findFirst({
+        where: { shopId: shops[shopKey].id, name: product.name },
       });
+
+      const row =
+        existing ??
+        (await prisma.product.create({
+          data: {
+            shopId: shops[shopKey].id,
+            name: product.name,
+            category: product.category,
+            buyPrice:
+              product.buyPrice === null ? null : toMoney(product.buyPrice),
+            sellPrice: toMoney(product.sellPrice),
+            stockQty: toMoney(product.stockQty),
+            trackStock: product.trackStock,
+            isActive: true,
+          },
+        }));
 
       products[shopKey][product.name] = row;
     }
