@@ -151,6 +151,16 @@ export async function POST(req: Request) {
           },
         });
 
+        await tx.cashEntry.create({
+          data: {
+            shopId: p.shopId,
+            entryType: "IN",
+            amount: amountStr,
+            reason: `Due payment from customer #${p.customerId}`,
+            createdAt,
+          },
+        });
+
         const current = await tx.customer.findUnique({
           where: { id: p.customerId },
           select: { totalDue: true },

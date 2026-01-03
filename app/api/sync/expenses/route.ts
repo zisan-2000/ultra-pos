@@ -77,12 +77,13 @@ export async function POST(req: Request) {
     });
 
     const deleteIds = Array.isArray(deletedIds) ? (deletedIds as string[]) : [];
+    let deleteTargets: Array<{ id: string; shopId: string; amount: any }> = [];
     if (deleteIds.length) {
-      const existing = await prisma.expense.findMany({
+      deleteTargets = await prisma.expense.findMany({
         where: { id: { in: deleteIds } },
-        select: { id: true, shopId: true },
+        select: { id: true, shopId: true, amount: true },
       });
-      existing.forEach((e) => shopIds.add(e.shopId));
+      deleteTargets.forEach((e) => shopIds.add(e.shopId));
     }
 
     if ((newItems.length || updatedItems.length || deleteIds.length) && shopIds.size === 0) {
@@ -97,6 +98,15 @@ export async function POST(req: Request) {
     }
 
     if (Array.isArray(newItems) && newItems.length > 0) {
+      const newIds = newItems.map((item) => item.id).filter(Boolean) as string[];
+      const existingNewIds = newIds.length
+        ? await prisma.expense.findMany({
+            where: { id: { in: newIds } },
+            select: { id: true },
+          })
+        : [];
+      const existingNewSet = new Set(existingNewIds.map((e) => e.id));
+
       const data = newItems.map((item: IncomingExpense) => ({
         id: item.id,
         shopId: item.shopId,
@@ -111,11 +121,46 @@ export async function POST(req: Request) {
         data,
         skipDuplicates: true,
       });
+
+      const freshItems = newItems.filter(
+        (item) => item.id && !existingNewSet.has(item.id)
+      );
+      if (freshItems.length > 0) {
+        await prisma.cashEntry.createMany({
+          data: freshItems.map((item) => ({
+            shopId: item.shopId,
+            entryType: "OUT",
+            amount: toMoney(item.amount),
+            reason: `Expense: ${item.category || "Uncategorized"} (#${
+              item.id || "offline"
+            })`,
+            createdAt: toDate(item.expenseDate ?? item.createdAt),
+          })),
+        });
+      }
     }
 
     if (Array.isArray(updatedItems) && updatedItems.length > 0) {
+      const updateIds = updatedItems
+        .map((item) => item.id)
+        .filter(Boolean) as string[];
+      const existingUpdates = updateIds.length
+        ? await prisma.expense.findMany({
+            where: { id: { in: updateIds } },
+            select: { id: true, shopId: true, amount: true },
+          })
+        : [];
+      const existingById = new Map(existingUpdates.map((e) => [e.id, e]));
+
       for (const item of updatedItems as IncomingExpense[]) {
         if (!item.id) continue;
+        const existing = existingById.get(item.id);
+        if (!existing) continue;
+
+        const prevAmount = Number(existing.amount);
+        const nextAmount = Number(item.amount);
+        const delta = Number((nextAmount - prevAmount).toFixed(2));
+
         await prisma.expense.update({
           where: { id: item.id },
           data: {
@@ -125,10 +170,31 @@ export async function POST(req: Request) {
             expenseDate: toDate(item.expenseDate),
           },
         });
+
+        if (delta !== 0) {
+          await prisma.cashEntry.create({
+            data: {
+              shopId: existing.shopId,
+              entryType: delta > 0 ? "OUT" : "IN",
+              amount: Math.abs(delta).toFixed(2),
+              reason: `Expense adjustment #${item.id}`,
+            },
+          });
+        }
       }
     }
 
     if (Array.isArray(deletedIds) && deletedIds.length > 0) {
+      if (deleteTargets.length > 0) {
+        await prisma.cashEntry.createMany({
+          data: deleteTargets.map((expense) => ({
+            shopId: expense.shopId,
+            entryType: "IN",
+            amount: expense.amount,
+            reason: `Reversal of expense #${expense.id}`,
+          })),
+        });
+      }
       await prisma.expense.deleteMany({
         where: { id: { in: deletedIds as string[] } },
       });

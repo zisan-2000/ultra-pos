@@ -166,6 +166,10 @@ export async function createSale(input: CreateSaleInput) {
   }
 
   const totalStr = computedTotal.toFixed(2); // numeric as string
+  const normalizedPaymentMethod = (input.paymentMethod || "cash").toLowerCase();
+  const totalNum = Number(totalStr);
+  const payNowRaw = Number(input.paidNow || 0);
+  const payNow = Math.min(Math.max(payNowRaw, 0), totalNum);
 
   const saleId = await prisma.$transaction(async (tx) => {
     // Insert sale
@@ -179,6 +183,27 @@ export async function createSale(input: CreateSaleInput) {
       },
       select: { id: true },
     });
+
+    const cashCollected =
+      normalizedPaymentMethod === "cash"
+        ? totalStr
+        : normalizedPaymentMethod === "due" && payNow > 0
+        ? payNow.toFixed(2)
+        : null;
+
+    if (cashCollected) {
+      await tx.cashEntry.create({
+        data: {
+          shopId: input.shopId,
+          entryType: "IN",
+          amount: cashCollected,
+          reason:
+            normalizedPaymentMethod === "due"
+              ? `Partial cash received for due sale #${inserted.id}`
+              : `Cash sale #${inserted.id}`,
+        },
+      });
+    }
 
     // Insert sale items
     const saleItemRows = input.items.map((item) => ({
@@ -210,10 +235,7 @@ export async function createSale(input: CreateSaleInput) {
 
     // Record due entry if needed
     if (dueCustomer) {
-      const total = Number(totalStr);
-      const payNowRaw = Number(input.paidNow || 0);
-      const payNow = Math.min(Math.max(payNowRaw, 0), total); // clamp 0..total
-      const dueAmount = Number((total - payNow).toFixed(2));
+      const dueAmount = Number((totalNum - payNow).toFixed(2));
 
       await tx.customerLedger.create({
         data: {
@@ -400,6 +422,8 @@ export async function voidSale(saleId: string, reason?: string | null) {
     throw new Error("Due sales cannot be voided yet. Please handle via customer ledger.");
   }
 
+  const isCashSale = (sale.paymentMethod || "").toLowerCase() === "cash";
+
   await prisma.$transaction(async (tx) => {
     // Restore stock for tracked products
     const saleItems = await tx.saleItem.findMany({
@@ -434,6 +458,17 @@ export async function voidSale(saleId: string, reason?: string | null) {
         voidByUserId: user.id,
       } as any,
     });
+
+    if (isCashSale) {
+      await tx.cashEntry.create({
+        data: {
+          shopId: sale.shopId,
+          entryType: "OUT",
+          amount: sale.totalAmount,
+          reason: `Reversal of sale #${sale.id}`,
+        },
+      });
+    }
   });
 
   return { success: true };

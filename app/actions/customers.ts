@@ -151,6 +151,15 @@ export async function recordCustomerPayment(input: PaymentInput) {
       },
     });
 
+    await tx.cashEntry.create({
+      data: {
+        shopId: input.shopId,
+        entryType: "IN",
+        amount: amount.toFixed(2),
+        reason: `Due payment from customer #${customer.id}`,
+      },
+    });
+
     const current = await tx.customer.findUnique({
       where: { id: customer.id },
       select: { totalDue: true },

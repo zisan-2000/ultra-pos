@@ -31,14 +31,27 @@ export async function createExpense(input: any) {
   requirePermission(user, "create_expense");
   await assertShopAccess(parsed.shopId, user);
 
-  await prisma.expense.create({
-    data: {
-      shopId: parsed.shopId,
-      amount: parsed.amount,
-      category: parsed.category,
-      expenseDate: normalizeExpenseDate(parsed.expenseDate),
-      note: parsed.note || "",
-    },
+  await prisma.$transaction(async (tx) => {
+    const expenseDate = normalizeExpenseDate(parsed.expenseDate);
+    const created = await tx.expense.create({
+      data: {
+        shopId: parsed.shopId,
+        amount: parsed.amount,
+        category: parsed.category,
+        expenseDate,
+        note: parsed.note || "",
+      },
+    });
+
+    await tx.cashEntry.create({
+      data: {
+        shopId: parsed.shopId,
+        entryType: "OUT",
+        amount: created.amount,
+        reason: `Expense: ${created.category} (#${created.id})`,
+        createdAt: expenseDate,
+      },
+    });
   });
 
   return { success: true };
@@ -62,14 +75,31 @@ export async function updateExpense(id: string, input: any) {
     throw new Error("Unauthorized access to this expense");
   }
 
-  await prisma.expense.update({
-    where: { id },
-    data: {
-      amount: parsed.amount,
-      category: parsed.category,
-      note: parsed.note || "",
-      expenseDate: normalizeExpenseDate(parsed.expenseDate),
-    },
+  const prevAmount = Number(existing.amount);
+  const nextAmount = Number(parsed.amount);
+  const delta = Number((nextAmount - prevAmount).toFixed(2));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.expense.update({
+      where: { id },
+      data: {
+        amount: parsed.amount,
+        category: parsed.category,
+        note: parsed.note || "",
+        expenseDate: normalizeExpenseDate(parsed.expenseDate),
+      },
+    });
+
+    if (delta !== 0) {
+      await tx.cashEntry.create({
+        data: {
+          shopId: parsed.shopId,
+          entryType: delta > 0 ? "OUT" : "IN",
+          amount: Math.abs(delta).toFixed(2),
+          reason: `Expense adjustment #${id}`,
+        },
+      });
+    }
   });
 
   return { success: true };
@@ -122,6 +152,16 @@ export async function deleteExpense(id: string) {
 
   await assertShopAccess(expense.shopId, user);
 
-  await prisma.expense.delete({ where: { id } });
+  await prisma.$transaction(async (tx) => {
+    await tx.cashEntry.create({
+      data: {
+        shopId: expense.shopId,
+        entryType: "IN",
+        amount: expense.amount,
+        reason: `Reversal of expense #${expense.id}`,
+      },
+    });
+    await tx.expense.delete({ where: { id } });
+  });
   return { success: true };
 }

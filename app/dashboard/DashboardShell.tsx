@@ -406,7 +406,7 @@ export function DashboardShell({
 
                 <button
                   type="button"
-                  className="hidden lg:inline-flex items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground shadow-sm hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar h-9 w-9"
+                  className="hidden lg:inline-flex items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-sm hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar h-9 w-9"
                   aria-label={
                     sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
                   }
@@ -422,7 +422,7 @@ export function DashboardShell({
 
                 <button
                   type="button"
-                  className="lg:hidden inline-flex items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground shadow-sm hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar h-9 w-9"
+                  className="lg:hidden inline-flex items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-sm hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar h-9 w-9"
                   aria-label="Close navigation"
                   onClick={() => setDrawerOpen(false)}
                 >
@@ -458,9 +458,9 @@ export function DashboardShell({
                         key={item.href}
                         href={targetHref}
                         onClick={() => setDrawerOpen(false)}
-                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                        className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                           active
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
                             : "text-sidebar-foreground hover:bg-sidebar-accent"
                         } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                       >
@@ -475,7 +475,7 @@ export function DashboardShell({
                             className={`h-4 w-4 ${
                               active
                                 ? "text-sidebar-primary-foreground"
-                                : "text-sidebar-foreground"
+                                : "text-sidebar-accent-foreground"
                             }`}
                           />
                         </span>
@@ -507,9 +507,9 @@ export function DashboardShell({
                       <Link
                         href={userCreationLogHref}
                         onClick={() => setDrawerOpen(false)}
-                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                        className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                           isActive(userCreationLogHref)
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
                             : "text-sidebar-foreground hover:bg-sidebar-accent"
                         } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                       >
@@ -524,7 +524,7 @@ export function DashboardShell({
                             className={`h-4 w-4 ${
                               isActive(userCreationLogHref)
                                 ? "text-sidebar-primary-foreground"
-                                : "text-sidebar-foreground"
+                                : "text-sidebar-accent-foreground"
                             }`}
                           />
                         </span>
@@ -546,11 +546,11 @@ export function DashboardShell({
                           roleBasePath
                         )}
                         onClick={() => setDrawerOpen(false)}
-                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                        className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                           isActive(
                             applyBasePath("/dashboard/admin/rbac", roleBasePath)
                           )
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
                             : "text-sidebar-foreground hover:bg-sidebar-accent"
                         } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                       >
@@ -575,7 +575,7 @@ export function DashboardShell({
                                 )
                               )
                                 ? "text-sidebar-primary-foreground"
-                                : "text-sidebar-foreground"
+                                : "text-sidebar-accent-foreground"
                             }`}
                           />
                         </span>
@@ -610,14 +610,14 @@ export function DashboardShell({
                         roleBasePath
                       )}
                       onClick={() => setDrawerOpen(false)}
-                      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                      className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                         isActive(
                           applyBasePath(
                             "/dashboard/admin/business-types",
                             roleBasePath
                           )
                         )
-                          ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
                           : "text-sidebar-foreground hover:bg-sidebar-accent"
                       } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                     >
@@ -642,7 +642,7 @@ export function DashboardShell({
                               )
                             )
                               ? "text-sidebar-primary-foreground"
-                              : "text-sidebar-foreground"
+                              : "text-sidebar-accent-foreground"
                           }`}
                         />
                       </span>
@@ -659,11 +659,11 @@ export function DashboardShell({
                     <Link
                       href={systemSettingsHref}
                       onClick={() => setDrawerOpen(false)}
-                      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
-                        pathname === systemSettingsHref
-                          ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent"
-                      } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                    className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                      pathname === systemSettingsHref
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent"
+                    } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                     >
                       <span
                         className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
@@ -676,7 +676,7 @@ export function DashboardShell({
                           className={`h-4 w-4 ${
                             pathname === systemSettingsHref
                               ? "text-sidebar-primary-foreground"
-                              : "text-sidebar-foreground"
+                              : "text-sidebar-accent-foreground"
                           }`}
                         />
                       </span>

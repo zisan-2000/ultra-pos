@@ -149,17 +149,17 @@ function Card({
   color: string;
   icon?: string;
 }) {
-  const styles: Record<string, string> = {
-    success: "bg-success-soft",
-    danger: "bg-danger-soft",
-    primary: "bg-primary-soft",
-    warning: "bg-warning-soft",
-  };
   const iconBg: Record<string, string> = {
     success: "bg-success/15 text-success",
     danger: "bg-danger/15 text-danger",
     primary: "bg-primary/15 text-primary",
     warning: "bg-warning/15 text-warning",
+  };
+  const valueColor: Record<string, string> = {
+    success: "text-success",
+    danger: "text-danger",
+    primary: "text-primary",
+    warning: "text-warning",
   };
   const trimmed = value.trim();
   const parts = trimmed.split(/\s+/);
@@ -167,11 +167,7 @@ function Card({
   const amount = parts.join(" ");
 
   return (
-    <div
-      className={`p-5 rounded-2xl border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all pressable ${
-        styles[color] ?? "bg-card text-foreground"
-      }`}
-    >
+    <div className="bg-card text-foreground p-5 rounded-2xl border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all pressable">
       <div className="flex items-start gap-3">
         {icon ? (
           <span
@@ -185,7 +181,11 @@ function Card({
         <div className="space-y-3">
           <p className="text-[13px] font-medium text-foreground/80">{title}</p>
           <div className="flex items-end gap-1">
-            <span className="text-[30px] font-extrabold text-foreground leading-none">
+            <span
+              className={`text-[30px] font-extrabold leading-none ${
+                valueColor[color] ?? "text-foreground"
+              }`}
+            >
               {amount}
             </span>
             {currency ? (

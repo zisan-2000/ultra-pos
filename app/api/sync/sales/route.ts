@@ -178,6 +178,18 @@ export async function POST(req: Request) {
             select: { id: true },
           });
 
+          if (paymentMethod === "cash") {
+            await tx.cashEntry.create({
+              data: {
+                shopId,
+                entryType: "IN",
+                amount: totalAmount,
+                reason: `Cash sale #${sale.id}`,
+                createdAt: createdAt,
+              },
+            });
+          }
+
           const saleItemRows = items.map((item) => {
             const qtyStr = toMoneyString(item.qty, "quantity");
             const unitPriceStr = toMoneyString(item.unitPrice, "unitPrice");
