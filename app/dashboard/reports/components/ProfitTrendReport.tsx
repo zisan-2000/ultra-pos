@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ProfitRow = { date: string; sales: number; expense: number };
 type Props = { shopId: string; from?: string; to?: string };
@@ -11,7 +11,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
   const [data, setData] = useState<ProfitRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  async function load(rangeFrom?: string, rangeTo?: string) {
+  const load = useCallback(async (rangeFrom?: string, rangeTo?: string) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ shopId });
@@ -28,11 +28,11 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [shopId]);
 
   useEffect(() => {
-    load(from, to);
-  }, [shopId, from, to]);
+    void load(from, to);
+  }, [load, from, to]);
 
   const totalProfit = useMemo(
     () =>

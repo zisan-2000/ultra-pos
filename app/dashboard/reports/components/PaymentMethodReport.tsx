@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type PaymentRow = { name: string; value: number; count?: number };
 type Props = { shopId: string; from?: string; to?: string };
@@ -11,7 +11,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
   const [data, setData] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  async function load(rangeFrom?: string, rangeTo?: string) {
+  const load = useCallback(async (rangeFrom?: string, rangeTo?: string) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ shopId });
@@ -41,11 +41,11 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [shopId]);
 
   useEffect(() => {
-    load(from, to);
-  }, [shopId, from, to]);
+    void load(from, to);
+  }, [load, from, to]);
 
   const totalAmount = useMemo(
     () => data.reduce((sum, item) => sum + Number(item.value || 0), 0),

@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { generateCSV } from "@/lib/utils/csv";
 import { downloadFile } from "@/lib/utils/download";
 
@@ -12,7 +12,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  async function load(rangeFrom?: string, rangeTo?: string) {
+  const load = useCallback(async (rangeFrom?: string, rangeTo?: string) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ shopId });
@@ -31,11 +31,11 @@ export default function SalesReport({ shopId, from, to }: Props) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [shopId]);
 
   useEffect(() => {
-    load(from, to);
-  }, [shopId, from, to]);
+    void load(from, to);
+  }, [load, from, to]);
 
   const totalAmount = useMemo(
     () => items.reduce((sum, s) => sum + Number(s.totalAmount || 0), 0),

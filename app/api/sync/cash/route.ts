@@ -10,7 +10,7 @@ import { rateLimit } from "@/lib/rate-limit";
 type IncomingCash = {
   id?: string;
   shopId: string;
-  entryType: "IN" | "OUT";
+  entryType?: "IN" | "OUT";
   amount: string | number;
   reason?: string | null;
   createdAt?: number | string | Date;

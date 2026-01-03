@@ -45,7 +45,7 @@ type PosPageClientProps = {
   }[];
   shopName: string;
   shopId: string;
-  submitSale: (formData: FormData) => Promise<void>;
+  submitSale: (formData: FormData) => Promise<{ success: boolean; saleId: string }>;
 };
 
 export function PosPageClient({
@@ -189,7 +189,7 @@ export function PosPageClient({
       setPaidNow("");
       setNote("");
       setCustomerId("");
-      setSuccess({ saleId: (res as any)?.saleId });
+      setSuccess({ saleId: res?.saleId });
       return;
     }
 

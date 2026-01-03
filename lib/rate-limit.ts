@@ -30,7 +30,10 @@ export function rateLimit(
 
   if (!bucket || bucket.resetAt <= now) {
     buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return { limited: false, headers: { "Retry-After": Math.ceil(windowMs / 1000) } };
+    return {
+      limited: false,
+      headers: { "Retry-After": Math.ceil(windowMs / 1000).toString() },
+    };
   }
 
   bucket.count += 1;
@@ -44,5 +47,8 @@ export function rateLimit(
     };
   }
 
-  return { limited: false, headers: { "Retry-After": Math.ceil((bucket.resetAt - now) / 1000) } };
+  return {
+    limited: false,
+    headers: { "Retry-After": Math.ceil((bucket.resetAt - now) / 1000).toString() },
+  };
 }

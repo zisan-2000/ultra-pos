@@ -1,3 +1,5 @@
+// app/actions/cash.ts
+
 "use server";
 
 import { prisma } from "@/lib/prisma";
