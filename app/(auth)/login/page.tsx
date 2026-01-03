@@ -1,10 +1,10 @@
-// app/(auth)/login/page.tsx
 "use client";
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
+import { LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,88 +27,117 @@ export default function LoginPage() {
 
     setLoading(false);
 
-    if (error) {
-      setError(error.message ?? "Login failed");
+    if (error || !data?.user) {
+      setError("ইমেইল বা পাসওয়ার্ড ঠিক হয়নি");
       return;
     }
 
-    // Check if user is authenticated
-    if (!data?.user) {
-      setError("Login failed");
-      return;
-    }
-
-    // Redirect to dashboard
     router.push("/dashboard");
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background px-4">
-      <form
-        onSubmit={handleSubmit}
-        className="p-6 w-full max-w-md border border-border rounded-2xl space-y-4 bg-card shadow-sm"
-      >
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold text-foreground">লগইন</h1>
-          <p className="text-sm text-muted-foreground">
-            আপনার ইমেইল ও পাসওয়ার্ড দিয়ে সাইন ইন করুন
-          </p>
-        </div>
+    <main className="relative min-h-screen overflow-hidden bg-linear-to-br from-amber-50/70 via-white to-emerald-50/70 px-4">
+      {/* soft background */}
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-32 right-[-10%] h-[420px] w-[420px] rounded-full bg-emerald-200/30 blur-[120px]" />
+        <div className="absolute bottom-[-20%] left-[-10%] h-[420px] w-[420px] rounded-full bg-amber-200/40 blur-[120px]" />
+      </div>
 
-        <div className="space-y-2">
-          <input
-            className="border border-border px-3 py-2 w-full rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+      <section className="relative mx-auto flex min-h-screen max-w-md items-center">
+        <form
+          onSubmit={handleSubmit}
+          className="w-full space-y-7 rounded-3xl border border-white/70 bg-white/80 p-8 shadow-xl backdrop-blur"
+        >
+          {/* header (Version 2 copy) */}
+          <div className="space-y-3 text-center">
+            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white/80 px-5 py-2 text-xs font-medium text-emerald-700 shadow-sm">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              এখানে তাড়াহুড়া নেই
+            </div>
 
-          <div className="relative">
+            <h1 className="text-2xl font-semibold leading-snug text-slate-900">
+              ব্যবসা মানেই শুধু কাজ নয়,
+              <span className="block">এটাও তো আপনার একটা স্বপ্ন</span>
+            </h1>
+
+            <p className="text-sm leading-relaxed text-slate-500">
+              সেই স্বপ্নটা যেন প্রতিদিন
+              <br />
+              হিসাব আর ঝামেলায় ক্লান্ত না হয়ে পড়ে—
+              <br />
+              আমরা সেটার খেয়াল রাখি।
+            </p>
+          </div>
+
+          {/* inputs */}
+          <div className="space-y-3">
             <input
-              className="border border-border px-3 py-2 w-full rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 pr-12"
-              placeholder="Password"
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              placeholder="আপনার ইমেইল"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((p) => !p)}
-              className="absolute inset-y-0 right-2 px-2 text-base text-muted-foreground hover:text-foreground"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              <span aria-hidden="true">{showPassword ? "🙈" : "👁"}</span>
-              <span className="sr-only">{showPassword ? "Hide" : "Show"}</span>
-            </button>
+
+            <div className="relative">
+              <input
+                className="w-full rounded-xl border border-slate-200 bg-white/70 px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                placeholder="পাসওয়ার্ড"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((p) => !p)}
+                className="absolute inset-y-0 right-3 text-lg text-slate-400 hover:text-slate-600"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "🙈" : "👁"}
+              </button>
+            </div>
           </div>
-        </div>
 
-        {error && (
-          <p className="text-sm text-danger bg-danger-soft border border-danger/30 rounded-lg p-2">
-            {error}
+          {/* error */}
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
+              {error}
+            </div>
+          )}
+
+          {/* button (Version 2 copy) */}
+          <button
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 py-3 font-semibold text-white shadow-lg shadow-emerald-200/70 hover:bg-emerald-700 disabled:opacity-60"
+          >
+            {loading ? (
+              "ঢুকছি..."
+            ) : (
+              <>
+                <LogIn className="h-4 w-4" />
+                লগইন করি
+              </>
+            )}
+          </button>
+
+          {/* only forgot password (no register) */}
+          <div className="text-center">
+            <Link
+              href="/forgot-password"
+              className="text-sm text-emerald-700 hover:underline"
+            >
+              পাসওয়ার্ড মনে পড়ছে না?
+            </Link>
+          </div>
+
+          {/* trust line */}
+          <p className="pt-4 text-center text-xs text-slate-400">
+            শান্ত • নিরাপদ • আপনার মতো ব্যবসার জন্য
           </p>
-        )}
-
-        <button
-          className="bg-primary-soft text-primary border border-primary/30 p-2.5 w-full rounded-lg font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
-          disabled={loading}
-        >
-          {loading ? "Signing in..." : "Login"}
-        </button>
-
-        <div className="flex items-center justify-between text-sm text-primary">
-          <Link href="/forgot-password" className="hover:underline hover:text-primary-hover">
-            পাসওয়ার্ড ভুলে গেছেন?
-          </Link>
-          <Link href="/register" className="hover:underline hover:text-primary-hover">
-            নতুন অ্যাকাউন্ট
-          </Link>
-        </div>
-      </form>
-    </div>
+        </form>
+      </section>
+    </main>
   );
 }
-
