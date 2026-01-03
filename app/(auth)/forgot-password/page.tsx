@@ -3,6 +3,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type ApiResponse = { success: boolean; resetUrl?: string; error?: string };
 
@@ -46,7 +47,10 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background px-4">
+    <div className="relative flex items-center justify-center min-h-screen bg-background px-4">
+      <div className="absolute right-6 top-6 z-10">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-sm p-6 space-y-4">
         <div className="space-y-1 text-center">
           <h1 className="text-2xl font-bold text-foreground">পাসওয়ার্ড রিসেট</h1>

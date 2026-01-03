@@ -4,6 +4,7 @@
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type ApiResponse = { success: boolean; error?: string };
 
@@ -70,7 +71,10 @@ function ResetPasswordPageInner() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background px-4">
+    <div className="relative flex items-center justify-center min-h-screen bg-background px-4">
+      <div className="absolute right-6 top-6 z-10">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-sm p-6 space-y-4">
         <div className="space-y-1 text-center">
           <h1 className="text-2xl font-bold text-foreground">নতুন পাসওয়ার্ড</h1>

@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import ServiceWorkerRegister from "@/components/service-worker-register";
 import SyncBootstrap from "@/components/sync-bootstrap";
+import ThemeScript from "@/components/theme-script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,6 +29,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="bn" suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-background text-foreground`}
         style={{ fontFamily: "'SutonnyMJ', 'Noto Sans Bengali', sans-serif" }}

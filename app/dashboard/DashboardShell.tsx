@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import LogoutButton from "@/components/LogoutButton";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import {
@@ -807,31 +808,34 @@ export function DashboardShell({
               </div>
 
               {/* Shop selector + Status */}
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                {shops?.length > 0 ? (
-                  <Select
-                    value={safeShopId ?? undefined}
-                    onValueChange={(value) => handleShopChange(value)}
-                  >
-                    <SelectTrigger className="w-[200px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
-                      <SelectValue placeholder="দোকান নির্বাচন" />
-                    </SelectTrigger>
-                    <SelectContent align="end" className="w-[220px]">
-                      {shops.map((shop) => (
-                        <SelectItem key={shop.id} value={shop.id}>
-                          {shop.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Link
-                    href={applyBasePath("/dashboard/shops/new", roleBasePath)}
-                    className="text-sm font-semibold text-primary hover:text-primary-hover"
-                  >
-                    দোকান তৈরি করুন
-                  </Link>
-                )}
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="flex items-center gap-2">
+                  {shops?.length > 0 ? (
+                    <Select
+                      value={safeShopId ?? undefined}
+                      onValueChange={(value) => handleShopChange(value)}
+                    >
+                      <SelectTrigger className="w-[180px] sm:w-[200px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                        <SelectValue placeholder="????? ????????" />
+                      </SelectTrigger>
+                      <SelectContent align="end" className="w-[220px]">
+                        {shops.map((shop) => (
+                          <SelectItem key={shop.id} value={shop.id}>
+                            {shop.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Link
+                      href={applyBasePath("/dashboard/shops/new", roleBasePath)}
+                      className="text-sm font-semibold text-primary hover:text-primary-hover"
+                    >
+                      ????? ???? ????
+                    </Link>
+                  )}
+                  <ThemeToggle />
+                </div>
 
                 {/* Online / Offline status under select */}
                 <div className="flex items-center gap-1 text-xs font-semibold mt-2">
@@ -944,3 +948,4 @@ export function DashboardShell({
     </div>
   );
 }
+

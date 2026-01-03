@@ -5,6 +5,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -39,7 +40,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background px-4">
+    <div className="relative flex items-center justify-center min-h-screen bg-background px-4">
+      <div className="absolute right-6 top-6 z-10">
+        <ThemeToggle />
+      </div>
       <form
         onSubmit={handleSubmit}
         className="p-6 w-full max-w-md border border-border rounded-2xl space-y-4 bg-card shadow-sm"
