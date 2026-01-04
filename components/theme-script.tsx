@@ -8,8 +8,7 @@ const themeScript = `
     const storageKey = "pos.theme";
     const root = document.documentElement;
     const stored = localStorage.getItem(storageKey);
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const theme = stored === "light" || stored === "dark" ? stored : (prefersDark ? "dark" : "light");
+    const theme = stored === "light" || stored === "dark" ? stored : "light";
     root.classList.toggle("dark", theme === "dark");
     root.style.colorScheme = theme;
   } catch {

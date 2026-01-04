@@ -10,9 +10,6 @@ type Theme = "light" | "dark";
 
 const STORAGE_KEY = "pos.theme";
 
-const getPreferredTheme = () =>
-  window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-
 const applyTheme = (theme: Theme) => {
   const root = document.documentElement;
   root.classList.toggle("dark", theme === "dark");
@@ -32,22 +29,9 @@ export function ThemeToggle({
   useEffect(() => {
     setMounted(true);
     const stored = localStorage.getItem(STORAGE_KEY);
-    const initial =
-      stored === "light" || stored === "dark" ? stored : getPreferredTheme();
+    const initial = stored === "light" || stored === "dark" ? stored : "light";
     setTheme(initial);
     applyTheme(initial);
-
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (event: MediaQueryListEvent) => {
-      const current = localStorage.getItem(STORAGE_KEY);
-      if (current === "light" || current === "dark") return;
-      const next = event.matches ? "dark" : "light";
-      setTheme(next);
-      applyTheme(next);
-    };
-
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
   }, []);
 
   const isDark = useMemo(() => theme === "dark", [theme]);
