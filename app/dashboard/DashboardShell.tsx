@@ -152,9 +152,7 @@ export function DashboardShell({
 
   const currentShopName = useMemo(() => {
     if (!safeShopId) return "দোকান নির্বাচন করুন";
-    return (
-      shops.find((s) => s.id === safeShopId)?.name || "দোকান নির্বাচন করুন"
-    );
+    return shops.find((s) => s.id === safeShopId)?.name || "দোকান নির্বাচন করুন";
   }, [safeShopId, shops]);
 
   // Sync URL ?shopId with global shop store & cookie
@@ -816,7 +814,7 @@ export function DashboardShell({
                       onValueChange={(value) => handleShopChange(value)}
                     >
                       <SelectTrigger className="w-[180px] sm:w-[200px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
-                        <SelectValue placeholder="????? ????????" />
+                        <SelectValue placeholder="দোকান নির্বাচন করুন" />
                       </SelectTrigger>
                       <SelectContent align="end" className="w-[220px]">
                         {shops.map((shop) => (
@@ -830,9 +828,7 @@ export function DashboardShell({
                     <Link
                       href={applyBasePath("/dashboard/shops/new", roleBasePath)}
                       className="text-sm font-semibold text-primary hover:text-primary-hover"
-                    >
-                      ????? ???? ????
-                    </Link>
+                    >নতুন দোকান যোগ করুন</Link>
                   )}
                   <ThemeToggle />
                 </div>
@@ -948,4 +944,6 @@ export function DashboardShell({
     </div>
   );
 }
+
+
 

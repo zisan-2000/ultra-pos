@@ -112,6 +112,9 @@ export async function middleware(req: NextRequest) {
 
   if (looksRolePrefixed) {
     const normalized = remainder || "/dashboard";
+    if (normalized === "/dashboard") {
+      return appendCookies(NextResponse.next(), cookiesToSet);
+    }
     const rewriteTarget =
       normalized === "/dashboard" ? "/dashboard" : "/dashboard" + normalized;
     return appendCookies(
