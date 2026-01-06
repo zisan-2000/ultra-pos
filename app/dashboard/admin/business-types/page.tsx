@@ -6,6 +6,8 @@ import {
   upsertBusinessType,
   getBusinessType,
   setBusinessTypeActive,
+  deleteBusinessType,
+  getBusinessTypeUsage,
 } from "@/app/actions/business-types";
 import {
   businessFieldConfig as STATIC_CONFIGS,
@@ -49,6 +51,14 @@ async function handleToggleActive(formData: FormData) {
   if (!key) return;
   const isActive = activeRaw === "true";
   await setBusinessTypeActive(key, isActive);
+  revalidatePath("/dashboard/admin/business-types");
+}
+
+async function handleDeleteBusinessType(formData: FormData) {
+  "use server";
+  const key = (formData.get("key") as string | null)?.trim();
+  if (!key) return;
+  await deleteBusinessType(key);
   revalidatePath("/dashboard/admin/business-types");
 }
 
@@ -161,9 +171,11 @@ async function handleStructuredEdit(formData: FormData) {
 export default async function BusinessTypesAdminPage() {
   let types: Awaited<ReturnType<typeof listBusinessTypes>> | null = null;
   let error: string | null = null;
+  let usage: Awaited<ReturnType<typeof getBusinessTypeUsage>> = {};
 
   try {
     types = await listBusinessTypes();
+    usage = await getBusinessTypeUsage();
   } catch (err: any) {
     error = err?.message || "Unable to load business types (Super Admin only).";
   }
@@ -412,6 +424,8 @@ export default async function BusinessTypesAdminPage() {
             const stock = (t.stockRules as any) ?? {};
             const unit = (t.unitRules as any) ?? {};
             const unitOptions = (unit.options || []) as string[];
+            const usageInfo = usage[t.key] ?? { shopCount: 0, templateCount: 0 };
+            const canDelete = usageInfo.shopCount === 0 && usageInfo.templateCount === 0;
 
             return (
               <div
@@ -422,6 +436,9 @@ export default async function BusinessTypesAdminPage() {
                   <div>
                     <div className="text-sm text-muted-foreground font-mono">{t.key}</div>
                     <div className="text-lg font-semibold text-foreground">{t.label}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Shops: {usageInfo.shopCount} · Templates: {usageInfo.templateCount}
+                    </div>
                   </div>
                   <form action={handleToggleActive}>
                     <input type="hidden" name="key" value={t.key} />
@@ -555,7 +572,24 @@ export default async function BusinessTypesAdminPage() {
                     >
                       Save changes
                     </button>
+                    <button
+                      type="submit"
+                      formAction={handleDeleteBusinessType}
+                      disabled={!canDelete}
+                      className={`px-4 py-2 rounded-md border font-semibold ${
+                        canDelete
+                          ? "border-danger/30 text-danger bg-danger-soft hover:border-danger/50"
+                          : "border-border text-muted-foreground bg-muted cursor-not-allowed"
+                      }`}
+                    >
+                      Delete
+                    </button>
                   </div>
+                  {!canDelete && (
+                    <p className="text-xs text-warning">
+                      Delete is disabled because this business type is in use.
+                    </p>
+                  )}
                 </form>
               </div>
             );

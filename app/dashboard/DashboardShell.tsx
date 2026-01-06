@@ -656,6 +656,58 @@ export function DashboardShell({
                     </Link>
 
                     <Link
+                      href={applyBasePath(
+                        "/dashboard/admin/business-product-library",
+                        roleBasePath
+                      )}
+                      onClick={() => setDrawerOpen(false)}
+                      className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                        isActive(
+                          applyBasePath(
+                            "/dashboard/admin/business-product-library",
+                            roleBasePath
+                          )
+                        )
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent"
+                      } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                    >
+                      <span
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                          isActive(
+                            applyBasePath(
+                              "/dashboard/admin/business-product-library",
+                              roleBasePath
+                            )
+                          )
+                            ? "bg-sidebar-primary/20"
+                            : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
+                        }`}
+                      >
+                        <Package
+                          className={`h-4 w-4 ${
+                            isActive(
+                              applyBasePath(
+                                "/dashboard/admin/business-product-library",
+                                roleBasePath
+                              )
+                            )
+                              ? "text-sidebar-primary-foreground"
+                              : "text-sidebar-accent-foreground"
+                          }`}
+                        />
+                      </span>
+
+                      <span
+                        className={
+                          sidebarCollapsed ? "lg:hidden truncate" : "truncate"
+                        }
+                      >
+                        Product Library
+                      </span>
+                    </Link>
+
+                    <Link
                       href={systemSettingsHref}
                       onClick={() => setDrawerOpen(false)}
                     className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${

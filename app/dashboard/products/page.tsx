@@ -4,7 +4,12 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getProductsByShopPaginated } from "@/app/actions/products";
+import { listActiveBusinessProductTemplates } from "@/app/actions/business-product-templates";
+import { listActiveBusinessTypes } from "@/app/actions/business-types";
 import ProductsListClient from "./components/ProductsListClient";
+import { businessOptions } from "@/lib/productFormConfig";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 
 type PageProps = {
   searchParams?: Promise<{
@@ -70,6 +75,18 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       : null;
 
   const activeShopId = urlSelectedShopId ?? cookieSelectedShopId ?? shops[0].id;
+  const activeShop = shops.find((shop) => shop.id === activeShopId) ?? shops[0];
+  const businessType = activeShop.businessType || "tea_stall";
+  const activeBusinessTypes = await listActiveBusinessTypes().catch(() => []);
+  const mergedBusinessTypes = [
+    ...activeBusinessTypes.map((t) => ({ id: t.key, label: t.label })),
+    ...businessOptions.filter(
+      (option) => !activeBusinessTypes.some((t) => t.key === option.id),
+    ),
+  ];
+  const businessLabel =
+    mergedBusinessTypes.find((option) => option.id === businessType)?.label ||
+    businessType;
 
   const page = parsePositiveInt(resolvedParams?.page) ?? 1;
   const query = normalizeQuery(resolvedParams?.q);
@@ -84,6 +101,10 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       status,
     });
 
+  const templateProducts = await listActiveBusinessProductTemplates(businessType).catch(() => []);
+  const user = await requireUser();
+  const canCreateProducts = hasPermission(user, "create_product");
+
   return (
     <div className="space-y-6 section-gap">
       <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
@@ -96,6 +117,9 @@ export default async function ProductsPage({ searchParams }: PageProps) {
           <ProductsListClient
             shops={shops}
             activeShopId={activeShopId}
+            businessLabel={businessLabel}
+            templateProducts={templateProducts}
+            canCreateProducts={canCreateProducts}
             serverProducts={items}
             page={currentPage}
             pageSize={pageSize}

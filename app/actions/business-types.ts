@@ -166,3 +166,69 @@ export async function listActiveBusinessTypes() {
     orderBy: [{ label: "asc" }],
   });
 }
+
+export async function getBusinessTypeUsage() {
+  const user = await requireUser();
+  assertSuperAdmin(user);
+
+  const [shopGroups, templateGroups] = await Promise.all([
+    prisma.shop.groupBy({
+      by: ["businessType"],
+      _count: { _all: true },
+    }),
+    prisma.businessProductTemplate.groupBy({
+      by: ["businessType"],
+      _count: { _all: true },
+    }),
+  ]);
+
+  const usage: Record<string, { shopCount: number; templateCount: number }> = {};
+
+  for (const group of shopGroups) {
+    const key = group.businessType?.toString() ?? "";
+    if (!key) continue;
+    usage[key] = {
+      shopCount: group._count._all,
+      templateCount: 0,
+    };
+  }
+
+  for (const group of templateGroups) {
+    const key = group.businessType?.toString() ?? "";
+    if (!key) continue;
+    const existing = usage[key] ?? { shopCount: 0, templateCount: 0 };
+    usage[key] = {
+      ...existing,
+      templateCount: group._count._all,
+    };
+  }
+
+  return usage;
+}
+
+export async function deleteBusinessType(key: string) {
+  const user = await requireUser();
+  assertSuperAdmin(user);
+
+  const normalizedKey = key?.toString().trim().toLowerCase();
+  if (!normalizedKey) {
+    throw new Error("Business type key is required");
+  }
+
+  const [shopCount, templateCount] = await Promise.all([
+    prisma.shop.count({ where: { businessType: normalizedKey } }),
+    prisma.businessProductTemplate.count({
+      where: { businessType: normalizedKey },
+    }),
+  ]);
+
+  if (shopCount > 0) {
+    throw new Error("Cannot delete: business type is used by shops");
+  }
+  if (templateCount > 0) {
+    throw new Error("Cannot delete: templates exist for this business type");
+  }
+
+  await prisma.businessType.delete({ where: { key: normalizedKey } });
+  return { success: true };
+}

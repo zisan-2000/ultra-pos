@@ -13,9 +13,11 @@ import {
   useState,
 } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
-import { db } from "@/lib/dexie/db";
+import { db, type LocalProduct } from "@/lib/dexie/db";
+import { queueAdd } from "@/lib/sync/queue";
 import { ShopSwitcherClient } from "../shop-switcher-client";
 import { useCurrentShop } from "@/hooks/use-current-shop";
+import { addBusinessProductTemplatesToShop } from "@/app/actions/business-product-templates";
 import { deleteProduct } from "@/app/actions/products";
 
 type Shop = { id: string; name: string };
@@ -28,6 +30,13 @@ type Product = {
   stockQty: string;
   isActive: boolean;
   createdAt?: string;
+};
+
+type TemplateProduct = {
+  id: string;
+  name: string;
+  category: string | null;
+  defaultSellPrice: string | null;
 };
 
 type ProductStatusFilter = "all" | "active" | "inactive";
@@ -47,6 +56,9 @@ type SpeechRecognitionInstance = {
 type Props = {
   shops: Shop[];
   activeShopId: string;
+  businessLabel: string;
+  templateProducts: TemplateProduct[];
+  canCreateProducts: boolean;
   serverProducts: Product[];
   page: number;
   pageSize: number;
@@ -84,6 +96,9 @@ function triggerHaptic(type: "light" | "medium" | "heavy" = "light") {
 export default function ProductsListClient({
   shops,
   activeShopId,
+  businessLabel,
+  templateProducts,
+  canCreateProducts,
   serverProducts,
   page,
   pageSize,
@@ -104,6 +119,9 @@ export default function ProductsListClient({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(serverProducts.length === 0);
+  const [templateSelections, setTemplateSelections] = useState<Record<string, boolean>>({});
+  const [addingTemplates, setAddingTemplates] = useState(false);
 
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
@@ -128,6 +146,16 @@ export default function ProductsListClient({
       status: initialStatus,
     };
   }, [initialQuery, initialStatus]);
+
+  useEffect(() => {
+    setTemplateSelections({});
+  }, [activeShopId, templateProducts]);
+
+  useEffect(() => {
+    if (serverProducts.length === 0 && templateProducts.length > 0) {
+      setTemplateOpen(true);
+    }
+  }, [serverProducts.length, templateProducts.length]);
 
   useEffect(() => {
     if (online) {
@@ -220,6 +248,43 @@ export default function ProductsListClient({
   const activeShopName = useMemo(
     () => shops.find((s) => s.id === activeShopId)?.name || "",
     [shops, activeShopId]
+  );
+
+  const normalizedExistingNames = useMemo(() => {
+    return new Set(products.map((product) => normalizeText(product.name)));
+  }, [products]);
+
+  const templateItems = useMemo(() => {
+    if (!templateProducts.length) return [];
+    const seen = new Set<string>();
+    return templateProducts
+      .filter((template) => {
+        const key = normalizeText(template.name);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((template) => ({
+        ...template,
+        alreadyExists: normalizedExistingNames.has(
+          normalizeText(template.name)
+        ),
+      }));
+  }, [templateProducts, normalizedExistingNames]);
+
+  const selectableTemplateIds = useMemo(
+    () => templateItems.filter((t) => !t.alreadyExists).map((t) => t.id),
+    [templateItems]
+  );
+
+  const selectedTemplateIds = useMemo(
+    () => Object.keys(templateSelections).filter((id) => templateSelections[id]),
+    [templateSelections]
+  );
+
+  const selectedTemplates = useMemo(
+    () => templateItems.filter((template) => templateSelections[template.id]),
+    [templateItems, templateSelections]
   );
 
   const filteredProducts = useMemo(() => {
@@ -320,6 +385,140 @@ export default function ProductsListClient({
     if (targetPage < 1 || targetPage > effectiveTotalPages) return;
     triggerHaptic("light");
     applyFilters(targetPage);
+  }
+
+  function toggleTemplateSelection(id: string, checked: boolean) {
+    setTemplateSelections((prev) => ({ ...prev, [id]: checked }));
+  }
+
+  function handleToggleAllTemplates(checked: boolean) {
+    if (!checked) {
+      setTemplateSelections({});
+      return;
+    }
+    const next: Record<string, boolean> = {};
+    selectableTemplateIds.forEach((id) => {
+      next[id] = true;
+    });
+    setTemplateSelections(next);
+  }
+
+  function clearTemplateSelections() {
+    setTemplateSelections({});
+  }
+
+  async function handleAddTemplates() {
+    if (!canCreateProducts) {
+      alert("You do not have permission to add products.");
+      return;
+    }
+    if (addingTemplates) return;
+
+    const selected = selectedTemplates.filter((template) => !template.alreadyExists);
+    if (selected.length === 0) {
+      alert("Select at least one item to add.");
+      return;
+    }
+
+    setAddingTemplates(true);
+    triggerHaptic("medium");
+
+    try {
+      if (online) {
+        const result = await addBusinessProductTemplatesToShop({
+          shopId: activeShopId,
+          templateIds: selected.map((template) => template.id),
+        });
+        const createdCount = result?.createdCount ?? 0;
+        const skippedCount = result?.skippedCount ?? 0;
+        const inactiveCount = result?.inactiveCount ?? 0;
+
+        setTemplateSelections({});
+        router.refresh();
+
+        const parts = [`${createdCount} products added`];
+        if (skippedCount) parts.push(`${skippedCount} skipped`);
+        if (inactiveCount)
+          parts.push(`${inactiveCount} added as inactive (missing price)`);
+        alert(parts.join(". "));
+        return;
+      }
+
+      const existingNames = new Set(normalizedExistingNames);
+      const now = Date.now();
+      const localProducts: LocalProduct[] = [];
+      let skipped = 0;
+      let inactiveCount = 0;
+
+      for (const template of selected) {
+        const key = normalizeText(template.name);
+        if (!key || existingNames.has(key)) {
+          skipped += 1;
+          continue;
+        }
+        existingNames.add(key);
+        const defaultPrice = template.defaultSellPrice?.toString();
+        const numericPrice = defaultPrice ? Number(defaultPrice) : 0;
+        const hasValidPrice =
+          Number.isFinite(numericPrice) && numericPrice > 0;
+        if (!hasValidPrice) inactiveCount += 1;
+
+        localProducts.push({
+          id: crypto.randomUUID(),
+          shopId: activeShopId,
+          name: template.name,
+          category: template.category || "Uncategorized",
+          buyPrice: null,
+          sellPrice: defaultPrice || "0",
+          stockQty: "0",
+          isActive: hasValidPrice,
+          trackStock: false,
+          updatedAt: now,
+          syncStatus: "new",
+        });
+      }
+
+      if (localProducts.length === 0) {
+        alert("All selected items already exist in this shop.");
+        return;
+      }
+
+      await db.products.bulkPut(localProducts);
+      await Promise.all(
+        localProducts.map((item) => queueAdd("product", "create", item))
+      );
+
+      setProducts((prev) => [
+        ...localProducts.map((item) => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          buyPrice: item.buyPrice ?? null,
+          sellPrice: item.sellPrice,
+          stockQty: item.stockQty,
+          isActive: item.isActive,
+          createdAt: item.updatedAt.toString(),
+        })),
+        ...prev,
+      ]);
+
+      setTemplateSelections({});
+      const parts = [`${localProducts.length} products added offline`];
+      if (skipped) parts.push(`${skipped} skipped`);
+      if (inactiveCount)
+        parts.push(`${inactiveCount} added as inactive (missing price)`);
+      parts.push("Will sync when online.");
+      alert(parts.join(". "));
+    } catch (err) {
+      console.error("Add templates failed", err);
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : "Failed to add templates";
+      alert(message);
+    } finally {
+      setAddingTemplates(false);
+    }
   }
 
   const handleDelete = useCallback(
@@ -597,6 +796,130 @@ export default function ProductsListClient({
           )}
         </div>
       </div>
+
+      {templateItems.length > 0 && (
+        <div className="bg-card border-b border-border px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-foreground">
+                Common products for {businessLabel}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Add multiple items quickly. Missing prices will be added as inactive.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTemplateOpen((prev) => !prev)}
+              className="px-3 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              {templateOpen ? "Hide" : "Show"}
+            </button>
+          </div>
+
+          {templateOpen && (
+            <div className="mt-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={
+                      selectableTemplateIds.length > 0 &&
+                      selectableTemplateIds.every((id) => templateSelections[id])
+                    }
+                    onChange={(event) =>
+                      handleToggleAllTemplates(event.target.checked)
+                    }
+                    disabled={!canCreateProducts || selectableTemplateIds.length === 0}
+                    className="w-4 h-4"
+                  />
+                  <span>Select all available</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  {selectedTemplateIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearTemplateSelections}
+                      className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleAddTemplates}
+                    disabled={
+                      !canCreateProducts ||
+                      addingTemplates ||
+                      selectedTemplates.length === 0
+                    }
+                    className="px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {addingTemplates ? "Adding..." : "Add selected"}
+                  </button>
+                </div>
+              </div>
+
+              {!canCreateProducts && (
+                <div className="text-xs text-warning">
+                  You do not have permission to add products.
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {templateItems.map((template) => {
+                  const checked = Boolean(templateSelections[template.id]);
+                  const disabled = template.alreadyExists || !canCreateProducts;
+                  const numericPrice = template.defaultSellPrice
+                    ? Number(template.defaultSellPrice)
+                    : 0;
+                  const hasPrice =
+                    Number.isFinite(numericPrice) && numericPrice > 0;
+                  return (
+                    <label
+                      key={template.id}
+                      className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
+                        disabled
+                          ? "border-border bg-muted/50 text-muted-foreground"
+                          : "border-border bg-card hover:border-primary/40"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) =>
+                          toggleTemplateSelection(template.id, event.target.checked)
+                        }
+                        disabled={disabled}
+                        className="w-4 h-4"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold text-foreground truncate">
+                          {template.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {template.category || "Uncategorized"}
+                        </div>
+                      </div>
+                      <div className="text-xs font-semibold text-foreground whitespace-nowrap">
+                        {hasPrice
+                          ? `BDT ${template.defaultSellPrice}`
+                          : "No price"}
+                      </div>
+                      {template.alreadyExists && (
+                        <span className="text-[10px] font-semibold text-muted-foreground whitespace-nowrap">
+                          Already added
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
 
       {/* Products List - Scrolls normally */}
       <div className="px-4 py-4 space-y-3">

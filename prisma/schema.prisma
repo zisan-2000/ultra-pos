@@ -155,6 +155,22 @@ model BusinessType {
   @@map("business_types")
 }
 
+model BusinessProductTemplate {
+  id               String   @id @default(uuid()) @db.Uuid
+  businessType     String   @map("business_type")
+  name             String
+  category         String?
+  defaultSellPrice Decimal? @map("default_sell_price") @db.Decimal(12, 2)
+  isActive         Boolean  @map("is_active") @default(true)
+  createdAt        DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  @@index([businessType], map: "idx_business_product_templates_type")
+  @@index([businessType, isActive], map: "idx_business_product_templates_active")
+  @@unique([businessType, name], map: "uq_business_product_templates_type_name")
+  @@map("business_product_templates")
+}
+
 model Product {
   id         String   @id @default(uuid()) @db.Uuid
   shopId     String   @map("shop_id") @db.Uuid
