@@ -2,8 +2,10 @@
 
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 
 type Props = { shopId: string; from?: string; to?: string };
 
@@ -15,16 +17,31 @@ type CashRow = {
   createdAt: string;
 };
 
+type ReportCursor = { at: string; id: string };
+
 export default function CashbookReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
   const [rows, setRows] = useState<CashRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [cursorList, setCursorList] = useState<ReportCursor[]>([]);
+  const [nextCursor, setNextCursor] = useState<ReportCursor | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+
+  const currentCursor = page > 1 ? cursorList[page - 2] ?? null : null;
 
   const buildCacheKey = useCallback(
     (rangeFrom?: string, rangeTo?: string) =>
-      `reports:cash:${shopId}:${rangeFrom || "all"}:${rangeTo || "all"}`,
+      `reports:cash:${shopId}:${rangeFrom || "all"}:${rangeTo || "all"}:${REPORT_ROW_LIMIT}`,
     [shopId]
   );
+
+  useEffect(() => {
+    setPage(1);
+    setCursorList([]);
+    setNextCursor(null);
+    setHasMore(false);
+  }, [shopId, from, to]);
 
   const loadCached = useCallback(
     (rangeFrom?: string, rangeTo?: string) => {
@@ -50,8 +67,18 @@ export default function CashbookReport({ shopId, from, to }: Props) {
 
   const load = useCallback(
     async (rangeFrom?: string, rangeTo?: string) => {
+      if (page > 1 && !currentCursor) {
+        setPage(1);
+        return;
+      }
       if (!online) {
         setLoading(false);
+        setHasMore(false);
+        setNextCursor(null);
+        if (page !== 1) {
+          setPage(1);
+          return;
+        }
         loadCached(rangeFrom, rangeTo);
         return;
       }
@@ -60,28 +87,50 @@ export default function CashbookReport({ shopId, from, to }: Props) {
         const params = new URLSearchParams({ shopId });
         if (rangeFrom) params.append("from", rangeFrom);
         if (rangeTo) params.append("to", rangeTo);
+        params.append("limit", `${REPORT_ROW_LIMIT}`);
+        if (currentCursor) {
+          params.append("cursorAt", currentCursor.at);
+          params.append("cursorId", currentCursor.id);
+        }
 
         const res = await fetch(`/api/reports/cash?${params.toString()}`);
         if (!res.ok) {
-          loadCached(rangeFrom, rangeTo);
+          if (page === 1) {
+            loadCached(rangeFrom, rangeTo);
+          } else {
+            setRows([]);
+          }
+          setHasMore(false);
+          setNextCursor(null);
           return;
         }
         const data = await res.json();
         const rows = data.rows || [];
         setRows(rows);
-        try {
-          localStorage.setItem(
-            buildCacheKey(rangeFrom, rangeTo),
-            JSON.stringify(rows)
-          );
-        } catch (err) {
-          console.warn("Cash report cache write failed", err);
+        setHasMore(Boolean(data.hasMore));
+        setNextCursor(data.nextCursor ?? null);
+        if (data.nextCursor) {
+          setCursorList((prev) => {
+            const next = [...prev];
+            next[page - 1] = data.nextCursor;
+            return next;
+          });
+        }
+        if (page === 1) {
+          try {
+            localStorage.setItem(
+              buildCacheKey(rangeFrom, rangeTo),
+              JSON.stringify(rows)
+            );
+          } catch (err) {
+            console.warn("Cash report cache write failed", err);
+          }
         }
       } finally {
         setLoading(false);
       }
     },
-    [online, shopId, buildCacheKey, loadCached]
+    [online, shopId, buildCacheKey, loadCached, page, currentCursor]
   );
 
   useEffect(() => {
@@ -98,13 +147,41 @@ export default function CashbookReport({ shopId, from, to }: Props) {
     return { inbound, outbound, balance: inbound - outbound };
   }, [rows]);
 
+  const handlePrev = () => {
+    setPage((prev) => Math.max(1, prev - 1));
+  };
+
+  const handleNext = () => {
+    const cursorToUse = cursorList[page - 1] ?? nextCursor;
+    if (!cursorToUse) return;
+    setCursorList((prev) => {
+      const next = [...prev];
+      next[page - 1] = cursorToUse;
+      return next;
+    });
+    setPage((prev) => prev + 1);
+  };
+
+  const buildHref = () => {
+    const params = new URLSearchParams({ shopId });
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    return `/dashboard/cash?${params.toString()}`;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-foreground">ক্যাশ রিপোর্ট</h2>
-          <p className="text-xs text-muted-foreground">ক্যাশ ইন/আউট</p>
+          <p className="text-xs text-muted-foreground">সর্বশেষ 20টি ক্যাশ এন্ট্রি</p>
         </div>
+        <Link
+          href={buildHref()}
+          className="text-xs font-semibold text-primary hover:text-primary-hover"
+        >
+          পূর্ণ রিপোর্ট দেখুন
+        </Link>
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-sm">
@@ -152,6 +229,28 @@ export default function CashbookReport({ shopId, from, to }: Props) {
           })
         )}
       </div>
+
+      {(page > 1 || hasMore) && (
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <button
+            type="button"
+            onClick={handlePrev}
+            disabled={page <= 1 || loading || !online}
+            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Prev
+          </button>
+          <span className="text-xs text-muted-foreground">Page {page}</span>
+          <button
+            type="button"
+            onClick={handleNext}
+            disabled={!hasMore || !nextCursor || loading || !online}
+            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

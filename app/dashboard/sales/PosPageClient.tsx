@@ -103,6 +103,46 @@ export function PosPageClient({
     []
   );
 
+  const applyStockDelta = (soldItems: typeof items) => {
+    if (!soldItems || soldItems.length === 0) return;
+    const deltas = new Map<string, number>();
+    soldItems.forEach((item) => {
+      if (!item.productId) return;
+      const qty = Number(item.qty || 0);
+      if (!Number.isFinite(qty) || qty === 0) return;
+      deltas.set(item.productId, (deltas.get(item.productId) ?? 0) + qty);
+    });
+    if (deltas.size === 0) return;
+
+    setProductOptions((prev) =>
+      prev.map((product) => {
+        const delta = deltas.get(product.id);
+        if (!delta) return product;
+        if (product.trackStock === false) return product;
+        const current = Number(product.stockQty ?? 0);
+        if (!Number.isFinite(current)) return product;
+        return { ...product, stockQty: current - delta };
+      })
+    );
+
+    const updatedAt = Date.now();
+    db.transaction("rw", db.products, async () => {
+      for (const [productId, delta] of deltas) {
+        const record = await db.products.get(productId);
+        if (!record || record.trackStock === false) continue;
+        const current = Number(record.stockQty ?? 0);
+        if (!Number.isFinite(current)) continue;
+        const nextQty = current - delta;
+        await db.products.update(productId, {
+          stockQty: nextQty.toString(),
+          updatedAt,
+        });
+      }
+    }).catch((err) => {
+      console.error("Update local stock failed", err);
+    });
+  };
+
   useEffect(() => {
     if (serverSnapshotRef.current !== products) {
       serverSnapshotRef.current = products;
@@ -220,6 +260,7 @@ export function PosPageClient({
       formData.set("totalAmount", safeTotalAmount.toString());
 
       const res = await submitSale(formData);
+      applyStockDelta(items);
       clear();
       setPaidNow("");
       setNote("");
@@ -326,6 +367,7 @@ export function PosPageClient({
 
     await db.sales.put(salePayload);
     await queueAdd("sale", "create", salePayload);
+    applyStockDelta(items);
 
     alert(
       isDue

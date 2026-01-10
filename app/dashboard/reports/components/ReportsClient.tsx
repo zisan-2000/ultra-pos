@@ -168,7 +168,7 @@ export default function ReportsClient({
 }: Props) {
   const online = useOnlineStatus();
   const [active, setActive] = useState<(typeof NAV)[number]["key"]>("summary");
-  const [preset, setPreset] = useState<RangePreset>("all");
+  const [preset, setPreset] = useState<RangePreset>("today");
   const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
   const [customTo, setCustomTo] = useState<string | undefined>(undefined);
   const range = useMemo(

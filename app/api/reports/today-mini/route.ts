@@ -3,18 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { withTracing } from "@/lib/tracing";
-
-function startOfTodayUtc() {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
-}
-
-function endOfTodayUtc(start: Date) {
-  const end = new Date(start);
-  end.setUTCHours(23, 59, 59, 999);
-  return end;
-}
+import { getDhakaDayRange } from "@/lib/dhaka-date";
 
 export async function GET(req: Request) {
   return withTracing(req, "/api/reports/today-mini", async () => {
@@ -29,11 +18,14 @@ export async function GET(req: Request) {
       const user = await requireUser();
       await assertShopAccess(shopId, user);
 
-      const todayStart = startOfTodayUtc();
-      const todayEnd = endOfTodayUtc(todayStart);
+      const { start: todayStart, end: todayEnd } = getDhakaDayRange();
 
       const salesRows = await prisma.sale.findMany({
-        where: { shopId, saleDate: { gte: todayStart, lte: todayEnd } },
+        where: {
+          shopId,
+          status: { not: "VOIDED" },
+          saleDate: { gte: todayStart, lte: todayEnd },
+        },
       });
 
       const expenseRows = await prisma.expense.findMany({

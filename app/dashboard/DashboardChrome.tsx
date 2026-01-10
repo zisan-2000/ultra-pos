@@ -4,7 +4,15 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import {
   Select,
   SelectContent,
@@ -41,6 +49,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Shop = { id: string; name: string };
 
@@ -51,6 +60,34 @@ type RbacUser = {
   roles: string[];
   permissions: string[];
 } | null;
+
+const NAV_SKELETON_DELAY_MS = 180;
+
+const NavSkeleton = () => (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between gap-6">
+      <div className="space-y-2">
+        <Skeleton className="h-7 w-48" />
+        <Skeleton className="h-4 w-64" />
+      </div>
+      <Skeleton className="h-9 w-28 rounded-lg" />
+    </div>
+
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <Skeleton className="h-24 rounded-xl" />
+      <Skeleton className="h-24 rounded-xl" />
+      <Skeleton className="h-24 rounded-xl" />
+      <Skeleton className="h-24 rounded-xl" />
+    </div>
+
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <Skeleton className="h-56 rounded-2xl" />
+      <Skeleton className="h-56 rounded-2xl" />
+    </div>
+
+    <Skeleton className="h-72 rounded-2xl" />
+  </div>
+);
 
 const navItems: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/dashboard", label: "ড্যাশবোর্ড", Icon: LayoutDashboard },
@@ -94,33 +131,6 @@ const fabByRoute: Record<string, { href: string; label: string } | null> = {
   },
 };
 
-const toRoleBasePath = (role: string | null | undefined) => {
-  if (!role) return "/dashboard";
-  return `/${role.replace(/_/g, "-")}`;
-};
-
-const resolveBasePath = (roles: string[] | null | undefined) => {
-  if (!roles || roles.length === 0) return "/dashboard";
-  if (roles.includes("super_admin")) return "/super-admin";
-  return toRoleBasePath(roles[0]);
-};
-
-const applyBasePath = (href: string, basePath: string) => {
-  if (!href.startsWith("/dashboard")) return href;
-  if (basePath === "/dashboard") return href;
-  if (href === "/dashboard") return `${basePath}/dashboard`;
-  return `${basePath}${href.slice("/dashboard".length)}`;
-};
-
-const canonicalizePathname = (pathname: string, basePath: string) => {
-  if (basePath === "/dashboard") return pathname;
-  if (pathname === `${basePath}/dashboard`) return "/dashboard";
-  if (pathname.startsWith(`${basePath}/`)) {
-    return "/dashboard" + pathname.slice(basePath.length);
-  }
-  return pathname;
-};
-
 export function DashboardShell({
   shops,
   initialUser,
@@ -138,6 +148,8 @@ export function DashboardShell({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isNavigating, startTransition] = useTransition();
+  const [showNavSkeleton, setShowNavSkeleton] = useState(false);
   const [rbacUser] = useState<RbacUser>(initialUser);
   const [rbacLoaded] = useState(true);
   const [shopNameOpen, setShopNameOpen] = useState(false);
@@ -183,6 +195,19 @@ export function DashboardShell({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isNavigating) {
+      setShowNavSkeleton(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowNavSkeleton(true);
+    }, NAV_SKELETON_DELAY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [isNavigating]);
 
   useEffect(() => {
     setUserMenuOpen(false);
@@ -246,11 +271,6 @@ export function DashboardShell({
   const isAdmin = rbacUser?.roles?.includes("admin") ?? false;
   const canViewUserCreationLog = isSuperAdmin || isAdmin;
 
-  const roleBasePath = useMemo(
-    () => resolveBasePath(rbacUser?.roles ?? []),
-    [rbacUser]
-  );
-
   const hasPermission = (permission: string | null | undefined) => {
     if (!permission) return true;
     if (!rbacLoaded) return false;
@@ -259,17 +279,36 @@ export function DashboardShell({
     return perms.includes(permission);
   };
 
-  const effectiveDashboardHref = useMemo(
-    () => applyBasePath("/dashboard", roleBasePath),
-    [roleBasePath]
-  );
+  const effectiveDashboardHref = "/dashboard";
 
   const canAccessRbacAdmin = hasPermission("access_rbac_admin");
-  const userCreationLogHref = useMemo(
-    () => applyBasePath("/dashboard/admin/user-creation-log", roleBasePath),
-    [roleBasePath]
-  );
+  const userCreationLogHref = "/dashboard/admin/user-creation-log";
   const systemSettingsHref = "/super-admin/system-settings";
+
+  const handleNavPrefetch = (href: string) => {
+    router.prefetch(href);
+  };
+
+  const handleNavClick = (
+    event: ReactMouseEvent<HTMLAnchorElement>,
+    href: string
+  ) => {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.shiftKey
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    startTransition(() => {
+      router.push(href);
+    });
+  };
 
   const routePermissionMap: Record<string, string> = {
     "/dashboard": "view_dashboard_summary",
@@ -286,9 +325,8 @@ export function DashboardShell({
 
   const isActive = (href: string) => {
     if (!mounted) return false;
-    const target = applyBasePath(href, roleBasePath);
-    if (href === "/dashboard") return pathname === target;
-    return pathname.startsWith(target);
+    if (href === "/dashboard") return pathname === "/dashboard";
+    return pathname.startsWith(href);
   };
 
   const handleShopChange = (id: string) => {
@@ -304,12 +342,7 @@ export function DashboardShell({
     router.refresh();
   };
 
-  const canonicalPathname = canonicalizePathname(pathname, roleBasePath);
-
-  const profileHref = useMemo(
-    () => applyBasePath("/dashboard/profile", roleBasePath),
-    [roleBasePath]
-  );
+  const profileHref = "/dashboard/profile";
 
   const userDisplayName = rbacUser?.name?.trim() || "User";
   const userEmail = rbacUser?.email?.trim() || "";
@@ -331,14 +364,13 @@ export function DashboardShell({
       .join(" ");
   }, [rbacUser?.roles]);
 
-  const showFabLabel = canonicalPathname === "/dashboard";
+  const showFabLabel = pathname === "/dashboard";
 
   const baseFabConfig =
     fabByRoute[
-      bottomNav.find((item) => canonicalPathname.startsWith(item.href))?.href ||
-        canonicalPathname
+      bottomNav.find((item) => pathname.startsWith(item.href))?.href || pathname
     ] || null;
-  const fabConfig = canonicalPathname.startsWith("/dashboard/sales/new")
+  const fabConfig = pathname.startsWith("/dashboard/sales/new")
     ? null
     : baseFabConfig;
 
@@ -448,7 +480,7 @@ export function DashboardShell({
                     const targetHref =
                       item.href === "/dashboard"
                         ? effectiveDashboardHref
-                        : applyBasePath(item.href, roleBasePath);
+                        : item.href;
                     const active = isActive(targetHref);
                     const Icon = item.Icon;
 
@@ -456,7 +488,13 @@ export function DashboardShell({
                       <Link
                         key={item.href}
                         href={targetHref}
-                        onClick={() => setDrawerOpen(false)}
+                        prefetch
+                        onClick={(event) => {
+                          setDrawerOpen(false);
+                          handleNavClick(event, targetHref);
+                        }}
+                        onMouseEnter={() => handleNavPrefetch(targetHref)}
+                        onTouchStart={() => handleNavPrefetch(targetHref)}
                         className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                           active
                             ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
@@ -505,7 +543,17 @@ export function DashboardShell({
                     {canViewUserCreationLog && (
                       <Link
                         href={userCreationLogHref}
-                        onClick={() => setDrawerOpen(false)}
+                        prefetch
+                        onClick={(event) => {
+                          setDrawerOpen(false);
+                          handleNavClick(event, userCreationLogHref);
+                        }}
+                        onMouseEnter={() =>
+                          handleNavPrefetch(userCreationLogHref)
+                        }
+                        onTouchStart={() =>
+                          handleNavPrefetch(userCreationLogHref)
+                        }
                         className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
                           isActive(userCreationLogHref)
                             ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
@@ -540,39 +588,34 @@ export function DashboardShell({
 
                     {canAccessRbacAdmin && (
                       <Link
-                        href={applyBasePath(
-                          "/dashboard/admin/rbac",
-                          roleBasePath
-                        )}
-                        onClick={() => setDrawerOpen(false)}
+                        href="/dashboard/admin/rbac"
+                        prefetch
+                        onClick={(event) => {
+                          setDrawerOpen(false);
+                          handleNavClick(event, "/dashboard/admin/rbac");
+                        }}
+                        onMouseEnter={() =>
+                          handleNavPrefetch("/dashboard/admin/rbac")
+                        }
+                        onTouchStart={() =>
+                          handleNavPrefetch("/dashboard/admin/rbac")
+                        }
                         className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
-                          isActive(
-                            applyBasePath("/dashboard/admin/rbac", roleBasePath)
-                          )
+                          isActive("/dashboard/admin/rbac")
                             ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
                             : "text-sidebar-foreground hover:bg-sidebar-accent"
                         } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                       >
                         <span
                           className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
-                            isActive(
-                              applyBasePath(
-                                "/dashboard/admin/rbac",
-                                roleBasePath
-                              )
-                            )
+                            isActive("/dashboard/admin/rbac")
                               ? "bg-sidebar-primary/20"
                               : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
                           }`}
                         >
                           <Settings
                             className={`h-4 w-4 ${
-                              isActive(
-                                applyBasePath(
-                                  "/dashboard/admin/rbac",
-                                  roleBasePath
-                                )
-                              )
+                              isActive("/dashboard/admin/rbac")
                                 ? "text-sidebar-primary-foreground"
                                 : "text-sidebar-accent-foreground"
                             }`}
@@ -604,42 +647,34 @@ export function DashboardShell({
 
                   <div className="flex flex-col gap-1">
                     <Link
-                      href={applyBasePath(
-                        "/dashboard/admin/business-types",
-                        roleBasePath
-                      )}
-                      onClick={() => setDrawerOpen(false)}
+                      href="/dashboard/admin/business-types"
+                      prefetch
+                      onClick={(event) => {
+                        setDrawerOpen(false);
+                        handleNavClick(event, "/dashboard/admin/business-types");
+                      }}
+                      onMouseEnter={() =>
+                        handleNavPrefetch("/dashboard/admin/business-types")
+                      }
+                      onTouchStart={() =>
+                        handleNavPrefetch("/dashboard/admin/business-types")
+                      }
                       className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
-                        isActive(
-                          applyBasePath(
-                            "/dashboard/admin/business-types",
-                            roleBasePath
-                          )
-                        )
+                        isActive("/dashboard/admin/business-types")
                           ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
                           : "text-sidebar-foreground hover:bg-sidebar-accent"
                       } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                     >
                       <span
                         className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
-                          isActive(
-                            applyBasePath(
-                              "/dashboard/admin/business-types",
-                              roleBasePath
-                            )
-                          )
+                          isActive("/dashboard/admin/business-types")
                             ? "bg-sidebar-primary/20"
                             : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
                         }`}
                       >
                         <Settings
                           className={`h-4 w-4 ${
-                            isActive(
-                              applyBasePath(
-                                "/dashboard/admin/business-types",
-                                roleBasePath
-                              )
-                            )
+                            isActive("/dashboard/admin/business-types")
                               ? "text-sidebar-primary-foreground"
                               : "text-sidebar-accent-foreground"
                           }`}
@@ -656,42 +691,41 @@ export function DashboardShell({
                     </Link>
 
                     <Link
-                      href={applyBasePath(
-                        "/dashboard/admin/business-product-library",
-                        roleBasePath
-                      )}
-                      onClick={() => setDrawerOpen(false)}
-                      className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
-                        isActive(
-                          applyBasePath(
-                            "/dashboard/admin/business-product-library",
-                            roleBasePath
-                          )
+                      href="/dashboard/admin/business-product-library"
+                      prefetch
+                      onClick={(event) => {
+                        setDrawerOpen(false);
+                        handleNavClick(
+                          event,
+                          "/dashboard/admin/business-product-library"
+                        );
+                      }}
+                      onMouseEnter={() =>
+                        handleNavPrefetch(
+                          "/dashboard/admin/business-product-library"
                         )
+                      }
+                      onTouchStart={() =>
+                        handleNavPrefetch(
+                          "/dashboard/admin/business-product-library"
+                        )
+                      }
+                      className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                        isActive("/dashboard/admin/business-product-library")
                           ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
                           : "text-sidebar-foreground hover:bg-sidebar-accent"
                       } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                     >
                       <span
                         className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
-                          isActive(
-                            applyBasePath(
-                              "/dashboard/admin/business-product-library",
-                              roleBasePath
-                            )
-                          )
+                          isActive("/dashboard/admin/business-product-library")
                             ? "bg-sidebar-primary/20"
                             : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
                         }`}
                       >
                         <Package
                           className={`h-4 w-4 ${
-                            isActive(
-                              applyBasePath(
-                                "/dashboard/admin/business-product-library",
-                                roleBasePath
-                              )
-                            )
+                            isActive("/dashboard/admin/business-product-library")
                               ? "text-sidebar-primary-foreground"
                               : "text-sidebar-accent-foreground"
                           }`}
@@ -709,12 +743,18 @@ export function DashboardShell({
 
                     <Link
                       href={systemSettingsHref}
-                      onClick={() => setDrawerOpen(false)}
-                    className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
-                      pathname === systemSettingsHref
-                        ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent"
-                    } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                      prefetch
+                      onClick={(event) => {
+                        setDrawerOpen(false);
+                        handleNavClick(event, systemSettingsHref);
+                      }}
+                      onMouseEnter={() => handleNavPrefetch(systemSettingsHref)}
+                      onTouchStart={() => handleNavPrefetch(systemSettingsHref)}
+                      className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                        pathname === systemSettingsHref
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent"
+                      } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
                     >
                       <span
                         className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
@@ -804,10 +844,14 @@ export function DashboardShell({
                     <div className="p-2">
                       <Link
                         href={profileHref}
-                        onClick={() => {
+                        onClick={(event) => {
                           setUserMenuOpen(false);
                           setDrawerOpen(false);
+                          handleNavClick(event, profileHref);
                         }}
+                        prefetch
+                        onMouseEnter={() => handleNavPrefetch(profileHref)}
+                        onTouchStart={() => handleNavPrefetch(profileHref)}
                         className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       >
                         <User className="h-4 w-4" />
@@ -831,7 +875,12 @@ export function DashboardShell({
 
         {/* Main content */}
         <div className="flex-1 flex flex-col h-full lg:pl-0 overflow-hidden">
-          <header className="sticky top-0 z-20 bg-card/80 backdrop-blur border-b border-border">
+          <header className="sticky top-0 z-20 bg-card/80 backdrop-blur border-b border-border relative">
+            {isNavigating && (
+              <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/20">
+                <div className="h-full w-1/3 bg-primary animate-pulse" />
+              </div>
+            )}
             <div className="flex items-start gap-3 px-4 sm:px-6 lg:px-8 py-3">
               {/* Drawer toggle */}
               <button
@@ -878,7 +927,17 @@ export function DashboardShell({
                     </Select>
                   ) : (
                     <Link
-                      href={applyBasePath("/dashboard/shops/new", roleBasePath)}
+                      href="/dashboard/shops/new"
+                      prefetch
+                      onClick={(event) =>
+                        handleNavClick(event, "/dashboard/shops/new")
+                      }
+                      onMouseEnter={() =>
+                        handleNavPrefetch("/dashboard/shops/new")
+                      }
+                      onTouchStart={() =>
+                        handleNavPrefetch("/dashboard/shops/new")
+                      }
                       className="text-sm font-semibold text-primary hover:text-primary-hover"
                     >নতুন দোকান যোগ করুন</Link>
                   )}
@@ -917,8 +976,24 @@ export function DashboardShell({
             </Dialog>
           </header>
 
-          <main className="flex-1 pb-28 lg:pb-10 overflow-y-auto">
-            <div className="px-4 sm:px-6 lg:px-8 py-6">{children}</div>
+          <main
+            className="relative flex-1 pb-28 lg:pb-10 overflow-y-auto"
+            aria-busy={isNavigating}
+          >
+            {showNavSkeleton && (
+              <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-sm">
+                <div className="px-4 sm:px-6 lg:px-8 py-6">
+                  <NavSkeleton />
+                </div>
+              </div>
+            )}
+            <div
+              className={`px-4 sm:px-6 lg:px-8 py-6 ${
+                showNavSkeleton ? "opacity-0" : ""
+              }`}
+            >
+              {children}
+            </div>
           </main>
         </div>
       </div>
@@ -932,13 +1007,17 @@ export function DashboardShell({
             const targetHref =
               item.href === "/dashboard"
                 ? effectiveDashboardHref
-                : applyBasePath(item.href, roleBasePath);
+                : item.href;
             const Icon = item.Icon;
 
             return (
               <Link
                 key={item.href}
                 href={targetHref}
+                prefetch
+                onClick={(event) => handleNavClick(event, targetHref)}
+                onMouseEnter={() => handleNavPrefetch(targetHref)}
+                onTouchStart={() => handleNavPrefetch(targetHref)}
                 className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 rounded-xl transition-colors ${
                   isActive(targetHref)
                     ? "text-primary bg-primary-soft"
@@ -958,10 +1037,17 @@ export function DashboardShell({
       {/* Smart Floating Action Button */}
       {fabConfig && safeShopId && !drawerOpen ? (
         <Link
-          href={`${applyBasePath(
-            fabConfig.href,
-            roleBasePath
-          )}?shopId=${safeShopId}`}
+          href={`${fabConfig.href}?shopId=${safeShopId}`}
+          prefetch
+          onClick={(event) =>
+            handleNavClick(event, `${fabConfig.href}?shopId=${safeShopId}`)
+          }
+          onMouseEnter={() =>
+            handleNavPrefetch(`${fabConfig.href}?shopId=${safeShopId}`)
+          }
+          onTouchStart={() =>
+            handleNavPrefetch(`${fabConfig.href}?shopId=${safeShopId}`)
+          }
           aria-label={fabConfig.label}
           title={fabConfig.label}
           className={`

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
+import { revalidatePath } from "next/cache";
 
 type CartItemInput = {
   productId: string;
@@ -25,7 +26,7 @@ type CreateSaleInput = {
 };
 
 export type SaleCursor = {
-  createdAt: string;
+  saleDate: string;
   id: string;
 };
 
@@ -40,7 +41,7 @@ type SaleWithSummary = SaleRow & {
 type GetSalesByShopPaginatedInput = {
   shopId: string;
   limit?: number;
-  cursor?: { createdAt: Date; id: string } | null;
+  cursor?: { saleDate: Date; id: string } | null;
   dateFrom?: Date | null;
   dateTo?: Date | null;
 };
@@ -278,6 +279,12 @@ export async function createSale(input: CreateSaleInput) {
     return inserted.id;
   });
 
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/sales");
+  revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard/cash");
+  revalidatePath("/dashboard/products");
+
   return { success: true, saleId };
 }
 
@@ -291,7 +298,7 @@ export async function getSalesByShop(shopId: string) {
 
   const rows = await prisma.sale.findMany({
     where: { shopId },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    orderBy: [{ saleDate: "desc" }, { id: "desc" }],
   });
 
   return attachSaleSummaries(rows, shopId);
@@ -315,7 +322,7 @@ export async function getSalesByShopPaginated({
 
   const where: Prisma.SaleWhereInput = { shopId };
   if (dateFrom || dateTo) {
-    where.createdAt = {
+    where.saleDate = {
       ...(dateFrom ? { gte: dateFrom } : {}),
       ...(dateTo ? { lt: dateTo } : {}),
     };
@@ -325,8 +332,8 @@ export async function getSalesByShopPaginated({
     where.AND = [
       {
         OR: [
-          { createdAt: { lt: cursor.createdAt } },
-          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+          { saleDate: { lt: cursor.saleDate } },
+          { saleDate: cursor.saleDate, id: { lt: cursor.id } },
         ],
       },
     ];
@@ -334,7 +341,7 @@ export async function getSalesByShopPaginated({
 
   const rows = await prisma.sale.findMany({
     where,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    orderBy: [{ saleDate: "desc" }, { id: "desc" }],
     take: safeLimit + 1,
   });
 
@@ -345,7 +352,7 @@ export async function getSalesByShopPaginated({
   const last = pageRows[pageRows.length - 1];
   const nextCursor: SaleCursor | null =
     hasMore && last
-      ? { createdAt: last.createdAt.toISOString(), id: last.id }
+      ? { saleDate: last.saleDate.toISOString(), id: last.id }
       : null;
 
   return {
@@ -377,7 +384,7 @@ export async function getSalesSummary({
   };
 
   if (dateFrom || dateTo) {
-    where.createdAt = {
+    where.saleDate = {
       ...(dateFrom ? { gte: dateFrom } : {}),
       ...(dateTo ? { lt: dateTo } : {}),
     };

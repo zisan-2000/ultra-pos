@@ -11,6 +11,7 @@ import {
   voidSale,
   type SaleCursor,
 } from "@/app/actions/sales";
+import { getDhakaRangeFromDays } from "@/lib/dhaka-date";
 import ShopSelectorClient from "./ShopSelectorClient";
 import SalesListClient from "./components/SalesListClient";
 import DateFilterClient from "./components/DateFilterClient";
@@ -67,12 +68,6 @@ function parseDateInput(value: string) {
   return date;
 }
 
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
 function encodeCursorList(list: SaleCursor[]) {
   return Buffer.from(JSON.stringify(list), "utf8").toString("base64url");
 }
@@ -86,16 +81,18 @@ function decodeCursorList(value?: string): SaleCursor[] {
     const cursors: SaleCursor[] = [];
     for (const entry of parsed) {
       if (!entry || typeof entry !== "object") continue;
-      const createdAt =
-        typeof (entry as { createdAt?: unknown }).createdAt === "string"
+      const saleDate =
+        typeof (entry as { saleDate?: unknown }).saleDate === "string"
+          ? (entry as { saleDate: string }).saleDate
+          : typeof (entry as { createdAt?: unknown }).createdAt === "string"
           ? (entry as { createdAt: string }).createdAt
           : null;
       const id =
         typeof (entry as { id?: unknown }).id === "string"
           ? (entry as { id: string }).id
           : null;
-      if (createdAt && id) {
-        cursors.push({ createdAt, id });
+      if (saleDate && id) {
+        cursors.push({ saleDate, id });
       }
     }
     return cursors;
@@ -106,9 +103,9 @@ function decodeCursorList(value?: string): SaleCursor[] {
 
 function toCursorInput(cursor: SaleCursor | null) {
   if (!cursor) return null;
-  const createdAt = new Date(cursor.createdAt);
-  if (Number.isNaN(createdAt.getTime())) return null;
-  return { createdAt, id: cursor.id };
+  const saleDate = new Date(cursor.saleDate);
+  if (Number.isNaN(saleDate.getTime())) return null;
+  return { saleDate, id: cursor.id };
 }
 
 function applyCursorLimit(list: SaleCursor[], base: number, max: number) {
@@ -225,7 +222,8 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
 
   const fromStr = formatDateInput(fromDate);
   const toStr = formatDateInput(toDate);
-  const endExclusive = addDays(toDate, 1);
+  const { start: rangeStart, endExclusive: rangeEndExclusive } =
+    getDhakaRangeFromDays(fromStr, toStr);
 
   let page = parsePositiveInt(resolvedSearch?.page) ?? 1;
   let cursorList = decodeCursorList(resolvedSearch?.cursors);
@@ -266,13 +264,13 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
         shopId: selectedShopId,
         limit: PAGE_SIZE,
         cursor: toCursorInput(currentCursor),
-        dateFrom: fromDate,
-        dateTo: endExclusive,
+        dateFrom: rangeStart,
+        dateTo: rangeEndExclusive,
       }),
       getSalesSummary({
         shopId: selectedShopId,
-        dateFrom: fromDate,
-        dateTo: endExclusive,
+        dateFrom: rangeStart,
+        dateTo: rangeEndExclusive,
       }),
     ]);
 
@@ -328,7 +326,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     paymentMethod: s.paymentMethod,
     status: (s as any).status ?? "COMPLETED",
     voidReason: (s as any).voidReason ?? null,
-    createdAt: s.createdAt.toISOString(),
+    createdAt: s.saleDate.toISOString(),
     itemCount: (s as any).itemCount ?? 0,
     itemPreview: (s as any).itemPreview ?? "",
     customerName: (s as any).customerName ?? null,

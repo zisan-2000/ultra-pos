@@ -20,8 +20,6 @@ function parseTimestampRange(from?: string, to?: string) {
     }
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return undefined;
-    if (mode === "start") d.setUTCHours(0, 0, 0, 0);
-    if (mode === "end") d.setUTCHours(23, 59, 59, 999);
     return d;
   };
   return { start: parse(from, "start"), end: parse(to, "end") };

@@ -2,23 +2,40 @@
 
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { generateCSV } from "@/lib/utils/csv";
 import { downloadFile } from "@/lib/utils/download";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 
 type Props = { shopId: string; from?: string; to?: string };
+
+type ReportCursor = { at: string; id: string };
 
 export default function SalesReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [cursorList, setCursorList] = useState<ReportCursor[]>([]);
+  const [nextCursor, setNextCursor] = useState<ReportCursor | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+
+  const currentCursor = page > 1 ? cursorList[page - 2] ?? null : null;
 
   const buildCacheKey = useCallback(
     (rangeFrom?: string, rangeTo?: string) =>
-      `reports:sales:${shopId}:${rangeFrom || "all"}:${rangeTo || "all"}`,
+      `reports:sales:${shopId}:${rangeFrom || "all"}:${rangeTo || "all"}:${REPORT_ROW_LIMIT}`,
     [shopId]
   );
+
+  useEffect(() => {
+    setPage(1);
+    setCursorList([]);
+    setNextCursor(null);
+    setHasMore(false);
+  }, [shopId, from, to]);
 
   const loadCached = useCallback(
     (rangeFrom?: string, rangeTo?: string) => {
@@ -44,8 +61,18 @@ export default function SalesReport({ shopId, from, to }: Props) {
 
   const load = useCallback(
     async (rangeFrom?: string, rangeTo?: string) => {
+      if (page > 1 && !currentCursor) {
+        setPage(1);
+        return;
+      }
       if (!online) {
         setLoading(false);
+        setHasMore(false);
+        setNextCursor(null);
+        if (page !== 1) {
+          setPage(1);
+          return;
+        }
         loadCached(rangeFrom, rangeTo);
         return;
       }
@@ -54,52 +81,102 @@ export default function SalesReport({ shopId, from, to }: Props) {
         const params = new URLSearchParams({ shopId });
         if (rangeFrom) params.append("from", rangeFrom);
         if (rangeTo) params.append("to", rangeTo);
+        params.append("limit", `${REPORT_ROW_LIMIT}`);
+        if (currentCursor) {
+          params.append("cursorAt", currentCursor.at);
+          params.append("cursorId", currentCursor.id);
+        }
 
         const res = await fetch(`/api/reports/sales?${params.toString()}`);
         if (!res.ok) {
-          loadCached(rangeFrom, rangeTo);
+          if (page === 1) {
+            loadCached(rangeFrom, rangeTo);
+          } else {
+            setItems([]);
+          }
+          setHasMore(false);
+          setNextCursor(null);
           return;
         }
         const data = await res.json();
         const rows = data.rows || [];
 
         setItems(rows);
-        try {
-          localStorage.setItem(
-            buildCacheKey(rangeFrom, rangeTo),
-            JSON.stringify(rows)
-          );
-        } catch (err) {
-          console.warn("Sales report cache write failed", err);
+        setHasMore(Boolean(data.hasMore));
+        setNextCursor(data.nextCursor ?? null);
+        if (data.nextCursor) {
+          setCursorList((prev) => {
+            const next = [...prev];
+            next[page - 1] = data.nextCursor;
+            return next;
+          });
+        }
+        if (page === 1) {
+          try {
+            localStorage.setItem(
+              buildCacheKey(rangeFrom, rangeTo),
+              JSON.stringify(rows)
+            );
+          } catch (err) {
+            console.warn("Sales report cache write failed", err);
+          }
         }
       } finally {
         setLoading(false);
       }
     },
-    [online, shopId, buildCacheKey, loadCached]
+    [online, shopId, buildCacheKey, loadCached, page, currentCursor]
   );
 
   useEffect(() => {
     void load(from, to);
   }, [load, from, to]);
 
-  const totalAmount = useMemo(
+  const shownTotal = useMemo(
     () => items.reduce((sum, s) => sum + Number(s.totalAmount || 0), 0),
     [items]
   );
+
+  const handlePrev = () => {
+    setPage((prev) => Math.max(1, prev - 1));
+  };
+
+  const handleNext = () => {
+    const cursorToUse = cursorList[page - 1] ?? nextCursor;
+    if (!cursorToUse) return;
+    setCursorList((prev) => {
+      const next = [...prev];
+      next[page - 1] = cursorToUse;
+      return next;
+    });
+    setPage((prev) => prev + 1);
+  };
+
+  const buildHref = () => {
+    const params = new URLSearchParams({ shopId });
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    return `/dashboard/sales?${params.toString()}`;
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-foreground">বিক্রি রিপোর্ট</h2>
-          <p className="text-xs text-muted-foreground">তারিখ, পেমেন্ট, নোট</p>
+          <p className="text-xs text-muted-foreground">সর্বশেষ 20টি বিক্রি</p>
         </div>
+        <Link
+          href={buildHref()}
+          className="text-xs font-semibold text-primary hover:text-primary-hover"
+        >
+          পূর্ণ রিপোর্ট দেখুন
+        </Link>
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
         <p className="text-sm font-semibold text-foreground">
-          মোট: {totalAmount.toFixed(2)} ৳
+          এই তালিকায় মোট: {shownTotal.toFixed(2)} ?
         </p>
         <button
           onClick={() => {
@@ -111,7 +188,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
           }}
           className="px-3 py-1 border border-border rounded text-sm font-medium text-foreground hover:bg-muted transition-colors"
         >
-          CSV ডাউনলোড করুন
+          CSV (সর্বশেষ)
         </button>
       </div>
 
@@ -140,6 +217,28 @@ export default function SalesReport({ shopId, from, to }: Props) {
           ))
         )}
       </div>
+
+      {(page > 1 || hasMore) && (
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <button
+            type="button"
+            onClick={handlePrev}
+            disabled={page <= 1 || loading || !online}
+            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Prev
+          </button>
+          <span className="text-xs text-muted-foreground">Page {page}</span>
+          <button
+            type="button"
+            onClick={handleNext}
+            disabled={!hasMore || !nextCursor || loading || !online}
+            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

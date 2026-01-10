@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { clampReportLimit } from "@/lib/reporting-config";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
     const user = await requireUser();
     const { searchParams } = new URL(request.url);
     const shopId = searchParams.get("shopId");
-    const limit = parseInt(searchParams.get("limit") || "10");
+    const limit = clampReportLimit(searchParams.get("limit"));
 
     if (!shopId) {
       return NextResponse.json({ error: "shopId required" }, { status: 400 });

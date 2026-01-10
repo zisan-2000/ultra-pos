@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { useSyncStatus } from "@/lib/sync/sync-status";
 
 type Summary = {
   sales?: { total?: number } | number;
@@ -34,13 +36,22 @@ function getSummaryTotal(value?: { total?: number } | number) {
 }
 
 export default function OwnerDashboardClient({ userId, initialData }: Props) {
+  const router = useRouter();
   const online = useOnlineStatus();
+  const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [data, setData] = useState<OwnerDashboardData>(initialData);
   const [cacheMissing, setCacheMissing] = useState(false);
+  const serverSnapshotRef = useRef(initialData);
+  const refreshInFlightRef = useRef(false);
 
   const cacheKey = useMemo(() => `owner:dashboard:${userId}`, [userId]);
 
   useEffect(() => {
+    if (serverSnapshotRef.current !== initialData) {
+      serverSnapshotRef.current = initialData;
+      refreshInFlightRef.current = false;
+    }
+
     if (online) {
       setData(initialData);
       setCacheMissing(false);
@@ -69,6 +80,13 @@ export default function OwnerDashboardClient({ userId, initialData }: Props) {
       setCacheMissing(true);
     }
   }, [online, initialData, cacheKey]);
+
+  useEffect(() => {
+    if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    router.refresh();
+  }, [online, lastSyncAt, syncing, pendingCount, router]);
 
   const selectedShopId = data.shopId || data.shops?.[0]?.id || "";
   const salesTotal = Number(getSummaryTotal(data.summary?.sales));

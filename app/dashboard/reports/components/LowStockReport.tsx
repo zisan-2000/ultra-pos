@@ -4,22 +4,23 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
+import { getStockToneClasses } from "@/lib/stock-level";
 
 export default function LowStockReport({ shopId }: { shopId: string }) {
   const online = useOnlineStatus();
   const [items, setItems] = useState<any[]>([]);
-  const [threshold, setThreshold] = useState(10);
   const [loading, setLoading] = useState(false);
 
   const buildCacheKey = useCallback(
-    (limit: number) => `reports:low-stock:${shopId}:${limit}`,
+    () => `reports:low-stock:${shopId}:${REPORT_ROW_LIMIT}`,
     [shopId]
   );
 
   const loadCached = useCallback(
-    (limit: number) => {
+    () => {
       try {
-        const raw = localStorage.getItem(buildCacheKey(limit));
+        const raw = localStorage.getItem(buildCacheKey());
         if (!raw) {
           setItems([]);
           return false;
@@ -39,22 +40,22 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
   );
 
   const load = useCallback(
-    async (th: number) => {
+    async () => {
       try {
         if (!online) {
           setLoading(false);
-          loadCached(th);
+          loadCached();
           return;
         }
         setLoading(true);
         const res = await fetch(
-          `/api/reports/low-stock?shopId=${shopId}&limit=${th}`
+          `/api/reports/low-stock?shopId=${shopId}&limit=${REPORT_ROW_LIMIT}`
         );
         const json = await res.json();
         const rows = json.data || [];
         setItems(rows);
         try {
-          localStorage.setItem(buildCacheKey(th), JSON.stringify(rows));
+          localStorage.setItem(buildCacheKey(), JSON.stringify(rows));
         } catch (err) {
           console.warn("Low stock cache write failed", err);
         }
@@ -66,8 +67,8 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
   );
 
   useEffect(() => {
-    load(threshold);
-  }, [load, threshold]);
+    load();
+  }, [load]);
 
   const renderStatus = (qty: number) => (qty <= 5 ? "জরুরি" : "কম");
 
@@ -79,18 +80,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
           <p className="text-xs text-muted-foreground">থ্রেশহোল্ডের নিচের পণ্যগুলো</p>
         </div>
 
-        <select
-          className="border border-border bg-card text-foreground px-3 py-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
-          value={threshold}
-          onChange={(e) => {
-            const th = Number(e.target.value);
-            setThreshold(th);
-          }}
-        >
-          <option value={5}>শীর্ষ ৫</option>
-          <option value={10}>শীর্ষ ১০</option>
-          <option value={20}>শীর্ষ ২০</option>
-        </select>
+        <span className="text-xs text-muted-foreground">Limit {REPORT_ROW_LIMIT}</span>
       </div>
 
       <div className="border border-border rounded-lg overflow-x-auto hidden md:block">
@@ -116,17 +106,21 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
                   key={i}
                   className="border-t hover:bg-muted transition-colors"
                 >
+                  {(() => {
+                    const qty = Number(p.stockQty || 0);
+                    const stockClasses = getStockToneClasses(qty);
+                    return (
+                      <>
                   <td className="p-3 text-foreground">{p.name}</td>
                   <td className="p-3 text-right text-foreground">{p.stockQty}</td>
                   <td
-                    className={`p-3 text-right font-semibold ${
-                      Number(p.stockQty) <= 5
-                        ? "text-danger"
-                        : "text-warning"
-                    }`}
+                    className={`p-3 text-right font-semibold ${stockClasses.text}`}
                   >
-                    {renderStatus(Number(p.stockQty))}
+                    {renderStatus(qty)}
                   </td>
+                      </>
+                    );
+                  })()}
                 </tr>
               ))
             )}
@@ -142,7 +136,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
         ) : (
           items.map((p, i) => {
             const qty = Number(p.stockQty || 0);
-            const critical = qty <= 5;
+            const stockClasses = getStockToneClasses(qty);
             return (
               <div
                 key={i}
@@ -156,11 +150,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
                     </h3>
                   </div>
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      critical
-                        ? "bg-danger-soft text-danger"
-                        : "bg-warning-soft text-warning"
-                    }`}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${stockClasses.pill}`}
                   >
                     {renderStatus(qty)}
                   </span>

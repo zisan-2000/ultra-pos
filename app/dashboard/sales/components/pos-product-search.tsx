@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { useCart } from "@/hooks/use-cart";
+import { getStockToneClasses } from "@/lib/stock-level";
 
 type PosProductSearchProps = {
   shopId: string;
@@ -121,12 +122,7 @@ const ProductButton = memo(function ProductButton({
   isCooldown: boolean;
 }) {
   const stock = toNumber(product.stockQty);
-  const stockStyle =
-    stock <= 0
-      ? "bg-danger-soft text-danger"
-      : stock < 3
-      ? "bg-warning-soft text-warning"
-      : "bg-success-soft text-success";
+  const stockStyle = getStockToneClasses(stock).badge;
 
   return (
     <button
@@ -200,13 +196,19 @@ export const PosProductSearch = memo(function PosProductSearch({
     }
     setUsage(parsed);
 
-    // Initialize session-locked quick slots once using persisted usage + current products
+    const normalizedProducts: EnrichedProduct[] = products.map((p) => ({
+      ...p,
+      category: normalizeCategory(p.category),
+    }));
+    const productById = new Map(normalizedProducts.map((p) => [p.id, p]));
+
+    // Initialize session-locked quick slots once, then keep stock/price fresh.
     if (!quickSlotsRef.current) {
-      const normalizedProducts: EnrichedProduct[] = products.map((p) => ({
-        ...p,
-        category: normalizeCategory(p.category),
-      }));
       quickSlotsRef.current = buildQuickSlots(normalizedProducts, parsed);
+    } else {
+      quickSlotsRef.current = quickSlotsRef.current.map((slot) =>
+        slot ? productById.get(slot.id) ?? slot : null
+      );
     }
   }, [storageKey, products]);
 

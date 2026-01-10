@@ -4,6 +4,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 
@@ -26,11 +27,9 @@ function parseTimestampRange(from?: string, to?: string) {
       return Number.isNaN(d.getTime()) ? undefined : d;
     }
 
-    // Otherwise assume ISO timestamp and clamp to UTC day boundaries.
+    // Otherwise assume ISO timestamp and keep the provided time boundaries.
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return undefined;
-    if (mode === "start") d.setUTCHours(0, 0, 0, 0);
-    if (mode === "end") d.setUTCHours(23, 59, 59, 999);
     return d;
   };
 
@@ -45,12 +44,9 @@ function ensureBoundedRange(
   fallbackDays = 30
 ) {
   const endDate = end ? new Date(end) : new Date();
-  endDate.setUTCHours(23, 59, 59, 999);
-
   const startDate = start
     ? new Date(start)
     : new Date(endDate.getTime() - fallbackDays * 24 * 60 * 60 * 1000);
-  startDate.setUTCHours(0, 0, 0, 0);
 
   return { start: startDate, end: endDate };
 }
@@ -61,7 +57,6 @@ function clampRange(start?: Date | null, end?: Date | null, maxDays = 90) {
   const delta = bounded.end.getTime() - bounded.start.getTime();
   if (delta > maxWindowMs) {
     const clampedStart = new Date(bounded.end.getTime() - maxWindowMs);
-    clampedStart.setUTCHours(0, 0, 0, 0);
     return { start: clampedStart, end: bounded.end };
   }
   return bounded;
@@ -151,21 +146,35 @@ function parseDateRange(from?: string, to?: string) {
   return parseTimestampRange(from, to);
 }
 
-function normalizeLimit(limit?: number | null, defaultLimit = 200) {
+function normalizeLimit(limit?: number | null, defaultLimit = REPORT_ROW_LIMIT) {
   const n = Number(limit);
   if (!Number.isFinite(n)) return defaultLimit;
-  return Math.max(1, Math.min(n, 500));
+  return Math.max(1, Math.min(n, REPORT_ROW_LIMIT));
 }
+
+export type ReportCursor = {
+  at: string;
+  id: string;
+};
+
+type ReportPaginationInput = {
+  shopId: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  cursor?: { at: Date; id: string } | null;
+};
 
 /* --------------------------------------------------
    SALES LIST WITH DATE FILTER
 -------------------------------------------------- */
-export async function getSalesWithFilter(
-  shopId: string,
-  from?: string,
-  to?: string,
-  limit?: number
-) {
+export async function getSalesWithFilterPaginated({
+  shopId,
+  from,
+  to,
+  limit,
+  cursor,
+}: ReportPaginationInput) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
@@ -175,30 +184,68 @@ export async function getSalesWithFilter(
     ? { start: undefined, end: undefined }
     : clampRange(parsed.start, parsed.end, 90);
 
-  return prisma.sale.findMany({
-    where: {
-      shopId,
-      // exclude voided sales from reports
-      status: { not: "VOIDED" },
-      saleDate: {
-        gte: start ?? undefined,
-        lte: end ?? undefined,
-      },
+  const where: Prisma.SaleWhereInput = {
+    shopId,
+    status: { not: "VOIDED" },
+    saleDate: {
+      gte: start ?? undefined,
+      lte: end ?? undefined,
     },
+  };
+
+  if (cursor) {
+    where.AND = [
+      {
+        OR: [
+          { saleDate: { lt: cursor.at } },
+          { saleDate: cursor.at, id: { lt: cursor.id } },
+        ],
+      },
+    ];
+  }
+
+  const rows = await prisma.sale.findMany({
+    where,
     orderBy: [{ saleDate: "desc" }, { id: "desc" }],
-    take: safeLimit,
+    take: safeLimit + 1,
   });
+
+  const hasMore = rows.length > safeLimit;
+  const pageRows = rows.slice(0, safeLimit);
+  const last = pageRows[pageRows.length - 1];
+  const nextCursor: ReportCursor | null =
+    hasMore && last
+      ? { at: last.saleDate.toISOString(), id: last.id }
+      : null;
+
+  return { rows: pageRows, nextCursor, hasMore };
 }
 
-/* --------------------------------------------------
-   EXPENSE LIST WITH DATE FILTER
--------------------------------------------------- */
-export async function getExpensesWithFilter(
+export async function getSalesWithFilter(
   shopId: string,
   from?: string,
   to?: string,
   limit?: number
 ) {
+  const { rows } = await getSalesWithFilterPaginated({
+    shopId,
+    from,
+    to,
+    limit,
+  });
+  return rows;
+}
+
+/* --------------------------------------------------
+   EXPENSE LIST WITH DATE FILTER
+-------------------------------------------------- */
+export async function getExpensesWithFilterPaginated({
+  shopId,
+  from,
+  to,
+  limit,
+  cursor,
+}: ReportPaginationInput) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
@@ -208,28 +255,67 @@ export async function getExpensesWithFilter(
     ? { start: undefined, end: undefined }
     : clampRange(parsed.start, parsed.end, 90);
 
-  return prisma.expense.findMany({
-    where: {
-      shopId,
-      expenseDate: {
-        gte: start ?? undefined,
-        lte: end ?? undefined,
-      },
+  const where: Prisma.ExpenseWhereInput = {
+    shopId,
+    expenseDate: {
+      gte: start ?? undefined,
+      lte: end ?? undefined,
     },
+  };
+
+  if (cursor) {
+    where.AND = [
+      {
+        OR: [
+          { expenseDate: { lt: cursor.at } },
+          { expenseDate: cursor.at, id: { lt: cursor.id } },
+        ],
+      },
+    ];
+  }
+
+  const rows = await prisma.expense.findMany({
+    where,
     orderBy: [{ expenseDate: "desc" }, { id: "desc" }],
-    take: safeLimit,
+    take: safeLimit + 1,
   });
+
+  const hasMore = rows.length > safeLimit;
+  const pageRows = rows.slice(0, safeLimit);
+  const last = pageRows[pageRows.length - 1];
+  const nextCursor: ReportCursor | null =
+    hasMore && last
+      ? { at: last.expenseDate.toISOString(), id: last.id }
+      : null;
+
+  return { rows: pageRows, nextCursor, hasMore };
 }
 
-/* --------------------------------------------------
-   CASHBOOK LIST WITH DATE FILTER
--------------------------------------------------- */
-export async function getCashWithFilter(
+export async function getExpensesWithFilter(
   shopId: string,
   from?: string,
   to?: string,
   limit?: number
 ) {
+  const { rows } = await getExpensesWithFilterPaginated({
+    shopId,
+    from,
+    to,
+    limit,
+  });
+  return rows;
+}
+
+/* --------------------------------------------------
+   CASHBOOK LIST WITH DATE FILTER
+-------------------------------------------------- */
+export async function getCashWithFilterPaginated({
+  shopId,
+  from,
+  to,
+  limit,
+  cursor,
+}: ReportPaginationInput) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
@@ -239,17 +325,55 @@ export async function getCashWithFilter(
     ? { start: undefined, end: undefined }
     : clampRange(parsed.start, parsed.end, 90);
 
-  return prisma.cashEntry.findMany({
-    where: {
-      shopId,
-      createdAt: {
-        gte: start ?? undefined,
-        lte: end ?? undefined,
-      },
+  const where: Prisma.CashEntryWhereInput = {
+    shopId,
+    createdAt: {
+      gte: start ?? undefined,
+      lte: end ?? undefined,
     },
+  };
+
+  if (cursor) {
+    where.AND = [
+      {
+        OR: [
+          { createdAt: { lt: cursor.at } },
+          { createdAt: cursor.at, id: { lt: cursor.id } },
+        ],
+      },
+    ];
+  }
+
+  const rows = await prisma.cashEntry.findMany({
+    where,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: safeLimit,
+    take: safeLimit + 1,
   });
+
+  const hasMore = rows.length > safeLimit;
+  const pageRows = rows.slice(0, safeLimit);
+  const last = pageRows[pageRows.length - 1];
+  const nextCursor: ReportCursor | null =
+    hasMore && last
+      ? { at: last.createdAt.toISOString(), id: last.id }
+      : null;
+
+  return { rows: pageRows, nextCursor, hasMore };
+}
+
+export async function getCashWithFilter(
+  shopId: string,
+  from?: string,
+  to?: string,
+  limit?: number
+) {
+  const { rows } = await getCashWithFilterPaginated({
+    shopId,
+    from,
+    to,
+    limit,
+  });
+  return rows;
 }
 
 /* --------------------------------------------------

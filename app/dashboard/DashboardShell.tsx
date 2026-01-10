@@ -2,8 +2,6 @@
 
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
-import PosShell from "./PosShell";
 
 type Shop = { id: string; name: string };
 
@@ -31,17 +29,6 @@ export function DashboardShell({
   initialUser,
   children,
 }: DashboardShellProps) {
-  const pathname = usePathname();
-  const isPosRoute = pathname?.startsWith("/dashboard/sales/new");
-
-  if (isPosRoute) {
-    return (
-      <PosShell shops={shops} initialUser={initialUser}>
-        {children}
-      </PosShell>
-    );
-  }
-
   return (
     <DashboardChrome shops={shops} initialUser={initialUser}>
       {children}

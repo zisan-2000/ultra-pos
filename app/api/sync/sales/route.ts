@@ -9,6 +9,7 @@ import { assertShopAccess } from "@/lib/shop-access";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { withTracing } from "@/lib/tracing";
+import { revalidatePath } from "next/cache";
 
 type IncomingSaleItem = {
   productId: string;
@@ -309,6 +310,14 @@ export async function POST(req: Request) {
         });
 
         insertedSaleIds.push(inserted);
+      }
+
+      if (insertedSaleIds.length) {
+        revalidatePath("/dashboard");
+        revalidatePath("/dashboard/sales");
+        revalidatePath("/dashboard/reports");
+        revalidatePath("/dashboard/cash");
+        revalidatePath("/dashboard/products");
       }
 
       return NextResponse.json({ success: true, saleIds: insertedSaleIds });

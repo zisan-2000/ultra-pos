@@ -16,6 +16,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db, type LocalProduct } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
+import { getStockToneClasses } from "@/lib/stock-level";
 import { ShopSwitcherClient } from "../shop-switcher-client";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { addBusinessProductTemplatesToShop } from "@/app/actions/business-product-templates";
@@ -365,6 +366,11 @@ export default function ProductsListClient({
   const visibleProducts = online
     ? products
     : filteredProducts.slice(startIndex, startIndex + OFFLINE_PAGE_SIZE);
+
+  const selectedStockClasses = useMemo(
+    () => getStockToneClasses(Number(selectedProduct?.stockQty ?? 0)),
+    [selectedProduct]
+  );
 
   const pageNumbers = useMemo(() => {
     // Online uses cursor pagination, so random page jumps are not supported.
@@ -1038,7 +1044,11 @@ export default function ProductsListClient({
             </p>
           </div>
         ) : (
-          visibleProducts.map((product) => (
+          visibleProducts.map((product) => {
+            const stockClasses = getStockToneClasses(
+              Number(product.stockQty ?? 0)
+            );
+            return (
             <div
               key={product.id}
               className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden active:scale-[0.98] transition-transform"
@@ -1084,14 +1094,14 @@ export default function ProductsListClient({
                       ৳ {product.sellPrice}
                     </p>
                   </div>
-                  <div className="bg-success-soft rounded-xl p-3 border border-success/30">
-                    <p className="text-xs text-success font-medium mb-1">
-                      স্টক
-                    </p>
-                    <p className="text-lg font-bold text-foreground">
-                      {product.stockQty}
-                    </p>
-                  </div>
+                  <div className={`rounded-xl p-3 border ${stockClasses.card}`}>
+  <p className={`text-xs font-medium mb-1 ${stockClasses.label}`}>
+    স্টক
+  </p>
+  <p className="text-lg font-bold text-foreground">
+    {product.stockQty}
+  </p>
+</div>
                 </div>
 
                 {/* Action Buttons */}
@@ -1128,8 +1138,8 @@ export default function ProductsListClient({
                 </div>
               </div>
             </div>
-          ))
-        )}
+          );
+        }))}
       </div>
 
       {/* Pagination - Scrolls normally */}
@@ -1224,22 +1234,22 @@ export default function ProductsListClient({
                 </div>
                 {selectedProduct.buyPrice && (
                   <div className="bg-success-soft rounded-xl p-4 border border-success/30">
-                    <p className="text-xs text-success font-medium mb-1">
-                      ক্রয় মূল্য
+  <p className="text-xs text-success font-medium mb-1">
+    ক্রয় মূল্য
                     </p>
-                    <p className="text-2xl font-bold text-success">
+                    <p className="text-2xl font-bold text-foreground">
                       ৳ {selectedProduct.buyPrice}
                     </p>
                   </div>
                 )}
-                <div className="bg-success-soft rounded-xl p-4 border border-success/30">
-                  <p className="text-xs text-success font-medium mb-1">
+                <div className={`rounded-xl p-4 border ${selectedStockClasses.card}`}>
+                  <p className={`text-xs font-medium mb-1 ${selectedStockClasses.label}`}>
                     স্টক
-                  </p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {selectedProduct.stockQty}
-                  </p>
-                </div>
+  </p>
+  <p className="text-2xl font-bold text-foreground">
+    {selectedProduct.stockQty}
+  </p>
+</div>
                 <div className="bg-muted rounded-xl p-4 border border-border">
                   <p className="text-xs text-muted-foreground font-medium mb-1">
                     স্ট্যাটাস

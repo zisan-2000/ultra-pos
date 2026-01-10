@@ -5,10 +5,6 @@ import { resetDatabase } from "./reset";
 import { seedRBACAndUsers } from "./rbac/seedRbac";
 import { seedShops } from "./pos/seedShops";
 import { seedProducts } from "./pos/seedProducts";
-import { seedCustomers } from "./pos/seedCustomers";
-import { seedSales } from "./pos/seedSales";
-import { seedExpenses } from "./pos/seedExpenses";
-import { seedCashEntries } from "./pos/seedCashEntries";
 
 const prisma = new PrismaClient();
 
@@ -38,17 +34,7 @@ async function main() {
   console.log("🔥 Seeding products...");
   const products = await seedProducts(prisma, shops);
 
-  console.log("🔥 Seeding customers...");
-  const customers = await seedCustomers(prisma, shops);
-
-  console.log("🔥 Seeding sales...");
-  await seedSales(prisma, shops, products, customers);
-
-  console.log("🔥 Seeding expenses...");
-  await seedExpenses(prisma, shops);
-
-  console.log("🔥 Seeding cash entries...");
-  await seedCashEntries(prisma, shops);
+  // Intentionally skipping demo customers/sales/expenses/cash entries.
 
   console.log("\n🎉 Seed Completed Successfully!");
   console.log("=========================================\n");

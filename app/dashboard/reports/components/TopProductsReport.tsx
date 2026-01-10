@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 
 type TopProduct = { name: string; qty: number; revenue: number };
 
@@ -12,14 +13,14 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
   const [data, setData] = useState<TopProduct[]>([]);
 
   const buildCacheKey = useCallback(
-    (limit: number) => `reports:top-products:${shopId}:${limit}`,
+    () => `reports:top-products:${shopId}:${REPORT_ROW_LIMIT}`,
     [shopId]
   );
 
   const loadCached = useCallback(
-    (limit: number) => {
+    () => {
       try {
-        const raw = localStorage.getItem(buildCacheKey(limit));
+        const raw = localStorage.getItem(buildCacheKey());
         if (!raw) {
           setData([]);
           return false;
@@ -39,43 +40,43 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
   );
 
   const load = useCallback(
-    async (limit = 10) => {
+    async () => {
       try {
         if (!online) {
-          loadCached(limit);
+          loadCached();
           return;
         }
         const res = await fetch(
-          `/api/reports/top-products?shopId=${shopId}&limit=${limit}`,
+          `/api/reports/top-products?shopId=${shopId}&limit=${REPORT_ROW_LIMIT}`,
           { cache: "no-store" }
         );
         if (!res.ok) {
-          loadCached(limit);
+          loadCached();
           return;
         }
         const text = await res.text();
         if (!text) {
-          loadCached(limit);
+          loadCached();
           return;
         }
         const json = JSON.parse(text);
         const rows = Array.isArray(json?.data) ? json.data : [];
         setData(rows);
         try {
-          localStorage.setItem(buildCacheKey(limit), JSON.stringify(rows));
+          localStorage.setItem(buildCacheKey(), JSON.stringify(rows));
         } catch (err) {
           console.warn("Top products cache write failed", err);
         }
       } catch (e) {
         console.error("Top products load failed", e);
-        loadCached(limit);
+        loadCached();
       }
     },
     [online, shopId, buildCacheKey, loadCached]
   );
 
   useEffect(() => {
-    load(10);
+    load();
   }, [load]);
 
   return (
@@ -90,15 +91,9 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
           </p>
         </div>
 
-        <select
-          className="border border-border bg-card text-foreground px-3 py-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
-          defaultValue="10"
-          onChange={(e) => load(Number(e.target.value))}
-        >
-          <option value="5">শীর্ষ ৫</option>
-          <option value="10">শীর্ষ ১০</option>
-          <option value="20">শীর্ষ ২০</option>
-        </select>
+        <span className="text-xs text-muted-foreground">
+          Top {REPORT_ROW_LIMIT}
+        </span>
       </div>
 
       <div className="border border-border rounded-lg overflow-x-auto hidden md:block">

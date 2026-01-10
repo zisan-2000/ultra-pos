@@ -1,17 +1,6 @@
 // middleware.ts
 import { NextResponse, type NextRequest } from "next/server";
 
-const toRoleBasePath = (role: string | null | undefined) => {
-  if (!role) return "/dashboard";
-  return `/${role.replace(/_/g, "-")}`;
-};
-
-const resolveBasePath = (roles: string[] | null | undefined) => {
-  if (!roles || roles.length === 0) return "/dashboard";
-  if (roles.includes("super_admin")) return "/super-admin";
-  return toRoleBasePath(roles[0]);
-};
-
 async function getAuthContext(req: NextRequest) {
   try {
     const res = await fetch(new URL("/api/auth/session-rbac", req.url), {
@@ -69,7 +58,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const { session, user, setCookie: sessionCookie } = await getAuthContext(req);
+  const { session, setCookie: sessionCookie } = await getAuthContext(req);
 
   const cookiesToSet: Array<string | null> = [];
   if (sessionCookie) cookiesToSet.push(sessionCookie);
@@ -82,9 +71,10 @@ export async function middleware(req: NextRequest) {
   }
 
   if (session && isAuthPage) {
-    const basePath = resolveBasePath(user?.roles ?? []);
-    const target = `${basePath}/dashboard`;
-    return appendCookies(NextResponse.redirect(new URL(target, req.url)), cookiesToSet);
+    return appendCookies(
+      NextResponse.redirect(new URL("/dashboard", req.url)),
+      cookiesToSet,
+    );
   }
 
   if (!isProtectedRoute) {
@@ -94,14 +84,6 @@ export async function middleware(req: NextRequest) {
   const { search } = req.nextUrl;
 
   if (isDashboardPath) {
-    // If user has a role-prefixed base path, normalize /dashboard to that base.
-    if (pathname === "/dashboard" && session) {
-      const basePath = resolveBasePath(user?.roles ?? []);
-      if (basePath !== "/dashboard") {
-        const target = `${basePath}/dashboard${search}`;
-        return appendCookies(NextResponse.redirect(new URL(target, req.url)), cookiesToSet);
-      }
-    }
     return appendCookies(NextResponse.next(), cookiesToSet);
   }
 
@@ -112,13 +94,10 @@ export async function middleware(req: NextRequest) {
 
   if (looksRolePrefixed) {
     const normalized = remainder || "/dashboard";
-    if (normalized === "/dashboard") {
-      return appendCookies(NextResponse.next(), cookiesToSet);
-    }
     const rewriteTarget =
       normalized === "/dashboard" ? "/dashboard" : "/dashboard" + normalized;
     return appendCookies(
-      NextResponse.rewrite(new URL(rewriteTarget + search, req.url)),
+      NextResponse.redirect(new URL(rewriteTarget + search, req.url)),
       cookiesToSet,
     );
   }
