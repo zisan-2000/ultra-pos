@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
-import { getCustomersByShop, getDueSummary } from "@/app/actions/customers";
+import { getCustomersByShop } from "@/app/actions/customers";
 import DuePageClient from "./DuePageClient";
 import DueShopSelector from "./ShopSelector";
 
@@ -38,10 +38,7 @@ export default async function DuePage({ searchParams }: DuePageProps) {
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
 
-  const [customers, summary] = await Promise.all([
-    getCustomersByShop(selectedShopId),
-    getDueSummary(selectedShopId),
-  ]);
+  const customers = await getCustomersByShop(selectedShopId);
 
   return (
     <div className="space-y-6 section-gap">
@@ -72,7 +69,6 @@ export default async function DuePage({ searchParams }: DuePageProps) {
           shopId={selectedShopId}
           shopName={selectedShop.name}
           initialCustomers={customers as any}
-          initialSummary={summary as any}
         />
       </div>
     </div>

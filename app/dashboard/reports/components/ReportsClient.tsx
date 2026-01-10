@@ -2,16 +2,18 @@
 
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import SalesReport from "./SalesReport";
-import ExpenseReport from "./ExpenseReport";
-import CashbookReport from "./CashbookReport";
-import ProfitTrendReport from "./ProfitTrendReport";
-import PaymentMethodReport from "./PaymentMethodReport";
-import TopProductsReport from "./TopProductsReport";
-import LowStockReport from "./LowStockReport";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import dynamic from "next/dynamic";
 import ShopSelectorClient from "../ShopSelectorClient";
 import { StatCard } from "./StatCard";
+import { useOnlineStatus } from "@/lib/sync/net-status";
 
 type Summary = {
   sales: { totalAmount: number; completedCount?: number; voidedCount?: number };
@@ -26,6 +28,75 @@ type Props = {
   shops: { id: string; name: string }[];
   summary: Summary;
 };
+
+function ReportSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3">
+      <div className="h-4 w-28 rounded bg-muted" />
+      <div className="h-3 w-44 rounded bg-muted" />
+      <div className="h-40 w-full rounded bg-muted" />
+    </div>
+  );
+}
+
+function LazyReport({
+  children,
+  fallback,
+  rootMargin = "200px",
+}: {
+  children: ReactNode;
+  fallback?: ReactNode;
+  rootMargin?: string;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (visible) return;
+    const node = ref.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visible, rootMargin]);
+
+  return <div ref={ref}>{visible ? children : fallback}</div>;
+}
+
+const SalesReport = dynamic(() => import("./SalesReport"), {
+  loading: () => <ReportSkeleton />,
+});
+const ExpenseReport = dynamic(() => import("./ExpenseReport"), {
+  loading: () => <ReportSkeleton />,
+});
+const CashbookReport = dynamic(() => import("./CashbookReport"), {
+  loading: () => <ReportSkeleton />,
+});
+const ProfitTrendReport = dynamic(() => import("./ProfitTrendReport"), {
+  loading: () => <ReportSkeleton />,
+});
+const PaymentMethodReport = dynamic(() => import("./PaymentMethodReport"), {
+  loading: () => <ReportSkeleton />,
+});
+const TopProductsReport = dynamic(() => import("./TopProductsReport"), {
+  loading: () => <ReportSkeleton />,
+});
+const LowStockReport = dynamic(() => import("./LowStockReport"), {
+  loading: () => <ReportSkeleton />,
+});
 
 const NAV = [
   { key: "summary", label: "সারাংশ" },
@@ -95,6 +166,7 @@ export default function ReportsClient({
   shops,
   summary,
 }: Props) {
+  const online = useOnlineStatus();
   const [active, setActive] = useState<(typeof NAV)[number]["key"]>("summary");
   const [preset, setPreset] = useState<RangePreset>("all");
   const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
@@ -110,24 +182,56 @@ export default function ReportsClient({
     1
   )}৳ বিক্রি · লাভ ${liveSummary.profit.profit.toFixed(1)}৳`;
 
+  const loadCachedSummary = useCallback(() => {
+    if (typeof window === "undefined") return false;
+    const key = `reports:summary:${shopId}:${range.from || "all"}:${range.to || "all"}`;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as Summary;
+      if (parsed && parsed.sales) {
+        setLiveSummary(parsed);
+        return true;
+      }
+    } catch (err) {
+      console.warn("Summary cache read failed", err);
+    }
+    return false;
+  }, [shopId, range.from, range.to]);
+
   const fetchSummary = useCallback(async () => {
+    if (!online) {
+      setSummaryLoading(false);
+      loadCachedSummary();
+      return;
+    }
     setSummaryLoading(true);
     try {
       const params = new URLSearchParams({ shopId });
       if (range.from) params.append("from", range.from);
       if (range.to) params.append("to", range.to);
       const res = await fetch(`/api/reports/summary?${params.toString()}`);
-      if (!res.ok) return;
+      if (!res.ok) {
+        loadCachedSummary();
+        return;
+      }
       const json = await res.json();
       if (json && json.sales) {
         setLiveSummary(json as Summary);
+        const key = `reports:summary:${shopId}:${range.from || "all"}:${range.to || "all"}`;
+        try {
+          localStorage.setItem(key, JSON.stringify(json));
+        } catch (err) {
+          console.warn("Summary cache write failed", err);
+        }
       }
     } catch (err) {
       console.error("summary load failed", err);
+      loadCachedSummary();
     } finally {
       setSummaryLoading(false);
     }
-  }, [shopId, range.from, range.to]);
+  }, [online, shopId, range.from, range.to, loadCachedSummary]);
 
   useEffect(() => {
     fetchSummary();
@@ -201,6 +305,11 @@ export default function ReportsClient({
 
   return (
     <div className="space-y-5">
+      {!online && (
+        <div className="rounded-lg border border-warning/30 bg-warning-soft text-warning text-xs font-semibold px-3 py-2">
+          অফলাইন: আগের রিপোর্ট ডাটা দেখানো হচ্ছে।
+        </div>
+      )}
       <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground leading-tight">
@@ -389,35 +498,57 @@ export default function ReportsClient({
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
-            <SalesReport shopId={shopId} from={range.from} to={range.to} />
+            <LazyReport fallback={<ReportSkeleton />}>
+              <SalesReport shopId={shopId} from={range.from} to={range.to} />
+            </LazyReport>
           </div>
 
           <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
-            <ExpenseReport shopId={shopId} from={range.from} to={range.to} />
+            <LazyReport fallback={<ReportSkeleton />}>
+              <ExpenseReport shopId={shopId} from={range.from} to={range.to} />
+            </LazyReport>
           </div>
 
           <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
-            <CashbookReport shopId={shopId} from={range.from} to={range.to} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
-            <PaymentMethodReport shopId={shopId} from={range.from} to={range.to} />
-          </div>
-
-          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
-            <ProfitTrendReport shopId={shopId} from={range.from} to={range.to} />
+            <LazyReport fallback={<ReportSkeleton />}>
+              <CashbookReport shopId={shopId} from={range.from} to={range.to} />
+            </LazyReport>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
-            <TopProductsReport shopId={shopId} />
+            <LazyReport fallback={<ReportSkeleton />}>
+              <PaymentMethodReport
+                shopId={shopId}
+                from={range.from}
+                to={range.to}
+              />
+            </LazyReport>
           </div>
 
           <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
-            <LowStockReport shopId={shopId} />
+            <LazyReport fallback={<ReportSkeleton />}>
+              <ProfitTrendReport
+                shopId={shopId}
+                from={range.from}
+                to={range.to}
+              />
+            </LazyReport>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
+            <LazyReport fallback={<ReportSkeleton />}>
+              <TopProductsReport shopId={shopId} />
+            </LazyReport>
+          </div>
+
+          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
+            <LazyReport fallback={<ReportSkeleton />}>
+              <LowStockReport shopId={shopId} />
+            </LazyReport>
           </div>
         </div>
       </div>

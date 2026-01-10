@@ -5,6 +5,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { businessOptions } from "@/lib/productFormConfig";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useOnlineStatus } from "@/lib/sync/net-status";
+import { queueAdminAction } from "@/lib/sync/queue";
+import { db } from "@/lib/dexie/db";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -30,6 +33,8 @@ type ShopTemplate = {
 type Props = {
   backHref: string;
   action: (formData: FormData) => Promise<void>;
+  cacheUserId?: string | null;
+  shopId?: string | null;
   initial?: {
     name?: string;
     address?: string;
@@ -82,12 +87,15 @@ function parseSpokenNameAndPhone(spoken: string) {
 export default function ShopFormClient({
   backHref,
   action,
+  cacheUserId,
+  shopId,
   initial,
   submitLabel = "+ নতুন দোকান তৈরি করুন",
   ownerOptions,
   businessTypeOptions,
 }: Props) {
   const router = useRouter();
+  const online = useOnlineStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [templates, setTemplates] = useState<ShopTemplate[]>([]);
   const [voiceReady, setVoiceReady] = useState(false);
@@ -104,6 +112,10 @@ export default function ShopFormClient({
   );
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const hasOwnerOptions = Boolean(ownerOptions && ownerOptions.length > 0);
+  const cacheKey = useMemo(
+    () => `cachedShops:${cacheUserId || "anon"}`,
+    [cacheUserId]
+  );
 
   useEffect(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem(SHOP_TEMPLATE_KEY) : null;
@@ -169,6 +181,46 @@ export default function ShopFormClient({
   function persistTemplates(next: ShopTemplate[]) {
     setTemplates(next);
     localStorage.setItem(SHOP_TEMPLATE_KEY, JSON.stringify(next));
+  }
+
+  function updateCachedShops(
+    updater: (prev: Array<Record<string, any>>) => Array<Record<string, any>>
+  ) {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const base = Array.isArray(parsed) ? parsed : [];
+      const next = updater(base);
+      localStorage.setItem(cacheKey, JSON.stringify(next));
+    } catch {
+      // ignore cache errors
+    }
+  }
+
+  async function updatePendingCreate(clientId: string, data: Record<string, any>) {
+    try {
+      const items = await db.queue.where("type").equals("admin").toArray();
+      const matches = items.filter(
+        (item) =>
+          item.payload?.action === "shop_create" &&
+          item.payload?.data?.clientId === clientId
+      );
+      await Promise.all(
+        matches.map((item) =>
+          item.id
+            ? db.queue.update(item.id, {
+                payload: {
+                  ...item.payload,
+                  data: { ...item.payload.data, ...data },
+                },
+              })
+            : Promise.resolve()
+        )
+      );
+    } catch (err) {
+      console.error("Update pending shop create failed", err);
+    }
   }
 
   function applyTemplate(t: ShopTemplate) {
@@ -244,9 +296,9 @@ export default function ShopFormClient({
       return;
     }
 
-    const payloadName = (form.get("name") as string) || name;
-    const payloadAddress = (form.get("address") as string) || address;
-    const payloadPhone = (form.get("phone") as string) || phone;
+    const payloadName = ((form.get("name") as string) || name).trim();
+    const payloadAddress = ((form.get("address") as string) || address).trim();
+    const payloadPhone = ((form.get("phone") as string) || phone).trim();
     const payloadBusinessType = (form.get("businessType") as string) || businessType;
 
     form.set("name", payloadName);
@@ -268,6 +320,50 @@ export default function ShopFormClient({
     persistTemplates(mergeTemplates(templates, template));
 
     try {
+      if (!online) {
+        const payload = {
+          name: payloadName,
+          address: payloadAddress || null,
+          phone: payloadPhone || null,
+          businessType: payloadBusinessType,
+          ownerId: ownerOptions ? selectedOwnerId || null : null,
+        };
+
+        if (shopId) {
+          if (shopId.startsWith("offline-")) {
+            await updatePendingCreate(shopId, payload);
+          } else {
+            await queueAdminAction("shop_update", { id: shopId, ...payload });
+          }
+          updateCachedShops((prev) =>
+            prev.map((shop) =>
+              shop.id === shopId
+                ? { ...shop, ...payload, pending: true }
+                : shop
+            )
+          );
+          alert("অফলাইন: দোকানের পরিবর্তন কিউ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+          router.push(backHref);
+          return;
+        }
+
+        const clientId = `offline-${crypto.randomUUID()}`;
+        await queueAdminAction("shop_create", { ...payload, clientId });
+        updateCachedShops((prev) => [
+          {
+            id: clientId,
+            name: payloadName,
+            address: payloadAddress,
+            phone: payloadPhone,
+            pending: true,
+          },
+          ...prev,
+        ]);
+        alert("অফলাইন: দোকান তৈরি কিউ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+        router.push(backHref);
+        return;
+      }
+
       await action(form);
       router.push(backHref);
     } catch (err) {

@@ -19,7 +19,7 @@ const themeScript = `
 
 export default function ThemeScript() {
   return (
-    <Script id="theme-init" strategy="beforeInteractive">
+    <Script id="theme-init" strategy="afterInteractive">
       {themeScript}
     </Script>
   );

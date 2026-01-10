@@ -6,16 +6,17 @@ import {
   useState,
   FormEvent,
   useEffect,
-  useCallback,
   useMemo,
   useRef,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
 import { useCart } from "@/hooks/use-cart";
 
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
 
@@ -55,7 +56,9 @@ export function PosPageClient({
   shopId,
   submitSale,
 }: PosPageClientProps) {
-  const { totalAmount, clear, setShop: setCartShop } = useCart();
+  const router = useRouter();
+  const clear = useCart((s) => s.clear);
+  const setCartShop = useCart((s) => s.setShop);
   const cartItems = useCart((s) => s.items);
   const cartShopId = useCart((s) => s.currentShopId);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -74,11 +77,8 @@ export function PosPageClient({
     [cartItems, cartShopId, shopId]
   );
   const safeTotalAmount = useMemo(
-    () =>
-      cartShopId === shopId
-        ? totalAmount()
-        : items.reduce((sum, i) => sum + i.total, 0),
-    [cartShopId, shopId, totalAmount, items]
+    () => items.reduce((sum, i) => sum + i.total, 0),
+    [items]
   );
 
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -87,19 +87,67 @@ export function PosPageClient({
   const [note, setNote] = useState("");
   const [success, setSuccess] = useState<{ saleId?: string } | null>(null);
   const online = useOnlineStatus();
+  const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
+  const serverSnapshotRef = useRef(products);
+  const refreshInFlightRef = useRef(false);
   const isDue = paymentMethod === "due";
-  const paymentOptions = [
-    { value: "cash", label: "ক্যাশ" },
-    { value: "bkash", label: "বিকাশ" },
-    { value: "nagad", label: "নগদ" },
-    { value: "card", label: "কার্ড" },
-    { value: "bank_transfer", label: "ব্যাংক ট্রান্সফার" },
-    { value: "due", label: "ধার" },
-  ];
+  const paymentOptions = useMemo(
+    () => [
+      { value: "cash", label: "ক্যাশ" },
+      { value: "bkash", label: "বিকাশ" },
+      { value: "nagad", label: "নগদ" },
+      { value: "card", label: "কার্ড" },
+      { value: "bank_transfer", label: "ব্যাংক ট্রান্সফার" },
+      { value: "due", label: "ধার" },
+    ],
+    []
+  );
+
+  useEffect(() => {
+    if (serverSnapshotRef.current !== products) {
+      serverSnapshotRef.current = products;
+      refreshInFlightRef.current = false;
+    }
+  }, [products]);
+
+  useEffect(() => {
+    if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    router.refresh();
+  }, [online, lastSyncAt, syncing, pendingCount, router]);
 
   // Keep Dexie seeded when online; load from Dexie when offline.
   useEffect(() => {
+    let cancelled = false;
+
+    const loadFromDexie = async () => {
+      try {
+        const rows = await db.products.where("shopId").equals(shopId).toArray();
+        if (cancelled) return;
+        setProductOptions(
+          rows.map((p) => ({
+            id: p.id,
+            name: p.name,
+            sellPrice: p.sellPrice.toString(),
+            stockQty: p.stockQty?.toString(),
+            category: p.category,
+            trackStock: p.trackStock,
+          }))
+        );
+      } catch (err) {
+        console.error("Load offline products failed", err);
+      }
+    };
+
     if (online) {
+      if (syncing || pendingCount > 0 || refreshInFlightRef.current) {
+        loadFromDexie();
+        return () => {
+          cancelled = true;
+        };
+      }
+
       setProductOptions(
         products.map((p) => ({
           ...p,
@@ -121,29 +169,16 @@ export function PosPageClient({
       db.products.bulkPut(rows).catch((err) => {
         console.error("Seed Dexie products failed", err);
       });
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
-    db.products
-      .where("shopId")
-      .equals(shopId)
-      .toArray()
-      .then((rows) => {
-        setProductOptions(
-          rows.map((p) => ({
-            id: p.id,
-            name: p.name,
-            sellPrice: p.sellPrice.toString(),
-            stockQty: p.stockQty?.toString(),
-            category: p.category,
-            trackStock: p.trackStock,
-          }))
-        );
-      })
-      .catch((err) => {
-        console.error("Load offline products failed", err);
-      });
-  }, [online, products, shopId]);
+    loadFromDexie();
+    return () => {
+      cancelled = true;
+    };
+  }, [online, products, shopId, pendingCount, syncing]);
 
   // Keep cart tied to the currently selected shop; reset when shop changes
   useEffect(() => {
@@ -193,12 +228,83 @@ export function PosPageClient({
       return;
     }
 
-    if (paymentMethod === "due") {
-      alert("Due sales require internet so ledger stays accurate.");
-      return;
+    // Offline case - save to Dexie + queue
+    const nowTs = Date.now();
+    const nowIso = new Date(nowTs).toISOString();
+    const dueLedgerIds: string[] = [];
+
+    if (isDue) {
+      const saleLedgerId = crypto.randomUUID();
+      dueLedgerIds.push(saleLedgerId);
+
+      const paidLedgerId = paidNowNumber > 0 ? crypto.randomUUID() : null;
+      if (paidLedgerId) dueLedgerIds.push(paidLedgerId);
+
+      const totalAmount = Number(totalVal.toFixed(2));
+      const paidAmount = Number(paidNowNumber.toFixed(2));
+      const dueDelta = Number((totalAmount - paidAmount).toFixed(2));
+
+      await db.transaction("rw", db.dueCustomers, db.dueLedger, async () => {
+        await db.dueLedger.put({
+          id: saleLedgerId,
+          shopId,
+          customerId,
+          entryType: "SALE",
+          amount: totalAmount,
+          description: note || "Due sale",
+          entryDate: nowIso,
+          syncStatus: "new",
+        });
+
+        if (paidLedgerId) {
+          await db.dueLedger.put({
+            id: paidLedgerId,
+            shopId,
+            customerId,
+            entryType: "PAYMENT",
+            amount: paidAmount,
+            description: "Partial payment at sale",
+            entryDate: nowIso,
+            syncStatus: "new",
+          });
+        }
+
+        const existing = await db.dueCustomers.get(customerId);
+        const baseDueRaw =
+          existing?.totalDue ??
+          customers.find((c) => c.id === customerId)?.totalDue ??
+          0;
+        const baseDue = Number(baseDueRaw);
+        const nextDue = Number(
+          ((Number.isFinite(baseDue) ? baseDue : 0) + dueDelta).toFixed(2)
+        );
+        const lastPaymentAt =
+          paidAmount > 0 ? nowIso : existing?.lastPaymentAt ?? null;
+
+        if (existing) {
+          await db.dueCustomers.update(customerId, {
+            totalDue: nextDue,
+            lastPaymentAt,
+            updatedAt: nowTs,
+            syncStatus: "synced",
+          });
+        } else {
+          const customer = customers.find((c) => c.id === customerId);
+          await db.dueCustomers.put({
+            id: customerId,
+            shopId,
+            name: customer?.name || "Customer",
+            phone: customer?.phone ?? null,
+            address: null,
+            totalDue: nextDue,
+            lastPaymentAt,
+            updatedAt: nowTs,
+            syncStatus: "synced",
+          });
+        }
+      });
     }
 
-    // Offline case - save to Dexie + queue
     const salePayload = {
       tempId: crypto.randomUUID(),
       shopId,
@@ -209,10 +315,12 @@ export function PosPageClient({
         qty: i.qty,
       })),
       paymentMethod,
-      customerId: null,
+      customerId: isDue ? customerId : null,
+      paidNow: isDue ? paidNowNumber : undefined,
+      dueLedgerIds: isDue ? dueLedgerIds : undefined,
       note,
-      totalAmount: safeTotalAmount.toFixed(2),
-      createdAt: Date.now(),
+      totalAmount: totalVal.toFixed(2),
+      createdAt: nowTs,
       syncStatus: "new" as const,
     };
 
@@ -220,7 +328,9 @@ export function PosPageClient({
     await queueAdd("sale", "create", salePayload);
 
     alert(
-      "Sale stored offline. It will sync automatically when you're online."
+      isDue
+        ? "Offline: Due sale saved. It will sync when you're online."
+        : "Sale stored offline. It will sync automatically when you're online."
     );
     clear();
   }
@@ -228,6 +338,19 @@ export function PosPageClient({
   const itemCount = useMemo(
     () => items.reduce((sum, i) => sum + i.qty, 0),
     [items]
+  );
+  const cartList = useMemo(
+    () => items.map((i) => <PosCartItem key={i.productId} item={i} />),
+    [items]
+  );
+  const customerOptions = useMemo(
+    () =>
+      customers.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.name} - বকেয়া: {Number(c.totalDue || 0).toFixed(2)} ৳
+        </option>
+      )),
+    [customers]
   );
 
   const scrollToCart = () => {
@@ -307,7 +430,7 @@ export function PosPageClient({
           {items.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">কিছু যোগ করা হয়নি</p>
           ) : (
-            items.map((i) => <PosCartItem key={i.productId} item={i} />)
+            cartList
           )}
         </div>
 
@@ -350,11 +473,7 @@ export function PosPageClient({
                 onChange={(e) => setCustomerId(e.target.value)}
               >
                 <option value="">-- একজন গ্রাহক নির্বাচন করুন --</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} - বকেয়া: {Number(c.totalDue || 0).toFixed(2)} ৳
-                  </option>
-                ))}
+                {customerOptions}
               </select>
               <a
                 className="text-sm text-primary hover:underline"
@@ -516,9 +635,7 @@ export function PosPageClient({
               <p className="text-center text-muted-foreground py-6">কার্ট খালি</p>
             ) : (
               <div className="space-y-3">
-                {items.map((i) => (
-                  <PosCartItem key={i.productId} item={i} />
-                ))}
+                {cartList}
               </div>
             )}
 
@@ -544,3 +661,4 @@ export function PosPageClient({
     </div>
   );
 }
+

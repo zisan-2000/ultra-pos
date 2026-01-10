@@ -7,6 +7,8 @@ import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
 
+import { type CursorToken } from "@/lib/cursor-pagination";
+
 // ---------------------------------
 // TYPES
 // ---------------------------------
@@ -54,6 +56,14 @@ type GetProductsByShopPaginatedInput = {
   shopId: string;
   page?: number;
   pageSize?: number;
+  query?: string | null;
+  status?: ProductStatusFilter;
+};
+
+type GetProductsByShopCursorPaginatedInput = {
+  shopId: string;
+  limit?: number;
+  cursor?: { createdAt: Date; id: string } | null;
   query?: string | null;
   status?: ProductStatusFilter;
 };
@@ -253,6 +263,97 @@ export async function getProductsByShopPaginated({
     page: resolvedPage,
     pageSize: safePageSize,
   };
+}
+
+// ---------------------------------
+// GET PRODUCTS BY SHOP (CURSOR PAGINATED + SEARCH)
+// ---------------------------------
+export async function getProductsByShopCursorPaginated({
+  shopId,
+  limit = 12,
+  cursor,
+  query,
+  status = "all",
+}: GetProductsByShopCursorPaginatedInput): Promise<{
+  items: ProductListRow[];
+  totalCount: number;
+  nextCursor: CursorToken | null;
+  hasMore: boolean;
+}> {
+  const user = await requireUser();
+  requirePermission(user, "view_products");
+  await assertShopAccess(shopId, user);
+
+  const safeLimit = Math.max(1, Math.min(Math.floor(limit), 100));
+  const normalizedQuery = (query || "").trim();
+
+  const baseWhere: any = { shopId };
+  if (status === "active") {
+    baseWhere.isActive = true;
+  } else if (status === "inactive") {
+    baseWhere.isActive = false;
+  }
+
+  if (normalizedQuery) {
+    baseWhere.OR = [
+      { name: { contains: normalizedQuery, mode: "insensitive" } },
+      { category: { contains: normalizedQuery, mode: "insensitive" } },
+    ];
+  }
+
+  const where: any = { ...baseWhere };
+
+  if (cursor) {
+    where.AND = [
+      {
+        OR: [
+          { createdAt: { lt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+        ],
+      },
+    ];
+  }
+
+  const [rows, totalCount] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: safeLimit + 1,
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        buyPrice: true,
+        sellPrice: true,
+        stockQty: true,
+        isActive: true,
+        createdAt: true,
+      },
+    }),
+    prisma.product.count({ where: baseWhere }),
+  ]);
+
+  const hasMore = rows.length > safeLimit;
+  const pageRows = rows.slice(0, safeLimit);
+
+  const items: ProductListRow[] = pageRows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    buyPrice: p.buyPrice?.toString?.() ?? (p as any).buyPrice ?? null,
+    sellPrice: p.sellPrice?.toString?.() ?? (p as any).sellPrice ?? "0",
+    stockQty: p.stockQty?.toString?.() ?? (p as any).stockQty ?? "0",
+    isActive: p.isActive,
+    createdAt: p.createdAt.toISOString(),
+  }));
+
+  const last = pageRows[pageRows.length - 1];
+  const nextCursor: CursorToken | null =
+    hasMore && last
+      ? { createdAt: last.createdAt.toISOString(), id: last.id }
+      : null;
+
+  return { items, totalCount, nextCursor, hasMore };
 }
 
 // ---------------------------------

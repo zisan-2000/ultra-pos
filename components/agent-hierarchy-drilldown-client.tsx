@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import OwnerStaffDrilldownClient from "@/components/owner-staff-drilldown-client";
 
 type StaffEntry = {
@@ -95,7 +95,7 @@ export default function AgentHierarchyDrilldownClient({
     return { matchesText, matchesDate, hasQuery };
   }, [query, fromDate, toDate]);
 
-  const getOwnerStats = (owners: OwnerEntry[]): OwnerStats => {
+  const getOwnerStats = useCallback((owners: OwnerEntry[]): OwnerStats => {
     let ownerCount = 0;
     let staffCount = 0;
 
@@ -123,7 +123,7 @@ export default function AgentHierarchyDrilldownClient({
     }
 
     return { ownerCount, staffCount };
-  };
+  }, [filterHelpers]);
 
   const filteredAgents = useMemo<FilteredAgent[]>(() => {
     if (agents.length === 0) return [];

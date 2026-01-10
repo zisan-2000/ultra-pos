@@ -180,9 +180,31 @@ export async function POST(req: Request) {
       }
 
       // Delete
-      if (Array.isArray(deletedIds) && deletedIds.length > 0) {
-        await prisma.product.deleteMany({ where: { id: { in: deletedIds } } });
+    if (Array.isArray(deletedIds) && deletedIds.length > 0) {
+      const deleteTargets = deletedIds as string[];
+      const referenced = await prisma.saleItem.findMany({
+        where: { productId: { in: deleteTargets } },
+        select: { productId: true },
+        distinct: ["productId"],
+      });
+      const archiveIds = referenced.map((row) => row.productId);
+      const archiveSet = new Set(archiveIds);
+      const hardDeleteIds = deleteTargets.filter((id) => !archiveSet.has(id));
+
+      if (archiveIds.length > 0) {
+        await prisma.product.updateMany({
+          where: { id: { in: archiveIds } },
+          data: {
+            isActive: false,
+            trackStock: false,
+          },
+        });
       }
+
+      if (hardDeleteIds.length > 0) {
+        await prisma.product.deleteMany({ where: { id: { in: hardDeleteIds } } });
+      }
+    }
 
       return NextResponse.json({ success: true });
     } catch (e: any) {

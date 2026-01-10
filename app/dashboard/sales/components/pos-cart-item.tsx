@@ -1,33 +1,45 @@
 // app/dashboard/sales/components/PosCartItem.tsx
 "use client";
 
-import { useState } from "react";
+import { memo, useCallback, useRef } from "react";
 import { useCart, CartItem } from "@/hooks/use-cart";
 
-export function PosCartItem({ item }: { item: CartItem }) {
-  const { increase, decrease, remove } = useCart();
-  const [isProcessing, setIsProcessing] = useState(false);
+export const PosCartItem = memo(function PosCartItem({
+  item,
+}: {
+  item: CartItem;
+}) {
+  const increase = useCart((s) => s.increase);
+  const decrease = useCart((s) => s.decrease);
+  const remove = useCart((s) => s.remove);
+  const lockRef = useRef(false);
 
-  const handleIncrease = () => {
-    if (isProcessing) return;
-    setIsProcessing(true);
-    increase(item.productId);
-    setTimeout(() => setIsProcessing(false), 100);
-  };
+  const runOncePerFrame = useCallback((action: () => void) => {
+    if (lockRef.current) return;
+    lockRef.current = true;
+    action();
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => {
+        lockRef.current = false;
+      });
+    } else {
+      setTimeout(() => {
+        lockRef.current = false;
+      }, 16);
+    }
+  }, []);
 
-  const handleDecrease = () => {
-    if (isProcessing) return;
-    setIsProcessing(true);
-    decrease(item.productId);
-    setTimeout(() => setIsProcessing(false), 100);
-  };
+  const handleIncrease = useCallback(() => {
+    runOncePerFrame(() => increase(item.productId));
+  }, [increase, item.productId, runOncePerFrame]);
 
-  const handleRemove = () => {
-    if (isProcessing) return;
-    setIsProcessing(true);
-    remove(item.productId);
-    setTimeout(() => setIsProcessing(false), 100);
-  };
+  const handleDecrease = useCallback(() => {
+    runOncePerFrame(() => decrease(item.productId));
+  }, [decrease, item.productId, runOncePerFrame]);
+
+  const handleRemove = useCallback(() => {
+    runOncePerFrame(() => remove(item.productId));
+  }, [remove, item.productId, runOncePerFrame]);
 
   return (
     <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-foreground">
@@ -41,8 +53,7 @@ export function PosCartItem({ item }: { item: CartItem }) {
         <button
           type="button"
           onClick={handleRemove}
-          disabled={isProcessing}
-          className="text-destructive hover:text-destructive/80 font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          className="text-destructive hover:text-destructive/80 font-bold text-lg"
         >
           ✕
         </button>
@@ -52,8 +63,7 @@ export function PosCartItem({ item }: { item: CartItem }) {
         <button
           type="button"
           onClick={handleDecrease}
-          disabled={isProcessing}
-          className="w-8 h-8 flex items-center justify-center bg-card border border-border rounded hover:bg-muted/60 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-8 h-8 flex items-center justify-center bg-card border border-border rounded hover:bg-muted/60 font-bold"
         >
           −
         </button>
@@ -61,12 +71,11 @@ export function PosCartItem({ item }: { item: CartItem }) {
         <button
           type="button"
           onClick={handleIncrease}
-          disabled={isProcessing}
-          className="w-8 h-8 flex items-center justify-center bg-card border border-border rounded hover:bg-muted/60 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-8 h-8 flex items-center justify-center bg-card border border-border rounded hover:bg-muted/60 font-bold"
         >
           +
         </button>
       </div>
     </div>
   );
-}
+});

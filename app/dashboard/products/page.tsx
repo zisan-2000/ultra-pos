@@ -3,24 +3,34 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
-import { getProductsByShopPaginated } from "@/app/actions/products";
+import { getProductsByShopCursorPaginated } from "@/app/actions/products";
 import { listActiveBusinessProductTemplates } from "@/app/actions/business-product-templates";
 import { listActiveBusinessTypes } from "@/app/actions/business-types";
 import ProductsListClient from "./components/ProductsListClient";
 import { businessOptions } from "@/lib/productFormConfig";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
+import {
+  buildCursorPageLink,
+  decodeCursorList,
+  encodeCursorList,
+  normalizeCursorPageState,
+  toCursorInput,
+} from "@/lib/cursor-pagination";
 
 type PageProps = {
   searchParams?: Promise<{
     shopId?: string;
     page?: string;
+    cursors?: string;
+    cursorBase?: string;
     q?: string;
     status?: string;
   }>;
 };
 
 const PAGE_SIZE = 12;
+const MAX_CURSOR_HISTORY = 20;
 
 function parsePositiveInt(value?: string) {
   if (!value) return null;
@@ -88,18 +98,78 @@ export default async function ProductsPage({ searchParams }: PageProps) {
     mergedBusinessTypes.find((option) => option.id === businessType)?.label ||
     businessType;
 
-  const page = parsePositiveInt(resolvedParams?.page) ?? 1;
+  const pageParam = parsePositiveInt(resolvedParams?.page) ?? 1;
+  const cursorBaseParam = parsePositiveInt(resolvedParams?.cursorBase) ?? 2;
+  const cursorList = decodeCursorList(resolvedParams?.cursors);
   const query = normalizeQuery(resolvedParams?.q);
   const status = normalizeStatus(resolvedParams?.status);
 
-  const { items, totalCount, totalPages, page: currentPage, pageSize } =
-    await getProductsByShopPaginated({
+  const normalized = normalizeCursorPageState({
+    page: pageParam,
+    cursors: cursorList,
+    cursorBase: cursorBaseParam,
+    maxHistory: MAX_CURSOR_HISTORY,
+  });
+
+  const { items, totalCount, nextCursor, hasMore } =
+    await getProductsByShopCursorPaginated({
       shopId: activeShopId,
-      page,
-      pageSize: PAGE_SIZE,
+      limit: PAGE_SIZE,
+      cursor: toCursorInput(normalized.currentCursor),
       query,
       status,
     });
+
+  const buildHref = ({
+    page,
+    cursors,
+    cursorBase,
+  }: {
+    page?: number;
+    cursors?: { createdAt: string; id: string }[];
+    cursorBase?: number;
+  }) => {
+    const params = new URLSearchParams();
+    params.set("shopId", activeShopId);
+    const cleanQuery = query.trim();
+    if (cleanQuery) params.set("q", cleanQuery);
+    if (status !== "all") params.set("status", status);
+
+    if (page && page > 1) {
+      params.set("page", `${page}`);
+      if (cursorBase) params.set("cursorBase", `${cursorBase}`);
+      if (cursors && cursors.length > 0) {
+        params.set("cursors", encodeCursorList(cursors));
+      }
+    }
+
+    return `/dashboard/products?${params.toString()}`;
+  };
+
+  const prevHref =
+    normalized.page > 1
+      ? buildCursorPageLink({
+          targetPage: normalized.page - 1,
+          currentPage: normalized.page,
+          cursors: normalized.cursors,
+          cursorBase: normalized.cursorBase,
+          nextCursor,
+          maxHistory: MAX_CURSOR_HISTORY,
+          buildHref,
+        })
+      : null;
+
+  const nextHref = hasMore
+    ? buildCursorPageLink({
+        targetPage: normalized.page + 1,
+        currentPage: normalized.page,
+        cursors: normalized.cursors,
+        cursorBase: normalized.cursorBase,
+        nextCursor,
+        maxHistory: MAX_CURSOR_HISTORY,
+        buildHref,
+      })
+    : null;
 
   const templateProducts = await listActiveBusinessProductTemplates(businessType).catch(() => []);
   const user = await requireUser();
@@ -121,10 +191,11 @@ export default async function ProductsPage({ searchParams }: PageProps) {
             templateProducts={templateProducts}
             canCreateProducts={canCreateProducts}
             serverProducts={items}
-            page={currentPage}
-            pageSize={pageSize}
+            page={normalized.page}
+            prevHref={prevHref}
+            nextHref={nextHref}
+            hasMore={Boolean(hasMore)}
             totalCount={totalCount}
-            totalPages={totalPages}
             initialQuery={query}
             initialStatus={status}
           />

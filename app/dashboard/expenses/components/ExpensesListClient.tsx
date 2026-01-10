@@ -3,8 +3,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { ExpensesDeleteButton } from "./ExpensesDeleteButton";
 
@@ -19,6 +21,14 @@ type Expense = {
 type Props = {
   shopId: string;
   expenses: Expense[];
+  from?: string;
+  to?: string;
+  page?: number;
+  prevHref?: string | null;
+  nextHref?: string | null;
+  hasMore?: boolean;
+  summaryTotal?: string;
+  summaryCount?: number;
 };
 
 type RangePreset = "today" | "yesterday" | "7d" | "month" | "all" | "custom";
@@ -31,6 +41,14 @@ const PRESETS: { key: RangePreset; label: string }[] = [
   { key: "all", label: "সব" },
   { key: "custom", label: "কাস্টম" },
 ];
+
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 function computeRange(preset: RangePreset, customFrom?: string, customTo?: string) {
   const toStr = (d: Date) => d.toISOString().split("T")[0];
@@ -54,16 +72,103 @@ function computeRange(preset: RangePreset, customFrom?: string, customTo?: strin
   return { from: undefined, to: undefined };
 }
 
-export function ExpensesListClient({ shopId, expenses }: Props) {
+export function ExpensesListClient({
+  shopId,
+  expenses,
+  from,
+  to,
+  page,
+  prevHref,
+  nextHref,
+  hasMore,
+  summaryTotal,
+  summaryCount,
+}: Props) {
+  const router = useRouter();
   const online = useOnlineStatus();
+  const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<Expense[]>(expenses);
   const [preset, setPreset] = useState<RangePreset>("today");
   const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
   const [customTo, setCustomTo] = useState<string | undefined>(undefined);
+  const serverSnapshotRef = useRef(expenses);
+  const refreshInFlightRef = useRef(false);
+
+  const canApplyCustom = (() => {
+    if (!customFrom || !customTo) return false;
+    return customFrom <= customTo;
+  })();
+  const handleOptimisticDelete = useCallback(
+    (id: string) => {
+      setItems((prev) => {
+        const next = prev.filter((item) => item.id !== id);
+        try {
+          localStorage.setItem(
+            `cachedExpenses:${shopId}`,
+            JSON.stringify(next)
+          );
+        } catch {
+          // ignore cache errors
+        }
+        return next;
+      });
+    },
+    [shopId]
+  );
+
+  useEffect(() => {
+    if (serverSnapshotRef.current !== expenses) {
+      serverSnapshotRef.current = expenses;
+      refreshInFlightRef.current = false;
+    }
+  }, [expenses]);
+
+  useEffect(() => {
+    if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    router.refresh();
+  }, [online, lastSyncAt, syncing, pendingCount, router]);
 
   // Keep Dexie/cache synced for offline use
   useEffect(() => {
+    let cancelled = false;
+
+    const loadFromDexie = async () => {
+      try {
+        const rows = await db.expenses.where("shopId").equals(shopId).toArray();
+        if (cancelled) return;
+        if (!rows || rows.length === 0) {
+          try {
+            const cached = localStorage.getItem(`cachedExpenses:${shopId}`);
+            if (cached) setItems(JSON.parse(cached) as Expense[]);
+          } catch {
+            // ignore
+          }
+          return;
+        }
+        setItems(
+          rows.map((r) => ({
+            id: r.id,
+            amount: r.amount,
+            category: r.category,
+            note: r.note,
+            expenseDate: r.expenseDate,
+          }))
+        );
+      } catch (err) {
+        console.error("Load offline expenses failed", err);
+      }
+    };
+
     if (online) {
+      if (syncing || pendingCount > 0 || refreshInFlightRef.current) {
+        loadFromDexie();
+        return () => {
+          cancelled = true;
+        };
+      }
+
       setItems(expenses);
       const rows = expenses.map((e) => ({
         id: e.id,
@@ -89,42 +194,44 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
       } catch {
         // ignore
       }
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
-    db.expenses
-      .where("shopId")
-      .equals(shopId)
-      .toArray()
-      .then((rows) => {
-        if (!rows || rows.length === 0) {
-          try {
-            const cached = localStorage.getItem(`cachedExpenses:${shopId}`);
-            if (cached) setItems(JSON.parse(cached) as Expense[]);
-          } catch {
-            // ignore
-          }
-          return;
-        }
-        setItems(
-          rows.map((r) => ({
-            id: r.id,
-            amount: r.amount,
-            category: r.category,
-            note: r.note,
-            expenseDate: r.expenseDate,
-          }))
-        );
-      })
-      .catch((err) => console.error("Load offline expenses failed", err));
-  }, [online, expenses, shopId]);
+    loadFromDexie();
+    return () => {
+      cancelled = true;
+    };
+  }, [online, expenses, shopId, pendingCount, syncing]);
 
   const range = useMemo(
     () => computeRange(preset, customFrom, customTo),
     [preset, customFrom, customTo]
   );
 
+  useEffect(() => {
+    if (!online) return;
+    // When server drives the list (online), reflect URL range into the custom inputs.
+    if (from) setCustomFrom(from);
+    if (to) setCustomTo(to);
+  }, [online, from, to]);
+
+  const applyRangeToUrl = useCallback(
+    (nextFrom: string, nextTo: string) => {
+      const params = new URLSearchParams({
+        shopId,
+        from: nextFrom,
+        to: nextTo,
+      });
+      router.push(`/dashboard/expenses?${params.toString()}`);
+    },
+    [router, shopId]
+  );
+
   const filteredItems = useMemo(() => {
+    // Online: server already applied the range. Don't client-filter again.
+    if (online) return items;
     return items.filter((e) => {
       const dateStr = e.expenseDate
         ? new Date(e.expenseDate as any).toISOString().slice(0, 10)
@@ -135,16 +242,18 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
       if (range.to && dateStr > range.to) return false;
       return true;
     });
-  }, [items, range.from, range.to]);
+  }, [items, online, range.from, range.to]);
 
-  const totalAmount = useMemo(
-    () =>
-      filteredItems.reduce((sum, e) => {
-        const amt = Number((e.amount as any)?.toString?.() ?? e.amount ?? 0);
-        return Number.isFinite(amt) ? sum + amt : sum;
-      }, 0),
-    [filteredItems]
-  );
+  const totalAmount = useMemo(() => {
+    if (online && summaryTotal !== undefined) {
+      const num = Number(summaryTotal);
+      return Number.isFinite(num) ? num : 0;
+    }
+    return filteredItems.reduce((sum, e) => {
+      const amt = Number((e.amount as any)?.toString?.() ?? e.amount ?? 0);
+      return Number.isFinite(amt) ? sum + amt : sum;
+    }, 0);
+  }, [filteredItems, online, summaryTotal]);
 
   const DateFilterRow = ({ className = "" }: { className?: string }) => (
     <div className={`relative ${className}`}>
@@ -152,7 +261,15 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
         {PRESETS.map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => setPreset(key)}
+            onClick={() => {
+              setPreset(key);
+              if (online) {
+                const next = computeRange(key, customFrom, customTo);
+                const nextFrom = next.from ?? todayStr();
+                const nextTo = next.to ?? nextFrom;
+                applyRangeToUrl(nextFrom, nextTo);
+              }
+            }}
             className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
               preset === key
                 ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
@@ -182,6 +299,22 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
           value={customTo ?? ""}
           onChange={(e) => setCustomTo(e.target.value)}
         />
+        {online && (
+          <button
+            type="button"
+            disabled={!canApplyCustom}
+            onClick={() => {
+              if (!canApplyCustom) return;
+              const cf = customFrom;
+              const ct = customTo;
+              if (!cf || !ct) return;
+              applyRangeToUrl(cf, ct);
+            }}
+            className="col-span-2 w-full rounded-lg bg-primary-soft text-primary border border-primary/30 py-2 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
+          >
+            রেঞ্জ প্রয়োগ করুন
+          </button>
+        )}
       </div>
     ) : null;
 
@@ -190,6 +323,7 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
       <div className="bg-card border border-border rounded-xl p-6 text-center space-y-2">
         <p className="text-lg font-semibold text-foreground">এখনো কোনো খরচ নেই</p>
         <p className="text-sm text-muted-foreground">প্রথম খরচ যোগ করুন</p>
+
         <Link
           href={`/dashboard/expenses/new?shopId=${shopId}`}
           className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
@@ -202,6 +336,36 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
 
   return (
     <div className="space-y-4">
+      {(prevHref || nextHref) && (
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {prevHref ? (
+              <Link
+                href={prevHref}
+                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted"
+              >
+                ⬅️ আগের
+              </Link>
+            ) : null}
+          </div>
+          <span className="text-xs text-muted-foreground">
+            পৃষ্ঠা {page ?? 1}
+          </span>
+          {nextHref ? (
+            <Link
+              href={nextHref}
+              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted"
+            >
+              পরের ➡️
+            </Link>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {online ? "শেষ" : ""}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Mobile sticky summary */}
       <div className="md:hidden sticky top-0 z-30 bg-card/95 backdrop-blur border-b border-border py-2 space-y-2">
         <div className="px-3 flex items-center justify-between">
@@ -213,9 +377,12 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
               {totalAmount.toFixed(2)} ৳
             </p>
             <p className="text-[11px] text-muted-foreground">
-              {filteredItems.length} খরচ
+              {(online && typeof summaryCount === "number")
+                ? summaryCount
+                : filteredItems.length} খরচ
             </p>
           </div>
+
           <Link
             href={`/dashboard/expenses/new?shopId=${shopId}`}
             className="px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold shadow-sm"
@@ -238,7 +405,11 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
             <p className="text-2xl font-bold text-foreground">
               {totalAmount.toFixed(2)} ৳
             </p>
-            <p className="text-xs text-muted-foreground">{filteredItems.length} খরচ</p>
+            <p className="text-xs text-muted-foreground">
+              {(online && typeof summaryCount === "number")
+                ? summaryCount
+                : filteredItems.length} খরচ
+            </p>
           </div>
           <Link
             href={`/dashboard/expenses/new?shopId=${shopId}`}
@@ -297,7 +468,10 @@ export function ExpensesListClient({ shopId, expenses }: Props) {
                       Offline মোড
                     </span>
                   )}
-                  <ExpensesDeleteButton id={e.id} />
+                  <ExpensesDeleteButton
+                    id={e.id}
+                    onDeleted={handleOptimisticDelete}
+                  />
                 </div>
               </div>
             </div>

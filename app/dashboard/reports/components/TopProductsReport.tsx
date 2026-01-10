@@ -3,36 +3,75 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useOnlineStatus } from "@/lib/sync/net-status";
 
 type TopProduct = { name: string; qty: number; revenue: number };
 
 export default function TopProductsReport({ shopId }: { shopId: string }) {
+  const online = useOnlineStatus();
   const [data, setData] = useState<TopProduct[]>([]);
+
+  const buildCacheKey = useCallback(
+    (limit: number) => `reports:top-products:${shopId}:${limit}`,
+    [shopId]
+  );
+
+  const loadCached = useCallback(
+    (limit: number) => {
+      try {
+        const raw = localStorage.getItem(buildCacheKey(limit));
+        if (!raw) {
+          setData([]);
+          return false;
+        }
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setData(parsed);
+          return true;
+        }
+      } catch (err) {
+        console.warn("Top products cache read failed", err);
+      }
+      setData([]);
+      return false;
+    },
+    [buildCacheKey]
+  );
 
   const load = useCallback(
     async (limit = 10) => {
       try {
+        if (!online) {
+          loadCached(limit);
+          return;
+        }
         const res = await fetch(
           `/api/reports/top-products?shopId=${shopId}&limit=${limit}`,
           { cache: "no-store" }
         );
         if (!res.ok) {
-          setData([]);
+          loadCached(limit);
           return;
         }
         const text = await res.text();
         if (!text) {
-          setData([]);
+          loadCached(limit);
           return;
         }
         const json = JSON.parse(text);
-        setData(Array.isArray(json?.data) ? json.data : []);
+        const rows = Array.isArray(json?.data) ? json.data : [];
+        setData(rows);
+        try {
+          localStorage.setItem(buildCacheKey(limit), JSON.stringify(rows));
+        } catch (err) {
+          console.warn("Top products cache write failed", err);
+        }
       } catch (e) {
         console.error("Top products load failed", e);
-        setData([]);
+        loadCached(limit);
       }
     },
-    [shopId]
+    [online, shopId, buildCacheKey, loadCached]
   );
 
   useEffect(() => {

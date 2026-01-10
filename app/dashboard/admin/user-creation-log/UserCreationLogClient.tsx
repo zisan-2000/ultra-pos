@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useOnlineStatus } from "@/lib/sync/net-status";
 
 type ActivityEntry = {
   createdAt: string;
@@ -30,6 +31,7 @@ type Filters = {
 };
 
 export function UserCreationLogClient() {
+  const online = useOnlineStatus();
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
   const [filters, setFilters] = useState<Filters>({
@@ -45,6 +47,33 @@ export function UserCreationLogClient() {
   const [resultCount, setResultCount] = useState(0);
 
   const abortRef = useRef<AbortController | null>(null);
+  const cacheKey = "admin:user-creation-log";
+
+  const loadFromCache = useCallback(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as {
+        entries?: ActivityEntry[];
+        creators?: Creator[];
+        meta?: { count?: number; updatedAt?: string };
+      };
+      const cachedEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
+      const cachedCreators = Array.isArray(parsed.creators) ? parsed.creators : [];
+      setEntries(cachedEntries);
+      setCreators(cachedCreators);
+      const count =
+        typeof parsed.meta?.count === "number"
+          ? parsed.meta.count
+          : cachedEntries.length;
+      setResultCount(count);
+      setLastUpdated(parsed.meta?.updatedAt ? new Date(parsed.meta.updatedAt) : null);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [cacheKey]);
 
   const hasInvalidRange = useMemo(() => {
     if (!filters.startDate || !filters.endDate) return false;
@@ -65,8 +94,25 @@ export function UserCreationLogClient() {
     if (hasInvalidRange) {
       setError("Start date cannot be after end date.");
       setEntries([]);
+      setCreators([]);
       setResultCount(0);
+      setLastUpdated(null);
       setLoading(false);
+      return;
+    }
+
+    if (!online) {
+      abortRef.current?.abort();
+      setLoading(false);
+      setError(null);
+      const loaded = loadFromCache();
+      if (!loaded) {
+        setEntries([]);
+        setCreators([]);
+        setResultCount(0);
+        setLastUpdated(null);
+        setError("Offline: cached activity log not available.");
+      }
       return;
     }
 
@@ -96,19 +142,38 @@ export function UserCreationLogClient() {
         return res.json();
       })
       .then((payload) => {
-        setEntries(Array.isArray(payload?.data) ? payload.data : []);
-        setCreators(Array.isArray(payload?.creators) ? payload.creators : []);
-        setResultCount(payload?.meta?.count ?? payload?.data?.length ?? 0);
-        setLastUpdated(new Date());
+        const data = Array.isArray(payload?.data) ? payload.data : [];
+        const creatorsData = Array.isArray(payload?.creators) ? payload.creators : [];
+        const count = payload?.meta?.count ?? data.length;
+        setEntries(data);
+        setCreators(creatorsData);
+        setResultCount(count);
+        const updatedAt = new Date();
+        setLastUpdated(updatedAt);
+        try {
+          localStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              entries: data,
+              creators: creatorsData,
+              meta: { count, updatedAt: updatedAt.toISOString() },
+            }),
+          );
+        } catch {
+          // ignore cache errors
+        }
       })
       .catch((err) => {
         if (err.name === "AbortError") return;
-        setError(err.message || "Failed to load activity log");
+        const loaded = loadFromCache();
+        if (!loaded) {
+          setError(err.message || "Failed to load activity log");
+        }
       })
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [filters, hasInvalidRange]);
+  }, [filters, hasInvalidRange, online, loadFromCache, cacheKey]);
 
   const applyFilter = (patch: Partial<Filters>) => {
     setFilters((prev) => ({ ...prev, ...patch }));
@@ -130,7 +195,15 @@ export function UserCreationLogClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+      {!online && (
+        <div className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-xs font-semibold text-warning">
+          Offline: showing cached activity log.
+        </div>
+      )}
+      <fieldset
+        disabled={!online}
+        className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm disabled:opacity-70"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -242,7 +315,7 @@ export function UserCreationLogClient() {
             End date must be on or after the start date.
           </div>
         ) : null}
-      </div>
+      </fieldset>
 
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">

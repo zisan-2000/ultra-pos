@@ -6,18 +6,30 @@ import { queueAdd } from "@/lib/sync/queue";
 
 type Props = {
   id: string;
+  onDeleted: (id: string) => void;
 };
 
-export function CashDeleteButton({ id }: Props) {
+export function CashDeleteButton({ id, onDeleted }: Props) {
   const online = useOnlineStatus();
 
   const handleDelete = async () => {
-    const confirmDelete = confirm("ক্যাশ এন্ট্রি ডিলিট করবেন?");
+    const confirmDelete = confirm("আপনি কি ক্যাশ এন্ট্রিটি মুছে ফেলতে চান?");
     if (!confirmDelete) return;
 
-    await db.cash.delete(id);
-    await queueAdd("cash", "delete", { id });
-    alert("ডিলিট কিউ হয়েছে, সংযোগ পেলে সিঙ্ক হবে।");
+    onDeleted(id);
+
+    try {
+      await db.cash.delete(id);
+      await queueAdd("cash", "delete", { id });
+    } catch (err) {
+      console.error("Cash delete failed", err);
+    }
+
+    alert(
+      online
+        ? "ক্যাশ এন্ট্রি মুছে ফেলা হয়েছে, সিঙ্ক হবে।"
+        : "অফলাইন: ক্যাশ এন্ট্রি মুছে ফেলা হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।"
+    );
   };
 
   return (
@@ -26,7 +38,7 @@ export function CashDeleteButton({ id }: Props) {
       onClick={handleDelete}
       className="w-full md:w-auto px-4 py-2 bg-danger-soft border border-danger/30 text-danger rounded-lg font-semibold hover:border-danger/50 hover:bg-danger-soft transition-colors"
     >
-      ডিলিট
+      মুছুন
     </button>
   );
 }

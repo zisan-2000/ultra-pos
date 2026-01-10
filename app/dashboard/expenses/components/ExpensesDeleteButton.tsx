@@ -6,21 +6,30 @@ import { queueAdd } from "@/lib/sync/queue";
 
 type Props = {
   id: string;
+  onDeleted: (id: string) => void;
 };
 
-export function ExpensesDeleteButton({ id }: Props) {
+export function ExpensesDeleteButton({ id, onDeleted }: Props) {
   const online = useOnlineStatus();
 
   const handleDelete = async () => {
-    const confirmDelete = confirm("খরচ ডিলিট করতে চান?");
+    const confirmDelete = confirm("আপনি কি খরচটি মুছে ফেলতে চান?");
     if (!confirmDelete) return;
 
-    if (online) {
+    onDeleted(id);
+
+    try {
       await db.expenses.delete(id);
       await queueAdd("expense", "delete", { id });
+    } catch (err) {
+      console.error("Expense delete failed", err);
     }
 
-    alert("ডিলিট কিউ হয়েছে, সংযোগ পেলে সিঙ্ক হবে।");
+    alert(
+      online
+        ? "খরচটি মুছে ফেলা হয়েছে, সিঙ্ক হবে।"
+        : "অফলাইন: খরচটি মুছে ফেলা হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।"
+    );
   };
 
   return (
@@ -29,7 +38,7 @@ export function ExpensesDeleteButton({ id }: Props) {
       onClick={handleDelete}
       className="w-full md:w-auto px-4 py-2 bg-danger-soft border border-danger/30 text-danger rounded-lg font-semibold hover:border-danger/50 hover:bg-danger-soft/70 transition-colors"
     >
-      ডিলিট
+      মুছুন
     </button>
   );
 }

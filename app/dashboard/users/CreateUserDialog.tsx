@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createUserWithRole } from "@/app/actions/user-management";
 import { getShopsByUser } from "@/app/actions/shops";
+import { useOnlineStatus } from "@/lib/sync/net-status";
 
 type Role = {
   id: string;
@@ -28,6 +29,8 @@ export function CreateUserDialog({
   creatableRoles,
   onSuccess,
 }: CreateUserDialogProps) {
+  const online = useOnlineStatus();
+  const isOfflineBlocked = !online;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,6 +51,15 @@ export function CreateUserDialog({
     if (!isOpen || !isStaffRole) return;
 
     let mounted = true;
+    setError(null);
+
+    if (!online) {
+      setShops([]);
+      setSelectedShopId("");
+      setShopsLoading(false);
+      return;
+    }
+
     setShopsLoading(true);
     getShopsByUser()
       .then((rows) => {
@@ -66,13 +78,17 @@ export function CreateUserDialog({
     return () => {
       mounted = false;
     };
-  }, [isOpen, isStaffRole]);
+  }, [isOpen, isStaffRole, online]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!name.trim() || !email.trim() || !password.trim() || !selectedRoleId) {
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedName || !trimmedEmail || !trimmedPassword || !selectedRoleId) {
       setError("সব ফিল্ড পূরণ করুন");
       return;
     }
@@ -84,10 +100,14 @@ export function CreateUserDialog({
 
     try {
       setLoading(true);
+      if (!online) {
+        setError("অফলাইন: নতুন ইউজার তৈরি করতে ইন্টারনেট দরকার");
+        return;
+      }
       await createUserWithRole(
-        email,
-        name,
-        password,
+        trimmedEmail,
+        trimmedName,
+        trimmedPassword,
         selectedRoleId,
         isStaffRole ? selectedShopId : undefined
       );
@@ -124,6 +144,11 @@ export function CreateUserDialog({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {isOfflineBlocked && (
+            <div className="rounded-lg border border-warning/30 bg-warning-soft text-warning text-xs font-semibold px-3 py-2">
+              অফলাইন: নতুন ইউজার তৈরি করতে ইন্টারনেট দরকার।
+            </div>
+          )}
           {error && (
             <div className="bg-danger-soft border border-danger/30 rounded-lg p-3">
               <p className="text-danger text-sm">{error}</p>
@@ -237,7 +262,7 @@ export function CreateUserDialog({
             <button
               type="submit"
               className="flex-1 px-4 py-2 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading}
+              disabled={loading || isOfflineBlocked}
             >
               {loading ? "তৈরি হচ্ছে..." : "তৈরি করুন"}
             </button>

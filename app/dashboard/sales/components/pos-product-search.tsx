@@ -1,7 +1,15 @@
 // app/dashboard/sales/components/PosProductSearch.tsx
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useCart } from "@/hooks/use-cart";
 
 type PosProductSearchProps = {
@@ -32,6 +40,23 @@ type SpeechRecognitionInstance = {
 };
 
 const QUICK_LIMIT = 8; // fixed slots so buttons never jump during a session
+const INITIAL_RENDER = 60;
+const RENDER_BATCH = 40;
+
+function scheduleIdle(callback: () => void) {
+  const g = globalThis as typeof globalThis & {
+    requestIdleCallback?: (cb: () => void, options?: { timeout?: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+
+  if (typeof g.requestIdleCallback === "function") {
+    const id = g.requestIdleCallback(callback, { timeout: 200 });
+    return () => g.cancelIdleCallback?.(id);
+  }
+
+  const id = setTimeout(callback, 16);
+  return () => clearTimeout(id);
+}
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -87,13 +112,13 @@ function buildQuickSlots(
 const ProductButton = memo(function ProductButton({
   product,
   onAdd,
-  recentlyAddedId,
-  cooldownProductId,
+  isRecentlyAdded,
+  isCooldown,
 }: {
   product: EnrichedProduct;
   onAdd: (product: EnrichedProduct) => void;
-  recentlyAddedId: string | null;
-  cooldownProductId: string | null;
+  isRecentlyAdded: boolean;
+  isCooldown: boolean;
 }) {
   const stock = toNumber(product.stockQty);
   const stockStyle =
@@ -103,16 +128,14 @@ const ProductButton = memo(function ProductButton({
       ? "bg-warning-soft text-warning"
       : "bg-success-soft text-success";
 
-  const inCooldown = cooldownProductId === product.id;
-
   return (
     <button
       key={product.id}
       type="button"
       className={`w-full h-full min-h-[140px] text-left rounded-xl border bg-card border-border hover:border-primary/40 hover:shadow-sm transition-all p-3.5 pressable active:scale-[0.97] active:translate-y-[1px] ${
-        recentlyAddedId === product.id ? "ring-2 ring-success/30" : ""
+        isRecentlyAdded ? "ring-2 ring-success/30" : ""
       } ${stock <= 0 ? "opacity-80" : ""} ${
-        inCooldown ? "opacity-95 shadow-inner border-success/30" : ""
+        isCooldown ? "opacity-95 shadow-inner border-success/30" : ""
       }`}
       onClick={() => onAdd(product)}
     >
@@ -125,7 +148,7 @@ const ProductButton = memo(function ProductButton({
         >
           {stock.toFixed(0)}
         </span>
-        {recentlyAddedId === product.id && (
+        {isRecentlyAdded && (
           <span className="absolute -top-1 -right-1 bg-success text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
             +1
           </span>
@@ -139,7 +162,10 @@ const ProductButton = memo(function ProductButton({
   );
 });
 
-export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
+export const PosProductSearch = memo(function PosProductSearch({
+  products,
+  shopId,
+}: PosProductSearchProps) {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [usage, setUsage] = useState<Record<string, UsageEntry>>({});
@@ -151,14 +177,15 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   const [cooldownProductId, setCooldownProductId] = useState<string | null>(null);
 
   const add = useCart((s) => s.add);
-  const items = useCart((s) => s.items);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const quickSlotsRef = useRef<QuickSlot[] | null>(null);
   const lastAddRef = useRef(0);
   const storageKey = useMemo(() => `pos-usage-${shopId}`, [shopId]);
+  const [renderCount, setRenderCount] = useState(INITIAL_RENDER);
 
-  const debouncedQuery = useDebounce(query, 200);
+  const deferredQuery = useDeferredValue(query);
+  const debouncedQuery = useDebounce(deferredQuery, 200);
 
   useEffect(() => {
     const stored =
@@ -186,11 +213,14 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
   // Persist usage separately to avoid doing localStorage writes in setState updaters
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(usage));
-    } catch {
-      // ignore quota / serialization errors in production UI
-    }
+    const cancel = scheduleIdle(() => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(usage));
+      } catch {
+        // ignore quota / serialization errors in production UI
+      }
+    });
+    return () => cancel();
   }, [usage, storageKey]);
 
   useEffect(() => {
@@ -302,6 +332,27 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
     return slotProducts.filter((p) => !quickIds.has(p.id)).slice(0, 6);
   }, [debouncedQuery, filteredByCategory, sortedResults, usage]);
 
+  useEffect(() => {
+    if (!showAllProducts) return;
+    setRenderCount(Math.min(INITIAL_RENDER, sortedResults.length));
+  }, [showAllProducts, sortedResults.length]);
+
+  useEffect(() => {
+    if (!showAllProducts) return;
+    if (renderCount >= sortedResults.length) return;
+    const cancel = scheduleIdle(() => {
+      setRenderCount((prev) =>
+        Math.min(prev + RENDER_BATCH, sortedResults.length)
+      );
+    });
+    return () => cancel();
+  }, [showAllProducts, renderCount, sortedResults.length]);
+
+  const visibleResults = useMemo(
+    () => sortedResults.slice(0, renderCount),
+    [sortedResults, renderCount]
+  );
+
   const handleAddToCart = useCallback(
     (product: EnrichedProduct) => {
       // Prevent double clicks within 300ms (ref-based, not state-based)
@@ -310,7 +361,9 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
       lastAddRef.current = now;
 
       const stock = toNumber(product.stockQty);
-      const inCart = items.find((i) => i.productId === product.id)?.qty || 0;
+      const cartItems = useCart.getState().items;
+      const inCart =
+        cartItems.find((i) => i.productId === product.id)?.qty || 0;
       const tracksStock = product.trackStock === true;
 
       if (tracksStock && stock <= inCart) {
@@ -334,7 +387,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
       setTimeout(() => setRecentlyAdded(null), 450);
       setTimeout(() => setCooldownProductId(null), 220);
     },
-    [add, bumpUsage, items, setCooldownProductId, setRecentlyAdded, shopId]
+    [add, bumpUsage, setCooldownProductId, setRecentlyAdded, shopId]
   );
 
   const startVoice = () => {
@@ -392,8 +445,8 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
       key={product.id}
       product={product}
       onAdd={handleAddToCart}
-      recentlyAddedId={recentlyAdded}
-      cooldownProductId={cooldownProductId}
+      isRecentlyAdded={recentlyAdded === product.id}
+      isCooldown={cooldownProductId === product.id}
     />
   );
 
@@ -469,7 +522,7 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
         </div>
       )}
 
-      {(query.trim().length > 0 || items.length === 0) && (
+      {query.trim().length > 0 && (
         <div className="space-y-3 bg-card border border-border rounded-xl p-3 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
@@ -527,14 +580,19 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
               ))}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 px-1 pb-1 max-h-[520px] overflow-y-auto pr-1">
-              {sortedResults.length === 0 ? (
+              {visibleResults.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8 col-span-full">
                   আপনার ফিল্টারে কোনো পণ্য নেই।
                 </p>
               ) : (
-                sortedResults.map((p) => renderProductButton(p))
+                visibleResults.map((p) => renderProductButton(p))
               )}
             </div>
+            {renderCount < sortedResults.length ? (
+              <p className="text-xs text-muted-foreground text-center">
+                আরও {sortedResults.length - renderCount} টি পণ্য লোড হচ্ছে...
+              </p>
+            ) : null}
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -544,4 +602,4 @@ export function PosProductSearch({ products, shopId }: PosProductSearchProps) {
       </div>
     </div>
   );
-}
+});

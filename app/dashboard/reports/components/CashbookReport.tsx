@@ -3,6 +3,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useOnlineStatus } from "@/lib/sync/net-status";
 
 type Props = { shopId: string; from?: string; to?: string };
 
@@ -15,27 +16,73 @@ type CashRow = {
 };
 
 export default function CashbookReport({ shopId, from, to }: Props) {
+  const online = useOnlineStatus();
   const [rows, setRows] = useState<CashRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async (rangeFrom?: string, rangeTo?: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ shopId });
-      if (rangeFrom) params.append("from", rangeFrom);
-      if (rangeTo) params.append("to", rangeTo);
+  const buildCacheKey = useCallback(
+    (rangeFrom?: string, rangeTo?: string) =>
+      `reports:cash:${shopId}:${rangeFrom || "all"}:${rangeTo || "all"}`,
+    [shopId]
+  );
 
-      const res = await fetch(`/api/reports/cash?${params.toString()}`);
-      if (!res.ok) {
-        setRows([]);
+  const loadCached = useCallback(
+    (rangeFrom?: string, rangeTo?: string) => {
+      try {
+        const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
+        if (!raw) {
+          setRows([]);
+          return false;
+        }
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setRows(parsed);
+          return true;
+        }
+      } catch (err) {
+        console.warn("Cash report cache read failed", err);
+      }
+      setRows([]);
+      return false;
+    },
+    [buildCacheKey]
+  );
+
+  const load = useCallback(
+    async (rangeFrom?: string, rangeTo?: string) => {
+      if (!online) {
+        setLoading(false);
+        loadCached(rangeFrom, rangeTo);
         return;
       }
-      const data = await res.json();
-      setRows(data.rows || []);
-    } finally {
-      setLoading(false);
-    }
-  }, [shopId]);
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ shopId });
+        if (rangeFrom) params.append("from", rangeFrom);
+        if (rangeTo) params.append("to", rangeTo);
+
+        const res = await fetch(`/api/reports/cash?${params.toString()}`);
+        if (!res.ok) {
+          loadCached(rangeFrom, rangeTo);
+          return;
+        }
+        const data = await res.json();
+        const rows = data.rows || [];
+        setRows(rows);
+        try {
+          localStorage.setItem(
+            buildCacheKey(rangeFrom, rangeTo),
+            JSON.stringify(rows)
+          );
+        } catch (err) {
+          console.warn("Cash report cache write failed", err);
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [online, shopId, buildCacheKey, loadCached]
+  );
 
   useEffect(() => {
     void load(from, to);

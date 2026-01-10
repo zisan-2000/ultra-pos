@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import type { Role } from "@prisma/client";
 import { assignRoleToUser, revokeRoleFromUser } from "@/app/actions/rbac-admin";
+import { useOnlineStatus } from "@/lib/sync/net-status";
+import { queueAdminAction } from "@/lib/sync/queue";
 
 interface UserRow {
   id: string;
@@ -17,6 +19,7 @@ interface UsersRolesPanelProps {
 }
 
 export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
+  const online = useOnlineStatus();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [workingUserId, setWorkingUserId] = useState<string | null>(null);
   const [localAssignments, setLocalAssignments] = useState<
@@ -69,6 +72,50 @@ export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
     startSaving(async () => {
       setWorkingUserId(selectedUserId);
       try {
+        if (!online) {
+          await Promise.all([
+            ...toAssign.map((roleId) =>
+              queueAdminAction("rbac_assign_role", {
+                userId: selectedUserId,
+                roleId,
+              }),
+            ),
+            ...toRevoke.map((roleId) =>
+              queueAdminAction("rbac_revoke_role", {
+                userId: selectedUserId,
+                roleId,
+              }),
+            ),
+          ]);
+          try {
+            const raw = localStorage.getItem("admin:rbac");
+            if (raw) {
+              const parsed = JSON.parse(raw) as {
+                users?: UserRow[];
+                roleOptions?: Role[];
+                roles?: Role[];
+                permissions?: any[];
+              };
+              if (Array.isArray(parsed.users)) {
+                const roleMap = new Map(roles.map((role) => [role.id, role.name]));
+                parsed.users = parsed.users.map((user) => {
+                  if (user.id !== selectedUserId) return user;
+                  const nextRoles = Array.from(current).map((id) => ({
+                    id,
+                    name: roleMap.get(id) || "Unknown",
+                  }));
+                  return { ...user, roles: nextRoles };
+                });
+                localStorage.setItem("admin:rbac", JSON.stringify(parsed));
+              }
+            }
+          } catch {
+            // ignore cache errors
+          }
+          alert("Offline: role changes queued.");
+          return;
+        }
+
         await Promise.all([
           ...toAssign.map((roleId) => assignRoleToUser(selectedUserId, roleId)),
           ...toRevoke.map((roleId) => revokeRoleFromUser(selectedUserId, roleId)),
@@ -116,11 +163,16 @@ export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
             </tr>
           </thead>
           <tbody className="bg-card divide-y divide-border">
-            {users.map((u, idx) => (
-              <tr
-                key={u.id}
-                className={idx % 2 === 0 ? "bg-card" : "bg-muted/40"}
-              >
+            {users.map((u, idx) => {
+              const roleIds =
+                localAssignments[u.id] ?? new Set(u.roles.map((r) => r.id));
+              const displayRoles = roles.filter((r) => roleIds.has(r.id));
+
+              return (
+                <tr
+                  key={u.id}
+                  className={idx % 2 === 0 ? "bg-card" : "bg-muted/40"}
+                >
                 <td className="px-3 py-2 align-top">
                   <div className="font-semibold text-foreground text-xs sm:text-sm">
                     {u.name || "(No name)"}
@@ -131,12 +183,12 @@ export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
                 </td>
                 <td className="px-3 py-2 align-top text-xs sm:text-sm">
                   <div className="flex flex-wrap gap-1">
-                    {u.roles.length === 0 ? (
+                    {displayRoles.length === 0 ? (
                       <span className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground">
                         No roles
                       </span>
                     ) : (
-                      u.roles.map((r) => (
+                      displayRoles.map((r) => (
                         <span
                           key={r.id}
                           className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground border border-border"
@@ -156,8 +208,9 @@ export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
                     ✏️ Manage
                   </button>
                 </td>
-              </tr>
-            ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

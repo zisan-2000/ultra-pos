@@ -2,15 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { updateUser } from "@/app/actions/user-management";
+import { useOnlineStatus } from "@/lib/sync/net-status";
+import { queueAdminAction } from "@/lib/sync/queue";
+import { db } from "@/lib/dexie/db";
 
 type User = {
   id: string;
   email: string | null;
   name: string | null;
   emailVerified: boolean;
-  createdAt: Date;
+  createdAt: Date | string;
   createdBy: string | null;
   roles: Array<{ id: string; name: string }>;
+  pending?: boolean;
 };
 
 type EditUserDialogProps = {
@@ -18,6 +22,7 @@ type EditUserDialogProps = {
   onClose: () => void;
   user: User | null;
   onSuccess: () => void;
+  onOptimisticUpdate?: (user: User) => void;
 };
 
 export function EditUserDialog({
@@ -25,13 +30,40 @@ export function EditUserDialog({
   onClose,
   user,
   onSuccess,
+  onOptimisticUpdate,
 }: EditUserDialogProps) {
+  const online = useOnlineStatus();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const updatePendingCreate = async (clientId: string, data: Record<string, any>) => {
+    try {
+      const items = await db.queue.where("type").equals("admin").toArray();
+      const matches = items.filter(
+        (item) =>
+          item.payload?.action === "user_create" &&
+          item.payload?.data?.clientId === clientId
+      );
+      await Promise.all(
+        matches.map((item) =>
+          item.id
+            ? db.queue.update(item.id, {
+                payload: {
+                  ...item.payload,
+                  data: { ...item.payload.data, ...data },
+                },
+              })
+            : Promise.resolve()
+        )
+      );
+    } catch (err) {
+      console.error("Update pending user create failed", err);
+    }
+  };
 
   // Sync local form state whenever dialog opens or target user changes
   useEffect(() => {
@@ -50,8 +82,16 @@ export function EditUserDialog({
 
     if (!user) return;
 
-    if (!name.trim() || !email.trim()) {
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedName || !trimmedEmail) {
       setError("সব ফিল্ড পূরণ করুন");
+      return;
+    }
+
+    if (!online && (password.trim() || confirmPassword.trim())) {
+      setError("অফলাইন: পাসওয়ার্ড পরিবর্তন করা যাবে না");
       return;
     }
 
@@ -70,9 +110,39 @@ export function EditUserDialog({
 
     try {
       setLoading(true);
+      if (!online) {
+        const trimmedPassword = password.trim();
+        const passwordValue = trimmedPassword ? trimmedPassword : undefined;
+        const payload = {
+          userId: user.id,
+          name: trimmedName,
+          email: trimmedEmail,
+          ...(passwordValue ? { password: passwordValue } : {}),
+        };
+
+        if (user.id.startsWith("offline-")) {
+          await updatePendingCreate(user.id, {
+            email: trimmedEmail,
+            name: trimmedName,
+            ...(passwordValue ? { password: passwordValue } : {}),
+          });
+        } else {
+          await queueAdminAction("user_update", payload);
+        }
+
+        onOptimisticUpdate?.({
+          ...user,
+          name: trimmedName,
+          email: trimmedEmail,
+          pending: true,
+        });
+        alert("অফলাইন: ইউজার আপডেট কিউ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+        onClose();
+        return;
+      }
       await updateUser(user.id, {
-        name,
-        email,
+        name: trimmedName,
+        email: trimmedEmail,
         password: password || undefined,
       });
       onSuccess();
@@ -136,7 +206,7 @@ export function EditUserDialog({
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="ফাঁকা রাখলে পাসওয়ার্ড পরিবর্তন হবে না"
                 className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                disabled={loading}
+                disabled={loading || !online}
               />
               <p className="text-xs text-muted-foreground mt-1">
                 কমপক্ষে ৮ অক্ষর, একটি বড় অক্ষর এবং একটি সংখ্যা ব্যবহার করা উত্তম
@@ -152,7 +222,7 @@ export function EditUserDialog({
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="আবার পাসওয়ার্ড লিখুন"
                 className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                disabled={loading}
+                disabled={loading || !online}
               />
             </div>
           </div>

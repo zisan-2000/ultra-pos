@@ -3,13 +3,45 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
-import { getCashByShop } from "@/app/actions/cash";
+import { getCashByShopCursorPaginated, getCashSummaryByRange } from "@/app/actions/cash";
 import ShopSelectorClient from "./ShopSelectorClient";
 import { CashListClient } from "./components/CashListClient";
 
+import {
+  buildCursorPageLink,
+  decodeCursorList,
+  encodeCursorList,
+  normalizeCursorPageState,
+  toCursorInput,
+} from "@/lib/cursor-pagination";
+
 type CashPageProps = {
-  searchParams?: Promise<{ shopId?: string } | undefined>;
+  searchParams?: Promise<{
+    shopId?: string;
+    from?: string;
+    to?: string;
+    page?: string;
+    cursors?: string;
+    cursorBase?: string;
+  }>;
 };
+
+const PAGE_SIZE = 30;
+const MAX_CURSOR_HISTORY = 20;
+
+function parsePositiveInt(value?: string) {
+  if (!value) return null;
+  const num = Number.parseInt(value, 10);
+  return Number.isFinite(num) && num > 0 ? num : null;
+}
+
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 export default async function CashPage({ searchParams }: CashPageProps) {
   const shops = await getShopsByUser();
@@ -46,20 +78,81 @@ export default async function CashPage({ searchParams }: CashPageProps) {
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
 
-  const rows = await getCashByShop(selectedShopId);
-  const serializableRows = rows.map((e) => ({
-    id: e.id,
-    shopId: e.shopId,
-    entryType: (e.entryType as "IN" | "OUT") || "IN",
-    amount: e.amount?.toString?.() ?? (e as any).amount ?? "0",
-    reason: e.reason,
-    createdAt: e.createdAt?.toISOString?.() ?? e.createdAt,
-  }));
+  const rawFrom = resolvedSearch?.from;
+  const rawTo = resolvedSearch?.to;
+  const from = rawFrom ?? rawTo ?? todayStr();
+  const to = rawTo ?? from;
 
-  const balance = rows.reduce((sum, e) => {
-    const amt = Number(e.amount);
-    return e.entryType === "IN" ? sum + amt : sum - amt;
-  }, 0);
+  const pageParam = parsePositiveInt(resolvedSearch?.page) ?? 1;
+  const cursorBaseParam = parsePositiveInt(resolvedSearch?.cursorBase) ?? 2;
+  const cursorList = decodeCursorList(resolvedSearch?.cursors);
+
+  const normalized = normalizeCursorPageState({
+    page: pageParam,
+    cursors: cursorList,
+    cursorBase: cursorBaseParam,
+    maxHistory: MAX_CURSOR_HISTORY,
+  });
+
+  const [{ items: serializableRows, nextCursor, hasMore }, summary] =
+    await Promise.all([
+      getCashByShopCursorPaginated({
+        shopId: selectedShopId,
+        limit: PAGE_SIZE,
+        cursor: toCursorInput(normalized.currentCursor),
+        from,
+        to,
+      }),
+      getCashSummaryByRange(selectedShopId, from, to),
+    ]);
+
+  const buildHref = ({
+    page,
+    cursors,
+    cursorBase,
+  }: {
+    page?: number;
+    cursors?: { createdAt: string; id: string }[];
+    cursorBase?: number;
+  }) => {
+    const params = new URLSearchParams();
+    params.set("shopId", selectedShopId);
+    params.set("from", from);
+    params.set("to", to);
+    if (page && page > 1) {
+      params.set("page", `${page}`);
+      if (cursorBase) params.set("cursorBase", `${cursorBase}`);
+      if (cursors && cursors.length > 0) {
+        params.set("cursors", encodeCursorList(cursors));
+      }
+    }
+    return `/dashboard/cash?${params.toString()}`;
+  };
+
+  const prevHref =
+    normalized.page > 1
+      ? buildCursorPageLink({
+          targetPage: normalized.page - 1,
+          currentPage: normalized.page,
+          cursors: normalized.cursors,
+          cursorBase: normalized.cursorBase,
+          nextCursor,
+          maxHistory: MAX_CURSOR_HISTORY,
+          buildHref,
+        })
+      : null;
+
+  const nextHref = hasMore
+    ? buildCursorPageLink({
+        targetPage: normalized.page + 1,
+        currentPage: normalized.page,
+        cursors: normalized.cursors,
+        cursorBase: normalized.cursorBase,
+        nextCursor,
+        maxHistory: MAX_CURSOR_HISTORY,
+        buildHref,
+      })
+    : null;
 
   return (
     <div className="space-y-6 section-gap">
@@ -74,7 +167,7 @@ export default async function CashPage({ searchParams }: CashPageProps) {
             </p>
             <div className="bg-muted border border-border rounded-lg p-4 mt-2">
               <p className="text-lg text-muted-foreground leading-snug">
-                বর্তমান ব্যালেন্স: <span className={`text-2xl font-bold ${balance >= 0 ? "text-success" : "text-danger"}`}>{balance.toFixed(2)} ৳</span>
+                বর্তমান ব্যালেন্স: <span className={`text-2xl font-bold ${summary.balance >= 0 ? "text-success" : "text-danger"}`}>{summary.balance.toFixed(2)} ৳</span>
               </p>
             </div>
           </div>
@@ -96,6 +189,16 @@ export default async function CashPage({ searchParams }: CashPageProps) {
         shopId={selectedShopId}
         shopName={selectedShop.name}
         rows={serializableRows}
+        from={from}
+        to={to}
+        page={normalized.page}
+        prevHref={prevHref}
+        nextHref={nextHref}
+        hasMore={Boolean(hasMore)}
+        summaryIn={summary.totalIn}
+        summaryOut={summary.totalOut}
+        summaryNet={summary.balance}
+        summaryCount={summary.count}
       />
     </div>
   );

@@ -3,8 +3,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { VoidSaleControls } from "./VoidSaleControls";
 
@@ -18,6 +20,7 @@ type SaleSummary = {
   itemCount: number;
   itemPreview: string;
   customerName: string | null;
+  syncStatus?: "new" | "synced";
 };
 
 type Props = {
@@ -66,46 +69,35 @@ export default function SalesListClient({
   hasMore,
   voidSaleAction,
 }: Props) {
+  const router = useRouter();
   const online = useOnlineStatus();
+  const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<SaleSummary[]>(sales);
+  const serverSnapshotRef = useRef(sales);
+  const refreshInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (serverSnapshotRef.current !== sales) {
+      serverSnapshotRef.current = sales;
+      refreshInFlightRef.current = false;
+    }
+  }, [sales]);
+
+  useEffect(() => {
+    if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    router.refresh();
+  }, [online, lastSyncAt, syncing, pendingCount, router]);
 
   // Seed Dexie when online; load from Dexie when offline.
   useEffect(() => {
-    if (online) {
-      setItems(sales);
-      const rows = sales.map((s) => ({
-        tempId: s.id,
-        id: s.id,
-        shopId,
-        items: [],
-        paymentMethod: s.paymentMethod,
-        customerId: null,
-        note: "",
-        totalAmount: s.totalAmount,
-        createdAt: new Date(s.createdAt).getTime(),
-        syncStatus: "synced" as const,
-        itemCount: s.itemCount,
-        itemPreview: s.itemPreview,
-        customerName: s.customerName,
-        status: s.status ?? "COMPLETED",
-        voidReason: s.voidReason ?? null,
-      }));
-      db.sales.bulkPut(rows).catch((err) => {
-        console.error("Seed Dexie sales failed", err);
-      });
-      try {
-        localStorage.setItem(`cachedSales:${shopId}`, JSON.stringify(sales));
-      } catch (err) {
-        console.warn("Persist cached sales failed", err);
-      }
-      return;
-    }
+    let cancelled = false;
 
-    db.sales
-      .where("shopId")
-      .equals(shopId)
-      .toArray()
-      .then((rows) => {
+    const loadFromDexie = async () => {
+      try {
+        const rows = await db.sales.where("shopId").equals(shopId).toArray();
+        if (cancelled) return;
         if (!rows || rows.length === 0) {
           // Fallback to cached server copy
           try {
@@ -154,6 +146,7 @@ export default function SalesListClient({
             itemCount,
             itemPreview,
             customerName: (r as any).customerName ?? null,
+            syncStatus: (r as any).syncStatus ?? "synced",
           };
         });
 
@@ -162,11 +155,55 @@ export default function SalesListClient({
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
         setItems(mapped);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error("Load offline sales failed", err);
+      }
+    };
+
+    if (online) {
+      if (syncing || pendingCount > 0 || refreshInFlightRef.current) {
+        loadFromDexie();
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      setItems(sales);
+      const rows = sales.map((s) => ({
+        tempId: s.id,
+        id: s.id,
+        shopId,
+        items: [],
+        paymentMethod: s.paymentMethod,
+        customerId: null,
+        note: "",
+        totalAmount: s.totalAmount,
+        createdAt: new Date(s.createdAt).getTime(),
+        syncStatus: "synced" as const,
+        itemCount: s.itemCount,
+        itemPreview: s.itemPreview,
+        customerName: s.customerName,
+        status: s.status ?? "COMPLETED",
+        voidReason: s.voidReason ?? null,
+      }));
+      db.sales.bulkPut(rows).catch((err) => {
+        console.error("Seed Dexie sales failed", err);
       });
-  }, [online, sales, shopId]);
+      try {
+        localStorage.setItem(`cachedSales:${shopId}`, JSON.stringify(sales));
+      } catch (err) {
+        console.warn("Persist cached sales failed", err);
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    loadFromDexie();
+    return () => {
+      cancelled = true;
+    };
+  }, [online, sales, shopId, pendingCount, syncing]);
 
   const renderedItems = useMemo(() => items, [items]);
 
@@ -206,6 +243,7 @@ export default function SalesListClient({
           const paymentText =
             paymentLabels[paymentKey] || s.paymentMethod || "নগদ";
           const isDueSale = paymentKey === "due";
+          const isPending = s.syncStatus === "new";
           const itemLine =
             s.itemPreview ||
             (s.itemCount > 0
@@ -274,6 +312,11 @@ export default function SalesListClient({
                   {!online && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-[11px] font-semibold text-warning border border-warning/30">
                       বাতিল করা যাবে না (Offline)
+                    </span>
+                  )}
+                  {!online && isPending && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-[11px] font-semibold text-warning border border-warning/30">
+                      Pending sync
                     </span>
                   )}
 

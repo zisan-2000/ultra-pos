@@ -3,14 +3,49 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
-import { getExpensesByShop } from "@/app/actions/expenses";
+import {
+  getExpenseSummaryByRange,
+  getExpensesByShopCursorPaginated,
+} from "@/app/actions/expenses";
 
 import ShopSelectorClient from "./ShopSelectorClient";
 import { ExpensesListClient } from "./components/ExpensesListClient";
 
+import {
+  buildCursorPageLink,
+  decodeCursorList,
+  encodeCursorList,
+  normalizeCursorPageState,
+  toCursorInput,
+} from "@/lib/cursor-pagination";
+
 type ExpensePageProps = {
-  searchParams?: Promise<{ shopId?: string } | undefined>;
+  searchParams?: Promise<{
+    shopId?: string;
+    from?: string;
+    to?: string;
+    page?: string;
+    cursors?: string;
+    cursorBase?: string;
+  }>;
 };
+
+const PAGE_SIZE = 20;
+const MAX_CURSOR_HISTORY = 20;
+
+function parsePositiveInt(value?: string) {
+  if (!value) return null;
+  const num = Number.parseInt(value, 10);
+  return Number.isFinite(num) && num > 0 ? num : null;
+}
+
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 export default async function ExpensesPage({
   searchParams,
@@ -49,16 +84,81 @@ export default async function ExpensesPage({
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
 
-  const rows = await getExpensesByShop(selectedShopId);
-  const serializableRows = rows.map((e) => ({
-    id: e.id,
-    shopId: e.shopId,
-    amount: e.amount?.toString?.() ?? (e as any).amount ?? "0",
-    category: e.category,
-    note: e.note,
-    expenseDate: e.expenseDate?.toISOString?.() ?? e.expenseDate,
-    createdAt: e.createdAt?.toISOString?.() ?? e.createdAt,
-  }));
+  const rawFrom = resolvedSearch?.from;
+  const rawTo = resolvedSearch?.to;
+  const from = rawFrom ?? rawTo ?? todayStr();
+  const to = rawTo ?? from;
+
+  const pageParam = parsePositiveInt(resolvedSearch?.page) ?? 1;
+  const cursorBaseParam = parsePositiveInt(resolvedSearch?.cursorBase) ?? 2;
+  const cursorList = decodeCursorList(resolvedSearch?.cursors);
+
+  const normalized = normalizeCursorPageState({
+    page: pageParam,
+    cursors: cursorList,
+    cursorBase: cursorBaseParam,
+    maxHistory: MAX_CURSOR_HISTORY,
+  });
+
+  const [{ items: serializableRows, nextCursor, hasMore }, summary] =
+    await Promise.all([
+      getExpensesByShopCursorPaginated({
+        shopId: selectedShopId,
+        limit: PAGE_SIZE,
+        cursor: toCursorInput(normalized.currentCursor),
+        from,
+        to,
+      }),
+      getExpenseSummaryByRange(selectedShopId, from, to),
+    ]);
+
+  const buildHref = ({
+    page,
+    cursors,
+    cursorBase,
+  }: {
+    page?: number;
+    cursors?: { createdAt: string; id: string }[];
+    cursorBase?: number;
+  }) => {
+    const params = new URLSearchParams();
+    params.set("shopId", selectedShopId);
+    params.set("from", from);
+    params.set("to", to);
+    if (page && page > 1) {
+      params.set("page", `${page}`);
+      if (cursorBase) params.set("cursorBase", `${cursorBase}`);
+      if (cursors && cursors.length > 0) {
+        params.set("cursors", encodeCursorList(cursors));
+      }
+    }
+    return `/dashboard/expenses?${params.toString()}`;
+  };
+
+  const prevHref =
+    normalized.page > 1
+      ? buildCursorPageLink({
+          targetPage: normalized.page - 1,
+          currentPage: normalized.page,
+          cursors: normalized.cursors,
+          cursorBase: normalized.cursorBase,
+          nextCursor,
+          maxHistory: MAX_CURSOR_HISTORY,
+          buildHref,
+        })
+      : null;
+
+  const nextHref = hasMore
+    ? buildCursorPageLink({
+        targetPage: normalized.page + 1,
+        currentPage: normalized.page,
+        cursors: normalized.cursors,
+        cursorBase: normalized.cursorBase,
+        nextCursor,
+        maxHistory: MAX_CURSOR_HISTORY,
+        buildHref,
+      })
+    : null;
 
   return (
     <div className="space-y-4 section-gap">
@@ -94,7 +194,18 @@ export default async function ExpensesPage({
         </div>
       </div>
 
-      <ExpensesListClient shopId={selectedShopId} expenses={serializableRows} />
+      <ExpensesListClient
+        shopId={selectedShopId}
+        expenses={serializableRows}
+        from={from}
+        to={to}
+        page={normalized.page}
+        prevHref={prevHref}
+        nextHref={nextHref}
+        hasMore={Boolean(hasMore)}
+        summaryTotal={summary.totalAmount}
+        summaryCount={summary.count}
+      />
     </div>
   );
 }

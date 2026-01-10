@@ -5,11 +5,13 @@ import { redirect } from "next/navigation";
 import ShopFormClient from "../ShopFormClient";
 import { listActiveBusinessTypes } from "@/app/actions/business-types";
 import { businessOptions } from "@/lib/productFormConfig";
+import { getCurrentUser } from "@/lib/auth-session";
 
 type PageProps = { params: Promise<{ id: string }> };
 
 export default async function EditShop({ params }: PageProps) {
   const { id } = await params;
+  const user = await getCurrentUser();
   const shop = await getShop(id);
   if (!shop) {
     return <div className="p-6 text-center text-danger">Shop not found</div>;
@@ -46,6 +48,8 @@ export default async function EditShop({ params }: PageProps) {
       <ShopFormClient
         backHref={backHref}
         action={handleUpdate}
+        cacheUserId={user?.id ?? "anon"}
+        shopId={id}
         initial={{
           name: shop.name || "",
           address: shop.address || "",

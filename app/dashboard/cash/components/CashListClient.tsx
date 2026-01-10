@@ -3,8 +3,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { CashDeleteButton } from "./CashDeleteButton";
 
@@ -20,6 +22,16 @@ type Props = {
   shopId: string;
   shopName?: string;
   rows: CashEntry[];
+  from?: string;
+  to?: string;
+  page?: number;
+  prevHref?: string | null;
+  nextHref?: string | null;
+  hasMore?: boolean;
+  summaryIn?: number;
+  summaryOut?: number;
+  summaryNet?: number;
+  summaryCount?: number;
 };
 
 type RangePreset = "today" | "yesterday" | "7d" | "month" | "all" | "custom";
@@ -38,6 +50,7 @@ function computeRange(preset: RangePreset, customFrom?: string, customTo?: strin
   const today = new Date();
   if (preset === "custom") return { from: customFrom, to: customTo };
   if (preset === "today") return { from: toStr(today), to: toStr(today) };
+
   if (preset === "yesterday") {
     const y = new Date(today);
     y.setDate(y.getDate() - 1);
@@ -55,15 +68,124 @@ function computeRange(preset: RangePreset, customFrom?: string, customTo?: strin
   return { from: undefined, to: undefined };
 }
 
-export function CashListClient({ shopId, shopName, rows }: Props) {
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function CashListClient({
+  shopId,
+  shopName,
+  rows,
+  from,
+  to,
+  page,
+  prevHref,
+  nextHref,
+  hasMore,
+  summaryIn,
+  summaryOut,
+  summaryNet,
+  summaryCount,
+}: Props) {
+  const router = useRouter();
   const online = useOnlineStatus();
+  const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<CashEntry[]>(rows);
   const [preset, setPreset] = useState<RangePreset>("today");
-  const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
-  const [customTo, setCustomTo] = useState<string | undefined>(undefined);
+  const [customFrom, setCustomFrom] = useState<string | undefined>(from);
+  const [customTo, setCustomTo] = useState<string | undefined>(to);
+  const serverSnapshotRef = useRef(rows);
+  const refreshInFlightRef = useRef(false);
+
+  const canApplyCustom = (() => {
+    if (!customFrom || !customTo) return false;
+    return customFrom <= customTo;
+  })();
 
   useEffect(() => {
+    if (!online) return;
+    if (from) setCustomFrom(from);
+    if (to) setCustomTo(to);
+  }, [online, from, to]);
+
+  const applyRangeToUrl = useCallback(
+    (nextFrom: string, nextTo: string) => {
+      const params = new URLSearchParams({ shopId, from: nextFrom, to: nextTo });
+      router.push(`/dashboard/cash?${params.toString()}`);
+    },
+    [router, shopId]
+  );
+  const handleOptimisticDelete = useCallback(
+    (id: string) => {
+      setItems((prev) => {
+        const next = prev.filter((item) => item.id !== id);
+        try {
+          localStorage.setItem(`cachedCash:${shopId}`, JSON.stringify(next));
+        } catch {
+          // ignore cache errors
+        }
+        return next;
+      });
+    },
+    [shopId]
+  );
+
+  useEffect(() => {
+    if (serverSnapshotRef.current !== rows) {
+      serverSnapshotRef.current = rows;
+      refreshInFlightRef.current = false;
+    }
+  }, [rows]);
+
+  useEffect(() => {
+    if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    router.refresh();
+  }, [online, lastSyncAt, syncing, pendingCount, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFromDexie = async () => {
+      try {
+        const entries = await db.cash.where("shopId").equals(shopId).toArray();
+        if (cancelled) return;
+        if (!entries || entries.length === 0) {
+          try {
+            const cached = localStorage.getItem(`cachedCash:${shopId}`);
+            if (cached) setItems(JSON.parse(cached) as CashEntry[]);
+          } catch {
+            // ignore
+          }
+          return;
+        }
+        setItems(
+          entries.map((e) => ({
+            id: e.id,
+            entryType: e.entryType,
+            amount: e.amount,
+            reason: e.reason,
+            createdAt: e.createdAt,
+          }))
+        );
+      } catch (err) {
+        console.error("Load offline cash failed", err);
+      }
+    };
+
     if (online) {
+      if (syncing || pendingCount > 0 || refreshInFlightRef.current) {
+        loadFromDexie();
+        return () => {
+          cancelled = true;
+        };
+      }
+
       setItems(rows);
       const mapped = rows.map((e) => ({
         id: e.id,
@@ -84,35 +206,16 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
       } catch {
         // ignore
       }
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
-    db.cash
-      .where("shopId")
-      .equals(shopId)
-      .toArray()
-      .then((entries) => {
-        if (!entries || entries.length === 0) {
-          try {
-            const cached = localStorage.getItem(`cachedCash:${shopId}`);
-            if (cached) setItems(JSON.parse(cached) as CashEntry[]);
-          } catch {
-            // ignore
-          }
-          return;
-        }
-        setItems(
-          entries.map((e) => ({
-            id: e.id,
-            entryType: e.entryType,
-            amount: e.amount,
-            reason: e.reason,
-            createdAt: e.createdAt,
-          }))
-        );
-      })
-      .catch((err) => console.error("Load offline cash failed", err));
-  }, [online, rows, shopId]);
+    loadFromDexie();
+    return () => {
+      cancelled = true;
+    };
+  }, [online, rows, shopId, pendingCount, syncing]);
 
   const range = useMemo(
     () => computeRange(preset, customFrom, customTo),
@@ -123,15 +226,24 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
     return items.filter((e) => {
       const d = e.createdAt ? new Date(e.createdAt as any) : null;
       const ds = d ? d.toISOString().slice(0, 10) : undefined;
+      if (online) return true;
       if (!range.from && !range.to) return true;
       if (!ds) return false;
       if (range.from && ds < range.from) return false;
       if (range.to && ds > range.to) return false;
       return true;
     });
-  }, [items, range.from, range.to]);
+  }, [items, online, range.from, range.to]);
 
   const totals = useMemo(() => {
+    if (
+      online &&
+      typeof summaryNet === "number" &&
+      typeof summaryIn === "number" &&
+      typeof summaryOut === "number"
+    ) {
+      return { in: summaryIn, out: summaryOut, net: summaryNet };
+    }
     return rendered.reduce(
       (acc, e) => {
         const amt = Number((e.amount as any)?.toString?.() ?? e.amount ?? 0);
@@ -146,7 +258,7 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
       },
       { in: 0, out: 0, net: 0 }
     );
-  }, [rendered]);
+  }, [rendered, online, summaryIn, summaryOut, summaryNet]);
 
   const grouped = useMemo(() => {
     const groups: Record<string, CashEntry[]> = {};
@@ -172,7 +284,15 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
         {PRESETS.map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => setPreset(key)}
+            onClick={() => {
+              setPreset(key);
+              if (online) {
+                const next = computeRange(key, customFrom, customTo);
+                const nextFrom = next.from ?? todayStr();
+                const nextTo = next.to ?? nextFrom;
+                applyRangeToUrl(nextFrom, nextTo);
+              }
+            }}
             className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
               preset === key
                 ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
@@ -209,7 +329,11 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
             <p className="text-xl font-bold text-foreground leading-tight">
               {totals.net.toFixed(2)} ৳
             </p>
-            <p className="text-[11px] text-muted-foreground">{rendered.length} এন্ট্রি</p>
+            <p className="text-[11px] text-muted-foreground">
+              {(online && typeof summaryCount === "number")
+                ? summaryCount
+                : rendered.length} এন্ট্রি
+            </p>
           </div>
           <Link
             href={`/dashboard/cash/new?shopId=${shopId}`}
@@ -235,6 +359,22 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
                 value={customTo ?? ""}
                 onChange={(e) => setCustomTo(e.target.value)}
               />
+              {online && (
+                <button
+                  type="button"
+                  disabled={!canApplyCustom}
+                  onClick={() => {
+                    if (!canApplyCustom) return;
+                    const cf = customFrom;
+                    const ct = customTo;
+                    if (!cf || !ct) return;
+                    applyRangeToUrl(cf, ct);
+                  }}
+                  className="col-span-2 w-full rounded-lg bg-primary-soft text-primary border border-primary/30 py-2 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
+                >
+                  রেঞ্জ প্রয়োগ করুন
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -259,12 +399,58 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
                 value={customTo ?? ""}
                 onChange={(e) => setCustomTo(e.target.value)}
               />
+              {online && (
+                <button
+                  type="button"
+                  disabled={!canApplyCustom}
+                  onClick={() => {
+                    if (!canApplyCustom) return;
+                    const cf = customFrom;
+                    const ct = customTo;
+                    if (!cf || !ct) return;
+                    applyRangeToUrl(cf, ct);
+                  }}
+                  className="rounded-lg bg-primary-soft text-primary border border-primary/30 py-1 text-xs font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
+                >
+                  রেঞ্জ প্রয়োগ করুন
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
 
       {/* KPI pills */}
+      {(prevHref || nextHref) ? (
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {prevHref ? (
+              <Link
+                href={prevHref}
+                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted"
+              >
+                ⬅️ আগের
+              </Link>
+            ) : null}
+          </div>
+          <span className="text-xs text-muted-foreground">
+            পৃষ্ঠা {page ?? 1}
+          </span>
+          {nextHref ? (
+            <Link
+              href={nextHref}
+              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted"
+            >
+              পরের ➡️
+            </Link>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {online ? "শেষ" : ""}
+            </span>
+          )}
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-3 gap-2 md:gap-3">
         <div className="bg-success-soft border border-success/30 rounded-xl p-3 text-center">
           <p className="text-xs font-semibold text-success">মোট ইন</p>
@@ -272,6 +458,7 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
             + {totals.in.toFixed(2)} ৳
           </p>
         </div>
+
         <div className="bg-danger-soft border border-danger/30 rounded-xl p-3 text-center">
           <p className="text-xs font-semibold text-danger">মোট আউট</p>
           <p className="text-lg font-bold text-danger">
@@ -361,7 +548,10 @@ export function CashListClient({ shopId, shopName, rows }: Props) {
                                 Offline
                               </span>
                             )}
-                            <CashDeleteButton id={e.id} />
+                            <CashDeleteButton
+                              id={e.id}
+                              onDeleted={handleOptimisticDelete}
+                            />
                           </div>
                         </div>
                       </div>

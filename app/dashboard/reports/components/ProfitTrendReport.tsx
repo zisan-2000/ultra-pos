@@ -3,32 +3,79 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useOnlineStatus } from "@/lib/sync/net-status";
 
 type ProfitRow = { date: string; sales: number; expense: number };
 type Props = { shopId: string; from?: string; to?: string };
 
 export default function ProfitTrendReport({ shopId, from, to }: Props) {
+  const online = useOnlineStatus();
   const [data, setData] = useState<ProfitRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async (rangeFrom?: string, rangeTo?: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ shopId });
-      if (rangeFrom) params.append("from", rangeFrom);
-      if (rangeTo) params.append("to", rangeTo);
+  const buildCacheKey = useCallback(
+    (rangeFrom?: string, rangeTo?: string) =>
+      `reports:profit:${shopId}:${rangeFrom || "all"}:${rangeTo || "all"}`,
+    [shopId]
+  );
 
-      const res = await fetch(`/api/reports/profit-trend?${params.toString()}`);
-      if (!res.ok) {
-        setData([]);
+  const loadCached = useCallback(
+    (rangeFrom?: string, rangeTo?: string) => {
+      try {
+        const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
+        if (!raw) {
+          setData([]);
+          return false;
+        }
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setData(parsed);
+          return true;
+        }
+      } catch (err) {
+        console.warn("Profit report cache read failed", err);
+      }
+      setData([]);
+      return false;
+    },
+    [buildCacheKey]
+  );
+
+  const load = useCallback(
+    async (rangeFrom?: string, rangeTo?: string) => {
+      if (!online) {
+        setLoading(false);
+        loadCached(rangeFrom, rangeTo);
         return;
       }
-      const json = await res.json();
-      setData(json.data || []);
-    } finally {
-      setLoading(false);
-    }
-  }, [shopId]);
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ shopId });
+        if (rangeFrom) params.append("from", rangeFrom);
+        if (rangeTo) params.append("to", rangeTo);
+
+        const res = await fetch(`/api/reports/profit-trend?${params.toString()}`);
+        if (!res.ok) {
+          loadCached(rangeFrom, rangeTo);
+          return;
+        }
+        const json = await res.json();
+        const rows = json.data || [];
+        setData(rows);
+        try {
+          localStorage.setItem(
+            buildCacheKey(rangeFrom, rangeTo),
+            JSON.stringify(rows)
+          );
+        } catch (err) {
+          console.warn("Profit report cache write failed", err);
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [online, shopId, buildCacheKey, loadCached]
+  );
 
   useEffect(() => {
     void load(from, to);

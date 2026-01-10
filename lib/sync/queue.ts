@@ -21,6 +21,13 @@ export async function queueAdd(
 }
 
 // ---------------------------------------------
+// ADD ADMIN ACTION TO QUEUE
+// ---------------------------------------------
+export async function queueAdminAction(action: string, payload: any) {
+  await queueAdd("admin", "admin", { action, data: payload });
+}
+
+// ---------------------------------------------
 // GET ALL PENDING ITEMS
 // (Oldest first for FIFO processing)
 // ---------------------------------------------

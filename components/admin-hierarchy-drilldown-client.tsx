@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import OwnerStaffDrilldownClient from "@/components/owner-staff-drilldown-client";
 
 type StaffEntry = {
@@ -24,6 +24,8 @@ type AgentEntry = {
   email: string | null;
   createdAt: string;
   owners: OwnerEntry[];
+  ownerCount?: number;
+  staffCount?: number;
 };
 
 type AdminEntry = {
@@ -33,6 +35,8 @@ type AdminEntry = {
   createdAt: string;
   agents: AgentEntry[];
   directOwners: OwnerEntry[];
+  ownerCount?: number;
+  staffCount?: number;
 };
 
 type FilterState = {
@@ -102,7 +106,7 @@ export default function AdminHierarchyDrilldownClient({
     return { matchesText, matchesDate, hasQuery };
   }, [query, fromDate, toDate]);
 
-  const getOwnerStats = (owners: OwnerEntry[]): OwnerStats => {
+  const getOwnerStats = useCallback((owners: OwnerEntry[]): OwnerStats => {
     let ownerCount = 0;
     let staffCount = 0;
 
@@ -130,7 +134,7 @@ export default function AdminHierarchyDrilldownClient({
     }
 
     return { ownerCount, staffCount };
-  };
+  }, [filterHelpers]);
 
   const filteredAdmins = useMemo<FilteredAdmin[]>(() => {
     if (admins.length === 0) return [];
@@ -291,10 +295,10 @@ export default function AdminHierarchyDrilldownClient({
                     Agents: {formatCount(admin.agents.length)}
                   </span>
                   <span className="rounded-full border border-border bg-card px-2 py-1">
-                    Owners: {formatCount(admin.ownerCount)}
+                    Owners: {formatCount(admin.ownerCount ?? 0)}
                   </span>
                   <span className="rounded-full border border-border bg-card px-2 py-1">
-                    Staff: {formatCount(admin.staffCount)}
+                    Staff: {formatCount(admin.staffCount ?? 0)}
                   </span>
                 </div>
               </summary>
@@ -329,10 +333,10 @@ export default function AdminHierarchyDrilldownClient({
                             </div>
                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                               <span className="rounded-full border border-border bg-card px-2 py-1">
-                                Owners: {formatCount(agent.ownerCount)}
+                                Owners: {formatCount(agent.ownerCount ?? 0)}
                               </span>
                               <span className="rounded-full border border-border bg-card px-2 py-1">
-                                Staff: {formatCount(agent.staffCount)}
+                                Staff: {formatCount(agent.staffCount ?? 0)}
                               </span>
                             </div>
                           </summary>

@@ -33,6 +33,8 @@ export type LocalSale = {
   customerId?: string | null;
   note: string;
   totalAmount: string;
+  paidNow?: string | number;
+  dueLedgerIds?: string[];
   createdAt: number;
   syncStatus: "new" | "synced";
   // Optional summary fields for offline listing
@@ -64,6 +66,29 @@ export type LocalCashEntry = {
   syncStatus: "new" | "updated" | "deleted" | "synced";
 };
 
+export type LocalDueCustomer = {
+  id: string;
+  shopId: string;
+  name: string;
+  phone?: string | null;
+  address?: string | null;
+  totalDue: string | number;
+  lastPaymentAt?: string | null;
+  updatedAt?: number;
+  syncStatus: "new" | "synced";
+};
+
+export type LocalDueLedger = {
+  id: string;
+  shopId: string;
+  customerId: string;
+  entryType: "SALE" | "PAYMENT";
+  amount: string | number;
+  description?: string | null;
+  entryDate: string;
+  syncStatus: "new" | "synced";
+};
+
 // Sync queue (generic)
 export type SyncQueueItem = {
   id?: number;
@@ -73,8 +98,9 @@ export type SyncQueueItem = {
     | "expense"
     | "cash"
     | "due_customer"
-    | "due_payment";
-  action: "create" | "update" | "delete" | "payment";
+    | "due_payment"
+    | "admin";
+  action: "create" | "update" | "delete" | "payment" | "admin";
   payload: any;
   createdAt: number;
   retryCount: number;
@@ -89,6 +115,8 @@ export class PosDexieDB extends Dexie {
   sales!: Table<LocalSale, string>;
   expenses!: Table<LocalExpense, string>;
   cash!: Table<LocalCashEntry, string>;
+  dueCustomers!: Table<LocalDueCustomer, string>;
+  dueLedger!: Table<LocalDueLedger, string>;
   queue!: Table<SyncQueueItem, number>;
 
   constructor() {
@@ -121,6 +149,17 @@ export class PosDexieDB extends Dexie {
       sales: "tempId, shopId, syncStatus, createdAt",
       expenses: "id, shopId, syncStatus, expenseDate",
       cash: "id, shopId, syncStatus, createdAt",
+      queue: "++id, type, action, createdAt",
+    });
+
+    // v5: add due customers + ledger
+    this.version(5).stores({
+      products: "id, shopId, syncStatus",
+      sales: "tempId, shopId, syncStatus, createdAt",
+      expenses: "id, shopId, syncStatus, expenseDate",
+      cash: "id, shopId, syncStatus, createdAt",
+      dueCustomers: "id, shopId, totalDue, syncStatus",
+      dueLedger: "id, [shopId+customerId], entryDate, syncStatus",
       queue: "++id, type, action, createdAt",
     });
   }

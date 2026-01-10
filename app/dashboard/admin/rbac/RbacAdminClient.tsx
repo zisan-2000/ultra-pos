@@ -1,9 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Permission, Role } from "@prisma/client";
 import { UsersRolesPanel } from "./UsersRolesPanel";
 import { RolesPermissionsPanel } from "./RolesPermissionsPanel";
+import { useOnlineStatus } from "@/lib/sync/net-status";
+import { useSyncStatus } from "@/lib/sync/sync-status";
 
 type RoleWithPermissions = Role & { rolePermissions: { permissionId: string }[] };
 type UserRow = {
@@ -26,18 +29,89 @@ const tabs = [
 ] as const;
 
 export default function RbacAdminClient({ users, roleOptions, roles, permissions }: Props) {
+  const online = useOnlineStatus();
+  const router = useRouter();
+  const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [activeTab, setActiveTab] = useState<"users" | "permissions">("users");
+  const [cachedUsers, setCachedUsers] = useState(users);
+  const [cachedRoleOptions, setCachedRoleOptions] = useState(roleOptions);
+  const [cachedRoles, setCachedRoles] = useState(roles);
+  const [cachedPermissions, setCachedPermissions] = useState(permissions);
+  const refreshInFlightRef = useRef(false);
+  const serverSnapshotRef = useRef({
+    users,
+    roleOptions,
+    roles,
+    permissions,
+  });
+
+  useEffect(() => {
+    const cacheKey = "admin:rbac";
+    if (online) {
+      setCachedUsers(users);
+      setCachedRoleOptions(roleOptions);
+      setCachedRoles(roles);
+      setCachedPermissions(permissions);
+      try {
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({ users, roleOptions, roles, permissions })
+        );
+      } catch {
+        // ignore cache errors
+      }
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<Props>;
+      if (Array.isArray(parsed.users)) setCachedUsers(parsed.users as UserRow[]);
+      if (Array.isArray(parsed.roleOptions))
+        setCachedRoleOptions(parsed.roleOptions as Role[]);
+      if (Array.isArray(parsed.roles)) setCachedRoles(parsed.roles as RoleWithPermissions[]);
+      if (Array.isArray(parsed.permissions))
+        setCachedPermissions(parsed.permissions as Permission[]);
+    } catch {
+      // ignore cache errors
+    }
+  }, [online, users, roleOptions, roles, permissions]);
+
+  useEffect(() => {
+    if (
+      serverSnapshotRef.current.users !== users ||
+      serverSnapshotRef.current.roleOptions !== roleOptions ||
+      serverSnapshotRef.current.roles !== roles ||
+      serverSnapshotRef.current.permissions !== permissions
+    ) {
+      serverSnapshotRef.current = { users, roleOptions, roles, permissions };
+      refreshInFlightRef.current = false;
+    }
+  }, [users, roleOptions, roles, permissions]);
+
+  useEffect(() => {
+    if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    router.refresh();
+  }, [online, lastSyncAt, syncing, pendingCount, router]);
 
   const stats = useMemo(
     () => ({
-      users: users.length,
-      roles: roles.length,
+      users: cachedUsers.length,
+      roles: cachedRoles.length,
     }),
-    [users.length, roles.length],
+    [cachedUsers.length, cachedRoles.length],
   );
 
   return (
     <main className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-6">
+      {!online && (
+        <div className="border border-warning/30 bg-warning-soft text-warning rounded-lg p-3 text-xs font-semibold">
+          অফলাইন: আগের RBAC ডাটা দেখানো হচ্ছে।
+        </div>
+      )}
       <header className="bg-card/80 border border-border rounded-2xl shadow-sm p-5 flex flex-col gap-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="space-y-1">
@@ -80,9 +154,9 @@ export default function RbacAdminClient({ users, roleOptions, roles, permissions
 
       <section className="grid grid-cols-1 gap-6">
         {activeTab === "users" ? (
-          <UsersRolesPanel users={users as any} roles={roleOptions as any} />
+          <UsersRolesPanel users={cachedUsers as any} roles={cachedRoleOptions as any} />
         ) : (
-          <RolesPermissionsPanel roles={roles as any} permissions={permissions as any} />
+          <RolesPermissionsPanel roles={cachedRoles as any} permissions={cachedPermissions as any} />
         )}
       </section>
     </main>

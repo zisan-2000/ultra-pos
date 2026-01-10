@@ -2,8 +2,6 @@
 
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import ServiceWorkerRegister from "@/components/service-worker-register";
-import SyncBootstrap from "@/components/sync-bootstrap";
 import ThemeScript from "@/components/theme-script";
 import "./globals.css";
 
@@ -37,8 +35,6 @@ export default function RootLayout({
         style={{ fontFamily: "'SutonnyMJ', 'Noto Sans Bengali', sans-serif" }}
         suppressHydrationWarning
       >
-        <ServiceWorkerRegister />
-        <SyncBootstrap />
         {children}
       </body>
     </html>

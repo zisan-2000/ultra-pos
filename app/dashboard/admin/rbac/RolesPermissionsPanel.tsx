@@ -3,6 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import type { Role, Permission } from "@prisma/client";
 import { updateRolePermissions } from "@/app/actions/rbac-admin";
+import { useOnlineStatus } from "@/lib/sync/net-status";
+import { queueAdminAction } from "@/lib/sync/queue";
 
 type RoleWithPermissions = Role & {
   rolePermissions: { permissionId: string }[];
@@ -130,6 +132,7 @@ export function RolesPermissionsPanel({
   roles,
   permissions,
 }: RolesPermissionsPanelProps) {
+  const online = useOnlineStatus();
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(
     roles[0]?.id ?? null,
   );
@@ -234,6 +237,38 @@ export function RolesPermissionsPanel({
     if (!selectedRole) return;
     const ids = Array.from(selectedPermissionIds);
     startSaving(async () => {
+      if (!online) {
+        await queueAdminAction("rbac_update_role_permissions", {
+          roleId: selectedRole.id,
+          permissionIds: ids,
+        });
+        try {
+          const raw = localStorage.getItem("admin:rbac");
+          if (raw) {
+            const parsed = JSON.parse(raw) as {
+              roles?: RoleWithPermissions[];
+              users?: any[];
+              roleOptions?: any[];
+              permissions?: any[];
+            };
+            if (Array.isArray(parsed.roles)) {
+              parsed.roles = parsed.roles.map((role) =>
+                role.id === selectedRole.id
+                  ? {
+                      ...role,
+                      rolePermissions: ids.map((permissionId) => ({ permissionId })),
+                    }
+                  : role,
+              );
+              localStorage.setItem("admin:rbac", JSON.stringify(parsed));
+            }
+          }
+        } catch {
+          // ignore cache errors
+        }
+        alert("Offline: permission changes queued.");
+        return;
+      }
       await updateRolePermissions(selectedRole.id, ids);
     });
   };

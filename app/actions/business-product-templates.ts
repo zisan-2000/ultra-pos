@@ -8,6 +8,7 @@ import { isSuperAdmin, requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
 
 type TemplateInput = {
+  id?: string;
   businessType: string;
   name: string;
   category?: string | null;
@@ -101,21 +102,43 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
   const user = await requireUser();
   assertSuperAdmin(user);
 
+  const id = input.id?.toString().trim() || undefined;
   const businessType = normalizeRequiredText(input.businessType, "Business type");
   const name = normalizeRequiredText(input.name, "Name");
   const category = normalizeOptionalText(input.category);
   const defaultSellPrice = normalizeOptionalMoney(input.defaultSellPrice);
   const isActive = input.isActive ?? true;
 
-  await prisma.businessProductTemplate.create({
-    data: {
-      businessType,
-      name,
-      category: category ?? null,
-      defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
-      isActive,
-    },
-  });
+  if (id) {
+    await prisma.businessProductTemplate.upsert({
+      where: { id },
+      create: {
+        id,
+        businessType,
+        name,
+        category: category ?? null,
+        defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        isActive,
+      },
+      update: {
+        businessType,
+        name,
+        category: category ?? null,
+        defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        isActive,
+      },
+    });
+  } else {
+    await prisma.businessProductTemplate.create({
+      data: {
+        businessType,
+        name,
+        category: category ?? null,
+        defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        isActive,
+      },
+    });
+  }
 
   return { success: true };
 }

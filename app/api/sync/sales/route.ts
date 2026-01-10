@@ -3,6 +3,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { z } from "zod";
@@ -22,6 +23,7 @@ type IncomingSale = {
   paymentMethod?: string;
   note?: string | null;
   customerId?: string | null;
+  paidNow?: string | number;
   totalAmount?: string | number;
   createdAt?: number | string;
 };
@@ -39,6 +41,7 @@ const saleSchema = z.object({
   paymentMethod: z.string().optional(),
   note: z.string().nullable().optional(),
   customerId: z.string().nullable().optional(),
+  paidNow: z.union([z.string(), z.number()]).optional(),
   totalAmount: z.union([z.string(), z.number()]).optional(),
   createdAt: z.union([z.string(), z.number()]).optional(),
 });
@@ -114,6 +117,7 @@ export async function POST(req: Request) {
         const paymentMethod = (raw?.paymentMethod || "cash").toLowerCase();
         const note = raw?.note ?? null;
         const createdAt = toDateOrUndefined(raw?.createdAt);
+        const customerId = raw?.customerId ?? null;
 
         if (!shopId) {
           throw new Error("shopId is required");
@@ -121,9 +125,9 @@ export async function POST(req: Request) {
         if (!Array.isArray(items) || items.length === 0) {
           throw new Error("items are required");
         }
-        // Offline flow currently blocks due sales. Keep server strict.
-        if (paymentMethod === "due") {
-          throw new Error("Due sales cannot be synced offline yet");
+        const isDue = paymentMethod === "due";
+        if (isDue && !customerId) {
+          throw new Error("Select a customer for due sale");
         }
 
         const productIds = items.map((i) => i.productId).filter(Boolean);
@@ -163,12 +167,38 @@ export async function POST(req: Request) {
           raw?.totalAmount ?? computedTotal,
           "totalAmount"
         );
+        const totalNum = Number(totalAmount);
+        const payNowRaw = Number(raw?.paidNow ?? 0);
+        const payNow = Math.min(
+          Math.max(Number.isFinite(payNowRaw) ? payNowRaw : 0, 0),
+          totalNum
+        );
 
         const inserted = await prisma.$transaction(async (tx) => {
+          if (isDue && customerId) {
+            const existingCustomer = await tx.customer.findUnique({
+              where: { id: customerId },
+              select: { id: true, shopId: true, totalDue: true },
+            });
+            if (existingCustomer && existingCustomer.shopId !== shopId) {
+              throw new Error("Customer not found for this shop");
+            }
+            if (!existingCustomer) {
+              await tx.customer.create({
+                data: {
+                  id: customerId,
+                  shopId,
+                  name: "Customer",
+                  totalDue: "0",
+                },
+              });
+            }
+          }
+
           const sale = await tx.sale.create({
             data: {
               shopId,
-              customerId: null,
+              customerId: isDue ? customerId : null,
               totalAmount,
               paymentMethod,
               note,
@@ -185,6 +215,16 @@ export async function POST(req: Request) {
                 entryType: "IN",
                 amount: totalAmount,
                 reason: `Cash sale #${sale.id}`,
+                createdAt: createdAt,
+              },
+            });
+          } else if (isDue && payNow > 0) {
+            await tx.cashEntry.create({
+              data: {
+                shopId,
+                entryType: "IN",
+                amount: payNow.toFixed(2),
+                reason: `Partial cash received for due sale #${sale.id}`,
                 createdAt: createdAt,
               },
             });
@@ -221,6 +261,47 @@ export async function POST(req: Request) {
             await tx.product.update({
               where: { id: p.id },
               data: { stockQty: toMoneyString(newStock, "stockQty") },
+            });
+          }
+
+          if (isDue && customerId) {
+            const dueAmount = Number((totalNum - payNow).toFixed(2));
+            await tx.customerLedger.create({
+              data: {
+                shopId,
+                customerId,
+                entryType: "SALE",
+                amount: totalAmount,
+                description: note || "Due sale",
+                entryDate: createdAt,
+              },
+            });
+
+            if (payNow > 0) {
+              await tx.customerLedger.create({
+                data: {
+                  shopId,
+                  customerId,
+                  entryType: "PAYMENT",
+                  amount: payNow.toFixed(2),
+                  description: "Partial payment at sale",
+                  entryDate: createdAt,
+                },
+              });
+            }
+
+            const current = await tx.customer.findUnique({
+              where: { id: customerId },
+              select: { totalDue: true },
+            });
+            const currentDue = new Prisma.Decimal(current?.totalDue ?? 0);
+            const newDue = currentDue.add(new Prisma.Decimal(dueAmount));
+            await tx.customer.update({
+              where: { id: customerId },
+              data: {
+                totalDue: newDue.toFixed(2),
+                lastPaymentAt: payNow > 0 ? new Date() : null,
+              },
             });
           }
 

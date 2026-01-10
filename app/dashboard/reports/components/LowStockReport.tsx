@@ -3,26 +3,66 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useOnlineStatus } from "@/lib/sync/net-status";
 
 export default function LowStockReport({ shopId }: { shopId: string }) {
+  const online = useOnlineStatus();
   const [items, setItems] = useState<any[]>([]);
   const [threshold, setThreshold] = useState(10);
   const [loading, setLoading] = useState(false);
 
+  const buildCacheKey = useCallback(
+    (limit: number) => `reports:low-stock:${shopId}:${limit}`,
+    [shopId]
+  );
+
+  const loadCached = useCallback(
+    (limit: number) => {
+      try {
+        const raw = localStorage.getItem(buildCacheKey(limit));
+        if (!raw) {
+          setItems([]);
+          return false;
+        }
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setItems(parsed);
+          return true;
+        }
+      } catch (err) {
+        console.warn("Low stock cache read failed", err);
+      }
+      setItems([]);
+      return false;
+    },
+    [buildCacheKey]
+  );
+
   const load = useCallback(
     async (th: number) => {
-      setLoading(true);
       try {
+        if (!online) {
+          setLoading(false);
+          loadCached(th);
+          return;
+        }
+        setLoading(true);
         const res = await fetch(
           `/api/reports/low-stock?shopId=${shopId}&limit=${th}`
         );
         const json = await res.json();
-        setItems(json.data || []);
+        const rows = json.data || [];
+        setItems(rows);
+        try {
+          localStorage.setItem(buildCacheKey(th), JSON.stringify(rows));
+        } catch (err) {
+          console.warn("Low stock cache write failed", err);
+        }
       } finally {
         setLoading(false);
       }
     },
-    [shopId]
+    [online, shopId, buildCacheKey, loadCached]
   );
 
   useEffect(() => {

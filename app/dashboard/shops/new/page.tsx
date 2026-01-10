@@ -52,6 +52,7 @@ export default async function NewShopPage() {
       <ShopFormClient
         backHref={backHref}
         action={handleCreateShop}
+        cacheUserId={user?.id ?? "anon"}
         ownerOptions={ownerOptions}
         businessTypeOptions={mergedBusinessTypes}
       />

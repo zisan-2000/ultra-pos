@@ -2,15 +2,19 @@
 
 import { useState } from "react";
 import { deleteUser } from "@/app/actions/user-management";
+import { useOnlineStatus } from "@/lib/sync/net-status";
+import { queueAdminAction, queueRemove } from "@/lib/sync/queue";
+import { db } from "@/lib/dexie/db";
 
 type User = {
   id: string;
   email: string | null;
   name: string | null;
   emailVerified: boolean;
-  createdAt: Date;
+  createdAt: Date | string;
   createdBy: string | null;
   roles: Array<{ id: string; name: string }>;
+  pending?: boolean;
 };
 
 type DeleteUserDialogProps = {
@@ -18,6 +22,7 @@ type DeleteUserDialogProps = {
   onClose: () => void;
   user: User | null;
   onSuccess: () => void;
+  onOptimisticDelete?: (userId: string) => void;
 };
 
 export function DeleteUserDialog({
@@ -25,7 +30,9 @@ export function DeleteUserDialog({
   onClose,
   user,
   onSuccess,
+  onOptimisticDelete,
 }: DeleteUserDialogProps) {
+  const online = useOnlineStatus();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +42,35 @@ export function DeleteUserDialog({
     try {
       setLoading(true);
       setError(null);
+      if (!online) {
+        if (user.id.startsWith("offline-")) {
+          try {
+            const items = await db.queue.where("type").equals("admin").toArray();
+            const matches = items.filter(
+              (item) =>
+                item.payload?.action === "user_create" &&
+                item.payload?.data?.clientId === user.id
+            );
+            await Promise.all(
+              matches.map((item) =>
+                item.id ? queueRemove(item.id) : Promise.resolve()
+              )
+            );
+          } catch (err) {
+            console.error("Remove queued user create failed", err);
+          }
+          onOptimisticDelete?.(user.id);
+          alert("অফলাইন: কিউ থেকে ইউজারটি সরানো হয়েছে।");
+          onClose();
+          return;
+        }
+
+        await queueAdminAction("user_delete", { userId: user.id });
+        onOptimisticDelete?.(user.id);
+        alert("অফলাইন: ইউজার ডিলিট কিউ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+        onClose();
+        return;
+      }
       await deleteUser(user.id);
       onSuccess();
       onClose();

@@ -3,45 +3,92 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useOnlineStatus } from "@/lib/sync/net-status";
 
 type PaymentRow = { name: string; value: number; count?: number };
 type Props = { shopId: string; from?: string; to?: string };
 
 export default function PaymentMethodReport({ shopId, from, to }: Props) {
+  const online = useOnlineStatus();
   const [data, setData] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async (rangeFrom?: string, rangeTo?: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ shopId });
-      if (rangeFrom) params.append("from", rangeFrom);
-      if (rangeTo) params.append("to", rangeTo);
+  const buildCacheKey = useCallback(
+    (rangeFrom?: string, rangeTo?: string) =>
+      `reports:payment:${shopId}:${rangeFrom || "all"}:${rangeTo || "all"}`,
+    [shopId]
+  );
 
-      const res = await fetch(
-        `/api/reports/payment-method?${params.toString()}`,
-        { cache: "no-store" }
-      );
-
-      if (!res.ok) {
-        setData([]);
-        return;
+  const loadCached = useCallback(
+    (rangeFrom?: string, rangeTo?: string) => {
+      try {
+        const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
+        if (!raw) {
+          setData([]);
+          return false;
+        }
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setData(parsed);
+          return true;
+        }
+      } catch (err) {
+        console.warn("Payment report cache read failed", err);
       }
-
-      const text = await res.text();
-      if (!text) {
-        setData([]);
-        return;
-      }
-      const json = JSON.parse(text);
-      setData(Array.isArray(json?.data) ? json.data : []);
-    } catch (err) {
-      console.error("Payment method load failed", err);
       setData([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [shopId]);
+      return false;
+    },
+    [buildCacheKey]
+  );
+
+  const load = useCallback(
+    async (rangeFrom?: string, rangeTo?: string) => {
+      if (!online) {
+        setLoading(false);
+        loadCached(rangeFrom, rangeTo);
+        return;
+      }
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ shopId });
+        if (rangeFrom) params.append("from", rangeFrom);
+        if (rangeTo) params.append("to", rangeTo);
+
+        const res = await fetch(
+          `/api/reports/payment-method?${params.toString()}`,
+          { cache: "no-store" }
+        );
+
+        if (!res.ok) {
+          loadCached(rangeFrom, rangeTo);
+          return;
+        }
+
+        const text = await res.text();
+        if (!text) {
+          loadCached(rangeFrom, rangeTo);
+          return;
+        }
+        const json = JSON.parse(text);
+        const rows = Array.isArray(json?.data) ? json.data : [];
+        setData(rows);
+        try {
+          localStorage.setItem(
+            buildCacheKey(rangeFrom, rangeTo),
+            JSON.stringify(rows)
+          );
+        } catch (err) {
+          console.warn("Payment report cache write failed", err);
+        }
+      } catch (err) {
+        console.error("Payment method load failed", err);
+        loadCached(rangeFrom, rangeTo);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [online, shopId, buildCacheKey, loadCached]
+  );
 
   useEffect(() => {
     void load(from, to);

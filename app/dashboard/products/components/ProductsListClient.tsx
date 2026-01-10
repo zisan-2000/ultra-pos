@@ -13,6 +13,7 @@ import {
   useState,
 } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db, type LocalProduct } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
 import { ShopSwitcherClient } from "../shop-switcher-client";
@@ -61,14 +62,16 @@ type Props = {
   canCreateProducts: boolean;
   serverProducts: Product[];
   page: number;
-  pageSize: number;
   totalCount: number;
-  totalPages: number;
+  prevHref: string | null;
+  nextHref: string | null;
+  hasMore: boolean;
   initialQuery: string;
   initialStatus: ProductStatusFilter;
 };
 
 const MAX_PAGE_BUTTONS = 5;
+const OFFLINE_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -101,16 +104,20 @@ export default function ProductsListClient({
   canCreateProducts,
   serverProducts,
   page,
-  pageSize,
   totalCount,
-  totalPages,
+  prevHref,
+  nextHref,
+  hasMore,
   initialQuery,
   initialStatus,
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
+  const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const { setShop } = useCurrentShop();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const serverSnapshotRef = useRef(serverProducts);
+  const refreshInFlightRef = useRef(false);
 
   const [products, setProducts] = useState(serverProducts);
   const [query, setQuery] = useState(initialQuery);
@@ -177,7 +184,68 @@ export default function ProductsListClient({
   }, []);
 
   useEffect(() => {
+    if (serverSnapshotRef.current !== serverProducts) {
+      serverSnapshotRef.current = serverProducts;
+      refreshInFlightRef.current = false;
+    }
+  }, [serverProducts]);
+
+  useEffect(() => {
+    if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    router.refresh();
+  }, [online, lastSyncAt, syncing, pendingCount, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFromDexie = async () => {
+      try {
+        const rows = await db.products
+          .where("shopId")
+          .equals(activeShopId)
+          .toArray();
+        if (cancelled) return;
+        if (rows.length > 0) {
+          setProducts(
+            rows.map((p) => ({
+              id: p.id,
+              name: p.name,
+              category: p.category,
+              buyPrice: p.buyPrice ?? null,
+              sellPrice: p.sellPrice,
+              stockQty: p.stockQty,
+              isActive: p.isActive,
+              createdAt: p.updatedAt?.toString?.() || "",
+            }))
+          );
+          return;
+        }
+      } catch (err) {
+        console.error("Load offline products failed", err);
+      }
+
+      try {
+        const cached = localStorage.getItem(`cachedProducts:${activeShopId}`);
+        if (!cached || cancelled) return;
+        const parsed = JSON.parse(cached) as Product[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setProducts(parsed);
+        }
+      } catch (err) {
+        console.warn("Load cached products failed", err);
+      }
+    };
+
     if (online) {
+      if (syncing || pendingCount > 0 || refreshInFlightRef.current) {
+        loadFromDexie();
+        return () => {
+          cancelled = true;
+        };
+      }
+
       setProducts(serverProducts);
       const rows = serverProducts.map((p) => ({
         id: p.id,
@@ -203,31 +271,16 @@ export default function ProductsListClient({
       } catch (err) {
         console.warn("Persist cached products failed", err);
       }
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
-    db.products
-      .where("shopId")
-      .equals(activeShopId)
-      .toArray()
-      .then((rows) =>
-        setProducts(
-          rows.map((p) => ({
-            id: p.id,
-            name: p.name,
-            category: p.category,
-            buyPrice: p.buyPrice ?? null,
-            sellPrice: p.sellPrice,
-            stockQty: p.stockQty,
-            isActive: p.isActive,
-            createdAt: p.updatedAt?.toString?.() || "",
-          }))
-        )
-      )
-      .catch((err) => {
-        console.error("Load offline products failed", err);
-      });
-  }, [online, activeShopId, serverProducts]);
+    loadFromDexie();
+    return () => {
+      cancelled = true;
+    };
+  }, [online, activeShopId, serverProducts, pendingCount, syncing]);
 
   useEffect(() => {
     if (online) return;
@@ -303,67 +356,59 @@ export default function ProductsListClient({
 
   const effectiveTotalCount = online ? totalCount : filteredProducts.length;
   const effectiveTotalPages = online
-    ? totalPages
-    : Math.max(1, Math.ceil(effectiveTotalCount / pageSize));
-  const effectivePage = Math.min(
-    online ? page : offlinePage,
-    effectiveTotalPages
-  );
-  const startIndex = (effectivePage - 1) * pageSize;
+    ? hasMore
+      ? page + 1
+      : page
+    : Math.max(1, Math.ceil(effectiveTotalCount / OFFLINE_PAGE_SIZE));
+  const effectivePage = Math.min(online ? page : offlinePage, effectiveTotalPages);
+  const startIndex = (effectivePage - 1) * OFFLINE_PAGE_SIZE;
   const visibleProducts = online
     ? products
-    : filteredProducts.slice(startIndex, startIndex + pageSize);
+    : filteredProducts.slice(startIndex, startIndex + OFFLINE_PAGE_SIZE);
 
-  const halfWindow = Math.floor(MAX_PAGE_BUTTONS / 2);
-  let startPage = Math.max(1, effectivePage - halfWindow);
-  let endPage = Math.min(effectiveTotalPages, startPage + MAX_PAGE_BUTTONS - 1);
-  startPage = Math.max(1, endPage - MAX_PAGE_BUTTONS + 1);
-  const pageNumbers = Array.from(
-    { length: endPage - startPage + 1 },
-    (_, index) => startPage + index
-  );
+  const pageNumbers = useMemo(() => {
+    // Online uses cursor pagination, so random page jumps are not supported.
+    if (online) return [effectivePage];
+    const halfWindow = Math.floor(MAX_PAGE_BUTTONS / 2);
+    let startPage = Math.max(1, effectivePage - halfWindow);
+    let endPage = Math.min(effectiveTotalPages, startPage + MAX_PAGE_BUTTONS - 1);
+    startPage = Math.max(1, endPage - MAX_PAGE_BUTTONS + 1);
+    return Array.from(
+      { length: endPage - startPage + 1 },
+      (_, index) => startPage + index
+    );
+  }, [online, effectivePage, effectiveTotalPages]);
 
-  const showPagination = effectiveTotalPages > 1;
-
-  const buildHref = useCallback(
-    (targetPage: number, nextQuery = query, nextStatus = status) => {
-      const params = new URLSearchParams();
-      params.set("shopId", activeShopId);
-      const cleanQuery = nextQuery.trim();
-      if (cleanQuery) params.set("q", cleanQuery);
-      if (nextStatus !== "all") params.set("status", nextStatus);
-      if (targetPage > 1) params.set("page", `${targetPage}`);
-      return `/dashboard/products?${params.toString()}`;
-    },
-    [activeShopId, query, status]
-  );
+  const showPagination = online
+    ? Boolean(prevHref) || Boolean(nextHref)
+    : effectiveTotalPages > 1;
 
   const applyFilters = useCallback(
-    (
-      targetPage: number,
-      nextQuery = query,
-      nextStatus = status,
-      replace = false
-    ) => {
+    (nextQuery = query, nextStatus = status, replace = false) => {
       if (online) {
-        const href = buildHref(targetPage, nextQuery, nextStatus);
+        const params = new URLSearchParams();
+        params.set("shopId", activeShopId);
+        const cleanQuery = nextQuery.trim();
+        if (cleanQuery) params.set("q", cleanQuery);
+        if (nextStatus !== "all") params.set("status", nextStatus);
+        const href = `/dashboard/products?${params.toString()}`;
         if (replace) {
           router.replace(href);
         } else {
           router.push(href);
         }
       } else {
-        setOfflinePage(targetPage);
+        setOfflinePage(1);
       }
     },
-    [online, buildHref, router, query, status]
+    [online, activeShopId, query, status, router]
   );
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     triggerHaptic("light");
     lastAppliedRef.current = { query: query.trim(), status };
-    applyFilters(1, query, status, true);
+    applyFilters(query, status, true);
   }
 
   function handleReset() {
@@ -371,20 +416,34 @@ export default function ProductsListClient({
     setQuery("");
     setStatus("all");
     lastAppliedRef.current = { query: "", status: "all" };
-    applyFilters(1, "", "all", true);
+    applyFilters("", "all", true);
   }
 
   function handleStatusChange(nextStatus: ProductStatusFilter) {
     triggerHaptic("light");
     setStatus(nextStatus);
     lastAppliedRef.current = { query: query.trim(), status: nextStatus };
-    applyFilters(1, query, nextStatus, true);
+    applyFilters(query, nextStatus, true);
   }
 
   function handleNavigate(targetPage: number) {
-    if (targetPage < 1 || targetPage > effectiveTotalPages) return;
-    triggerHaptic("light");
-    applyFilters(targetPage);
+    if (!online) {
+      if (targetPage < 1 || targetPage > effectiveTotalPages) return;
+      triggerHaptic("light");
+      setOfflinePage(targetPage);
+      return;
+    }
+
+    if (targetPage === page - 1 && prevHref) {
+      triggerHaptic("light");
+      router.push(prevHref);
+      return;
+    }
+    if (targetPage === page + 1 && nextHref) {
+      triggerHaptic("light");
+      router.push(nextHref);
+      return;
+    }
   }
 
   function toggleTemplateSelection(id: string, checked: boolean) {
@@ -525,26 +584,69 @@ export default function ProductsListClient({
     async (id: string) => {
       if (deletingId) return;
       triggerHaptic("medium");
-      const confirmed = confirm("আপনি কি এই পণ্যটি ডিলিট করতে চান?");
+      const confirmed = confirm(
+        "আপনি কি নিশ্চিত যে এই পণ্যটি মুছে ফেলতে চান?"
+      );
       if (!confirmed) return;
-      if (!online) {
-        alert("অফলাইনে ডিলিট করা যাবে না। অনলাইনে এসে আবার চেষ্টা করুন।");
-        return;
-      }
+
+      const persistCache = (next: Product[]) => {
+        try {
+          localStorage.setItem(
+            `cachedProducts:${activeShopId}`,
+            JSON.stringify(next)
+          );
+        } catch {
+          // ignore cache errors
+        }
+      };
+
+      const removeFromState = () => {
+        setProducts((prev) => {
+          const next = prev.filter((p) => p.id !== id);
+          persistCache(next);
+          return next;
+        });
+      };
+
+      const markArchived = () => {
+        setProducts((prev) => {
+          const next = prev.map((p) =>
+            p.id === id ? { ...p, isActive: false } : p
+          );
+          persistCache(next);
+          return next;
+        });
+      };
+
       try {
         setDeletingId(id);
         triggerHaptic("heavy");
+
+        if (!online) {
+          removeFromState();
+          setSelectedProduct(null);
+          await db.products.delete(id);
+          await queueAdd("product", "delete", { id });
+          alert("অফলাইন: পণ্যটি মুছে ফেলা হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+          return;
+        }
+
         const result = await deleteProduct(id);
 
         if (result?.archived) {
-          setProducts((prev) =>
-            prev.map((p) => (p.id === id ? { ...p, isActive: false } : p))
-          );
+          markArchived();
+          await db.products.update(id, {
+            isActive: false,
+            trackStock: false,
+            syncStatus: "synced",
+            updatedAt: Date.now(),
+          });
           alert(
-            "এই পণ্যটি আগে বিক্রিতে ব্যবহার হয়েছে, তাই ডিলিট করা যায়নি। এটিকে নিষ্ক্রিয় করা হয়েছে।"
+            "এই পণ্যে বিক্রির ইতিহাস আছে, তাই ডিলিট না করে আর্কাইভ করা হয়েছে।"
           );
         } else {
-          setProducts((prev) => prev.filter((p) => p.id !== id));
+          removeFromState();
+          await db.products.delete(id);
         }
 
         setSelectedProduct(null);
@@ -554,13 +656,13 @@ export default function ProductsListClient({
         const message =
           err instanceof Error && err.message
             ? err.message
-            : "পণ্য ডিলিট করা যায়নি। পরে চেষ্টা করুন।";
+            : "ডিলিট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।";
         alert(message);
       } finally {
         setDeletingId(null);
       }
     },
-    [deletingId, online, router]
+    [activeShopId, deletingId, online, router]
   );
 
   useEffect(() => {
@@ -578,7 +680,7 @@ export default function ProductsListClient({
       return;
     }
     lastAppliedRef.current = { query: cleanQuery, status };
-    applyFilters(1, cleanQuery, status, true);
+    applyFilters(cleanQuery, status, true);
   }, [online, debouncedQuery, status, applyFilters]);
 
   function startListening() {
@@ -1180,3 +1282,4 @@ export default function ProductsListClient({
     </div>
   );
 }
+

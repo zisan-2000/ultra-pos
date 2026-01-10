@@ -2,9 +2,22 @@
 
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdd } from "@/lib/sync/queue";
+import {
+  db,
+  type LocalDueCustomer,
+  type LocalDueLedger,
+} from "@/lib/dexie/db";
 
 type Customer = {
   id: string;
@@ -61,20 +74,103 @@ type PaymentTemplate = {
   lastUsed: number;
 };
 
+function toNumber(value: string | number | null | undefined) {
+  if (value === null || value === undefined) return 0;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function normalizeEntryDate(value: string | number | Date | undefined) {
+  if (!value) return new Date().toISOString();
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime())
+    ? parsed.toISOString()
+    : new Date().toISOString();
+}
+
+function computeSummary(customers: Customer[]): Summary {
+  const totalDue = customers.reduce((sum, c) => sum + toNumber(c.totalDue), 0);
+  const topDue = [...customers]
+    .sort((a, b) => toNumber(b.totalDue) - toNumber(a.totalDue))
+    .slice(0, 5)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      totalDue: toNumber(c.totalDue),
+      phone: c.phone ?? null,
+    }));
+  return { totalDue, topDue };
+}
+
+function toLocalDueCustomer(
+  customer: Customer,
+  shopId: string,
+  now: number
+): LocalDueCustomer {
+  return {
+    id: customer.id,
+    shopId,
+    name: customer.name,
+    phone: customer.phone ?? null,
+    address: customer.address ?? null,
+    totalDue: toNumber(customer.totalDue),
+    lastPaymentAt: customer.lastPaymentAt ?? null,
+    updatedAt: now,
+    syncStatus: "synced",
+  };
+}
+
+function fromLocalDueCustomer(row: LocalDueCustomer): Customer {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone ?? null,
+    address: row.address ?? null,
+    totalDue: row.totalDue ?? 0,
+    lastPaymentAt: row.lastPaymentAt ?? null,
+  };
+}
+
+function toLocalDueLedger(
+  row: StatementRow,
+  shopId: string,
+  customerId: string
+): LocalDueLedger {
+  return {
+    id: row.id,
+    shopId,
+    customerId,
+    entryType: row.entryType,
+    amount: row.amount,
+    description: row.description ?? null,
+    entryDate: normalizeEntryDate(row.entryDate),
+    syncStatus: "synced",
+  };
+}
+
+function fromLocalDueLedger(row: LocalDueLedger): StatementRow {
+  return {
+    id: row.id,
+    entryType: row.entryType,
+    amount: row.amount,
+    description: row.description ?? null,
+    entryDate: normalizeEntryDate(row.entryDate),
+  };
+}
+
 type Props = {
   shopId: string;
   shopName: string;
   initialCustomers: Customer[];
-  initialSummary: Summary;
 };
 
 export default function DuePageClient({
   shopId,
   shopName,
   initialCustomers,
-  initialSummary,
 }: Props) {
   const online = useOnlineStatus();
+  const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [voiceReady, setVoiceReady] = useState(false);
   const [listening, setListening] = useState(false);
@@ -95,9 +191,7 @@ export default function DuePageClient({
   const [customers, setCustomers] = useState<Customer[]>(
     initialCustomers || []
   );
-  const [summary, setSummary] = useState<Summary>(
-    initialSummary || { totalDue: 0, topDue: [] }
-  );
+  const summary = useMemo(() => computeSummary(customers), [customers]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [statement, setStatement] = useState<StatementRow[]>([]);
   const [loadingStatement, setLoadingStatement] = useState(false);
@@ -133,35 +227,55 @@ export default function DuePageClient({
     return Array.from(new Set(values.filter(Boolean)));
   }
 
-  // Cache seed when online; load cache when offline (customers + summary)
-  useEffect(() => {
-    if (online) {
-      setCustomers(initialCustomers || []);
-      setSummary(initialSummary || { totalDue: 0, topDue: [] });
-      try {
-        localStorage.setItem(
-          `due:customers:${shopId}`,
-          JSON.stringify(initialCustomers || [])
-        );
-        localStorage.setItem(
-          `due:summary:${shopId}`,
-          JSON.stringify(initialSummary || {})
-        );
-      } catch {
-        // ignore
-      }
-      return;
-    }
+  const loadCustomersFromDexie = useCallback(async () => {
     try {
-      const cachedCustomers = localStorage.getItem(`due:customers:${shopId}`);
-      const cachedSummary = localStorage.getItem(`due:summary:${shopId}`);
-      if (cachedCustomers)
-        setCustomers(JSON.parse(cachedCustomers) as Customer[]);
-      if (cachedSummary) setSummary(JSON.parse(cachedSummary) as Summary);
-    } catch {
-      // ignore
+      const rows = await db.dueCustomers
+        .where("shopId")
+        .equals(shopId)
+        .toArray();
+      const mapped = rows
+        .map(fromLocalDueCustomer)
+        .sort((a, b) => toNumber(b.totalDue) - toNumber(a.totalDue));
+      setCustomers(mapped);
+      return mapped;
+    } catch (err) {
+      console.error("Load offline due customers failed", err);
+      setCustomers([]);
+      return [];
     }
-  }, [online, initialCustomers, initialSummary, shopId]);
+  }, [shopId]);
+
+  const seedCustomersToDexie = useCallback(async (nextCustomers: Customer[]) => {
+    const now = Date.now();
+    const rows = (nextCustomers || []).map((customer) =>
+      toLocalDueCustomer(customer, shopId, now)
+    );
+    await db.transaction("rw", db.dueCustomers, async () => {
+      await db.dueCustomers
+        .where("shopId")
+        .equals(shopId)
+        .and((row) => row.syncStatus === "synced")
+        .delete();
+      if (rows.length > 0) {
+        await db.dueCustomers.bulkPut(rows);
+      }
+    });
+  }, [shopId]);
+
+  // Seed Dexie when online; always read from Dexie as source of truth.
+  useEffect(() => {
+    const run = async () => {
+      if (online) {
+        try {
+          await seedCustomersToDexie(initialCustomers || []);
+        } catch (err) {
+          console.error("Seed Dexie due customers failed", err);
+        }
+      }
+      await loadCustomersFromDexie();
+    };
+    run();
+  }, [online, initialCustomers, loadCustomersFromDexie, seedCustomersToDexie]);
 
   function mergeCustomerTemplates(
     existing: CustomerTemplate[],
@@ -244,23 +358,13 @@ export default function DuePageClient({
     }
   }, [customerTemplateKey, paymentTemplateKey]);
 
-  // Reset all client state when shop changes to avoid leaking data across shops
+  // Reset client state when shop changes to avoid leaking data across shops.
   useEffect(() => {
-    setCustomers(initialCustomers || []);
-    setSummary(initialSummary || { totalDue: 0, topDue: [] });
-    const firstId = initialCustomers?.[0]?.id || "";
-    setSelectedCustomerId(firstId);
-    setPaymentForm({
-      customerId: firstId,
-      amount: "",
-      description: "",
-    });
+    setSelectedCustomerId("");
+    setPaymentForm({ customerId: "", amount: "", description: "" });
     setStatement([]);
-    if (firstId) {
-      loadStatement(firstId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shopId, initialCustomers, initialSummary]);
+    loadCustomersFromDexie();
+  }, [shopId, loadCustomersFromDexie]);
 
   useEffect(() => {
     if (!selectedCustomerId && customers.length > 0) {
@@ -272,79 +376,116 @@ export default function DuePageClient({
   }, [customers]);
 
   async function refreshData() {
-    const [customersRes, summaryRes] = await Promise.all([
-      fetch(`/api/due/customers?shopId=${shopId}`).then((r) => r.json()),
-      fetch(`/api/due/summary?shopId=${shopId}`).then((r) => r.json()),
-    ]);
-
-    setCustomers(customersRes.data || []);
-    setSummary(summaryRes || { totalDue: 0, topDue: [] });
+    const customersRes = await fetch(
+      `/api/due/customers?shopId=${shopId}`
+    ).then((r) => r.json());
+    const list = Array.isArray(customersRes?.data) ? customersRes.data : [];
+    try {
+      await seedCustomersToDexie(list);
+    } catch (err) {
+      console.error("Refresh due customers failed", err);
+    }
+    await loadCustomersFromDexie();
   }
 
   async function loadStatement(customerId: string) {
     if (!customerId) return;
     setLoadingStatement(true);
-    // Offline: use cached statement
-    if (!online) {
-      try {
-        const cached = localStorage.getItem(
-          `due:statement:${shopId}:${customerId}`
-        );
-        if (cached) {
-          setStatement(JSON.parse(cached) || []);
-        } else {
-          setStatement([]);
-        }
-      } catch {
-        setStatement([]);
-      } finally {
-        setLoadingStatement(false);
-      }
-      return;
-    }
-
     try {
-      const res = await fetch(
-        `/api/due/statement?shopId=${shopId}&customerId=${customerId}`
-      );
-      const json = await res.json();
-      setStatement(json.data || []);
-      try {
-        localStorage.setItem(
-          `due:statement:${shopId}:${customerId}`,
-          JSON.stringify(json.data || [])
+      if (online) {
+        const res = await fetch(
+          `/api/due/statement?shopId=${shopId}&customerId=${customerId}`
         );
-      } catch {
-        // ignore cache errors
+        const json = await res.json();
+        const rows = Array.isArray(json?.data) ? json.data : [];
+        const mapped = rows.map((row: any) =>
+          toLocalDueLedger(
+            {
+              id: row.id,
+              entryType: row.entryType,
+              amount: row.amount,
+              description: row.description ?? null,
+              entryDate: row.entryDate,
+            },
+            shopId,
+            customerId
+          )
+        );
+
+        await db.transaction("rw", db.dueLedger, async () => {
+          await db.dueLedger
+            .where("[shopId+customerId]")
+            .equals([shopId, customerId])
+            .and((row) => row.syncStatus === "synced")
+            .delete();
+          if (mapped.length > 0) {
+            await db.dueLedger.bulkPut(mapped);
+          }
+        });
       }
+
+      const localRows = await db.dueLedger
+        .where("[shopId+customerId]")
+        .equals([shopId, customerId])
+        .toArray();
+      const localStatement = localRows
+        .map(fromLocalDueLedger)
+        .sort(
+          (a, b) =>
+            new Date(a.entryDate).getTime() -
+            new Date(b.entryDate).getTime()
+        );
+      setStatement(localStatement);
+    } catch (err) {
+      console.error("Load due statement failed", err);
+      setStatement([]);
     } finally {
       setLoadingStatement(false);
     }
   }
 
+  useEffect(() => {
+    if (!online) return;
+    if (!lastSyncAt) return;
+    if (syncing) return;
+    if (pendingCount > 0) return;
+    refreshData();
+    if (selectedCustomerId) {
+      loadStatement(selectedCustomerId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online, lastSyncAt, syncing, pendingCount]);
+
   async function handleAddCustomer(e: FormEvent) {
     e.preventDefault();
     if (!newCustomer.name.trim()) return;
     if (!online) {
+      const now = Date.now();
       const payload = {
         id: crypto.randomUUID(),
         shopId,
         name: newCustomer.name.trim(),
+        phone: newCustomer.phone.trim() || null,
+        address: newCustomer.address.trim() || null,
+        totalDue: "0",
+        lastPaymentAt: null,
+        updatedAt: now,
+        syncStatus: "new" as const,
+      };
+      await db.dueCustomers.put(payload);
+      await queueAdd("due_customer", "create", payload);
+      const template: CustomerTemplate = {
+        name: newCustomer.name.trim(),
         phone: newCustomer.phone.trim() || undefined,
         address: newCustomer.address.trim() || undefined,
-        totalDue: "0",
+        count: 1,
+        lastUsed: Date.now(),
       };
-      setCustomers((prev) => [payload, ...prev]);
-      try {
-        localStorage.setItem(
-          `due:customers:${shopId}`,
-          JSON.stringify([payload, ...customers])
-        );
-      } catch {
-        // ignore
-      }
-      await queueAdd("due_customer", "create", payload);
+      const merged = mergeCustomerTemplates(customerTemplates, template);
+      setCustomerTemplates(merged);
+      localStorage.setItem(customerTemplateKey, JSON.stringify(merged));
       setNewCustomer({ name: "", phone: "", address: "" });
+      await loadCustomersFromDexie();
       return;
     }
 
@@ -374,39 +515,150 @@ export default function DuePageClient({
     await refreshData();
   }
 
+  function persistPaymentTemplate(
+    customerId: string,
+    amount: string,
+    description: string
+  ) {
+    const template: PaymentTemplate = {
+      customerId,
+      amount: amount || "0",
+      description: description || "",
+      count: 1,
+      lastUsed: Date.now(),
+    };
+    const merged = mergePaymentTemplates(paymentTemplates, template);
+    setPaymentTemplates(merged);
+    localStorage.setItem(paymentTemplateKey, JSON.stringify(merged));
+  }
+
+
   async function handlePayment(e: FormEvent) {
     e.preventDefault();
     if (!paymentForm.customerId || !paymentForm.amount) return;
-    if (!online) {
-      alert(
-        "Offline অবস্থায় পেমেন্ট/আদায় যোগ করা যাবে না। অনলাইনে গিয়ে চেষ্টা করুন।"
-      );
-      return;
-    }
+
+    const amountValue = Number(paymentForm.amount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) return;
 
     setSavingPayment(true);
     try {
+      if (!online) {
+        const nowIso = new Date().toISOString();
+        const nowTs = Date.now();
+        const entryId = crypto.randomUUID();
+        const description = paymentForm.description?.trim() || "";
+        const targetCustomer = customers.find(
+          (customer) => customer.id === paymentForm.customerId
+        );
+        const nextDue = Math.max(
+          0,
+          toNumber(targetCustomer?.totalDue) - amountValue
+        );
+        let nextCustomers = customers.map((customer) =>
+          customer.id === paymentForm.customerId
+            ? {
+                ...customer,
+                totalDue: nextDue,
+                lastPaymentAt: nowIso,
+              }
+            : customer
+        );
+        if (!targetCustomer) {
+          nextCustomers = nextCustomers.concat({
+            id: paymentForm.customerId,
+            name: "Customer",
+            phone: null,
+            address: null,
+            totalDue: nextDue,
+            lastPaymentAt: nowIso,
+          });
+        }
+        nextCustomers = nextCustomers.sort(
+          (a, b) => toNumber(b.totalDue) - toNumber(a.totalDue)
+        );
+        setCustomers(nextCustomers);
+
+        const ledgerEntry: LocalDueLedger = {
+          id: entryId,
+          shopId,
+          customerId: paymentForm.customerId,
+          entryType: "PAYMENT",
+          amount: amountValue,
+          description: description || null,
+          entryDate: nowIso,
+          syncStatus: "new",
+        };
+
+        await db.transaction("rw", db.dueCustomers, db.dueLedger, async () => {
+          await db.dueLedger.put(ledgerEntry);
+          const existing = await db.dueCustomers.get(paymentForm.customerId);
+          if (existing) {
+            await db.dueCustomers.update(paymentForm.customerId, {
+              totalDue: nextDue,
+              lastPaymentAt: nowIso,
+              updatedAt: nowTs,
+              syncStatus: "synced",
+            });
+          } else {
+            const name = targetCustomer?.name || "Customer";
+            const phone = targetCustomer?.phone ?? null;
+            const address = targetCustomer?.address ?? null;
+            await db.dueCustomers.put({
+              id: paymentForm.customerId,
+              shopId,
+              name,
+              phone,
+              address,
+              totalDue: nextDue,
+              lastPaymentAt: nowIso,
+              updatedAt: nowTs,
+              syncStatus: "synced",
+            });
+          }
+        });
+
+        await queueAdd("due_payment", "payment", {
+          shopId,
+          customerId: paymentForm.customerId,
+          amount: amountValue,
+          description: description || null,
+          createdAt: nowIso,
+          localId: entryId,
+        });
+
+        persistPaymentTemplate(
+          paymentForm.customerId,
+          paymentForm.amount,
+          paymentForm.description || ""
+        );
+
+        setPaymentForm({
+          customerId: paymentForm.customerId,
+          amount: "",
+          description: "",
+        });
+
+        await loadStatement(paymentForm.customerId);
+        alert("অফলাইন: পেমেন্ট সেভ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+        return;
+      }
+
       await fetch("/api/due/payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           shopId,
           customerId: paymentForm.customerId,
-          amount: Number(paymentForm.amount),
+          amount: amountValue,
           description: paymentForm.description || undefined,
         }),
       });
 
-      const template: PaymentTemplate = {
-        customerId: paymentForm.customerId,
-        amount: paymentForm.amount || "0",
-        description: paymentForm.description || "",
-        count: 1,
-        lastUsed: Date.now(),
-      };
-      const merged = mergePaymentTemplates(paymentTemplates, template);
-      setPaymentTemplates(merged);
-      localStorage.setItem(paymentTemplateKey, JSON.stringify(merged));
+      persistPaymentTemplate(
+        paymentForm.customerId,
+        paymentForm.amount,
+        paymentForm.description || ""
+      );
 
       setPaymentForm({
         customerId: paymentForm.customerId,
