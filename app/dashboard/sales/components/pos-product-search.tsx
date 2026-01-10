@@ -150,7 +150,9 @@ const ProductButton = memo(function ProductButton({
           </span>
         )}
       </div>
-      <p className="text-base sm:text-lg font-bold text-success mt-1">৳ {product.sellPrice}</p>
+      <p className="text-base sm:text-lg font-bold text-foreground mt-1">
+        <span className="text-muted-foreground">৳</span> {product.sellPrice}
+      </p>
       <p className="text-[11px] text-muted-foreground mt-1 capitalize">
         {(product.category || "Uncategorized").replace("&", "and")}
       </p>
