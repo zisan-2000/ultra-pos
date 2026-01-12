@@ -8,6 +8,7 @@ type StaffEntry = {
   name: string | null;
   email: string | null;
   createdAt: string;
+  shopName: string | null;
 };
 
 type OwnerEntry = {
@@ -15,6 +16,7 @@ type OwnerEntry = {
   name: string | null;
   email: string | null;
   createdAt: string;
+  shopCount: number;
   staff: StaffEntry[];
 };
 

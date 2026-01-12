@@ -93,6 +93,22 @@ export default async function AdminDashboardPage() {
   }
 
   const ownerIds = ownerRows.map((owner) => owner.id);
+  const shops =
+    ownerIds.length > 0
+      ? await prisma.shop.findMany({
+          where: { ownerId: { in: ownerIds } },
+          select: { id: true, ownerId: true },
+        })
+      : [];
+
+  const shopCountByOwner = new Map<string, number>();
+  for (const shop of shops) {
+    shopCountByOwner.set(
+      shop.ownerId,
+      (shopCountByOwner.get(shop.ownerId) ?? 0) + 1,
+    );
+  }
+
   const staffRows =
     ownerIds.length > 0
       ? await prisma.user.findMany({
@@ -106,6 +122,7 @@ export default async function AdminDashboardPage() {
             email: true,
             createdAt: true,
             createdBy: true,
+            staffShop: { select: { id: true, name: true, ownerId: true } },
           },
           orderBy: { createdAt: "desc" },
         })
@@ -146,11 +163,13 @@ export default async function AdminDashboardPage() {
       name: owner.name,
       email: owner.email,
       createdAt: owner.createdAt.toISOString(),
+      shopCount: shopCountByOwner.get(owner.id) ?? 0,
       staff: (staffListByOwner.get(owner.id) ?? []).map((staff) => ({
         id: staff.id,
         name: staff.name,
         email: staff.email,
         createdAt: staff.createdAt.toISOString(),
+        shopName: staff.staffShop?.name ?? null,
       })),
     }));
 
@@ -192,6 +211,7 @@ export default async function AdminDashboardPage() {
       email: owner.email,
       agentLabel,
       staffCount,
+      shopCount: shopCountByOwner.get(owner.id) ?? 0,
       createdAt: owner.createdAt.toISOString(),
     };
   });

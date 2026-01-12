@@ -14,6 +14,7 @@ type StaffEntry = {
   name: string | null;
   email: string | null;
   createdAt: string;
+  shopName: string | null;
 };
 
 type OwnerEntry = {
@@ -21,6 +22,7 @@ type OwnerEntry = {
   name: string | null;
   email: string | null;
   createdAt: string;
+  shopCount: number;
   staff: StaffEntry[];
 };
 
@@ -67,6 +69,7 @@ type OwnerRow = {
   agentLabel: string;
   adminLabel: string;
   staffCount: number;
+  shopCount: number;
   createdAt: string;
 };
 
@@ -504,6 +507,9 @@ export default function SuperAdminDashboardClient({ userId, initialData }: Props
                     Admin
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Shops
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Staff
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -529,6 +535,9 @@ export default function SuperAdminDashboardClient({ userId, initialData }: Props
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {owner.adminLabel}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-foreground">
+                      {formatCount(owner.shopCount ?? 0)}
                     </td>
                     <td className="px-4 py-3 font-semibold text-foreground">
                       {formatCount(owner.staffCount)}

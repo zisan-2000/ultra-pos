@@ -7,6 +7,7 @@ type StaffEntry = {
   name: string | null;
   email: string | null;
   createdAt: string;
+  shopName: string | null;
 };
 
 type OwnerEntry = {
@@ -14,6 +15,7 @@ type OwnerEntry = {
   name: string | null;
   email: string | null;
   createdAt: string;
+  shopCount: number;
   staff: StaffEntry[];
 };
 
@@ -216,6 +218,9 @@ export default function OwnerStaffDrilldownClient({
                   Owner
                 </th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Shops
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Staff
                 </th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -242,6 +247,9 @@ export default function OwnerStaffDrilldownClient({
                           </span>
                         </div>
                       </td>
+                      <td className="px-3 py-2 font-semibold text-foreground">
+                        {formatCount(owner.shopCount ?? 0)}
+                      </td>
                       <td className="px-3 py-2">
                         <button
                           type="button"
@@ -264,7 +272,7 @@ export default function OwnerStaffDrilldownClient({
                       id={staffRowId}
                       className={isOpen ? "bg-muted/20" : "hidden"}
                     >
-                      <td colSpan={3} className="px-3 pb-3">
+                      <td colSpan={4} className="px-3 pb-3">
                         {owner.filteredStaff.length === 0 ? (
                           <div className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-3 text-xs text-muted-foreground">
                             No staff under this owner for the current filters.
@@ -276,6 +284,9 @@ export default function OwnerStaffDrilldownClient({
                                 <tr>
                                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                     Staff
+                                  </th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Shop
                                   </th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                     Created
@@ -294,6 +305,9 @@ export default function OwnerStaffDrilldownClient({
                                           {staff.email || "No email"}
                                         </span>
                                       </div>
+                                    </td>
+                                    <td className="px-3 py-2 text-muted-foreground">
+                                      {staff.shopName || "Unassigned"}
                                     </td>
                                     <td className="px-3 py-2 text-muted-foreground">
                                       {formatDate(staff.createdAt)}
