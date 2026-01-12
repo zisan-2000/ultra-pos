@@ -9,6 +9,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { ExpensesDeleteButton } from "./ExpensesDeleteButton";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type Expense = {
   id: string;
@@ -157,6 +158,7 @@ export function ExpensesListClient({
           }))
         );
       } catch (err) {
+        handlePermissionError(err);
         console.error("Load offline expenses failed", err);
       }
     };
@@ -254,6 +256,7 @@ export function ExpensesListClient({
       return Number.isFinite(amt) ? sum + amt : sum;
     }, 0);
   }, [filteredItems, online, summaryTotal]);
+  const hasItems = filteredItems.length > 0;
 
   const DateFilterRow = ({ className = "" }: { className?: string }) => (
     <div className={`relative ${className}`}>
@@ -317,22 +320,6 @@ export function ExpensesListClient({
         )}
       </div>
     ) : null;
-
-  if (filteredItems.length === 0) {
-    return (
-      <div className="bg-card border border-border rounded-xl p-6 text-center space-y-2">
-        <p className="text-lg font-semibold text-foreground">এখনো কোনো খরচ নেই</p>
-        <p className="text-sm text-muted-foreground">প্রথম খরচ যোগ করুন</p>
-
-        <Link
-          href={`/dashboard/expenses/new?shopId=${shopId}`}
-          className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
-        >
-          + নতুন খরচ
-        </Link>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -425,59 +412,73 @@ export function ExpensesListClient({
         </div>
       </div>
 
-      <div className="space-y-4">
-        {filteredItems.map((e) => {
-          const amountNum = Number(e.amount ?? 0);
-          const formattedAmount = Number.isFinite(amountNum)
-            ? amountNum.toFixed(2)
-            : (e.amount as any)?.toString?.() ?? "0.00";
-          const expenseDateStr = e.expenseDate
-            ? new Date(e.expenseDate as any).toISOString().slice(0, 10)
-            : "-";
+      {hasItems ? (
+        <div className="space-y-4">
+          {filteredItems.map((e) => {
+            const amountNum = Number(e.amount ?? 0);
+            const formattedAmount = Number.isFinite(amountNum)
+              ? amountNum.toFixed(2)
+              : (e.amount as any)?.toString?.() ?? "0.00";
+            const expenseDateStr = e.expenseDate
+              ? new Date(e.expenseDate as any).toISOString().slice(0, 10)
+              : "-";
 
-          return (
-            <div
-              key={e.id}
-              className="bg-card border border-border rounded-xl p-5 shadow-sm hover:shadow-md transition-all"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <p className="text-2xl font-bold text-foreground">
-                    {formattedAmount} ৳
-                  </p>
-                  <p className="text-sm font-semibold text-foreground">
-                    {e.category}
-                  </p>
-                  <p className="text-xs text-muted-foreground">তারিখ: {expenseDateStr}</p>
-                  {e.note ? (
-                    <p className="text-xs text-muted-foreground leading-snug">
-                      নোট: {e.note}
+            return (
+              <div
+                key={e.id}
+                className="bg-card border border-border rounded-xl p-5 shadow-sm hover:shadow-md transition-all"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-2xl font-bold text-foreground">
+                      {formattedAmount} ৳
                     </p>
-                  ) : null}
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  {online ? (
-                    <Link
-                      href={`/dashboard/expenses/${e.id}`}
-                      className="px-3 py-1.5 rounded-full bg-primary-soft text-primary text-xs font-semibold border border-primary/30 hover:bg-primary-soft/70"
-                    >
-                      দেখুন
-                    </Link>
-                  ) : (
-                    <span className="text-[11px] text-muted-foreground">
-                      Offline মোড
-                    </span>
-                  )}
-                  <ExpensesDeleteButton
-                    id={e.id}
-                    onDeleted={handleOptimisticDelete}
-                  />
+                    <p className="text-sm font-semibold text-foreground">
+                      {e.category}
+                    </p>
+                    <p className="text-xs text-muted-foreground">তারিখ: {expenseDateStr}</p>
+                    {e.note ? (
+                      <p className="text-xs text-muted-foreground leading-snug">
+                        নোট: {e.note}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    {online ? (
+                      <Link
+                        href={`/dashboard/expenses/${e.id}`}
+                        className="px-3 py-1.5 rounded-full bg-primary-soft text-primary text-xs font-semibold border border-primary/30 hover:bg-primary-soft/70"
+                      >
+                        দেখুন
+                      </Link>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">
+                        Offline মোড
+                      </span>
+                    )}
+                    <ExpensesDeleteButton
+                      id={e.id}
+                      onDeleted={handleOptimisticDelete}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="bg-card border border-border rounded-xl p-6 text-center space-y-2">
+          <p className="text-lg font-semibold text-foreground">এখনো কোনো খরচ নেই</p>
+          <p className="text-sm text-muted-foreground">প্রথম খরচ যোগ করুন</p>
+
+          <Link
+            href={`/dashboard/expenses/new?shopId=${shopId}`}
+            className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
+          >
+            + নতুন খরচ
+          </Link>
+        </div>
+      )}
 
     </div>
   );

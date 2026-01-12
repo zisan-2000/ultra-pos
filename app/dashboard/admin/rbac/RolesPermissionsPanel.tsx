@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import type { Role, Permission } from "@prisma/client";
 import { updateRolePermissions } from "@/app/actions/rbac-admin";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdminAction } from "@/lib/sync/queue";
+import { STAFF_BASELINE_PERMISSIONS } from "@/lib/staff-baseline-permissions";
 
 type RoleWithPermissions = Role & {
   rolePermissions: { permissionId: string }[];
@@ -15,7 +16,7 @@ interface RolesPermissionsPanelProps {
   permissions: Permission[];
 }
 
-type ModuleKey =
+export type ModuleKey =
   | "dashboard"
   | "shops"
   | "products"
@@ -30,7 +31,7 @@ type ModuleKey =
   | "offline"
   | "other";
 
-const moduleLabels: Record<ModuleKey, string> = {
+export const moduleLabels: Record<ModuleKey, string> = {
   dashboard: "ড্যাশবোর্ড",
   shops: "দোকান",
   products: "পণ্য",
@@ -46,14 +47,14 @@ const moduleLabels: Record<ModuleKey, string> = {
   other: "অন্যান্য",
 };
 
-type PermissionMeta = {
+export type PermissionMeta = {
   label: string;
   description?: string;
   module: ModuleKey;
   critical?: boolean;
 };
 
-const permissionMeta: Record<string, PermissionMeta> = {
+export const permissionMeta: Record<string, PermissionMeta> = {
   view_dashboard_summary: {
     label: "ড্যাশবোর্ড দেখা",
     module: "dashboard",
@@ -159,6 +160,35 @@ export function RolesPermissionsPanel({
     return localAssignments[selectedRole.id] ?? new Set<string>();
   }, [selectedRole, localAssignments]);
 
+  const isStaffRole = selectedRole?.name === "staff";
+
+  const staffBaselineIds = useMemo(() => {
+    if (!selectedRole || selectedRole.name !== "staff") {
+      return new Set<string>();
+    }
+    const baselineSet = new Set(STAFF_BASELINE_PERMISSIONS);
+    const ids = permissions
+      .filter((permission) => baselineSet.has(permission.name))
+      .map((permission) => permission.id);
+    return new Set(ids);
+  }, [selectedRole, permissions]);
+
+  useEffect(() => {
+    if (!selectedRole || selectedRole.name !== "staff") return;
+    if (staffBaselineIds.size === 0) return;
+    setLocalAssignments((prev) => {
+      const current = new Set(prev[selectedRole.id] ?? []);
+      let changed = false;
+      staffBaselineIds.forEach((id) => {
+        if (!current.has(id)) {
+          current.add(id);
+          changed = true;
+        }
+      });
+      return changed ? { ...prev, [selectedRole.id]: current } : prev;
+    });
+  }, [selectedRole, staffBaselineIds]);
+
   const groupedPermissions = useMemo(() => {
     const modulesMap = new Map<
       ModuleKey,
@@ -210,6 +240,7 @@ export function RolesPermissionsPanel({
 
   const togglePermission = (permissionId: string) => {
     if (!selectedRole) return;
+    if (isStaffRole && staffBaselineIds.has(permissionId)) return;
     setLocalAssignments((prev) => {
       const current = new Set(prev[selectedRole.id] ?? []);
       if (current.has(permissionId)) {
@@ -226,6 +257,7 @@ export function RolesPermissionsPanel({
     setLocalAssignments((prev) => {
       const current = new Set(prev[selectedRole.id] ?? []);
       ids.forEach((id) => {
+        if (!enabled && isStaffRole && staffBaselineIds.has(id)) return;
         if (enabled) current.add(id);
         else current.delete(id);
       });
@@ -235,7 +267,9 @@ export function RolesPermissionsPanel({
 
   const handleSave = () => {
     if (!selectedRole) return;
-    const ids = Array.from(selectedPermissionIds);
+    const ids = isStaffRole
+      ? Array.from(new Set([...selectedPermissionIds, ...staffBaselineIds]))
+      : Array.from(selectedPermissionIds);
     startSaving(async () => {
       if (!online) {
         await queueAdminAction("rbac_update_role_permissions", {
@@ -375,6 +409,12 @@ export function RolesPermissionsPanel({
                 </div>
               </div>
 
+              {isStaffRole ? (
+                <div className="px-3 py-2 text-[11px] text-warning bg-warning-soft border-b border-warning/30">
+                  স্টাফ রোলে কিছু বেসলাইন অনুমতি বাধ্যতামূলক — এগুলো বন্ধ করা যাবে না।
+                </div>
+              ) : null}
+
               <div className="divide-y divide-border overflow-y-auto">
                 {groupedPermissions.length === 0 ? (
                   <div className="p-4 text-xs text-muted-foreground">
@@ -419,16 +459,20 @@ export function RolesPermissionsPanel({
                         <div className="mt-2 grid grid-cols-1 gap-1">
                           {module.items.map((p) => {
                             const checked = selectedPermissionIds.has(p.id);
+                            const locked = isStaffRole && staffBaselineIds.has(p.id);
                             return (
                               <label
                                 key={p.id}
-                                className="flex items-start gap-3 px-2 py-1.5 rounded-lg hover:bg-muted cursor-pointer"
+                                className={`flex items-start gap-3 px-2 py-1.5 rounded-lg ${
+                                  locked ? "opacity-80" : "hover:bg-muted cursor-pointer"
+                                }`}
                               >
                                 <input
                                   type="checkbox"
                                   className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
                                   checked={checked}
                                   onChange={() => togglePermission(p.id)}
+                                  disabled={locked}
                                 />
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2">
@@ -441,6 +485,11 @@ export function RolesPermissionsPanel({
                                     {p.meta.critical ? (
                                       <span className="text-[10px] font-semibold text-warning bg-warning-soft border border-warning/30 rounded-full px-2 py-0.5">
                                         Critical
+                                      </span>
+                                    ) : null}
+                                    {locked ? (
+                                      <span className="text-[10px] font-semibold text-primary bg-primary-soft border border-primary/30 rounded-full px-2 py-0.5">
+                                        বেসলাইন
                                       </span>
                                     ) : null}
                                   </div>

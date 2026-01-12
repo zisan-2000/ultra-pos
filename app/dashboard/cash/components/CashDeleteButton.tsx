@@ -3,6 +3,7 @@
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type Props = {
   id: string;
@@ -22,6 +23,7 @@ export function CashDeleteButton({ id, onDeleted }: Props) {
       await db.cash.delete(id);
       await queueAdd("cash", "delete", { id });
     } catch (err) {
+      handlePermissionError(err);
       console.error("Cash delete failed", err);
     }
 

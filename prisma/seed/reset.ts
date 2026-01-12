@@ -16,6 +16,7 @@ export async function resetDatabase(prisma: PrismaClient) {
   await prisma.verification.deleteMany();
   await prisma.account.deleteMany();
 
+  await prisma.userPermissionOverride.deleteMany();
   await prisma.rolePermission.deleteMany();
   await prisma.role.deleteMany();
   await prisma.permission.deleteMany();

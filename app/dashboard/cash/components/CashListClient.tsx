@@ -9,6 +9,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { CashDeleteButton } from "./CashDeleteButton";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type CashEntry = {
   id: string;
@@ -174,6 +175,7 @@ export function CashListClient({
           }))
         );
       } catch (err) {
+        handlePermissionError(err);
         console.error("Load offline cash failed", err);
       }
     };
@@ -259,6 +261,7 @@ export function CashListClient({
       { in: 0, out: 0, net: 0 }
     );
   }, [rendered, online, summaryIn, summaryOut, summaryNet]);
+  const hasItems = rendered.length > 0;
 
   const grouped = useMemo(() => {
     const groups: Record<string, CashEntry[]> = {};
@@ -306,16 +309,6 @@ export function CashListClient({
       <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
     </div>
   );
-
-  if (rendered.length === 0) {
-    return (
-      <p className="text-center text-muted-foreground py-8 bg-card border border-border rounded-xl">
-        {online
-          ? "এখনো কোনো এন্ট্রি নেই।"
-          : "Offline: ক্যাশ এন্ট্রি ক্যাশে নেই"}
-      </p>
-    );
-  }
 
   return (
     <div className="space-y-4 pb-16">
@@ -479,89 +472,97 @@ export function CashListClient({
       </div>
 
       {/* Grouped list */}
-      <div className="space-y-4">
-        {Object.keys(grouped)
-          .sort((a, b) => (a > b ? -1 : 1))
-          .map((dateKey) => {
-            const friendly = new Date(dateKey).toLocaleDateString("bn-BD");
-            const entries = grouped[dateKey];
-            return (
-              <div key={dateKey} className="space-y-2">
-                <div className="flex items-center justify-between px-1">
-                  <p className="text-sm font-semibold text-foreground">
-                    {friendly}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {entries.length} এন্ট্রি
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  {entries.map((e) => {
-                    const amt = Number(e.amount ?? 0);
-                    const val = Number.isFinite(amt)
-                      ? amt.toFixed(2)
-                      : (e.amount as any)?.toString?.() ?? "0";
-                    const created = e.createdAt
-                      ? new Date(e.createdAt as any)
-                      : null;
-                    const timeStr = created
-                      ? created.toLocaleTimeString("bn-BD", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "";
-                    const inFlow = e.entryType === "IN";
-                    return (
-                      <div
-                        key={e.id}
-                        className="bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-all card-lift"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p
-                              className={`text-2xl font-bold ${
-                                inFlow ? "text-success" : "text-danger"
-                              }`}
-                            >
-                              {inFlow ? "+" : "-"}
-                              {val} ৳
-                            </p>
-                            <p className="text-sm text-muted-foreground mt-1 truncate max-w-[240px]">
-                              {e.reason || "—"}
-                            </p>
-                            {timeStr ? (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {timeStr}
-                              </p>
-                            ) : null}
-                          </div>
-                          <div className="flex flex-col items-end gap-2">
-                            {online ? (
-                              <Link
-                                href={`/dashboard/cash/${e.id}`}
-                                className="px-3 py-1.5 bg-primary-soft border border-primary/30 text-primary rounded-full text-xs font-semibold hover:border-primary/50 hover:bg-primary-soft transition-colors"
+      {hasItems ? (
+        <div className="space-y-4">
+          {Object.keys(grouped)
+            .sort((a, b) => (a > b ? -1 : 1))
+            .map((dateKey) => {
+              const friendly = new Date(dateKey).toLocaleDateString("bn-BD");
+              const entries = grouped[dateKey];
+              return (
+                <div key={dateKey} className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      {friendly}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {entries.length} এন্ট্রি
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    {entries.map((e) => {
+                      const amt = Number(e.amount ?? 0);
+                      const val = Number.isFinite(amt)
+                        ? amt.toFixed(2)
+                        : (e.amount as any)?.toString?.() ?? "0";
+                      const created = e.createdAt
+                        ? new Date(e.createdAt as any)
+                        : null;
+                      const timeStr = created
+                        ? created.toLocaleTimeString("bn-BD", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "";
+                      const inFlow = e.entryType === "IN";
+                      return (
+                        <div
+                          key={e.id}
+                          className="bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-all card-lift"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p
+                                className={`text-2xl font-bold ${
+                                  inFlow ? "text-success" : "text-danger"
+                                }`}
                               >
-                                এডিট
-                              </Link>
-                            ) : (
-                              <span className="text-[11px] text-muted-foreground">
-                                Offline
-                              </span>
-                            )}
-                            <CashDeleteButton
-                              id={e.id}
-                              onDeleted={handleOptimisticDelete}
-                            />
+                                {inFlow ? "+" : "-"}
+                                {val} ৳
+                              </p>
+                              <p className="text-sm text-muted-foreground mt-1 truncate max-w-[240px]">
+                                {e.reason || "—"}
+                              </p>
+                              {timeStr ? (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {timeStr}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              {online ? (
+                                <Link
+                                  href={`/dashboard/cash/${e.id}`}
+                                  className="px-3 py-1.5 bg-primary-soft border border-primary/30 text-primary rounded-full text-xs font-semibold hover:border-primary/50 hover:bg-primary-soft transition-colors"
+                                >
+                                  এডিট
+                                </Link>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground">
+                                  Offline
+                                </span>
+                              )}
+                              <CashDeleteButton
+                                id={e.id}
+                                onDeleted={handleOptimisticDelete}
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-      </div>
+              );
+            })}
+        </div>
+      ) : (
+        <p className="text-center text-muted-foreground py-8 bg-card border border-border rounded-xl">
+          {online
+            ? "এখনো কোনো এন্ট্রি নেই।"
+            : "Offline: ক্যাশ এন্ট্রি ক্যাশে নেই"}
+        </p>
+      )}
     </div>
   );
 }

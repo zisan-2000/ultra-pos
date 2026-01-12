@@ -3,6 +3,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   getManageableUsers,
   getCreatableRoles,
@@ -13,6 +14,7 @@ import { DeleteUserDialog } from "./DeleteUserDialog";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type User = {
   id: string;
@@ -31,8 +33,13 @@ type Role = {
   description: string | null;
 };
 
+type UserManagementClientProps = {
+  canManageStaffPermissions: boolean;
+};
 
-export default function UserManagementPage() {
+export default function UserManagementPage({
+  canManageStaffPermissions,
+}: UserManagementClientProps) {
   const online = useOnlineStatus();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [users, setUsers] = useState<User[]>([]);
@@ -56,6 +63,7 @@ export default function UserManagementPage() {
         try {
           localStorage.setItem(usersCacheKey, JSON.stringify(next));
         } catch (err) {
+          handlePermissionError(err);
           console.warn("User cache write failed", err);
         }
         return next;
@@ -76,6 +84,7 @@ export default function UserManagementPage() {
         }
       }
     } catch (err) {
+      handlePermissionError(err);
       console.warn("User cache read failed", err);
     }
 
@@ -89,6 +98,7 @@ export default function UserManagementPage() {
         }
       }
     } catch (err) {
+      handlePermissionError(err);
       console.warn("Role cache read failed", err);
     }
 
@@ -118,9 +128,11 @@ export default function UserManagementPage() {
         localStorage.setItem(usersCacheKey, JSON.stringify(usersData));
         localStorage.setItem(rolesCacheKey, JSON.stringify(rolesData));
       } catch (err) {
+        handlePermissionError(err);
         console.warn("User cache write failed", err);
       }
     } catch (err) {
+      handlePermissionError(err);
       const loaded = loadFromCache();
       if (!loaded) {
         setError(err instanceof Error ? err.message : "Failed to load data");
@@ -173,6 +185,7 @@ export default function UserManagementPage() {
           );
         }
       } catch (err) {
+        handlePermissionError(err);
         console.warn("Purge offline user creates failed", err);
       }
     };
@@ -478,23 +491,38 @@ export default function UserManagementPage() {
                       {new Date(user.createdAt).toLocaleString("bn-BD", { dateStyle: "medium", timeStyle: "short" })}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      <button
-                        onClick={() => {
-                          setEditingUser(user);
-                        }}
-                        className="text-primary hover:text-primary-hover font-medium text-xs disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        সম্পাদনা
-                      </button>
-                      <span className="mx-2 text-muted-foreground">|</span>
-                      <button
-                        onClick={() => {
-                          setDeletingUser(user);
-                        }}
-                        className="text-danger hover:text-danger/80 font-medium text-xs disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        মুছুন
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <button
+                          onClick={() => {
+                            setEditingUser(user);
+                          }}
+                          className="text-primary hover:text-primary-hover font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          সম্পাদনা
+                        </button>
+                        {canManageStaffPermissions &&
+                        user.roles.some((role) => role.name === "staff") ? (
+                          <>
+                            <span className="text-muted-foreground">|</span>
+                            <Link
+                              href={`/dashboard/users/${user.id}/access`}
+                              prefetch={false}
+                              className="text-foreground hover:text-primary font-medium"
+                            >
+                              অ্যাকসেস
+                            </Link>
+                          </>
+                        ) : null}
+                        <span className="text-muted-foreground">|</span>
+                        <button
+                          onClick={() => {
+                            setDeletingUser(user);
+                          }}
+                          className="text-danger hover:text-danger/80 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          মুছুন
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

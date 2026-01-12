@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
 import { hashPassword } from "@/lib/password";
+import { STAFF_BASELINE_PERMISSIONS } from "@/lib/staff-baseline-permissions";
 
 /**
  * Role hierarchy (lower index = higher privilege):
@@ -60,9 +61,25 @@ function isSuperAdminRole(role: string): boolean {
   return role === "super_admin";
 }
 
+async function ensureOwnerOwnsStaffShop(ownerId: string, staffShopId?: string | null) {
+  if (!staffShopId) {
+    throw new Error("Staff user is missing shop assignment");
+  }
+
+  const shop = await prisma.shop.findFirst({
+    where: { id: staffShopId, ownerId },
+    select: { id: true },
+  });
+
+  if (!shop) {
+    throw new Error("Forbidden: staff user is not under your shop");
+  }
+}
+
 /**
  * Get users that the current user can manage
  * - super_admin can see all users
+ * - owner can see staff in their shops
  * - others can only see users they created
  */
 export async function getManageableUsers() {
@@ -74,6 +91,26 @@ export async function getManageableUsers() {
   if (isSuperAdminRole(primaryRole)) {
     // Super admin sees all users
     return await prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        emailVerified: true,
+        createdAt: true,
+        createdBy: true,
+        staffShopId: true,
+        roles: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  if (primaryRole === "owner") {
+    return await prisma.user.findMany({
+      where: {
+        roles: { some: { name: "staff" } },
+        staffShop: { ownerId: user.id },
+      },
       select: {
         id: true,
         email: true,
@@ -215,7 +252,7 @@ export async function updateUser(
   const editorRole = getUserPrimaryRole(editor.roles);
   const targetUser = await prisma.user.findUnique({
     where: { id: userId },
-    include: { roles: { select: { name: true } } },
+    include: { roles: { select: { name: true } }, staffShop: true },
   });
 
   if (!targetUser) {
@@ -224,13 +261,23 @@ export async function updateUser(
 
   const targetIsStaff = targetUser.roles.some((r) => r.name === "staff");
   if (targetIsStaff) {
-    if (editorRole !== "owner" || targetUser.createdBy !== editor.id) {
+    if (editorRole === "owner") {
+      await ensureOwnerOwnsStaffShop(editor.id, targetUser.staffShopId);
+    } else if (!isSuperAdminRole(editorRole) && targetUser.createdBy !== editor.id) {
       throw new Error("Forbidden: only owners can update staff users");
     }
   }
 
   // Check if editor can edit this user
-  if (!isSuperAdminRole(editorRole) && targetUser.createdBy !== editor.id) {
+  if (editorRole === "owner" && !targetIsStaff) {
+    throw new Error("Forbidden: owners can only edit staff users");
+  }
+
+  if (
+    !isSuperAdminRole(editorRole) &&
+    editorRole !== "owner" &&
+    targetUser.createdBy !== editor.id
+  ) {
     throw new Error("Forbidden: you can only edit users you created");
   }
 
@@ -275,7 +322,7 @@ export async function deleteUser(userId: string) {
   const deleterRole = getUserPrimaryRole(deleter.roles);
   const targetUser = await prisma.user.findUnique({
     where: { id: userId },
-    include: { roles: { select: { name: true } } },
+    include: { roles: { select: { name: true } }, staffShop: true },
   });
 
   if (!targetUser) {
@@ -284,13 +331,23 @@ export async function deleteUser(userId: string) {
 
   const targetIsStaff = targetUser.roles.some((r) => r.name === "staff");
   if (targetIsStaff) {
-    if (deleterRole !== "owner" || targetUser.createdBy !== deleter.id) {
+    if (deleterRole === "owner") {
+      await ensureOwnerOwnsStaffShop(deleter.id, targetUser.staffShopId);
+    } else if (!isSuperAdminRole(deleterRole) && targetUser.createdBy !== deleter.id) {
       throw new Error("Forbidden: only owners can deactivate staff users");
     }
   }
 
   // Check if deleter can delete this user
-  if (!isSuperAdminRole(deleterRole) && targetUser.createdBy !== deleter.id) {
+  if (deleterRole === "owner" && !targetIsStaff) {
+    throw new Error("Forbidden: owners can only delete staff users");
+  }
+
+  if (
+    !isSuperAdminRole(deleterRole) &&
+    deleterRole !== "owner" &&
+    targetUser.createdBy !== deleter.id
+  ) {
     throw new Error("Forbidden: you can only delete users you created");
   }
 
@@ -324,4 +381,200 @@ export async function getCreatableRoles() {
   });
 
   return roles.filter((role) => canCreateRole(primaryRole, role.name));
+}
+
+type StaffPermissionOption = {
+  id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+};
+
+async function requireStaffPermissionAccess(
+  targetUserId: string,
+  permissionName: string,
+) {
+  const actor = await requireUser();
+  requirePermission(actor, permissionName);
+
+  const actorRole = getUserPrimaryRole(actor.roles);
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: {
+      id: true,
+      staffShopId: true,
+      roles: { select: { name: true } },
+    },
+  });
+
+  if (!targetUser) {
+    throw new Error("User not found");
+  }
+
+  const targetIsStaff = targetUser.roles.some((r) => r.name === "staff");
+  if (!targetIsStaff) {
+    throw new Error("Only staff users are supported");
+  }
+
+  if (!isSuperAdminRole(actorRole)) {
+    if (actorRole !== "owner") {
+      throw new Error("Forbidden: only owners can manage staff permissions");
+    }
+    await ensureOwnerOwnsStaffShop(actor.id, targetUser.staffShopId);
+  }
+
+  return { actorRole, targetUser };
+}
+
+async function getStaffRolePermissions() {
+  const staffRole = await prisma.role.findUnique({
+    where: { name: "staff" },
+    select: {
+      id: true,
+      rolePermissions: {
+        select: {
+          permission: { select: { id: true, name: true, description: true } },
+        },
+      },
+    },
+  });
+
+  if (!staffRole) {
+    throw new Error("Staff role not found");
+  }
+
+  const basePermissions = staffRole.rolePermissions
+    .map((rp) => rp.permission)
+    .filter((perm): perm is { id: string; name: string; description: string | null } =>
+      Boolean(perm),
+    );
+
+  const existingNames = new Set(basePermissions.map((perm) => perm.name));
+  const missingNames = STAFF_BASELINE_PERMISSIONS.filter(
+    (name) => !existingNames.has(name),
+  );
+
+  if (missingNames.length) {
+    const missingPermissions = await prisma.permission.findMany({
+      where: { name: { in: missingNames } },
+      select: { id: true, name: true, description: true },
+    });
+
+    if (missingPermissions.length) {
+      await prisma.rolePermission.createMany({
+        data: missingPermissions.map((perm) => ({
+          roleId: staffRole.id,
+          permissionId: perm.id,
+        })),
+        skipDuplicates: true,
+      });
+
+      missingPermissions.forEach((perm) => {
+        if (!existingNames.has(perm.name)) {
+          basePermissions.push(perm);
+          existingNames.add(perm.name);
+        }
+      });
+    }
+  }
+
+  return basePermissions;
+}
+
+export async function getStaffPermissionOptions(userId: string): Promise<{
+  permissions: StaffPermissionOption[];
+}> {
+  await requireStaffPermissionAccess(userId, "view_users_under_me");
+
+  const basePermissions = await getStaffRolePermissions();
+  basePermissions.sort((a, b) => a.name.localeCompare(b.name));
+  const baseIds = basePermissions.map((p) => p.id);
+
+  const overrides = await prisma.userPermissionOverride.findMany({
+    where: { userId, permissionId: { in: baseIds } },
+    select: { permissionId: true, allowed: true },
+  });
+
+  const deniedIds = new Set(
+    overrides.filter((o) => !o.allowed).map((o) => o.permissionId),
+  );
+
+  return {
+    permissions: basePermissions.map((perm) => ({
+      id: perm.id,
+      name: perm.name,
+      description: perm.description,
+      enabled: !deniedIds.has(perm.id),
+    })),
+  };
+}
+
+export async function getStaffUserSummary(userId: string): Promise<{
+  id: string;
+  name: string | null;
+  email: string | null;
+  roles: { id: string; name: string }[];
+  shopName: string | null;
+}> {
+  await requireStaffPermissionAccess(userId, "view_users_under_me");
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      roles: { select: { id: true, name: true } },
+      staffShop: { select: { name: true } },
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    roles: user.roles,
+    shopName: user.staffShop?.name ?? null,
+  };
+}
+
+export async function updateStaffPermissions(
+  userId: string,
+  enabledPermissionIds: string[],
+) {
+  await requireStaffPermissionAccess(userId, "edit_users_under_me");
+
+  const basePermissions = await getStaffRolePermissions();
+  const baseIds = basePermissions.map((p) => p.id);
+  const baseSet = new Set(baseIds);
+
+  const uniqueEnabled = Array.from(new Set(enabledPermissionIds));
+  const unknown = uniqueEnabled.filter((id) => !baseSet.has(id));
+  if (unknown.length > 0) {
+    throw new Error("Invalid permission selection");
+  }
+
+  const enabledSet = new Set(uniqueEnabled);
+  const deniedIds = baseIds.filter((id) => !enabledSet.has(id));
+
+  await prisma.userPermissionOverride.deleteMany({
+    where: { userId, permissionId: { in: baseIds } },
+  });
+
+  if (deniedIds.length) {
+    await prisma.userPermissionOverride.createMany({
+      data: deniedIds.map((permissionId) => ({
+        userId,
+        permissionId,
+        allowed: false,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  return { success: true };
 }

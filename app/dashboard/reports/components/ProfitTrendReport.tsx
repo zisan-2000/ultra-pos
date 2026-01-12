@@ -2,8 +2,11 @@
 
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
+import { scheduleIdle } from "@/lib/schedule-idle";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type ProfitRow = { date: string; sales: number; expense: number };
 type Props = { shopId: string; from?: string; to?: string };
@@ -12,6 +15,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
   const [data, setData] = useState<ProfitRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const prefetchKeyRef = useRef<string | null>(null);
 
   const buildCacheKey = useCallback(
     (rangeFrom?: string, rangeTo?: string) =>
@@ -33,6 +37,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
           return true;
         }
       } catch (err) {
+        handlePermissionError(err);
         console.warn("Profit report cache read failed", err);
       }
       setData([]);
@@ -43,12 +48,12 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
 
   const load = useCallback(
     async (rangeFrom?: string, rangeTo?: string) => {
+      const cachedApplied = loadCached(rangeFrom, rangeTo);
       if (!online) {
         setLoading(false);
-        loadCached(rangeFrom, rangeTo);
         return;
       }
-      setLoading(true);
+      setLoading(!cachedApplied);
       try {
         const params = new URLSearchParams({ shopId });
         if (rangeFrom) params.append("from", rangeFrom);
@@ -68,6 +73,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
             JSON.stringify(rows)
           );
         } catch (err) {
+          handlePermissionError(err);
           console.warn("Profit report cache write failed", err);
         }
       } finally {
@@ -80,6 +86,38 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
   useEffect(() => {
     void load(from, to);
   }, [load, from, to]);
+
+  useEffect(() => {
+    if (!online || typeof window === "undefined") return;
+    if (prefetchKeyRef.current === shopId) return;
+    prefetchKeyRef.current = shopId;
+    const cancel = scheduleIdle(() => {
+      PREFETCH_PRESETS.forEach((presetKey) => {
+        const { from: rangeFrom, to: rangeTo } = computePresetRange(presetKey);
+        const cacheKey = buildCacheKey(rangeFrom, rangeTo);
+        if (localStorage.getItem(cacheKey)) return;
+        const params = new URLSearchParams({ shopId });
+        if (rangeFrom) params.append("from", rangeFrom);
+        if (rangeTo) params.append("to", rangeTo);
+        fetch(`/api/reports/profit-trend?${params.toString()}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((json) => {
+            const rows = Array.isArray(json?.data) ? json.data : null;
+            if (!rows) return;
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(rows));
+            } catch (err) {
+              handlePermissionError(err);
+              console.warn("Profit prefetch cache write failed", err);
+            }
+          })
+          .catch(() => {
+            // ignore prefetch errors
+          });
+      });
+    });
+    return () => cancel();
+  }, [online, shopId, buildCacheKey]);
 
   const totalProfit = useMemo(
     () =>

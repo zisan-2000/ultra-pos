@@ -19,6 +19,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type ProductOption = {
   id: string;
@@ -176,6 +177,7 @@ export function PosPageClient({
           }))
         );
       } catch (err) {
+        handlePermissionError(err);
         console.error("Load offline products failed", err);
       }
     };

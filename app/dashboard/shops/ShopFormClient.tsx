@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdminAction } from "@/lib/sync/queue";
 import { db } from "@/lib/dexie/db";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -219,6 +220,7 @@ export default function ShopFormClient({
         )
       );
     } catch (err) {
+      handlePermissionError(err);
       console.error("Update pending shop create failed", err);
     }
   }
@@ -367,6 +369,7 @@ export default function ShopFormClient({
       await action(form);
       router.push(backHref);
     } catch (err) {
+      handlePermissionError(err);
       setSubmitError(
         err instanceof Error ? err.message : "Shop তৈরি করতে ব্যর্থ"
       );

@@ -23,6 +23,7 @@ model Permission {
   name            String           @unique
   description     String?
   rolePermissions RolePermission[]
+  userOverrides   UserPermissionOverride[]
 }
 
 model RolePermission {
@@ -33,6 +34,20 @@ model RolePermission {
   permission   Permission @relation(fields: [permissionId], references: [id])
 
   @@id([roleId, permissionId])
+}
+
+model UserPermissionOverride {
+  userId       String
+  permissionId String
+  allowed      Boolean  @default(true)
+  createdAt    DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  user       User       @relation(fields: [userId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([userId, permissionId])
+  @@index([permissionId], map: "idx_user_permission_overrides_permission")
+  @@map("user_permission_overrides")
 }
 
 
@@ -54,6 +69,7 @@ model User {
   verifications Verification[]
 
   roles         Role[]    @relation("UserRoles")
+  permissionOverrides UserPermissionOverride[]
 
   // User hierarchy: who created this user
   createdBy     String?   @map("created_by")

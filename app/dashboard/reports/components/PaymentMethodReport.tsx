@@ -2,8 +2,11 @@
 
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
+import { scheduleIdle } from "@/lib/schedule-idle";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type PaymentRow = { name: string; value: number; count?: number };
 type Props = { shopId: string; from?: string; to?: string };
@@ -12,6 +15,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
   const [data, setData] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const prefetchKeyRef = useRef<string | null>(null);
 
   const buildCacheKey = useCallback(
     (rangeFrom?: string, rangeTo?: string) =>
@@ -33,6 +37,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
           return true;
         }
       } catch (err) {
+        handlePermissionError(err);
         console.warn("Payment report cache read failed", err);
       }
       setData([]);
@@ -43,12 +48,12 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
 
   const load = useCallback(
     async (rangeFrom?: string, rangeTo?: string) => {
+      const cachedApplied = loadCached(rangeFrom, rangeTo);
       if (!online) {
         setLoading(false);
-        loadCached(rangeFrom, rangeTo);
         return;
       }
-      setLoading(true);
+      setLoading(!cachedApplied);
       try {
         const params = new URLSearchParams({ shopId });
         if (rangeFrom) params.append("from", rangeFrom);
@@ -78,9 +83,11 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
             JSON.stringify(rows)
           );
         } catch (err) {
+          handlePermissionError(err);
           console.warn("Payment report cache write failed", err);
         }
       } catch (err) {
+        handlePermissionError(err);
         console.error("Payment method load failed", err);
         loadCached(rangeFrom, rangeTo);
       } finally {
@@ -93,6 +100,40 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
   useEffect(() => {
     void load(from, to);
   }, [load, from, to]);
+
+  useEffect(() => {
+    if (!online || typeof window === "undefined") return;
+    if (prefetchKeyRef.current === shopId) return;
+    prefetchKeyRef.current = shopId;
+    const cancel = scheduleIdle(() => {
+      PREFETCH_PRESETS.forEach((presetKey) => {
+        const { from: rangeFrom, to: rangeTo } = computePresetRange(presetKey);
+        const cacheKey = buildCacheKey(rangeFrom, rangeTo);
+        if (localStorage.getItem(cacheKey)) return;
+        const params = new URLSearchParams({ shopId });
+        if (rangeFrom) params.append("from", rangeFrom);
+        if (rangeTo) params.append("to", rangeTo);
+        fetch(`/api/reports/payment-method?${params.toString()}`, {
+          cache: "no-store",
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((json) => {
+            const rows = Array.isArray(json?.data) ? json.data : null;
+            if (!rows) return;
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(rows));
+            } catch (err) {
+              handlePermissionError(err);
+              console.warn("Payment prefetch cache write failed", err);
+            }
+          })
+          .catch(() => {
+            // ignore prefetch errors
+          });
+      });
+    });
+    return () => cancel();
+  }, [online, shopId, buildCacheKey]);
 
   const totalAmount = useMemo(
     () => data.reduce((sum, item) => sum + Number(item.value || 0), 0),

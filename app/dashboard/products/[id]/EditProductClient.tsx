@@ -10,6 +10,7 @@ import { updateProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type Props = {
   product: any;
@@ -326,6 +327,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
           : merged[0] || "Uncategorized"
       );
     } catch (err) {
+      handlePermissionError(err);
       console.error("Failed to load custom categories", err);
       setCategoryOptions(baseCategories);
       setSelectedCategory(
@@ -354,6 +356,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
       setSelectedUnit((prev: string) => (merged.includes(prev) ? prev : initialUnit));
     } catch (err) {
+      handlePermissionError(err);
       console.error("Failed to load custom units", err);
       setUnitOptions((prev) => (prev.length ? prev : configUnits));
       setSelectedUnit((prev: string) => (prev ? prev : configDefaultUnit || configUnits[0] || "pcs"));

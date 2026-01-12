@@ -14,6 +14,14 @@ import dynamic from "next/dynamic";
 import ShopSelectorClient from "../ShopSelectorClient";
 import { StatCard } from "./StatCard";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import {
+  PREFETCH_PRESETS,
+  computeRange,
+  computePresetRange,
+  type RangePreset,
+} from "@/lib/reporting-range";
+import { scheduleIdle } from "@/lib/schedule-idle";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type Summary = {
   sales: { totalAmount: number; completedCount?: number; voidedCount?: number };
@@ -109,8 +117,6 @@ const NAV = [
   { key: "stock", label: "লো স্টক" },
 ] as const;
 
-type RangePreset = "today" | "yesterday" | "7d" | "month" | "all" | "custom";
-
 const PRESETS: { key: RangePreset; label: string }[] = [
   { key: "today", label: "আজ" },
   { key: "yesterday", label: "গতকাল" },
@@ -119,46 +125,6 @@ const PRESETS: { key: RangePreset; label: string }[] = [
   { key: "all", label: "সব" },
   { key: "custom", label: "কাস্টম" },
 ];
-
-function computeRange(
-  preset: RangePreset,
-  customFrom?: string,
-  customTo?: string
-) {
-  const toDhakaDateStr = (d: Date) => {
-    const fmt = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Dhaka",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    return fmt.format(d);
-  };
-  const today = new Date();
-  if (preset === "custom") {
-    return { from: customFrom, to: customTo };
-  }
-  if (preset === "today") {
-    const t = toDhakaDateStr(today);
-    return { from: t, to: t };
-  }
-  if (preset === "yesterday") {
-    const y = new Date(today);
-    y.setDate(y.getDate() - 1);
-    const d = toDhakaDateStr(y);
-    return { from: d, to: d };
-  }
-  if (preset === "7d") {
-    const start = new Date(today);
-    start.setDate(start.getDate() - 6);
-    return { from: toDhakaDateStr(start), to: toDhakaDateStr(today) };
-  }
-  if (preset === "month") {
-    const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    return { from: toDhakaDateStr(start), to: toDhakaDateStr(today) };
-  }
-  return { from: undefined, to: undefined };
-}
 
 export default function ReportsClient({
   shopId,
@@ -182,9 +148,15 @@ export default function ReportsClient({
     1
   )}৳ বিক্রি · লাভ ${liveSummary.profit.profit.toFixed(1)}৳`;
 
+  const buildSummaryKey = useCallback(
+    (rangeFrom?: string, rangeTo?: string) =>
+      `reports:summary:${shopId}:${rangeFrom || "all"}:${rangeTo || "all"}`,
+    [shopId]
+  );
+
   const loadCachedSummary = useCallback(() => {
     if (typeof window === "undefined") return false;
-    const key = `reports:summary:${shopId}:${range.from || "all"}:${range.to || "all"}`;
+    const key = buildSummaryKey(range.from, range.to);
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return false;
@@ -194,10 +166,11 @@ export default function ReportsClient({
         return true;
       }
     } catch (err) {
+      handlePermissionError(err);
       console.warn("Summary cache read failed", err);
     }
     return false;
-  }, [shopId, range.from, range.to]);
+  }, [buildSummaryKey, range.from, range.to]);
 
   const fetchSummary = useCallback(async () => {
     if (!online) {
@@ -205,7 +178,8 @@ export default function ReportsClient({
       loadCachedSummary();
       return;
     }
-    setSummaryLoading(true);
+    const hasCached = loadCachedSummary();
+    setSummaryLoading(!hasCached);
     try {
       const params = new URLSearchParams({ shopId });
       if (range.from) params.append("from", range.from);
@@ -218,24 +192,56 @@ export default function ReportsClient({
       const json = await res.json();
       if (json && json.sales) {
         setLiveSummary(json as Summary);
-        const key = `reports:summary:${shopId}:${range.from || "all"}:${range.to || "all"}`;
+        const key = buildSummaryKey(range.from, range.to);
         try {
           localStorage.setItem(key, JSON.stringify(json));
         } catch (err) {
+          handlePermissionError(err);
           console.warn("Summary cache write failed", err);
         }
       }
     } catch (err) {
+      handlePermissionError(err);
       console.error("summary load failed", err);
       loadCachedSummary();
     } finally {
       setSummaryLoading(false);
     }
-  }, [online, shopId, range.from, range.to, loadCachedSummary]);
+  }, [online, shopId, range.from, range.to, loadCachedSummary, buildSummaryKey]);
 
   useEffect(() => {
     fetchSummary();
   }, [fetchSummary]);
+
+  useEffect(() => {
+    if (!online || typeof window === "undefined") return;
+    const cancel = scheduleIdle(() => {
+      PREFETCH_PRESETS.forEach((presetKey) => {
+        const { from, to } = computePresetRange(presetKey);
+        const cacheKey = buildSummaryKey(from, to);
+        if (localStorage.getItem(cacheKey)) return;
+        const params = new URLSearchParams({ shopId });
+        if (from) params.append("from", from);
+        if (to) params.append("to", to);
+        fetch(`/api/reports/summary?${params.toString()}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((json) => {
+            if (json && json.sales) {
+              try {
+                localStorage.setItem(cacheKey, JSON.stringify(json));
+              } catch (err) {
+                handlePermissionError(err);
+                console.warn("Summary prefetch cache write failed", err);
+              }
+            }
+          })
+          .catch(() => {
+            // ignore prefetch errors
+          });
+      });
+    });
+    return () => cancel();
+  }, [online, shopId, buildSummaryKey]);
 
   useEffect(() => {
     if (preset === "custom" && customFrom && customTo && customFrom > customTo) {

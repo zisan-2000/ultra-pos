@@ -11,7 +11,7 @@ import {
 import ReportsClient from "./components/ReportsClient";
 
 type ReportsPageProps = {
-  searchParams?: Promise<{ shopId?: string } | undefined>;
+  searchParams?: Promise<{ shopId?: string; from?: string; to?: string } | undefined>;
 };
 
 export default async function ReportsPage({ searchParams }: ReportsPageProps) {
@@ -43,12 +43,22 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
 
+  const dhakaDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const useDefaultRange = !resolvedSearch?.from && !resolvedSearch?.to;
+  const rangeFrom = useDefaultRange ? dhakaDate : resolvedSearch?.from;
+  const rangeTo = useDefaultRange ? dhakaDate : resolvedSearch?.to;
+
   const [salesSummary, expenseSummary, cashSummary, profitSummary] =
     await Promise.all([
-      getSalesSummary(selectedShopId),
-      getExpenseSummary(selectedShopId),
-      getCashSummary(selectedShopId),
-      getProfitSummary(selectedShopId),
+      getSalesSummary(selectedShopId, rangeFrom, rangeTo),
+      getExpenseSummary(selectedShopId, rangeFrom, rangeTo),
+      getCashSummary(selectedShopId, rangeFrom, rangeTo),
+      getProfitSummary(selectedShopId, rangeFrom, rangeTo),
     ]);
 
   return (

@@ -21,6 +21,7 @@ import { ShopSwitcherClient } from "../shop-switcher-client";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { addBusinessProductTemplatesToShop } from "@/app/actions/business-product-templates";
 import { deleteProduct } from "@/app/actions/products";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type Shop = { id: string; name: string };
 type Product = {
@@ -224,6 +225,7 @@ export default function ProductsListClient({
           return;
         }
       } catch (err) {
+        handlePermissionError(err);
         console.error("Load offline products failed", err);
       }
 
@@ -235,6 +237,7 @@ export default function ProductsListClient({
           setProducts(parsed);
         }
       } catch (err) {
+        handlePermissionError(err);
         console.warn("Load cached products failed", err);
       }
     };
@@ -270,6 +273,7 @@ export default function ProductsListClient({
           JSON.stringify(serverProducts)
         );
       } catch (err) {
+        handlePermissionError(err);
         console.warn("Persist cached products failed", err);
       }
       return () => {
@@ -295,6 +299,7 @@ export default function ProductsListClient({
         setProducts(parsed);
       }
     } catch (err) {
+      handlePermissionError(err);
       console.warn("Load cached products failed", err);
     }
   }, [online, activeShopId, products.length]);
@@ -575,6 +580,7 @@ export default function ProductsListClient({
       parts.push("Will sync when online.");
       alert(parts.join(". "));
     } catch (err) {
+      handlePermissionError(err);
       console.error("Add templates failed", err);
       const message =
         err instanceof Error && err.message
@@ -658,6 +664,7 @@ export default function ProductsListClient({
         setSelectedProduct(null);
         router.refresh();
       } catch (err) {
+        handlePermissionError(err);
         console.error("Delete failed", err);
         const message =
           err instanceof Error && err.message

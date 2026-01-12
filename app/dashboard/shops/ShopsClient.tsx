@@ -10,6 +10,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdminAction, queueRemove } from "@/lib/sync/queue";
 import { db } from "@/lib/dexie/db";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type Shop = {
   id: string;
@@ -147,6 +148,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
             )
           );
         } catch (err) {
+          handlePermissionError(err);
           console.error("Remove queued shop create failed", err);
         }
       };
@@ -169,6 +171,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
         removeFromState();
         router.refresh();
       } catch (err) {
+        handlePermissionError(err);
         const message =
           err instanceof Error && err.message
             ? err.message

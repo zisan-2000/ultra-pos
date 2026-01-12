@@ -5,6 +5,7 @@ import { deleteUser } from "@/app/actions/user-management";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdminAction, queueRemove } from "@/lib/sync/queue";
 import { db } from "@/lib/dexie/db";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type User = {
   id: string;
@@ -57,6 +58,7 @@ export function DeleteUserDialog({
               )
             );
           } catch (err) {
+            handlePermissionError(err);
             console.error("Remove queued user create failed", err);
           }
           onOptimisticDelete?.(user.id);
@@ -75,6 +77,7 @@ export function DeleteUserDialog({
       onSuccess();
       onClose();
     } catch (err) {
+      handlePermissionError(err);
       setError(err instanceof Error ? err.message : "ব্যবহারকারী মুছতে ব্যর্থ");
     } finally {
       setLoading(false);

@@ -5,6 +5,7 @@ import { updateUser } from "@/app/actions/user-management";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdminAction } from "@/lib/sync/queue";
 import { db } from "@/lib/dexie/db";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type User = {
   id: string;
@@ -61,6 +62,7 @@ export function EditUserDialog({
         )
       );
     } catch (err) {
+      handlePermissionError(err);
       console.error("Update pending user create failed", err);
     }
   };
@@ -86,24 +88,24 @@ export function EditUserDialog({
     const trimmedEmail = email.trim();
 
     if (!trimmedName || !trimmedEmail) {
-      setError("সব ফিল্ড পূরণ করুন");
+      setError("αª╕αª¼ αª½αª┐αª▓αºìαªí αª¬αºéαª░αªú αªòαª░αºüαª¿");
       return;
     }
 
     if (!online && (password.trim() || confirmPassword.trim())) {
-      setError("অফলাইন: পাসওয়ার্ড পরিবর্তন করা যাবে না");
+      setError("αªàαª½αª▓αª╛αªçαª¿: αª¬αª╛αª╕αªôαª»αª╝αª╛αª░αºìαªí αª¬αª░αª┐αª¼αª░αºìαªñαª¿ αªòαª░αª╛ αª»αª╛αª¼αºç αª¿αª╛");
       return;
     }
 
     // If password fields filled, validate
     if (password || confirmPassword) {
       if (password !== confirmPassword) {
-        setError("Password এবং Confirm Password মিলছে না");
+        setError("Password αªÅαª¼αªé Confirm Password αª«αª┐αª▓αª¢αºç αª¿αª╛");
         return;
       }
 
       if (password.length < 8) {
-        setError("Password কমপক্ষে ৮ অক্ষরের হতে হবে");
+        setError("Password αªòαª«αª¬αªòαºìαª╖αºç αº« αªàαªòαºìαª╖αª░αºçαª░ αª╣αªñαºç αª╣αª¼αºç");
         return;
       }
     }
@@ -136,7 +138,7 @@ export function EditUserDialog({
           email: trimmedEmail,
           pending: true,
         });
-        alert("অফলাইন: ইউজার আপডেট কিউ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+        alert("αªàαª½αª▓αª╛αªçαª¿: αªçαªëαª£αª╛αª░ αªåαª¬αªíαºçαªƒ αªòαª┐αªë αª╣αª»αª╝αºçαª¢αºç, αªàαª¿αª▓αª╛αªçαª¿αºç αªùαºçαª▓αºç αª╕αª┐αªÖαºìαªò αª╣αª¼αºçαÑñ");
         onClose();
         return;
       }
@@ -148,7 +150,8 @@ export function EditUserDialog({
       onSuccess();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "ব্যবহারকারী আপডেট করতে ব্যর্থ");
+      handlePermissionError(err);
+      setError(err instanceof Error ? err.message : "αª¼αºìαª»αª¼αª╣αª╛αª░αªòαª╛αª░αºÇ αªåαª¬αªíαºçαªƒ αªòαª░αªñαºç αª¼αºìαª»αª░αºìαªÑ");
     } finally {
       setLoading(false);
     }
@@ -161,13 +164,13 @@ export function EditUserDialog({
       <div className="bg-card rounded-lg shadow-xl w-full max-w-md mx-4">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">ব্যবহারকারী সম্পাদনা করুন</h2>
+          <h2 className="text-lg font-semibold text-foreground">αª¼αºìαª»αª¼αª╣αª╛αª░αªòαª╛αª░αºÇ αª╕αª«αºìαª¬αª╛αªªαª¿αª╛ αªòαª░αºüαª¿</h2>
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground text-2xl leading-none"
             disabled={loading}
           >
-            ×
+            ├ù
           </button>
         </div>
 
@@ -182,13 +185,13 @@ export function EditUserDialog({
           {/* Name */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
-              নাম *
+              αª¿αª╛αª« *
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="ব্যবহারকারীর নাম"
+              placeholder="αª¼αºìαª»αª¼αª╣αª╛αª░αªòαª╛αª░αºÇαª░ αª¿αª╛αª«"
               className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               disabled={loading}
             />
@@ -198,29 +201,29 @@ export function EditUserDialog({
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
-                নতুন পাসওয়ার্ড
+                αª¿αªñαºüαª¿ αª¬αª╛αª╕αªôαª»αª╝αª╛αª░αºìαªí
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="ফাঁকা রাখলে পাসওয়ার্ড পরিবর্তন হবে না"
+                placeholder="αª½αª╛αªüαªòαª╛ αª░αª╛αªûαª▓αºç αª¬αª╛αª╕αªôαª»αª╝αª╛αª░αºìαªí αª¬αª░αª┐αª¼αª░αºìαªñαª¿ αª╣αª¼αºç αª¿αª╛"
                 className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 disabled={loading || !online}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                কমপক্ষে ৮ অক্ষর, একটি বড় অক্ষর এবং একটি সংখ্যা ব্যবহার করা উত্তম
+                αªòαª«αª¬αªòαºìαª╖αºç αº« αªàαªòαºìαª╖αª░, αªÅαªòαªƒαª┐ αª¼αªíαª╝ αªàαªòαºìαª╖αª░ αªÅαª¼αªé αªÅαªòαªƒαª┐ αª╕αªéαªûαºìαª»αª╛ αª¼αºìαª»αª¼αª╣αª╛αª░ αªòαª░αª╛ αªëαªñαºìαªñαª«
               </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
-                কনফার্ম পাসওয়ার্ড
+                αªòαª¿αª½αª╛αª░αºìαª« αª¬αª╛αª╕αªôαª»αª╝αª╛αª░αºìαªí
               </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="আবার পাসওয়ার্ড লিখুন"
+                placeholder="αªåαª¼αª╛αª░ αª¬αª╛αª╕αªôαª»αª╝αª╛αª░αºìαªí αª▓αª┐αªûαºüαª¿"
                 className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 disabled={loading || !online}
               />
@@ -230,7 +233,7 @@ export function EditUserDialog({
           {/* Email */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
-              ইমেইল *
+              αªçαª«αºçαªçαª▓ *
             </label>
             <input
               type="email"
@@ -245,12 +248,12 @@ export function EditUserDialog({
           {/* Role Info */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
-              ভূমিকা
+              αª¡αºéαª«αª┐αªòαª╛
             </label>
             <div className="flex flex-wrap gap-1">
               {user.roles.length === 0 ? (
                 <span className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
-                  কোনো ভূমিকা নেই
+                  αªòαºïαª¿αºï αª¡αºéαª«αª┐αªòαª╛ αª¿αºçαªç
                 </span>
               ) : (
                 user.roles.map((role) => (
@@ -264,7 +267,7 @@ export function EditUserDialog({
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              ভূমিকা পরিবর্তন করতে RBAC admin panel ব্যবহার করুন
+              αª¡αºéαª«αª┐αªòαª╛ αª¬αª░αª┐αª¼αª░αºìαªñαª¿ αªòαª░αªñαºç RBAC admin panel αª¼αºìαª»αª¼αª╣αª╛αª░ αªòαª░αºüαª¿
             </p>
           </div>
 
@@ -276,14 +279,14 @@ export function EditUserDialog({
               className="flex-1 px-4 py-2 border border-border rounded-lg text-foreground font-medium hover:bg-muted disabled:opacity-50"
               disabled={loading}
             >
-              বাতিল
+              αª¼αª╛αªñαª┐αª▓
             </button>
             <button
               type="submit"
               className="flex-1 px-4 py-2 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
             >
-              {loading ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন"}
+              {loading ? "αª╕αªéαª░αªòαºìαª╖αªú αª╣αªÜαºìαª¢αºç..." : "αª╕αªéαª░αªòαºìαª╖αªú αªòαª░αºüαª¿"}
             </button>
           </div>
         </form>

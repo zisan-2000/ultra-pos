@@ -19,6 +19,8 @@ import { createProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
+import toast from "react-hot-toast";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type Props = {
   shop: { id: string; name: string; businessType?: string | null };
@@ -377,6 +379,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
           : merged[0] || "Uncategorized"
       );
     } catch (err) {
+      handlePermissionError(err);
       console.error("Failed to load custom categories", err);
       setCategoryOptions(baseCategories);
       setSelectedCategory(
@@ -408,6 +411,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
         return merged.includes(prev) ? prev : next;
       });
     } catch (err) {
+      handlePermissionError(err);
       console.error("Failed to load custom units", err);
       setUnitOptions((prev) => (prev.length ? prev : configUnits));
       setSelectedUnit((prev) => (prev ? prev : configDefaultUnit || configUnits[0] || "pcs"));
@@ -642,16 +646,29 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
       price: payload.sellPrice,
     });
 
-    if (online) {
-      await createProduct(payload);
-      alert("পণ্য সফলভাবে যুক্ত হয়েছে");
-    } else {
-      await db.products.put(payload);
-      await queueAdd("product", "create", payload);
-      alert("পণ্য অফলাইনে রাখা হয়েছে; অনলাইনে হলে সিঙ্ক হবে");
-    }
+    try {
+      if (online) {
+        await createProduct(payload);
+        toast.success("পণ্য তৈরি হয়েছে।");
+      } else {
+        await db.products.put(payload);
+        await queueAdd("product", "create", payload);
+        toast.success("অফলাইন: পণ্য কিউ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+      }
 
-    router.push(`/dashboard/products?shopId=${ensuredShopId}`);
+      router.push(`/dashboard/products?shopId=${ensuredShopId}`);
+    } catch (err) {
+      if (handlePermissionError(err)) {
+        return;
+      }
+      const message = err instanceof Error ? err.message : "পণ্য তৈরি ব্যর্থ হয়েছে";
+      const normalized = message.toLowerCase();
+      if (normalized.includes("access to this shop")) {
+        toast.error("এই দোকানে আপনার অনুমতি নেই।");
+        return;
+      }
+      toast.error(message);
+    }
   }
   return (
     <div className="max-w-2xl mx-auto">

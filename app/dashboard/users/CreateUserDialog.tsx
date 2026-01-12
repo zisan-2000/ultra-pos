@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createUserWithRole } from "@/app/actions/user-management";
 import { getShopsByUser } from "@/app/actions/shops";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type Role = {
   id: string;
@@ -119,6 +120,7 @@ export function CreateUserDialog({
       onSuccess();
       onClose();
     } catch (err) {
+      handlePermissionError(err);
       setError(err instanceof Error ? err.message : "ব্যবহারকারী তৈরি করতে ব্যর্থ");
     } finally {
       setLoading(false);

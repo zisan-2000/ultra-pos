@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { getStockToneClasses } from "@/lib/stock-level";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 export default function LowStockReport({ shopId }: { shopId: string }) {
   const online = useOnlineStatus();
@@ -31,6 +32,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
           return true;
         }
       } catch (err) {
+        handlePermissionError(err);
         console.warn("Low stock cache read failed", err);
       }
       setItems([]);
@@ -57,6 +59,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
         try {
           localStorage.setItem(buildCacheKey(), JSON.stringify(rows));
         } catch (err) {
+          handlePermissionError(err);
           console.warn("Low stock cache write failed", err);
         }
       } finally {

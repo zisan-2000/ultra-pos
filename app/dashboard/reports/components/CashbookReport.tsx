@@ -3,9 +3,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
+import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
+import { scheduleIdle } from "@/lib/schedule-idle";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type Props = { shopId: string; from?: string; to?: string };
 
@@ -27,6 +30,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
   const [cursorList, setCursorList] = useState<ReportCursor[]>([]);
   const [nextCursor, setNextCursor] = useState<ReportCursor | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const prefetchKeyRef = useRef<string | null>(null);
 
   const currentCursor = page > 1 ? cursorList[page - 2] ?? null : null;
 
@@ -57,6 +61,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
           return true;
         }
       } catch (err) {
+        handlePermissionError(err);
         console.warn("Cash report cache read failed", err);
       }
       setRows([]);
@@ -71,6 +76,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
         setPage(1);
         return;
       }
+      const cachedApplied = page === 1 ? loadCached(rangeFrom, rangeTo) : false;
       if (!online) {
         setLoading(false);
         setHasMore(false);
@@ -79,10 +85,9 @@ export default function CashbookReport({ shopId, from, to }: Props) {
           setPage(1);
           return;
         }
-        loadCached(rangeFrom, rangeTo);
         return;
       }
-      setLoading(true);
+      setLoading(!cachedApplied || page > 1);
       try {
         const params = new URLSearchParams({ shopId });
         if (rangeFrom) params.append("from", rangeFrom);
@@ -123,6 +128,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
               JSON.stringify(rows)
             );
           } catch (err) {
+            handlePermissionError(err);
             console.warn("Cash report cache write failed", err);
           }
         }
@@ -136,6 +142,38 @@ export default function CashbookReport({ shopId, from, to }: Props) {
   useEffect(() => {
     void load(from, to);
   }, [load, from, to]);
+
+  useEffect(() => {
+    if (!online || typeof window === "undefined") return;
+    if (prefetchKeyRef.current === shopId) return;
+    prefetchKeyRef.current = shopId;
+    const cancel = scheduleIdle(() => {
+      PREFETCH_PRESETS.forEach((presetKey) => {
+        const { from: rangeFrom, to: rangeTo } = computePresetRange(presetKey);
+        const cacheKey = buildCacheKey(rangeFrom, rangeTo);
+        if (localStorage.getItem(cacheKey)) return;
+        const params = new URLSearchParams({ shopId, limit: `${REPORT_ROW_LIMIT}` });
+        if (rangeFrom) params.append("from", rangeFrom);
+        if (rangeTo) params.append("to", rangeTo);
+        fetch(`/api/reports/cash?${params.toString()}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.rows) {
+              try {
+                localStorage.setItem(cacheKey, JSON.stringify(data.rows));
+              } catch (err) {
+                handlePermissionError(err);
+                console.warn("Cash prefetch cache write failed", err);
+              }
+            }
+          })
+          .catch(() => {
+            // ignore prefetch errors
+          });
+      });
+    });
+    return () => cancel();
+  }, [online, shopId, buildCacheKey]);
 
   const totals = useMemo(() => {
     const inbound = rows

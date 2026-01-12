@@ -9,6 +9,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { VoidSaleControls } from "./VoidSaleControls";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type SaleSummary = {
   id: string;
@@ -156,6 +157,7 @@ export default function SalesListClient({
         );
         setItems(mapped);
       } catch (err) {
+        handlePermissionError(err);
         console.error("Load offline sales failed", err);
       }
     };
@@ -192,6 +194,7 @@ export default function SalesListClient({
       try {
         localStorage.setItem(`cachedSales:${shopId}`, JSON.stringify(sales));
       } catch (err) {
+        handlePermissionError(err);
         console.warn("Persist cached sales failed", err);
       }
       return () => {

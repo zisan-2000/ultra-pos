@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
+import { STAFF_BASELINE_PERMISSIONS } from "@/lib/staff-baseline-permissions";
 
 async function requireRbacAdminWithPermission(permission?: string) {
   const user = await requireUser();
@@ -97,11 +98,34 @@ export async function revokeRoleFromUser(userId: string, roleId: string) {
 export async function updateRolePermissions(roleId: string, permissionIds: string[]) {
   await requireRbacAdminWithPermission("update_role");
 
+  const role = await prisma.role.findUnique({
+    where: { id: roleId },
+    select: { name: true },
+  });
+
+  if (!role) {
+    throw new Error("Role not found");
+  }
+
+  let finalPermissionIds = permissionIds;
+  if (role.name === "staff") {
+    const baselinePermissions = await prisma.permission.findMany({
+      where: { name: { in: STAFF_BASELINE_PERMISSIONS } },
+      select: { id: true },
+    });
+    const baselineIds = baselinePermissions.map((perm) => perm.id);
+    const merged = new Set([...permissionIds, ...baselineIds]);
+    finalPermissionIds = Array.from(merged);
+  }
+
   // Clear existing mappings
   await prisma.rolePermission.deleteMany({ where: { roleId } });
 
-  if (permissionIds.length) {
-    const data = permissionIds.map((permissionId) => ({ roleId, permissionId }));
+  if (finalPermissionIds.length) {
+    const data = finalPermissionIds.map((permissionId) => ({
+      roleId,
+      permissionId,
+    }));
     await prisma.rolePermission.createMany({ data, skipDuplicates: true });
   }
 

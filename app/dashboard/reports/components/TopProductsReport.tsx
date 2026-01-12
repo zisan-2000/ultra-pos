@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
+import { handlePermissionError } from "@/lib/permission-toast";
 
 type TopProduct = { name: string; qty: number; revenue: number };
 
@@ -31,6 +32,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
           return true;
         }
       } catch (err) {
+        handlePermissionError(err);
         console.warn("Top products cache read failed", err);
       }
       setData([]);
@@ -65,6 +67,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
         try {
           localStorage.setItem(buildCacheKey(), JSON.stringify(rows));
         } catch (err) {
+          handlePermissionError(err);
           console.warn("Top products cache write failed", err);
         }
       } catch (e) {

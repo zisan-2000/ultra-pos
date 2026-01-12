@@ -9,6 +9,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { handlePermissionError } from "@/lib/permission-toast";
 import {
   changeMyPassword,
   getMyProfile,
@@ -93,6 +94,7 @@ export default function ProfilePage() {
         setName(data.name ?? "");
         setEmail(data.email ?? "");
       } catch (err) {
+        handlePermissionError(err);
         setInitialError(
           err instanceof Error ? err.message : "প্রোফাইল লোড করা যায়নি"
         );
@@ -128,6 +130,7 @@ export default function ProfilePage() {
         message: "প্রোফাইল সফলভাবে আপডেট হয়েছে",
       });
     } catch (err) {
+      handlePermissionError(err);
       setProfileFeedback({
         tone: "error",
         message: err instanceof Error ? err.message : "আপডেট করা যায়নি",
@@ -161,6 +164,7 @@ export default function ProfilePage() {
       setNewPassword("");
       setConfirmPassword("");
     } catch (err) {
+      handlePermissionError(err);
       setPasswordFeedback({
         tone: "error",
         message: err instanceof Error ? err.message : "পাসওয়ার্ড পরিবর্তন ব্যর্থ",

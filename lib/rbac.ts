@@ -30,6 +30,11 @@ export const getUserWithRolesAndPermissionsCached = cache(
             },
           },
         },
+        permissionOverrides: {
+          include: {
+            permission: true,
+          },
+        },
       },
     });
 
@@ -43,6 +48,16 @@ export const getUserWithRolesAndPermissionsCached = cache(
         if (rp.permission?.name) {
           permissionSet.add(rp.permission.name);
         }
+      }
+    }
+
+    for (const override of user.permissionOverrides ?? []) {
+      const name = override.permission?.name;
+      if (!name) continue;
+      if (override.allowed) {
+        permissionSet.add(name);
+      } else {
+        permissionSet.delete(name);
       }
     }
 

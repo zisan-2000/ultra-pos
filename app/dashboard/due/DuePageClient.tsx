@@ -13,6 +13,7 @@ import {
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdd } from "@/lib/sync/queue";
+import { handlePermissionError } from "@/lib/permission-toast";
 import {
   db,
   type LocalDueCustomer,
@@ -239,6 +240,7 @@ export default function DuePageClient({
       setCustomers(mapped);
       return mapped;
     } catch (err) {
+      handlePermissionError(err);
       console.error("Load offline due customers failed", err);
       setCustomers([]);
       return [];
@@ -269,6 +271,7 @@ export default function DuePageClient({
         try {
           await seedCustomersToDexie(initialCustomers || []);
         } catch (err) {
+          handlePermissionError(err);
           console.error("Seed Dexie due customers failed", err);
         }
       }
@@ -383,6 +386,7 @@ export default function DuePageClient({
     try {
       await seedCustomersToDexie(list);
     } catch (err) {
+      handlePermissionError(err);
       console.error("Refresh due customers failed", err);
     }
     await loadCustomersFromDexie();
@@ -437,6 +441,7 @@ export default function DuePageClient({
         );
       setStatement(localStatement);
     } catch (err) {
+      handlePermissionError(err);
       console.error("Load due statement failed", err);
       setStatement([]);
     } finally {
