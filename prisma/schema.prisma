@@ -70,6 +70,10 @@ model User {
 
   roles         Role[]    @relation("UserRoles")
   permissionOverrides UserPermissionOverride[]
+  ownedSubscriptions ShopSubscription[] @relation("OwnerSubscriptions")
+  ownedInvoices Invoice[] @relation("OwnerInvoices")
+  paymentRequests BillingPaymentRequest[] @relation("OwnerPaymentRequests")
+  shops Shop[] @relation("OwnerShops")
 
   // User hierarchy: who created this user
   createdBy     String?   @map("created_by")
@@ -145,6 +149,7 @@ model Shop {
   businessType String   @map("business_type") @default("tea_stall")
   createdAt    DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
 
+  owner          User             @relation("OwnerShops", fields: [ownerId], references: [id])
   products       Product[]
   sales          Sale[]
   expenses       Expense[]
@@ -152,9 +157,138 @@ model Shop {
   customers      Customer[]
   customerLedger CustomerLedger[]
   staffMembers   User[]   @relation("StaffShop")
+  subscription   ShopSubscription?
+  invoices       Invoice[]
+  paymentRequests BillingPaymentRequest[]
 
   @@index([ownerId], map: "idx_shops_owner_id")
   @@map("shops")
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+}
+
+enum InvoiceStatus {
+  draft
+  open
+  paid
+  void
+  uncollectible
+}
+
+enum BillingPaymentRequestStatus {
+  pending
+  approved
+  rejected
+}
+
+model SubscriptionPlan {
+  id             String   @id @default(uuid()) @db.Uuid
+  key            String   @unique
+  name           String
+  amount         Decimal  @db.Decimal(12, 2)
+  intervalMonths Int      @map("interval_months") @default(1)
+  isActive       Boolean  @map("is_active") @default(true)
+  createdAt      DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  subscriptions ShopSubscription[]
+
+  @@map("subscription_plans")
+}
+
+model ShopSubscription {
+  id                 String             @id @default(uuid()) @db.Uuid
+  shopId             String             @map("shop_id") @db.Uuid
+  ownerId            String             @map("owner_id")
+  planId             String             @map("plan_id") @db.Uuid
+  status             SubscriptionStatus @default(trialing)
+  currentPeriodStart DateTime           @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd   DateTime           @map("current_period_end") @db.Timestamptz(6)
+  nextInvoiceAt      DateTime?          @map("next_invoice_at") @db.Timestamptz(6)
+  trialEndsAt        DateTime?          @map("trial_ends_at") @db.Timestamptz(6)
+  graceEndsAt        DateTime?          @map("grace_ends_at") @db.Timestamptz(6)
+  canceledAt         DateTime?          @map("canceled_at") @db.Timestamptz(6)
+  createdAt          DateTime           @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime           @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  shop     Shop             @relation(fields: [shopId], references: [id])
+  owner    User             @relation("OwnerSubscriptions", fields: [ownerId], references: [id])
+  plan     SubscriptionPlan @relation(fields: [planId], references: [id])
+  invoices Invoice[]
+
+  @@unique([shopId], map: "uq_shop_subscriptions_shop_id")
+  @@index([ownerId], map: "idx_shop_subscriptions_owner_id")
+  @@map("shop_subscriptions")
+}
+
+model Invoice {
+  id             String        @id @default(uuid()) @db.Uuid
+  subscriptionId String        @map("subscription_id") @db.Uuid
+  shopId         String        @map("shop_id") @db.Uuid
+  ownerId        String        @map("owner_id")
+  periodStart    DateTime      @map("period_start") @db.Timestamptz(6)
+  periodEnd      DateTime      @map("period_end") @db.Timestamptz(6)
+  amount         Decimal       @db.Decimal(12, 2)
+  status         InvoiceStatus @default(open)
+  dueDate        DateTime      @map("due_date") @db.Timestamptz(6)
+  paidAt         DateTime?     @map("paid_at") @db.Timestamptz(6)
+  createdAt      DateTime      @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime      @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  subscription ShopSubscription @relation(fields: [subscriptionId], references: [id])
+  shop         Shop             @relation(fields: [shopId], references: [id])
+  owner        User             @relation("OwnerInvoices", fields: [ownerId], references: [id])
+  payments     InvoicePayment[]
+  paymentRequests BillingPaymentRequest[]
+
+  @@unique([subscriptionId, periodStart, periodEnd], map: "uq_billing_invoices_period")
+  @@index([shopId], map: "idx_billing_invoices_shop_id")
+  @@index([ownerId], map: "idx_billing_invoices_owner_id")
+  @@index([status], map: "idx_billing_invoices_status")
+  @@index([dueDate], map: "idx_billing_invoices_due_date")
+  @@map("billing_invoices")
+}
+
+model InvoicePayment {
+  id        String   @id @default(uuid()) @db.Uuid
+  invoiceId String   @map("invoice_id") @db.Uuid
+  amount    Decimal  @db.Decimal(12, 2)
+  method    String
+  reference String?
+  paidAt    DateTime @map("paid_at") @db.Timestamptz(6)
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId], map: "idx_invoice_payments_invoice_id")
+  @@map("invoice_payments")
+}
+
+model BillingPaymentRequest {
+  id        String                     @id @default(uuid()) @db.Uuid
+  invoiceId String                     @map("invoice_id") @db.Uuid
+  ownerId   String                     @map("owner_id")
+  shopId    String                     @map("shop_id") @db.Uuid
+  method    String
+  reference String?
+  note      String?
+  status    BillingPaymentRequestStatus @default(pending)
+  createdAt DateTime                   @map("created_at") @default(now()) @db.Timestamptz(6)
+  decidedAt DateTime?                  @map("decided_at") @db.Timestamptz(6)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  owner   User    @relation("OwnerPaymentRequests", fields: [ownerId], references: [id])
+  shop    Shop    @relation(fields: [shopId], references: [id])
+
+  @@index([invoiceId], map: "idx_billing_payment_requests_invoice_id")
+  @@index([ownerId], map: "idx_billing_payment_requests_owner_id")
+  @@index([status], map: "idx_billing_payment_requests_status")
+  @@map("billing_payment_requests")
 }
 
 model BusinessType {

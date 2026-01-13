@@ -3,6 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { buttonVariants } from "@/components/ui/button";
+import { BillingStatus } from "@/lib/billing";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 
@@ -19,15 +28,32 @@ type Shop = {
   name: string;
 };
 
+type BillingInfo = {
+  status: BillingStatus;
+  invoiceId: string | null;
+  amount: string | null;
+  dueDate: string | null;
+  periodEnd: string | null;
+  paymentRequestStatus: "pending" | "none";
+};
+
+type SupportContact = {
+  supportPhone: string | null;
+  supportWhatsapp: string | null;
+};
+
 type OwnerDashboardData = {
   shopId: string;
   shops: Shop[];
   summary: Summary;
+  billing?: BillingInfo;
+  supportContact?: SupportContact;
 };
 
 type Props = {
   userId: string;
   initialData: OwnerDashboardData;
+  onPaymentRequest: (formData: FormData) => Promise<void>;
 };
 
 function getSummaryTotal(value?: { total?: number } | number) {
@@ -35,12 +61,48 @@ function getSummaryTotal(value?: { total?: number } | number) {
   return value?.total ?? 0;
 }
 
-export default function OwnerDashboardClient({ userId, initialData }: Props) {
+const defaultBilling: BillingInfo = {
+  status: "untracked",
+  invoiceId: null,
+  amount: null,
+  dueDate: null,
+  periodEnd: null,
+  paymentRequestStatus: "none",
+};
+
+const defaultSupport: SupportContact = {
+  supportPhone: null,
+  supportWhatsapp: null,
+};
+
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(date);
+}
+
+function formatMoney(value?: string | null) {
+  if (!value) return "-";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "-";
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+export default function OwnerDashboardClient({
+  userId,
+  initialData,
+  onPaymentRequest,
+}: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [data, setData] = useState<OwnerDashboardData>(initialData);
   const [cacheMissing, setCacheMissing] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const serverSnapshotRef = useRef(initialData);
   const refreshInFlightRef = useRef(false);
 
@@ -95,6 +157,23 @@ export default function OwnerDashboardClient({ userId, initialData }: Props) {
   const cashBalance = Number(
     data.summary?.cash?.balance ?? data.summary?.balance ?? 0
   );
+  const billing = data.billing ?? defaultBilling;
+  const supportContact = data.supportContact ?? defaultSupport;
+  const showBillingWarning = billing.status === "due" || billing.status === "past_due";
+  const isPastDue = billing.status === "past_due";
+  const paymentRequestPending = billing.paymentRequestStatus === "pending";
+  const canSubmitPaymentRequest =
+    showBillingWarning && Boolean(billing.invoiceId) && !paymentRequestPending;
+  const contactHref = useMemo(() => {
+    if (supportContact.supportWhatsapp) {
+      const digits = supportContact.supportWhatsapp.replace(/\D/g, "");
+      return digits ? `https://wa.me/${digits}` : null;
+    }
+    if (supportContact.supportPhone) {
+      return `tel:${supportContact.supportPhone}`;
+    }
+    return null;
+  }, [supportContact.supportPhone, supportContact.supportWhatsapp]);
 
   return (
     <div className="space-y-6 section-gap">
@@ -120,6 +199,162 @@ export default function OwnerDashboardClient({ userId, initialData }: Props) {
           </div>
         </div>
       </div>
+
+      {showBillingWarning && (
+        <div
+          className={`rounded-xl border p-4 shadow-sm ${
+            isPastDue ? "border-danger/30 bg-danger-soft" : "border-warning/30 bg-warning-soft"
+          }`}
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    isPastDue ? "bg-danger/15 text-danger" : "bg-warning/15 text-warning"
+                  }`}
+                >
+                  {isPastDue ? "Past due" : "Payment due"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Due: {formatDate(billing.dueDate)}
+                </span>
+              </div>
+              <div className="text-sm font-semibold text-foreground">
+                Amount: {formatMoney(billing.amount)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Your subscription invoice is still open. All features remain active,
+                but please clear the payment to avoid future restrictions.
+              </p>
+              {paymentRequestPending && (
+                <p className="text-xs text-muted-foreground">
+                  Payment request sent. Waiting for admin approval.
+                </p>
+              )}
+              {(supportContact.supportPhone || supportContact.supportWhatsapp) && (
+                <div className="text-xs text-muted-foreground">
+                  {supportContact.supportPhone
+                    ? `Phone: ${supportContact.supportPhone}`
+                    : null}
+                  {supportContact.supportWhatsapp
+                    ? ` ${supportContact.supportPhone ? "| " : ""}WhatsApp: ${
+                        supportContact.supportWhatsapp
+                      }`
+                    : null}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {contactHref ? (
+                <a
+                  href={contactHref}
+                  target={contactHref.startsWith("https") ? "_blank" : undefined}
+                  rel={contactHref.startsWith("https") ? "noreferrer" : undefined}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  Contact admin
+                </a>
+              ) : null}
+              {canSubmitPaymentRequest ? (
+                <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+                  <DialogTrigger asChild>
+                    <button
+                      type="button"
+                      className={buttonVariants({ variant: "default", size: "sm" })}
+                    >
+                      I have paid
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Payment confirmation</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-muted-foreground">
+                      This sends a payment claim to the admin. The invoice stays open
+                      until it is verified.
+                    </p>
+                    <form
+                      action={onPaymentRequest}
+                      className="space-y-4"
+                      onSubmit={() => setPaymentDialogOpen(false)}
+                    >
+                      <input type="hidden" name="invoiceId" value={billing.invoiceId ?? ""} />
+                      <input type="hidden" name="shopId" value={selectedShopId} />
+                      <div className="space-y-1">
+                        <label
+                          htmlFor="billing-method"
+                          className="text-xs font-semibold text-muted-foreground"
+                        >
+                          Payment method
+                        </label>
+                        <select
+                          id="billing-method"
+                          name="method"
+                          defaultValue="cash"
+                          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm"
+                        >
+                          <option value="cash">Cash</option>
+                          <option value="bkash">bKash</option>
+                          <option value="bank">Bank</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label
+                          htmlFor="billing-reference"
+                          className="text-xs font-semibold text-muted-foreground"
+                        >
+                          Reference (optional)
+                        </label>
+                        <input
+                          id="billing-reference"
+                          name="reference"
+                          type="text"
+                          placeholder="Transaction id or note"
+                          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label
+                          htmlFor="billing-note"
+                          className="text-xs font-semibold text-muted-foreground"
+                        >
+                          Note (optional)
+                        </label>
+                        <textarea
+                          id="billing-note"
+                          name="note"
+                          className="min-h-[90px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentDialogOpen(false)}
+                          className={buttonVariants({ variant: "outline", size: "sm" })}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className={buttonVariants({ variant: "default", size: "sm" })}
+                        >
+                          Send request
+                        </button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              ) : paymentRequestPending ? (
+                <span className="text-xs font-semibold text-muted-foreground">
+                  Payment request pending
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

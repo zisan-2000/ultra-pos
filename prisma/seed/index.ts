@@ -3,6 +3,7 @@
 import { PrismaClient } from "@prisma/client";
 import { resetDatabase } from "./reset";
 import { seedRBACAndUsers } from "./rbac/seedRbac";
+import { seedBilling } from "./billing/seedBilling";
 import { seedShops } from "./pos/seedShops";
 import { seedProducts } from "./pos/seedProducts";
 
@@ -30,6 +31,9 @@ async function main() {
 
   console.log("🔥 Seeding shops...");
   const shops = await seedShops(prisma, ownerUser.id);
+
+  console.log("INFO: Seeding billing plans and subscriptions...");
+  await seedBilling(prisma, shops);
 
   console.log("🔥 Seeding products...");
   const products = await seedProducts(prisma, shops);

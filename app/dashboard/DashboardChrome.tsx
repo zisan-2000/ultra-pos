@@ -27,6 +27,7 @@ import { useCurrentShop } from "@/hooks/use-current-shop";
 import {
   BarChart3,
   ChevronDown,
+  CreditCard,
   HandCoins,
   LayoutDashboard,
   LogOut,
@@ -738,6 +739,50 @@ export function DashboardShell({
                         }
                       >
                         Product Library
+                      </span>
+                    </Link>
+
+                    <Link
+                      href="/dashboard/admin/billing"
+                      prefetch
+                      onClick={(event) => {
+                        setDrawerOpen(false);
+                        handleNavClick(event, "/dashboard/admin/billing");
+                      }}
+                      onMouseEnter={() =>
+                        handleNavPrefetch("/dashboard/admin/billing")
+                      }
+                      onTouchStart={() =>
+                        handleNavPrefetch("/dashboard/admin/billing")
+                      }
+                      className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                        isActive("/dashboard/admin/billing")
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent"
+                      } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                    >
+                      <span
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                          isActive("/dashboard/admin/billing")
+                            ? "bg-sidebar-primary/20"
+                            : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
+                        }`}
+                      >
+                        <CreditCard
+                          className={`h-4 w-4 ${
+                            isActive("/dashboard/admin/billing")
+                              ? "text-sidebar-primary-foreground"
+                              : "text-sidebar-accent-foreground"
+                          }`}
+                        />
+                      </span>
+
+                      <span
+                        className={
+                          sidebarCollapsed ? "lg:hidden truncate" : "truncate"
+                        }
+                      >
+                        Billing
                       </span>
                     </Link>
 

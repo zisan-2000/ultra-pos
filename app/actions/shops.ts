@@ -2,12 +2,71 @@
 
 "use server";
 
+import { type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
+import { BILLING_CONFIG, DEFAULT_PLAN, addDays, addMonths } from "@/lib/billing";
 
 async function getCurrentUser() {
   return requireUser();
+}
+
+async function ensureDefaultPlan(tx: Prisma.TransactionClient) {
+  return tx.subscriptionPlan.upsert({
+    where: { key: DEFAULT_PLAN.key },
+    update: {
+      name: DEFAULT_PLAN.name,
+      amount: DEFAULT_PLAN.amount,
+      intervalMonths: DEFAULT_PLAN.intervalMonths,
+      isActive: true,
+    },
+    create: {
+      key: DEFAULT_PLAN.key,
+      name: DEFAULT_PLAN.name,
+      amount: DEFAULT_PLAN.amount,
+      intervalMonths: DEFAULT_PLAN.intervalMonths,
+      isActive: true,
+    },
+  });
+}
+
+async function createShopSubscription(
+  tx: Prisma.TransactionClient,
+  shop: { id: string; ownerId: string },
+) {
+  const plan = await ensureDefaultPlan(tx);
+  const periodStart = new Date();
+  const periodEnd = addMonths(periodStart, plan.intervalMonths);
+  const trialEndsAt = addDays(periodStart, BILLING_CONFIG.trialDays);
+  const graceEndsAt = addDays(periodEnd, BILLING_CONFIG.graceDays);
+
+  const subscription = await tx.shopSubscription.create({
+    data: {
+      shopId: shop.id,
+      ownerId: shop.ownerId,
+      planId: plan.id,
+      status: "trialing",
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      nextInvoiceAt: periodEnd,
+      trialEndsAt,
+      graceEndsAt,
+    },
+  });
+
+  await tx.invoice.create({
+    data: {
+      subscriptionId: subscription.id,
+      shopId: shop.id,
+      ownerId: shop.ownerId,
+      periodStart,
+      periodEnd,
+      amount: plan.amount,
+      status: "open",
+      dueDate: periodEnd,
+    },
+  });
 }
 
 // ------------------------------
@@ -57,14 +116,18 @@ export async function createShop(data: {
 
   const targetOwnerId = isSuperAdmin ? requestedOwnerId ?? user.id : user.id;
 
-  await prisma.shop.create({
-    data: {
-      ownerId: targetOwnerId,
-      name: data.name,
-      address: data.address || "",
-      phone: data.phone || "",
-      businessType: data.businessType || "tea_stall",
-    },
+  await prisma.$transaction(async (tx) => {
+    const shop = await tx.shop.create({
+      data: {
+        ownerId: targetOwnerId,
+        name: data.name,
+        address: data.address || "",
+        phone: data.phone || "",
+        businessType: data.businessType || "tea_stall",
+      },
+    });
+
+    await createShopSubscription(tx, { id: shop.id, ownerId: shop.ownerId });
   });
 
   return { success: true };
@@ -151,6 +214,10 @@ export async function deleteShop(id: string) {
       where: { shopId: id },
       select: { id: true },
     });
+    const invoiceIds = await tx.invoice.findMany({
+      where: { shopId: id },
+      select: { id: true },
+    });
 
     if (saleIds.length) {
       await tx.saleItem.deleteMany({
@@ -169,6 +236,13 @@ export async function deleteShop(id: string) {
     await tx.sale.deleteMany({ where: { shopId: id } });
     await tx.customer.deleteMany({ where: { shopId: id } });
     await tx.product.deleteMany({ where: { shopId: id } });
+    if (invoiceIds.length) {
+      await tx.invoicePayment.deleteMany({
+        where: { invoiceId: { in: invoiceIds.map((row) => row.id) } },
+      });
+    }
+    await tx.invoice.deleteMany({ where: { shopId: id } });
+    await tx.shopSubscription.deleteMany({ where: { shopId: id } });
     await tx.shop.delete({ where: { id } });
   });
 

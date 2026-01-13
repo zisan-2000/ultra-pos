@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth-session";
 import { isSuperAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
+import {
+  buildOwnerBillingSummaries,
+  createEmptyBillingCounts,
+} from "@/lib/billing";
 import { getRoleChainCounts } from "@/lib/user-hierarchy";
 import SuperAdminDashboardClient from "./SuperAdminDashboardClient";
 
@@ -126,6 +130,51 @@ export default async function SuperAdminDashboardPage() {
           select: { id: true, ownerId: true },
         })
       : [];
+
+  const shopIds = shops.map((shop) => shop.id);
+  const subscriptions =
+    shopIds.length > 0
+      ? await prisma.shopSubscription.findMany({
+          where: { shopId: { in: shopIds } },
+          select: {
+            shopId: true,
+            status: true,
+            currentPeriodEnd: true,
+            trialEndsAt: true,
+            graceEndsAt: true,
+          },
+        })
+      : [];
+
+  const invoices =
+    shopIds.length > 0
+      ? await prisma.invoice.findMany({
+          where: { shopId: { in: shopIds } },
+          select: {
+            shopId: true,
+            status: true,
+            dueDate: true,
+            periodEnd: true,
+            paidAt: true,
+          },
+          orderBy: { periodEnd: "desc" },
+        })
+      : [];
+
+  const subscriptionByShopId = new Map(
+    subscriptions.map((subscription) => [subscription.shopId, subscription]),
+  );
+  const invoiceByShopId = new Map<string, (typeof invoices)[number]>();
+  for (const invoice of invoices) {
+    if (!invoiceByShopId.has(invoice.shopId)) {
+      invoiceByShopId.set(invoice.shopId, invoice);
+    }
+  }
+  const billingByOwner = buildOwnerBillingSummaries(
+    shops,
+    subscriptionByShopId,
+    invoiceByShopId,
+  );
 
   const shopCountByOwner = new Map<string, number>();
   for (const shop of shops) {
@@ -324,6 +373,7 @@ export default async function SuperAdminDashboardPage() {
       adminLabel,
       staffCount,
       shopCount: shopCountByOwner.get(owner.id) ?? 0,
+      billing: billingByOwner.get(owner.id) ?? createEmptyBillingCounts(),
       createdAt: owner.createdAt.toISOString(),
     };
   });

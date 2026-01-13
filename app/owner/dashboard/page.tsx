@@ -2,7 +2,11 @@
 
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
+import { submitPaymentRequest } from "@/app/actions/billing";
+import { getSupportContact } from "@/app/actions/system-settings";
 import { requireUser } from "@/lib/auth-session";
+import { resolveBillingStatus } from "@/lib/billing";
+import { prisma } from "@/lib/prisma";
 import OwnerDashboardClient from "./OwnerDashboardClient";
 
 type DashboardPageProps = {
@@ -66,6 +70,60 @@ export default async function OwnerDashboardPage({
 
   const summary = await fetchSummary(selectedShopId, cookieHeader);
   const shopSnapshot = shops.map((shop) => ({ id: shop.id, name: shop.name }));
+  const supportContact = await getSupportContact();
+
+  const subscription = await prisma.shopSubscription.findUnique({
+    where: { shopId: selectedShopId },
+    select: {
+      status: true,
+      currentPeriodEnd: true,
+      trialEndsAt: true,
+      graceEndsAt: true,
+    },
+  });
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { shopId: selectedShopId },
+    select: {
+      id: true,
+      status: true,
+      dueDate: true,
+      periodEnd: true,
+      paidAt: true,
+      amount: true,
+    },
+    orderBy: { periodEnd: "desc" },
+  });
+
+  const paymentRequest = invoice
+    ? await prisma.billingPaymentRequest.findFirst({
+        where: {
+          invoiceId: invoice.id,
+          ownerId: user.id,
+          status: "pending",
+        },
+        select: { id: true },
+      })
+    : null;
+
+  const billingStatus = resolveBillingStatus(
+    subscription
+      ? {
+          status: subscription.status,
+          currentPeriodEnd: subscription.currentPeriodEnd,
+          trialEndsAt: subscription.trialEndsAt,
+          graceEndsAt: subscription.graceEndsAt,
+        }
+      : null,
+    invoice
+      ? {
+          status: invoice.status,
+          dueDate: invoice.dueDate,
+          periodEnd: invoice.periodEnd,
+          paidAt: invoice.paidAt,
+        }
+      : null,
+  );
 
   return (
     <OwnerDashboardClient
@@ -74,7 +132,17 @@ export default async function OwnerDashboardPage({
         shopId: selectedShopId,
         shops: shopSnapshot,
         summary,
+        billing: {
+          status: billingStatus,
+          invoiceId: invoice?.id ?? null,
+          amount: invoice?.amount?.toString() ?? null,
+          dueDate: invoice?.dueDate?.toISOString() ?? null,
+          periodEnd: invoice?.periodEnd?.toISOString() ?? null,
+          paymentRequestStatus: paymentRequest ? "pending" : "none",
+        },
+        supportContact,
       }}
+      onPaymentRequest={submitPaymentRequest}
     />
   );
 }

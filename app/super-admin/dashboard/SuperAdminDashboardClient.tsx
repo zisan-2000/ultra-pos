@@ -26,6 +26,16 @@ type OwnerEntry = {
   staff: StaffEntry[];
 };
 
+type BillingCounts = {
+  total: number;
+  paid: number;
+  due: number;
+  pastDue: number;
+  trialing: number;
+  canceled: number;
+  untracked: number;
+};
+
 type AgentEntry = {
   id: string;
   name: string | null;
@@ -70,6 +80,7 @@ type OwnerRow = {
   adminLabel: string;
   staffCount: number;
   shopCount: number;
+  billing: BillingCounts;
   createdAt: string;
 };
 
@@ -105,6 +116,16 @@ const formatDate = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(date);
+};
+
+const emptyBilling: BillingCounts = {
+  total: 0,
+  paid: 0,
+  due: 0,
+  pastDue: 0,
+  trialing: 0,
+  canceled: 0,
+  untracked: 0,
 };
 
 function MetricCard({
@@ -510,6 +531,9 @@ export default function SuperAdminDashboardClient({ userId, initialData }: Props
                     Shops
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Billing
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Staff
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -518,7 +542,9 @@ export default function SuperAdminDashboardClient({ userId, initialData }: Props
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-card">
-                {data.ownerRows.map((owner) => (
+                {data.ownerRows.map((owner) => {
+                  const billing = owner.billing ?? emptyBilling;
+                  return (
                   <tr key={owner.id} className="hover:bg-muted/50">
                     <td className="px-4 py-3 text-foreground">
                       <div className="flex flex-col">
@@ -539,6 +565,23 @@ export default function SuperAdminDashboardClient({ userId, initialData }: Props
                     <td className="px-4 py-3 font-semibold text-foreground">
                       {formatCount(owner.shopCount ?? 0)}
                     </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-semibold text-foreground">
+                          Paid {formatCount(billing.paid)}/
+                          {formatCount(billing.total)}
+                        </span>
+                        <span>Due: {formatCount(billing.due)}</span>
+                        {billing.pastDue > 0 ? (
+                          <span className="text-danger">
+                            Past due: {formatCount(billing.pastDue)}
+                          </span>
+                        ) : null}
+                        {billing.trialing > 0 ? (
+                          <span>Trial: {formatCount(billing.trialing)}</span>
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 font-semibold text-foreground">
                       {formatCount(owner.staffCount)}
                     </td>
@@ -546,7 +589,8 @@ export default function SuperAdminDashboardClient({ userId, initialData }: Props
                       {formatDate(owner.createdAt)}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
