@@ -12,6 +12,10 @@ import {
 } from "@/lib/billing";
 import { buttonVariants } from "@/components/ui/button";
 
+type BillingPageProps = {
+  searchParams?: Promise<{ q?: string; status?: string } | undefined>;
+};
+
 const formatDate = (value?: Date | null) => {
   if (!value) return "-";
   const date = new Date(value);
@@ -32,6 +36,48 @@ const formatMethod = (value?: string | null) => {
   if (!value) return "-";
   if (value === "bkash") return "bKash";
   return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
+const formatUserLabel = (user?: { name: string | null; email: string | null } | null) =>
+  user?.name || user?.email || "Unknown";
+
+const getRoleNames = (user?: { roles?: Array<{ name: string }> } | null) =>
+  new Set((user?.roles ?? []).map((role) => role.name));
+
+const buildHierarchyLabels = (owner?: {
+  createdByUser?: {
+    name: string | null;
+    email: string | null;
+    roles?: Array<{ name: string }>;
+    createdByUser?: {
+      name: string | null;
+      email: string | null;
+      roles?: Array<{ name: string }>;
+    } | null;
+  } | null;
+} | null) => {
+  const creator = owner?.createdByUser ?? null;
+  const creatorRoles = getRoleNames(creator);
+  let agent = null as typeof creator | null;
+  let admin = null as typeof creator | null;
+
+  if (creator) {
+    if (creatorRoles.has("agent")) {
+      agent = creator;
+      admin = creator.createdByUser ?? null;
+    } else {
+      admin = creator;
+    }
+  }
+
+  const adminLabel = admin ? formatUserLabel(admin) : "Unknown";
+  const adminRoles = getRoleNames(admin);
+  const directLabel = adminRoles.has("super_admin")
+    ? "Direct (Super Admin)"
+    : "Direct (Admin)";
+  const agentLabel = agent ? formatUserLabel(agent) : admin ? directLabel : "Direct";
+
+  return { agentLabel, adminLabel };
 };
 
 async function markInvoicePaid(formData: FormData) {
@@ -164,11 +210,28 @@ async function generateDueInvoices() {
   revalidatePath("/owner/dashboard");
 }
 
-export default async function BillingPage() {
+export default async function BillingPage({ searchParams }: BillingPageProps) {
   const user = await requireUser();
   if (!isSuperAdmin(user) && !hasRole(user, "admin")) {
     redirect("/dashboard");
   }
+
+  const resolvedSearch = await searchParams;
+  const queryRaw = resolvedSearch?.q?.trim() ?? "";
+  const query = queryRaw.toLowerCase();
+  const statusFilterRaw = resolvedSearch?.status?.trim().toLowerCase() ?? "all";
+  const allowedStatuses = new Set([
+    "all",
+    "paid",
+    "due",
+    "past_due",
+    "trialing",
+    "canceled",
+    "untracked",
+  ]);
+  const statusFilter = allowedStatuses.has(statusFilterRaw)
+    ? statusFilterRaw
+    : "all";
 
   const subscriptions = await prisma.shopSubscription.findMany({
     include: {
@@ -176,7 +239,29 @@ export default async function BillingPage() {
         select: {
           id: true,
           name: true,
-          owner: { select: { id: true, name: true, email: true } },
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              createdByUser: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  roles: { select: { name: true } },
+                  createdByUser: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true,
+                      roles: { select: { name: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       plan: { select: { name: true, amount: true, intervalMonths: true } },
@@ -193,6 +278,63 @@ export default async function BillingPage() {
       invoice: { select: { id: true, amount: true, dueDate: true, status: true } },
     },
     orderBy: { createdAt: "desc" },
+  });
+
+  const rows = subscriptions.map((subscription) => {
+    const invoice = subscription.invoices[0] ?? null;
+    const status = resolveBillingStatus(
+      {
+        status: subscription.status,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+        trialEndsAt: subscription.trialEndsAt,
+        graceEndsAt: subscription.graceEndsAt,
+      },
+      invoice
+        ? {
+            status: invoice.status,
+            dueDate: invoice.dueDate,
+            periodEnd: invoice.periodEnd,
+            paidAt: invoice.paidAt,
+          }
+        : null,
+    );
+
+    const owner = subscription.shop.owner ?? null;
+    const { agentLabel, adminLabel } = buildHierarchyLabels(owner);
+
+    const searchText = [
+      subscription.shop.name,
+      subscription.shop.id,
+      subscription.plan.name,
+      owner?.name,
+      owner?.email,
+      agentLabel,
+      adminLabel,
+      invoice?.status,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return {
+      subscription,
+      invoice,
+      status,
+      owner,
+      agentLabel,
+      adminLabel,
+      searchText,
+    };
+  });
+
+  const filteredRows = rows.filter((row) => {
+    if (statusFilter !== "all" && row.status !== statusFilter) {
+      return false;
+    }
+    if (query && !row.searchText.includes(query)) {
+      return false;
+    }
+    return true;
   });
 
   return (
@@ -212,6 +354,55 @@ export default async function BillingPage() {
             Generate due invoices
           </button>
         </form>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+        <form method="get" className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1 min-w-[220px] flex-1">
+            <label className="text-xs font-semibold text-muted-foreground">
+              Search
+            </label>
+            <input
+              name="q"
+              defaultValue={queryRaw}
+              placeholder="Shop, owner, agent, admin, email"
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-muted-foreground">
+              Status
+            </label>
+            <select
+              name="status"
+              defaultValue={statusFilter}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm"
+            >
+              <option value="all">All</option>
+              <option value="paid">Paid</option>
+              <option value="due">Due</option>
+              <option value="past_due">Past due</option>
+              <option value="trialing">Trialing</option>
+              <option value="canceled">Canceled</option>
+              <option value="untracked">Untracked</option>
+            </select>
+          </div>
+          <button
+            type="submit"
+            className={buttonVariants({ variant: "default", className: "h-9 px-4 text-sm" })}
+          >
+            Apply
+          </button>
+          <a
+            href="/dashboard/admin/billing"
+            className={buttonVariants({ variant: "outline", className: "h-9 px-4 text-sm" })}
+          >
+            Reset
+          </a>
+        </form>
+        <div className="text-xs text-muted-foreground">
+          Showing {filteredRows.length} of {subscriptions.length} shops
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-3">
@@ -340,7 +531,7 @@ export default async function BillingPage() {
       </div>
 
       <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-        {subscriptions.length === 0 ? (
+        {filteredRows.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
             No shop subscriptions found.
           </div>
@@ -373,27 +564,17 @@ export default async function BillingPage() {
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Action
                   </th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Details
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-card">
-                {subscriptions.map((subscription) => {
-                  const invoice = subscription.invoices[0] ?? null;
-                  const status = resolveBillingStatus(
-                    {
-                      status: subscription.status,
-                      currentPeriodEnd: subscription.currentPeriodEnd,
-                      trialEndsAt: subscription.trialEndsAt,
-                      graceEndsAt: subscription.graceEndsAt,
-                    },
-                    invoice
-                      ? {
-                          status: invoice.status,
-                          dueDate: invoice.dueDate,
-                          periodEnd: invoice.periodEnd,
-                          paidAt: invoice.paidAt,
-                        }
-                      : null,
-                  );
+                {filteredRows.map((row) => {
+                  const subscription = row.subscription;
+                  const invoice = row.invoice;
+                  const status = row.status;
+                  const owner = row.owner;
 
                   const statusStyles: Record<string, string> = {
                     paid: "border-success/30 bg-success-soft text-success",
@@ -419,10 +600,13 @@ export default async function BillingPage() {
                       <td className="px-3 py-2 text-foreground">
                         <div className="flex flex-col">
                           <span className="font-semibold">
-                            {subscription.shop.owner?.name || "Owner"}
+                            {owner?.name || "Owner"}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {subscription.shop.owner?.email || "No email"}
+                            {owner?.email || "No email"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Agent: {row.agentLabel}
                           </span>
                         </div>
                       </td>
@@ -484,6 +668,21 @@ export default async function BillingPage() {
                             -
                           </span>
                         )}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        <details className="group">
+                          <summary className="cursor-pointer text-xs font-semibold text-primary">
+                            Details
+                          </summary>
+                          <div className="mt-2 space-y-1 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                            <div>Admin: {row.adminLabel}</div>
+                            <div>Agent: {row.agentLabel}</div>
+                            <div>Owner: {formatUserLabel(owner)}</div>
+                            <div>Shop ID: {subscription.shop.id}</div>
+                            <div>Subscription ID: {subscription.id}</div>
+                            <div>Invoice: {invoice ? invoice.id : "none"}</div>
+                          </div>
+                        </details>
                       </td>
                     </tr>
                   );

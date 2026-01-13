@@ -23,7 +23,10 @@ const fetchSession = cache(async (): Promise<SessionPayload | null> => {
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
     "http://localhost:3000";
 
-  const res = await fetch(`${baseURL}/api/auth/get-session`, {
+  const sessionUrl = new URL("/api/auth/get-session", baseURL);
+  sessionUrl.searchParams.set("disableCookieCache", "true");
+
+  const res = await fetch(sessionUrl.toString(), {
     headers: {
       cookie: cookieHeader,
     },

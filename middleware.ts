@@ -1,6 +1,55 @@
 // middleware.ts
 import { NextResponse, type NextRequest } from "next/server";
 
+type SetCookieHeaders = Headers & { getSetCookie?: () => string[] };
+
+const splitSetCookieHeader = (header: string): string[] => {
+  const cookies: string[] = [];
+  let start = 0;
+  let inExpires = false;
+
+  for (let i = 0; i < header.length; i++) {
+    const char = header[i];
+    if (char === ",") {
+      if (!inExpires) {
+        const chunk = header.slice(start, i).trim();
+        if (chunk) cookies.push(chunk);
+        start = i + 1;
+      }
+      continue;
+    }
+
+    if (char === ";") {
+      inExpires = false;
+      continue;
+    }
+
+    if (char === "=") {
+      const segment = header.slice(start, i).trimEnd();
+      const lastToken = segment.split(";").pop()?.trim().toLowerCase();
+      if (lastToken === "expires") {
+        inExpires = true;
+      }
+    }
+  }
+
+  const tail = header.slice(start).trim();
+  if (tail) cookies.push(tail);
+  return cookies;
+};
+
+const getSetCookies = (res: Response): string[] => {
+  const headers = res.headers as SetCookieHeaders;
+  if (typeof headers.getSetCookie === "function") {
+    const values = headers.getSetCookie();
+    if (values?.length) return values;
+  }
+
+  const header = res.headers.get("set-cookie");
+  if (!header) return [];
+  return splitSetCookieHeader(header);
+};
+
 async function getAuthContext(req: NextRequest) {
   try {
     const res = await fetch(new URL("/api/auth/session-rbac", req.url), {
@@ -11,24 +60,22 @@ async function getAuthContext(req: NextRequest) {
       cache: "no-store",
     });
 
-    const setCookie = res.headers.get("set-cookie");
+    const setCookies = getSetCookies(res);
     const data = res.ok ? await res.json() : null;
 
     return {
       session: data?.session ?? null,
       user: data?.user ?? null,
-      setCookie,
+      setCookies,
     };
   } catch (error) {
     console.error("Auth context lookup failed in middleware", error);
-    return { user: null, setCookie: null };
+    return { session: null, user: null, setCookies: [] };
   }
 }
 
-const appendCookies = (res: NextResponse, cookies: Array<string | null>) => {
-  cookies.filter(Boolean).forEach((c) => {
-    if (c) res.headers.append("set-cookie", c);
-  });
+const appendCookies = (res: NextResponse, cookies: string[]) => {
+  cookies.filter(Boolean).forEach((c) => res.headers.append("set-cookie", c));
   return res;
 };
 
@@ -58,10 +105,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const { session, setCookie: sessionCookie } = await getAuthContext(req);
+  const { session, setCookies } = await getAuthContext(req);
 
-  const cookiesToSet: Array<string | null> = [];
-  if (sessionCookie) cookiesToSet.push(sessionCookie);
+  const cookiesToSet = setCookies;
 
   if (!session && isProtectedRoute && !isAuthPage) {
     return appendCookies(

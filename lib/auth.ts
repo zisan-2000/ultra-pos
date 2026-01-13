@@ -16,6 +16,11 @@ export const auth = betterAuth({
     process.env.NEXT_PUBLIC_APP_URL!, // Production URL allowed
   ],
 
+  session: {
+    // Always validate sessions against the database (no cookie cache).
+    cookieCache: { enabled: false },
+  },
+
   emailAndPassword: {
     enabled: true,
   },
