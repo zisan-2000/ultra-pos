@@ -1,5 +1,6 @@
+// app/api/auth/session-rbac/route.ts
+
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { getUserWithRolesAndPermissions } from "@/lib/rbac";
 
 type SessionPayload = {
@@ -60,11 +61,7 @@ async function fetchSession(req: Request): Promise<{
   payload: SessionPayload | null;
   setCookies: string[];
 }> {
-  const cookieStore = await cookies();
-  const cookieHeader = cookieStore
-    .getAll()
-    .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
-    .join("; ");
+  const cookieHeader = req.headers.get("cookie") ?? "";
 
   const sessionUrl = new URL("/api/auth/get-session", req.url);
   sessionUrl.searchParams.set("disableCookieCache", "true");
@@ -87,21 +84,25 @@ export async function GET(req: Request) {
   try {
     const { payload, setCookies } = await fetchSession(req);
     const userId = payload?.session?.userId;
-    const user =
-      userId !== undefined && userId !== null
-        ? await getUserWithRolesAndPermissions(userId)
-        : null;
+    let user: SessionPayload["user"] = null;
+    if (userId !== undefined && userId !== null) {
+      try {
+        user = await getUserWithRolesAndPermissions(userId);
+      } catch (error) {
+        console.error("RBAC lookup failed in session-rbac endpoint", error);
+      }
+    }
 
-    const response = NextResponse.json({ session: payload?.session ?? null, user });
+    const response = NextResponse.json({
+      session: payload?.session ?? null,
+      user,
+    });
     setCookies.forEach((cookie) => {
       response.headers.append("set-cookie", cookie);
     });
     return response;
   } catch (error) {
     console.error("session-rbac endpoint failed", error);
-    return NextResponse.json(
-      { session: null, user: null },
-      { status: 200 },
-    );
+    return NextResponse.json({ session: null, user: null }, { status: 200 });
   }
 }
