@@ -89,10 +89,12 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-sm font-semibold text-foreground border border-border hover:bg-secondary transition"
+        className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-border bg-card/90 px-3 text-sm font-semibold text-foreground shadow-[0_1px_0_rgba(0,0,0,0.03)] hover:bg-muted transition sm:inline-flex sm:w-auto sm:min-w-[200px]"
       >
-        <span>📅</span>
-        <span className="text-sm">{rangeText}</span>
+        <span className="shrink-0">📅</span>
+        <span className="min-w-0 flex-1 text-left text-sm truncate">
+          {rangeText}
+        </span>
       </button>
 
       {mounted &&
@@ -105,7 +107,7 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="absolute left-1/2 top-[72px] w-[92%] max-w-md -translate-x-1/2 rounded-2xl bg-card border border-border shadow-2xl p-4 space-y-4"
+              className="absolute inset-x-0 bottom-0 w-full rounded-t-2xl bg-card border border-border shadow-2xl p-4 space-y-4 sm:inset-auto sm:left-1/2 sm:top-[72px] sm:w-[92%] sm:max-w-md sm:-translate-x-1/2 sm:rounded-2xl"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -123,7 +125,7 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-sm">
+              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
                 <button
                   type="button"
                   onClick={() => setPreset("today")}
@@ -156,20 +158,20 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
                     type="date"
                     value={customFrom}
                     onChange={(e) => setCustomFrom(e.target.value)}
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    className="h-11 w-full rounded-lg border border-border px-3 text-sm"
                   />
                   <input
                     type="date"
                     value={customTo}
                     onChange={(e) => setCustomTo(e.target.value)}
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    className="h-11 w-full rounded-lg border border-border px-3 text-sm"
                   />
                 </div>
                 <button
                   type="button"
                   disabled={!canApplyCustom}
                   onClick={() => applyRange(customFrom, customTo)}
-                  className="w-full rounded-lg bg-primary-soft text-primary border border-primary/30 py-2 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
+                  className="w-full rounded-lg bg-primary-soft text-primary border border-primary/30 py-2.5 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
                 >
                   রেঞ্জ প্রয়োগ করুন
                 </button>

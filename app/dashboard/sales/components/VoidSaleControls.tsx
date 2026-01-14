@@ -45,7 +45,7 @@ export function VoidSaleControls({
 
   if (isVoided) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-danger-soft px-3 py-1 text-[11px] font-semibold text-danger border border-danger/30">
+      <span className="inline-flex items-center gap-1 rounded-full bg-danger-soft px-3 py-1 text-xs font-semibold text-danger border border-danger/30">
         ❌ ইতিমধ্যেই বাতিল
       </span>
     );
@@ -56,7 +56,7 @@ export function VoidSaleControls({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 rounded-full border border-danger/30 px-3 py-1.5 text-xs font-semibold text-danger bg-card hover:bg-danger-soft/60 transition"
+        className="inline-flex items-center gap-1 rounded-full border border-danger/30 px-3 py-2 text-sm font-semibold text-danger bg-card hover:bg-danger-soft/60 transition"
       >
         ❌ বাতিল করুন
       </button>
@@ -96,7 +96,7 @@ export function VoidSaleControls({
                   placeholder="কারণ (ঐচ্ছিক)"
                   className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-danger/30"
                 />
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   এই ধাপ দুর্ঘটনাবশত Void হওয়া ঠেকাতে যুক্ত করা হয়েছে।
                 </p>
               </div>
@@ -118,3 +118,4 @@ export function VoidSaleControls({
     </>
   );
 }
+

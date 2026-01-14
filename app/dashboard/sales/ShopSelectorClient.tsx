@@ -4,6 +4,13 @@
 
 import { useRouter } from "next/navigation";
 import { useCurrentShop } from "@/hooks/use-current-shop";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Shop = { id: string; name: string };
 
@@ -24,11 +31,9 @@ export default function ShopSelectorClient({
   const { setShop } = useCurrentShop();
 
   return (
-    <select
-      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+    <Select
       value={selectedShopId}
-      onChange={(e) => {
-        const id = e.target.value;
+      onValueChange={(id) => {
         // Persist globally selected shop
         setShop(id);
         document.cookie = `activeShopId=${id}; path=/; max-age=${
@@ -40,11 +45,16 @@ export default function ShopSelectorClient({
         router.push(`/dashboard/sales?${params.toString()}`);
       }}
     >
-      {shops.map((shop) => (
-        <option key={shop.id} value={shop.id}>
-          {shop.name}
-        </option>
-      ))}
-    </select>
+      <SelectTrigger className="h-10 w-full sm:w-[200px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+        <SelectValue placeholder="দোকান সিলেক্ট করুন" />
+      </SelectTrigger>
+      <SelectContent align="end" className="w-[220px]">
+        {shops.map((shop) => (
+          <SelectItem key={shop.id} value={shop.id}>
+            {shop.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

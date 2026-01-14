@@ -159,7 +159,8 @@ export default function OwnerDashboardClient({
   );
   const billing = data.billing ?? defaultBilling;
   const supportContact = data.supportContact ?? defaultSupport;
-  const showBillingWarning = billing.status === "due" || billing.status === "past_due";
+  const showBillingWarning =
+    billing.status === "due" || billing.status === "past_due";
   const isPastDue = billing.status === "past_due";
   const paymentRequestPending = billing.paymentRequestStatus === "pending";
   const canSubmitPaymentRequest =
@@ -176,7 +177,7 @@ export default function OwnerDashboardClient({
   }, [supportContact.supportPhone, supportContact.supportWhatsapp]);
 
   return (
-    <div className="space-y-6 section-gap">
+    <div className="space-y-6 -mt-1 mb-6">
       {!online && (
         <div className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-xs font-semibold text-warning">
           Offline: showing cached owner dashboard data.
@@ -191,11 +192,11 @@ export default function OwnerDashboardClient({
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground leading-tight">
-              ড্যাশবোর্ড
+              দৈনিক সারসংক্ষেপ
             </h1>
-            <p className="text-sm text-muted-foreground mt-1 leading-snug">
+            {/* <p className="text-sm text-muted-foreground mt-1 leading-snug">
               আজকের সারসংক্ষেপ, বিক্রি ও খরচ
-            </p>
+            </p> */}
           </div>
         </div>
       </div>
@@ -203,7 +204,9 @@ export default function OwnerDashboardClient({
       {showBillingWarning && (
         <div
           className={`rounded-xl border p-4 shadow-sm ${
-            isPastDue ? "border-danger/30 bg-danger-soft" : "border-warning/30 bg-warning-soft"
+            isPastDue
+              ? "border-danger/30 bg-danger-soft"
+              : "border-warning/30 bg-warning-soft"
           }`}
         >
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -211,7 +214,9 @@ export default function OwnerDashboardClient({
               <div className="flex items-center gap-2">
                 <span
                   className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    isPastDue ? "bg-danger/15 text-danger" : "bg-warning/15 text-warning"
+                    isPastDue
+                      ? "bg-danger/15 text-danger"
+                      : "bg-warning/15 text-warning"
                   }`}
                 >
                   {isPastDue ? "Past due" : "Payment due"}
@@ -224,15 +229,17 @@ export default function OwnerDashboardClient({
                 Amount: {formatMoney(billing.amount)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Your subscription invoice is still open. All features remain active,
-                but please clear the payment to avoid future restrictions.
+                Your subscription invoice is still open. All features remain
+                active, but please clear the payment to avoid future
+                restrictions.
               </p>
               {paymentRequestPending && (
                 <p className="text-xs text-muted-foreground">
                   Payment request sent. Waiting for admin approval.
                 </p>
               )}
-              {(supportContact.supportPhone || supportContact.supportWhatsapp) && (
+              {(supportContact.supportPhone ||
+                supportContact.supportWhatsapp) && (
                 <div className="text-xs text-muted-foreground">
                   {supportContact.supportPhone
                     ? `Phone: ${supportContact.supportPhone}`
@@ -249,19 +256,29 @@ export default function OwnerDashboardClient({
               {contactHref ? (
                 <a
                   href={contactHref}
-                  target={contactHref.startsWith("https") ? "_blank" : undefined}
-                  rel={contactHref.startsWith("https") ? "noreferrer" : undefined}
+                  target={
+                    contactHref.startsWith("https") ? "_blank" : undefined
+                  }
+                  rel={
+                    contactHref.startsWith("https") ? "noreferrer" : undefined
+                  }
                   className={buttonVariants({ variant: "outline", size: "sm" })}
                 >
                   Contact admin
                 </a>
               ) : null}
               {canSubmitPaymentRequest ? (
-                <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+                <Dialog
+                  open={paymentDialogOpen}
+                  onOpenChange={setPaymentDialogOpen}
+                >
                   <DialogTrigger asChild>
                     <button
                       type="button"
-                      className={buttonVariants({ variant: "default", size: "sm" })}
+                      className={buttonVariants({
+                        variant: "default",
+                        size: "sm",
+                      })}
                     >
                       I have paid
                     </button>
@@ -271,16 +288,24 @@ export default function OwnerDashboardClient({
                       <DialogTitle>Payment confirmation</DialogTitle>
                     </DialogHeader>
                     <p className="text-sm text-muted-foreground">
-                      This sends a payment claim to the admin. The invoice stays open
-                      until it is verified.
+                      This sends a payment claim to the admin. The invoice stays
+                      open until it is verified.
                     </p>
                     <form
                       action={onPaymentRequest}
                       className="space-y-4"
                       onSubmit={() => setPaymentDialogOpen(false)}
                     >
-                      <input type="hidden" name="invoiceId" value={billing.invoiceId ?? ""} />
-                      <input type="hidden" name="shopId" value={selectedShopId} />
+                      <input
+                        type="hidden"
+                        name="invoiceId"
+                        value={billing.invoiceId ?? ""}
+                      />
+                      <input
+                        type="hidden"
+                        name="shopId"
+                        value={selectedShopId}
+                      />
                       <div className="space-y-1">
                         <label
                           htmlFor="billing-method"
@@ -332,13 +357,19 @@ export default function OwnerDashboardClient({
                         <button
                           type="button"
                           onClick={() => setPaymentDialogOpen(false)}
-                          className={buttonVariants({ variant: "outline", size: "sm" })}
+                          className={buttonVariants({
+                            variant: "outline",
+                            size: "sm",
+                          })}
                         >
                           Cancel
                         </button>
                         <button
                           type="submit"
-                          className={buttonVariants({ variant: "default", size: "sm" })}
+                          className={buttonVariants({
+                            variant: "default",
+                            size: "sm",
+                          })}
                         >
                           Send request
                         </button>
@@ -389,7 +420,9 @@ export default function OwnerDashboardClient({
       </div>
 
       <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-foreground mb-3">দ্রুত কাজ</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-3">
+          দ্রুত কাজ
+        </h2>
         <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
           <Link
             href={`/dashboard/sales/new?shopId=${selectedShopId}`}
@@ -466,7 +499,9 @@ function Card({
               {amount}
             </span>
             {currency ? (
-              <span className="text-xs text-muted-foreground pb-1">{currency}</span>
+              <span className="text-xs text-muted-foreground pb-1">
+                {currency}
+              </span>
             ) : null}
           </div>
         </div>

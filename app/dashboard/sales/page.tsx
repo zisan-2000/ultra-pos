@@ -205,7 +205,6 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     resolvedSearch?.shopId && shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
       : cookieSelectedShopId ?? shops[0].id;
-
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
 
   const todayStr = formatDateInput(new Date());
@@ -336,71 +335,74 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   const rangeLabel = fromStr === toStr ? fromStr : `${fromStr} – ${toStr}`;
 
   return (
-    <div className="space-y-5 section-gap pb-[110px]">
-      <div className="sticky top-0 z-30 bg-background/90 backdrop-blur-sm border-b border-border">
-        <div className="flex items-center justify-between gap-3 py-3">
-          <div className="leading-tight">
-            <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-              দোকান
-            </p>
-            <p className="text-sm font-semibold text-foreground">
-              {selectedShop.name}
-            </p>
-          </div>
-          <DateFilterClient shopId={selectedShopId} from={fromStr} to={toStr} />
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <div className="rounded-2xl bg-card border border-border p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">আজকের বিক্রি</p>
-              <p className="text-3xl font-bold text-foreground leading-tight">
+    <div className="space-y-4 sm:space-y-5 section-gap pb-[128px] sm:pb-[110px]">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-card to-card" />
+        <div className="pointer-events-none absolute -top-20 right-0 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
+        <div className="relative space-y-3 p-3 sm:space-y-4 sm:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-1">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                বিক্রির সারসংক্ষেপ
+              </p>
+              <p className="text-3xl font-bold text-foreground leading-tight tracking-tight sm:text-4xl">
                 ৳ {summaryTotalDisplay}
               </p>
-              <p className="text-sm text-muted-foreground flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-foreground font-semibold text-xs border border-border shadow-[0_1px_0_rgba(0,0,0,0.02)]">
-                  {summary.count} বিল
+              <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+                দোকান:
+                <span className="truncate font-semibold text-foreground">
+                  {selectedShop.name}
                 </span>
-                <span className="text-muted-foreground text-xs">{rangeLabel}</span>
               </p>
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <ShopSelectorClient
-                shops={shops}
-                selectedShopId={selectedShopId}
+            <div className="w-full sm:w-auto">
+              <DateFilterClient
+                shopId={selectedShopId}
                 from={fromStr}
                 to={toStr}
               />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-border/70 pt-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+                {summary.count} বিল
+              </span>
+              <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">
+                {rangeLabel}
+              </span>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+              <div className="w-full sm:w-[200px]">
+                <ShopSelectorClient
+                  shops={shops}
+                  selectedShopId={selectedShopId}
+                  from={fromStr}
+                  to={toStr}
+                />
+              </div>
               <Link
                 href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-                className="inline-flex items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-3 py-2 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
+                className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-3 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
               >
                 ➕ নতুন বিক্রি
               </Link>
             </div>
           </div>
         </div>
-
-        <SalesListClient
-          shopId={selectedShopId}
-          sales={clientSales}
-          page={page}
-          prevHref={prevHref}
-          nextHref={nextHref}
-          hasMore={Boolean(hasMore)}
-          voidSaleAction={voidSaleAction}
-        />
       </div>
 
-      <Link
-        href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-        className="fixed bottom-6 right-5 inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 text-2xl font-bold shadow-lg hover:bg-primary/15 hover:border-primary/40 active:scale-[0.98] transition"
-        aria-label="নতুন বিক্রি যোগ করুন"
-      >
-        +
-      </Link>
+      <SalesListClient
+        shopId={selectedShopId}
+        sales={clientSales}
+        page={page}
+        prevHref={prevHref}
+        nextHref={nextHref}
+        hasMore={Boolean(hasMore)}
+        voidSaleAction={voidSaleAction}
+      />
     </div>
   );
 }
+

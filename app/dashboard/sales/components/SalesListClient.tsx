@@ -212,7 +212,7 @@ export default function SalesListClient({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {!online && (
             <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-xs font-semibold text-warning border border-warning/30">
@@ -259,87 +259,90 @@ export default function SalesListClient({
             ? "bg-danger-soft text-danger border-danger/30"
             : "bg-success-soft text-success border-success/30";
           const statusText = isVoided ? "❌ বাতিল" : "✅ পরিশোধিত";
+          const accentBorder = isVoided
+            ? "border-l-4 border-l-danger/60"
+            : "border-l-4 border-l-success/60";
 
           return (
             <div
               key={s.id}
-              className={`rounded-2xl border bg-card p-4 shadow-sm hover:shadow-md transition card-lift ${
+              className={`rounded-2xl border bg-card shadow-sm transition card-lift overflow-hidden hover:shadow-md ${accentBorder} ${
                 isVoided ? "opacity-90 border-danger/30" : "border-border"
               }`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-2">
+              <div className="space-y-2 p-3 sm:p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2">
-                    <p className="text-2xl font-bold text-foreground">
+                    <p className="text-xl font-bold text-foreground sm:text-2xl">
                       ৳ {totalStr}
                     </p>
                     <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold border ${statusPill}`}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold border shadow-[0_1px_0_rgba(0,0,0,0.04)] ${statusPill}`}
                     >
                       {statusText}
                     </span>
                   </div>
-                  <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs font-semibold text-foreground border border-border">
-                      {paymentText}
-                    </span>
-                    {s.customerName && (
-                      <span className="text-xs text-muted-foreground">
-                        👤 {s.customerName}
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    🧾 {itemLine}
-                  </p>
-                  {isVoided && voidReason && (
-                    <p className="text-xs text-danger mt-1">
-                      বাতিলের কারণ: {voidReason}
-                    </p>
-                  )}
-                  {isDueSale && !isVoided && (
-                    <p className="text-xs text-warning">
-                      বাকির বিক্রি – কাস্টমার লেজারে পরিশোধ করুন
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex flex-col items-end gap-2">
-                  <div className="text-right text-xs text-muted-foreground">
-                    <p className="font-semibold flex items-center gap-1 justify-end">
+                  <div className="text-left text-xs text-muted-foreground sm:text-right">
+                    <p className="font-semibold flex items-center gap-1 justify-start sm:justify-end">
                       ⏱ {timeStr}
                     </p>
                     <p>{dateStr}</p>
                   </div>
+                </div>
 
+                <p className="text-sm text-muted-foreground flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs font-semibold text-foreground border border-border">
+                    {paymentText}
+                  </span>
+                  {s.customerName && (
+                    <span className="text-xs text-muted-foreground">
+                      👤 {s.customerName}
+                    </span>
+                  )}
+                </p>
+                <p className="text-[13px] text-muted-foreground flex items-center gap-2 leading-snug break-words sm:text-sm">
+                  🧾 {itemLine}
+                </p>
+                {isVoided && voidReason && (
+                  <p className="text-xs text-danger">
+                    বাতিলের কারণ: {voidReason}
+                  </p>
+                )}
+                {isDueSale && !isVoided && (
+                  <p className="text-xs text-warning">
+                    বাকির বিক্রি – কাস্টমার লেজারে পরিশোধ করুন
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 bg-muted/40 px-3 py-2 sm:px-4 sm:py-2.5">
+                <div className="flex flex-wrap items-center gap-2">
                   {!online && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-[11px] font-semibold text-warning border border-warning/30">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-xs font-semibold text-warning border border-warning/30">
                       বাতিল করা যাবে না (Offline)
                     </span>
                   )}
                   {!online && isPending && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-[11px] font-semibold text-warning border border-warning/30">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-xs font-semibold text-warning border border-warning/30">
                       Pending sync
                     </span>
                   )}
-
-                  {online ? (
-                    isDueSale ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-3 py-1 text-[11px] font-semibold text-warning border border-warning/30">
-                        বাকির বিল – বাতিল নয়
-                      </span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <form id={formId} action={voidSaleAction} />
-                        <VoidSaleControls
-                          saleId={s.id}
-                          isVoided={isVoided}
-                          formId={formId}
-                        />
-                      </div>
-                    )
-                  ) : null}
+                  {online && isDueSale && !isVoided && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-3 py-1 text-xs font-semibold text-warning border border-warning/30">
+                      বাকির বিল – বাতিল নয়
+                    </span>
+                  )}
                 </div>
+                {online && !isDueSale ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <form id={formId} action={voidSaleAction} />
+                    <VoidSaleControls
+                      saleId={s.id}
+                      isVoided={isVoided}
+                      formId={formId}
+                    />
+                  </div>
+                ) : null}
               </div>
             </div>
           );
@@ -369,3 +372,4 @@ export default function SalesListClient({
     </div>
   );
 }
+
