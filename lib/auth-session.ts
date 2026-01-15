@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { cache } from "react";
+import { auth } from "@/lib/auth";
 import {
   getUserWithRolesAndPermissionsCached,
   type UserContext,
@@ -19,23 +20,25 @@ const fetchSession = cache(async (): Promise<SessionPayload | null> => {
     .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
     .join("; ");
 
-  const baseURL =
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-    "http://localhost:3000";
+  try {
+    const result: any = await (auth as any).api?.getSession?.({
+      headers: {
+        cookie: cookieHeader,
+      },
+    });
 
-  const sessionUrl = new URL("/api/auth/get-session", baseURL);
-  sessionUrl.searchParams.set("disableCookieCache", "true");
+    const session = result?.data?.session ?? result?.session ?? null;
+    const user = result?.data?.user ?? result?.user ?? null;
+    const userId = session?.userId ?? user?.id ?? null;
+    if (!userId) return null;
 
-  const res = await fetch(sessionUrl.toString(), {
-    headers: {
-      cookie: cookieHeader,
-    },
-    cache: "no-store",
-  });
-
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data as SessionPayload;
+    return {
+      session: { userId },
+      user: user ? { id: user.id, email: user.email ?? null } : null,
+    };
+  } catch {
+    return null;
+  }
 });
 
 export async function getCurrentUser(): Promise<UserContext | null> {

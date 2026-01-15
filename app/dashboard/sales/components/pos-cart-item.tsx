@@ -3,15 +3,20 @@
 
 import { memo, useCallback, useRef } from "react";
 import { useCart, CartItem } from "@/hooks/use-cart";
+import { useShallow } from "zustand/react/shallow";
 
 export const PosCartItem = memo(function PosCartItem({
   item,
 }: {
   item: CartItem;
 }) {
-  const increase = useCart((s) => s.increase);
-  const decrease = useCart((s) => s.decrease);
-  const remove = useCart((s) => s.remove);
+  const { increase, decrease, remove } = useCart(
+    useShallow((s) => ({
+      increase: s.increase,
+      decrease: s.decrease,
+      remove: s.remove,
+    }))
+  );
   const lockRef = useRef(false);
 
   const runOncePerFrame = useCallback((action: () => void) => {

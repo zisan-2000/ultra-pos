@@ -120,6 +120,8 @@ export default function ProductsListClient({
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const serverSnapshotRef = useRef(serverProducts);
   const refreshInFlightRef = useRef(false);
+  const lastRefreshAtRef = useRef(0);
+  const REFRESH_MIN_INTERVAL_MS = 15_000;
 
   const [products, setProducts] = useState(serverProducts);
   const [query, setQuery] = useState(initialQuery);
@@ -195,7 +197,10 @@ export default function ProductsListClient({
   useEffect(() => {
     if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
     if (refreshInFlightRef.current) return;
+    const now = Date.now();
+    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
     refreshInFlightRef.current = true;
+    lastRefreshAtRef.current = now;
     router.refresh();
   }, [online, lastSyncAt, syncing, pendingCount, router]);
 

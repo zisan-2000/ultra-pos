@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
 import { useCart } from "@/hooks/use-cart";
+import { useShallow } from "zustand/react/shallow";
 
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
@@ -58,10 +59,19 @@ export function PosPageClient({
   submitSale,
 }: PosPageClientProps) {
   const router = useRouter();
-  const clear = useCart((s) => s.clear);
-  const setCartShop = useCart((s) => s.setShop);
-  const cartItems = useCart((s) => s.items);
-  const cartShopId = useCart((s) => s.currentShopId);
+  const {
+    clear,
+    setShop: setCartShop,
+    items: cartItems,
+    currentShopId: cartShopId,
+  } = useCart(
+    useShallow((s) => ({
+      clear: s.clear,
+      setShop: s.setShop,
+      items: s.items,
+      currentShopId: s.currentShopId,
+    }))
+  );
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [barFlash, setBarFlash] = useState(false);
   const cartPanelRef = useRef<HTMLDivElement | null>(null);
@@ -91,6 +101,8 @@ export function PosPageClient({
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const serverSnapshotRef = useRef(products);
   const refreshInFlightRef = useRef(false);
+  const lastRefreshAtRef = useRef(0);
+  const REFRESH_MIN_INTERVAL_MS = 15_000;
   const isDue = paymentMethod === "due";
   const paymentOptions = useMemo(
     () => [
@@ -154,7 +166,10 @@ export function PosPageClient({
   useEffect(() => {
     if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
     if (refreshInFlightRef.current) return;
+    const now = Date.now();
+    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
     refreshInFlightRef.current = true;
+    lastRefreshAtRef.current = now;
     router.refresh();
   }, [online, lastSyncAt, syncing, pendingCount, router]);
 
