@@ -393,6 +393,9 @@ export default function ProductsListClient({
   const showPagination = online
     ? Boolean(prevHref) || Boolean(nextHref)
     : effectiveTotalPages > 1;
+  const statusLabel =
+    status === "all" ? "সব স্ট্যাটাস" : status === "active" ? "সক্রিয়" : "নিষ্ক্রিয়";
+  const queryLabel = query.trim();
 
   const applyFilters = useCallback(
     (nextQuery = query, nextStatus = status, replace = false) => {
@@ -760,7 +763,7 @@ export default function ProductsListClient({
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="space-y-4">
       {/* Offline Banner - Removed sticky */}
       {!online && (
         <div className="bg-warning-soft border-b border-warning/30 px-4 py-3 text-center">
@@ -773,56 +776,85 @@ export default function ProductsListClient({
         </div>
       )}
 
-      {/* Header Section - Now scrolls normally */}
-      <div className="bg-card border-b border-border">
-        <div className="px-4 pt-4 pb-3">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              {/* <span className="text-2xl">📦</span> */}
-              <div>
-                {/* <h1 className="text-xl font-bold text-foreground">
-                  পণ্যের তালিকা
-                </h1> */}
-                <p className="text-xs text-muted-foreground mt-0.5">{activeShopName}</p>
-              </div>
-            </div>
-            {/* New Product Button - STICKY */}
-            <div className="relative z-50">
-              <Link
-                href={`/dashboard/products/new?shopId=${activeShopId}`}
-                onClick={() => triggerHaptic("medium")}
-                className="
-      sticky top-4
-      inline-flex items-center gap-2
-      px-4 h-11
-      bg-primary-soft text-primary
-      border border-primary/30
-      rounded-xl shadow-lg
-      hover:bg-primary/15 hover:border-primary/40
-      active:scale-95
-      transition-all
-    "
-              >
-                <span className="text-2xl leading-none">+</span>
-                <span className="text-sm font-semibold whitespace-nowrap">
-                  নতুন পণ্য
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-card to-card" />
+        <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
+        <div className="relative space-y-3 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-1">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                পণ্য
+              </p>
+              <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
+                পণ্য তালিকা
+              </h1>
+              <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+                দোকান:
+                <span className="truncate font-semibold text-foreground">
+                  {activeShopName}
                 </span>
-              </Link>
+              </p>
             </div>
+            <Link
+              href={`/dashboard/products/new?shopId=${activeShopId}`}
+              onClick={() => triggerHaptic("medium")}
+              className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
+            >
+              ➕ নতুন পণ্য
+            </Link>
           </div>
 
-          {/* Shop Switcher - Scrolls normally */}
-          <div className="mb-3">
-            <ShopSwitcherClient
-              shops={shops}
-              activeShopId={activeShopId}
-              query={query}
-              status={status}
-            />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="w-full sm:w-auto">
+              <ShopSwitcherClient
+                shops={shops}
+                activeShopId={activeShopId}
+                query={query}
+                status={status}
+              />
+            </div>
+            <Link
+              href={`/dashboard/products/new?shopId=${activeShopId}`}
+              onClick={() => triggerHaptic("medium")}
+              className="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
+            >
+              ➕ নতুন পণ্য যোগ করুন
+            </Link>
           </div>
 
-          {/* Search Box Container - STICKY */}
-          <div className="sticky top-0 z-40 bg-card pt-2 pb-3 -mx-4 px-4">
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3 text-xs">
+            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+              মোট {effectiveTotalCount} টি
+            </span>
+            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">
+              {statusLabel}
+            </span>
+            {queryLabel && (
+              <span
+                title={queryLabel}
+                className="inline-flex h-7 max-w-[180px] items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border truncate"
+              >
+                🔎 {queryLabel}
+              </span>
+            )}
+            {online && (
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="inline-flex h-7 items-center gap-1 rounded-full border border-primary/30 bg-primary-soft px-3 font-semibold text-primary shadow-sm hover:bg-primary/15 hover:border-primary/40 transition disabled:opacity-50"
+              >
+                <span className={isRefreshing ? "animate-spin" : ""}>🔄</span>
+                রিফ্রেশ
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="sticky top-0 z-30">
+        <div className="rounded-2xl border border-border bg-background/95 backdrop-blur-sm shadow-sm">
+          <div className="space-y-3 p-3">
             <div className="relative">
               <input
                 type="text"
@@ -833,7 +865,7 @@ export default function ProductsListClient({
                   if (!query) setSearchExpanded(false);
                 }}
                 placeholder="পণ্য খুঁজুন..."
-                className="w-full h-12 pl-11 pr-24 text-base border-2 border-border rounded-xl focus:border-primary focus:ring-0 transition-colors"
+                className="w-full h-12 pl-11 pr-16 text-base border border-border rounded-xl bg-card shadow-sm focus:border-primary/40 focus:ring-2 focus:ring-primary/20 transition"
               />
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">
                 🔍
@@ -842,7 +874,7 @@ export default function ProductsListClient({
                 <button
                   type="button"
                   onClick={listening ? stopListening : startListening}
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
                     listening
                       ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
                       : "bg-primary-soft text-primary border-primary/30 active:scale-95"
@@ -853,67 +885,45 @@ export default function ProductsListClient({
               )}
             </div>
             {voiceError && (
-              <p className="text-xs text-danger mt-1 px-1">{voiceError}</p>
+              <p className="text-xs text-danger px-1">{voiceError}</p>
             )}
-          </div>
 
-          {/* Filter Chips - Scrolls normally */}
-          <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-            {(["all", "active", "inactive"] as const).map((filterStatus) => (
-              <button
-                key={filterStatus}
-                type="button"
-                onClick={() => handleStatusChange(filterStatus)}
-                className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-95 ${
-                  status === filterStatus
-                    ? "bg-primary-soft text-primary border-2 border-primary/40 shadow-sm"
-                    : "bg-card text-muted-foreground border-2 border-border"
-                }`}
-              >
-                {filterStatus === "all" && "সবগুলো"}
-                {filterStatus === "active" && "✅ সক্রিয়"}
-                {filterStatus === "inactive" && "⏸️ নিষ্ক্রিয়"}
-              </button>
-            ))}
-            {(query || status !== "all") && (
-              <button
-                type="button"
-                onClick={handleReset}
-                className="flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium bg-danger-soft text-danger border-2 border-danger/30 active:scale-95 transition-all"
-              >
-                ✕ রিসেট
-              </button>
-            )}
+            <div className="relative">
+              <div className="flex gap-2 overflow-x-auto no-scrollbar pr-10 py-1">
+                {(["all", "active", "inactive"] as const).map((filterStatus) => (
+                  <button
+                    key={filterStatus}
+                    type="button"
+                    onClick={() => handleStatusChange(filterStatus)}
+                    className={`flex-shrink-0 h-9 px-4 rounded-full text-sm font-semibold transition active:scale-95 border ${
+                      status === filterStatus
+                        ? "bg-primary-soft text-primary border-primary/40 shadow-sm"
+                        : "bg-card text-muted-foreground border-border"
+                    }`}
+                  >
+                    {filterStatus === "all" && "সবগুলো"}
+                    {filterStatus === "active" && "✅ সক্রিয়"}
+                    {filterStatus === "inactive" && "⏸️ নিষ্ক্রিয়"}
+                  </button>
+                ))}
+                {(query || status !== "all") && (
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="flex-shrink-0 h-9 px-4 rounded-full text-sm font-semibold bg-danger-soft text-danger border border-danger/30 active:scale-95 transition"
+                  >
+                    ✕ রিসেট
+                  </button>
+                )}
+              </div>
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background to-transparent" />
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* Stats Bar - Scrolls normally */}
-      <div className="bg-card border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            মোট{" "}
-            <span className="font-semibold text-foreground">
-              {effectiveTotalCount}
-            </span>{" "}
-            টি পণ্য
-          </span>
-          {online && (
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="text-primary font-medium flex items-center gap-1 active:scale-95 transition-transform disabled:opacity-50"
-            >
-              <span className={isRefreshing ? "animate-spin" : ""}>🔄</span>
-              <span>রিফ্রেশ</span>
-            </button>
-          )}
         </div>
       </div>
 
       {templateItems.length > 0 && (
-        <div className="bg-card border-b border-border px-4 py-4">
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="text-base font-semibold text-foreground">
@@ -1037,7 +1047,7 @@ export default function ProductsListClient({
 
 
       {/* Products List - Scrolls normally */}
-      <div className="px-4 py-4 space-y-3">
+      <div className="space-y-3">
         {visibleProducts.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-6xl mb-4">📦</div>
@@ -1055,16 +1065,19 @@ export default function ProductsListClient({
             const stockClasses = getStockToneClasses(
               Number(product.stockQty ?? 0)
             );
+            const cardAccent = product.isActive
+              ? "border-l-4 border-l-success/60"
+              : "border-l-4 border-l-muted-foreground/30";
             return (
-            <div
-              key={product.id}
-              className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden active:scale-[0.98] transition-transform"
-              onClick={() => {
-                setSelectedProduct(product);
-                triggerHaptic("light");
-              }}
-            >
-              <div className="p-4">
+              <div
+                key={product.id}
+                className={`bg-card rounded-2xl shadow-sm border border-border overflow-hidden transition card-lift hover:shadow-md active:scale-[0.98] ${cardAccent}`}
+                onClick={() => {
+                  setSelectedProduct(product);
+                  triggerHaptic("light");
+                }}
+              >
+                <div className="p-4">
                 {/* Product Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0 pr-3">
@@ -1093,22 +1106,24 @@ export default function ProductsListClient({
 
                 {/* Product Info Grid */}
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-primary-soft rounded-xl p-3 border border-primary/30">
-                    <p className="text-xs text-primary font-medium mb-1">
+                  <div className="rounded-xl p-3 border border-primary/20 bg-primary-soft/70 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
+                    <p className="text-xs text-primary font-semibold mb-1">
                       বিক্রয় মূল্য
                     </p>
                     <p className="text-lg font-bold text-foreground">
                       ৳ {product.sellPrice}
                     </p>
                   </div>
-                  <div className={`rounded-xl p-3 border ${stockClasses.card}`}>
-  <p className={`text-xs font-medium mb-1 ${stockClasses.label}`}>
-    স্টক
-  </p>
-  <p className="text-lg font-bold text-foreground">
-    {product.stockQty}
-  </p>
-</div>
+                  <div
+                    className={`rounded-xl p-3 border ${stockClasses.card} shadow-[0_1px_0_rgba(0,0,0,0.02)]`}
+                  >
+                    <p className={`text-xs font-semibold mb-1 ${stockClasses.label}`}>
+                      স্টক
+                    </p>
+                    <p className="text-lg font-bold text-foreground">
+                      {product.stockQty}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Action Buttons */}
@@ -1119,7 +1134,7 @@ export default function ProductsListClient({
                       e.stopPropagation();
                       triggerHaptic("medium");
                     }}
-                    className="flex items-center justify-center gap-2 h-11 bg-primary-soft border-2 border-primary/40 text-primary rounded-xl font-semibold text-sm hover:bg-primary-soft active:scale-95 transition-all"
+                    className="flex items-center justify-center gap-2 h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 font-semibold text-sm shadow-sm hover:bg-primary/15 hover:border-primary/40 active:scale-95 transition"
                   >
                     <span>✏️</span>
                     <span>এডিট</span>
@@ -1131,10 +1146,10 @@ export default function ProductsListClient({
                       handleDelete(product.id);
                     }}
                     disabled={deletingId === product.id}
-                    className={`flex items-center justify-center gap-2 h-11 border-2 rounded-xl font-semibold text-sm transition-all ${
+                    className={`flex items-center justify-center gap-2 h-10 rounded-xl border font-semibold text-sm shadow-sm transition ${
                       deletingId === product.id
                         ? "bg-danger-soft border-danger/30 text-danger/60 cursor-not-allowed"
-                        : "bg-danger-soft border-danger/30 text-danger hover:bg-danger-soft active:scale-95"
+                        : "bg-danger-soft border-danger/30 text-danger hover:bg-danger-soft/80 active:scale-95"
                     }`}
                   >
                     <span>{deletingId === product.id ? "⏳" : "🗑️"}</span>
@@ -1151,7 +1166,7 @@ export default function ProductsListClient({
 
       {/* Pagination - Scrolls normally */}
       {showPagination && (
-        <div className="bg-card border-t border-border px-4 py-4">
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm text-muted-foreground">
               পৃষ্ঠা {effectivePage} / {effectiveTotalPages}
@@ -1166,7 +1181,7 @@ export default function ProductsListClient({
               type="button"
               onClick={() => handleNavigate(effectivePage - 1)}
               disabled={effectivePage <= 1}
-              className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-border text-muted-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+              className="flex items-center justify-center w-10 h-10 rounded-xl border border-border text-muted-foreground font-medium shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition"
             >
               {"<"}
             </button>
@@ -1177,10 +1192,10 @@ export default function ProductsListClient({
                   key={pageNumber}
                   type="button"
                   onClick={() => handleNavigate(pageNumber)}
-                  className={`flex-shrink-0 w-10 h-10 rounded-xl font-semibold text-sm transition-all active:scale-95 ${
+                  className={`flex-shrink-0 w-10 h-10 rounded-xl font-semibold text-sm transition active:scale-95 ${
                     pageNumber === effectivePage
-                      ? "bg-primary-soft text-primary border-2 border-primary/40 shadow-sm"
-                      : "border-2 border-border text-muted-foreground"
+                      ? "bg-primary-soft text-primary border border-primary/40 shadow-sm"
+                      : "border border-border text-muted-foreground"
                   }`}
                 >
                   {pageNumber}
@@ -1192,7 +1207,7 @@ export default function ProductsListClient({
               type="button"
               onClick={() => handleNavigate(effectivePage + 1)}
               disabled={effectivePage >= effectiveTotalPages}
-              className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-border text-muted-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+              className="flex items-center justify-center w-10 h-10 rounded-xl border border-border text-muted-foreground font-medium shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition"
             >
               {">"}
             </button>

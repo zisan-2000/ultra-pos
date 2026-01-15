@@ -1,6 +1,7 @@
 // app/dashboard/cash/[id]/page.tsx
 
 import { getCashEntry, updateCashEntry } from "@/app/actions/cash";
+import { getShop } from "@/app/actions/shops";
 import { redirect } from "next/navigation";
 import CashFormClient from "../new/CashFormClient";
 
@@ -19,6 +20,7 @@ export default async function EditCashPage({ params }: PageProps) {
     );
   }
   const entryShopId = entry.shopId;
+  const shop = await getShop(entryShopId);
   const backHref = `/dashboard/cash?shopId=${entryShopId}`;
 
   async function handleSubmit(formData: FormData) {
@@ -35,14 +37,10 @@ export default async function EditCashPage({ params }: PageProps) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">ক্যাশ এন্ট্রি সম্পাদনা</h1>
-        <p className="text-muted-foreground mt-2">ভয়েস ও টেমপ্লেট দিয়ে দ্রুত পরিবর্তন করুন</p>
-      </div>
-
+    <div className="max-w-2xl mx-auto space-y-4">
       <CashFormClient
         shopId={entryShopId}
+        shopName={shop.name}
         backHref={backHref}
         action={handleSubmit}
         id={id}

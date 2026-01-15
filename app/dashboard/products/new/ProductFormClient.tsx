@@ -12,6 +12,13 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
@@ -194,6 +201,7 @@ function ProductForm({ shop, businessConfig }: Props) {
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const [isMounted, setIsMounted] = useState(false);
 
   const templateCategories = useMemo(
     () => dedupe(templates.map((t) => t.category).filter(Boolean) as string[]),
@@ -253,42 +261,42 @@ function ProductForm({ shop, businessConfig }: Props) {
   const [selectedUnit, setSelectedUnit] = useState(configDefaultUnit || configUnits[0] || "pcs");
   const [stockEnabled, setStockEnabled] = useState(stock.enabledByDefault);
 
-const ensuredShopId = shop.id;
-const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
+  const ensuredShopId = shop.id;
+  const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
     buyPrice: () => (
       <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">ক্রয়মূল্য (ঐচ্ছিক)</label>
+        <label className="block text-sm font-semibold text-foreground">ক্রয়মূল্য (ঐচ্ছিক)</label>
         <input
           name="buyPrice"
           type="number"
           step="0.01"
           min="0"
           required={isFieldRequired("buyPrice")}
-          className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           placeholder="যেমন: ৫৫.০০"
         />
-        <p className="text-sm text-muted-foreground">চাইলে লাভ হিসাবের জন্য ক্রয়মূল্য দিন</p>
+        <p className="text-xs text-muted-foreground">চাইলে লাভ হিসাবের জন্য ক্রয়মূল্য দিন</p>
       </div>
     ),
     expiry: () => (
       <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">মেয়াদোত্তীর্ণের তারিখ</label>
+        <label className="block text-sm font-semibold text-foreground">মেয়াদোত্তীর্ণের তারিখ</label>
         <input
           name="expiryDate"
           type="date"
           required={isFieldRequired("expiry")}
-          className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>
     ),
     size: () => (
       <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">সাইজ / ভ্যারিয়েন্ট</label>
+        <label className="block text-sm font-semibold text-foreground">সাইজ / ভ্যারিয়েন্ট</label>
         <input
           name="size"
           type="text"
           required={isFieldRequired("size")}
-          className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           placeholder="যেমন: L, XL, 100ml"
         />
       </div>
@@ -347,6 +355,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
     return () => {
       recognitionRef.current?.stop?.();
     };
+  }, []);
+  useEffect(() => {
+    setIsMounted(true);
   }, []);
 
   // Load recent/frequent templates
@@ -671,203 +682,316 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
     }
   }
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">নতুন পণ্য যোগ করুন</h1>
-        <p className="text-muted-foreground mt-2">কয়েক ট্যাপেই সব তথ্য ভর্তি করার জন্য স্মার্ট ফর্ম</p>
-        <p className="text-sm text-muted-foreground mt-1">দোকান: {shop.name}</p>
+    <div className="max-w-2xl mx-auto space-y-4">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-card to-card" />
+        <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
+        <div className="relative space-y-3 p-4">
+          <div className="min-w-0 space-y-1">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+              পণ্য
+            </p>
+            <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
+              নতুন পণ্য যোগ করুন
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              কয়েক ট্যাপেই সব তথ্য ভর্তি করার জন্য স্মার্ট ফর্ম
+            </p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+              দোকান:
+              <span className="truncate font-semibold text-foreground">
+                {shop.name}
+              </span>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+              ভয়েস ইনপুট
+            </span>
+            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">
+              স্মার্ট সাজেশন
+            </span>
+            <span
+              className={`inline-flex h-7 items-center gap-1 rounded-full px-3 font-semibold border ${
+                online
+                  ? "bg-success-soft text-success border-success/30"
+                  : "bg-warning-soft text-warning border-warning/30"
+              }`}
+            >
+              {online ? "অনলাইন" : "অফলাইন"}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-card rounded-lg border border-border p-8 space-y-6">
-        
-        {/* Product Name */}
-        {isFieldVisible("name") && (
-          <div className="space-y-2">
-            <label className="block text-base font-medium text-foreground">পণ্যের নাম *</label>
-            <div className="flex gap-3">
-              <input
-                name="name"
-                value={name}
-                onChange={(e) => setNameWithSmartDefaults(e.target.value)}
-                className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="যেমন: চা, ডিম, বিস্কুট..."
-                required={isFieldRequired("name")}
-                autoComplete="off"
-              />
-              <button
-                type="button"
-                onClick={listening ? stopVoice : startVoice}
-                disabled={!voiceReady}
-                  className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-4">
+          {/* Product Name */}
+          {isFieldVisible("name") && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-base font-medium text-foreground">
+                  পণ্যের নাম *
+                </label>
+                <span className="text-xs text-muted-foreground">ভয়েস/সাজেশন</span>
+              </div>
+              <div className="relative">
+                <input
+                  name="name"
+                  value={name}
+                  onChange={(e) => setNameWithSmartDefaults(e.target.value)}
+                  className="w-full h-12 border border-border rounded-xl px-4 pr-16 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="যেমন: চা, ডিম, বিস্কুট..."
+                  required={isFieldRequired("name")}
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={listening ? stopVoice : startVoice}
+                  disabled={!voiceReady}
+                  aria-label={listening ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
                     listening
-                      ? "bg-primary-soft text-primary border-primary/40"
-                      : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
+                      ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                      : "bg-primary-soft text-primary border-primary/30 active:scale-95"
                   } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
-              >
-                {listening ? "থামান" : "ভয়েস"}
-              </button>
+                >
+                  {listening ? "🔴" : "🎤"}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {listening
+                  ? "শুনছি... নাম ও দাম বলুন"
+                  : voiceReady
+                  ? "নাম/দাম বললেই অটো বসবে"
+                  : "এই ডিভাইসে ভয়েস সাপোর্ট নেই"}{" "}
+                {voiceError ? `(${voiceError})` : ""}
+              </p>
+
+              {smartNameSuggestions.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {smartNameSuggestions.map((title) => (
+                    <button
+                      key={title}
+                      type="button"
+                      onClick={() => setNameWithSmartDefaults(title)}
+                      className="h-9 px-3 rounded-full border border-primary/30 text-primary bg-primary-soft/80 text-xs font-semibold hover:border-primary/50"
+                    >
+                      {title}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <p className="text-sm text-muted-foreground">
-              {listening
-                ? "Listening... say product name and price"
-                : voiceReady
-                ? "Say product name and price to fill automatically"
-                : "Microphone not ready"}{" "}
-              {voiceError ? `(${voiceError})` : ""}
-            </p>
-            
-            {smartNameSuggestions.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {smartNameSuggestions.map((title) => (
+          )}
+
+          {/* Sell Price */}
+          <div className="space-y-2">
+            <label className="block text-base font-medium text-foreground">
+              বিক্রয় মূল্য (৳) *
+            </label>
+            <input
+              name="sellPrice"
+              type="number"
+              step="0.01"
+              min="0"
+              value={sellPrice}
+              onChange={(e) => setSellPrice(e.target.value)}
+              className="w-full h-12 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="যেমন: ১০, ২৫.৫০"
+              required={isFieldRequired("sellPrice")}
+            />
+            {priceSuggestions.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {priceSuggestions.map((p) => (
                   <button
-                    key={title}
+                    key={p}
                     type="button"
-                    onClick={() => setNameWithSmartDefaults(title)}
-                    className="px-3 py-2 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
+                    onClick={() => setSellPrice(p)}
+                    className="h-9 px-3 rounded-full border border-primary/30 bg-primary-soft/80 text-primary text-xs font-semibold hover:border-primary/50"
                   >
-                    {title}
+                    ৳ {p}
                   </button>
                 ))}
               </div>
             )}
+            <p className="text-xs text-muted-foreground">
+              শুধু দাম বললেও/লিখলেও অটো শনাক্ত হবে
+            </p>
           </div>
-        )}
-
-        {/* Sell Price */}
-        <div className="space-y-2">
-          <label className="block text-base font-medium text-foreground">বিক্রয় মূল্য (৳) *</label>
-          <input
-            name="sellPrice"
-            type="number"
-            step="0.01"
-            min="0"
-            value={sellPrice}
-            onChange={(e) => setSellPrice(e.target.value)}
-            className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="যেমন: ১০, ২৫.৫০"
-            required={isFieldRequired("sellPrice")}
-          />
-          {priceSuggestions.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {priceSuggestions.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setSellPrice(p)}
-                  className="px-3 py-2 rounded-full border border-primary/30 bg-primary-soft text-primary text-sm hover:border-primary/50"
-                >
-                  ৳ {p}
-                </button>
-              ))}
-            </div>
-          )}
-          <p className="text-sm text-muted-foreground">শুধু দাম বললেও/লিখলেও অটো শনাক্ত হবে</p>
         </div>
 
         {/* Category (optional with custom) */}
-        <div className="space-y-2">
-          <label className="block text-base font-medium text-foreground">ক্যাটাগরি (ঐচ্ছিক)</label>
-          <div className="flex gap-3">
-            <select
-              name="category"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">ক্যাটাগরি বাছাই করুন</option>
-              {categoryOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={handleAddCustomCategory}
-              className="shrink-0 px-4 py-3 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
-            >
-              + কাস্টম যোগ করুন
-            </button>
-          </div>
-          {businessAssist?.categoryChips?.length ? (
-            <div className="flex flex-wrap gap-2">
-              {businessAssist.categoryChips.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => {
-                    setCategoryOptions((prev) => (prev.includes(c) ? prev : [...prev, c]));
-                    setSelectedCategory(c);
-                  }}
-                  className="px-3 py-2 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <p className="text-sm text-muted-foreground">
-            এক ট্যাপে ক্যাটাগরি/ইউনিট সিলেক্ট করুন; ভয়েস বা নাম লিখলে স্মার্ট ফিল হবে
-          </p>
-        </div>
-
-        {/* Unit (conditional) */}
-        {isFieldVisible("unit") && (
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-4">
           <div className="space-y-2">
-            <label className="block text-base font-medium text-foreground">ইউনিট (ঐচ্ছিক)</label>
-            <div className="flex gap-3">
-              <select
-                name="baseUnit"
-                value={selectedUnit}
-                onChange={(e) => setSelectedUnit(e.target.value)}
-                required={isFieldRequired("unit")}
-                className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                {unitOptions.map((u) => (
-                  <option key={u} value={u}>
-                    {unitLabels[u as keyof typeof unitLabels] || u}
-                  </option>
-                ))}
-              </select>
+            <label className="block text-base font-medium text-foreground">
+              ক্যাটাগরি (ঐচ্ছিক)
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {isMounted ? (
+                <div className="w-full">
+                  <input type="hidden" name="category" value={selectedCategory} />
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="h-11 w-full rounded-xl border border-border bg-card px-4 text-left text-base text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                      <SelectValue placeholder="ক্যাটাগরি বাছাই করুন" />
+                    </SelectTrigger>
+                    <SelectContent
+                      align="start"
+                      className="min-w-[var(--radix-select-trigger-width)]"
+                    >
+                      {categoryOptions.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <select
+                  name="category"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="">ক্যাটাগরি বাছাই করুন</option>
+                  {categoryOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              )}
               <button
                 type="button"
-                onClick={handleAddCustomUnit}
-                className="shrink-0 px-4 py-3 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                onClick={handleAddCustomCategory}
+                className="h-11 px-4 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors sm:w-auto"
               >
                 + কাস্টম যোগ করুন
               </button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {unitOptions.slice(0, 5).map((u) => (
-                <button
-                  key={u}
-                  type="button"
-                  onClick={() => setSelectedUnit(u)}
-                  className="px-3 py-2 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
-                >
-                  {unitLabels[u as keyof typeof unitLabels] || u}
-                </button>
-              ))}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              নাম থেকেই ইউনিট অনুমান হবে: ডিম → পিস, তেল → লিটার, চিনি → কেজি
+            {businessAssist?.categoryChips?.length ? (
+              <div className="flex flex-wrap gap-2">
+                {businessAssist.categoryChips.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      setCategoryOptions((prev) =>
+                        prev.includes(c) ? prev : [...prev, c]
+                      );
+                      setSelectedCategory(c);
+                    }}
+                    className="h-9 px-3 rounded-full border border-primary/30 text-primary bg-primary-soft/80 text-xs font-semibold hover:border-primary/50"
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              এক ট্যাপে ক্যাটাগরি/ইউনিট সিলেক্ট করুন; ভয়েস বা নাম লিখলে স্মার্ট ফিল হবে
             </p>
           </div>
-        )}
 
-        {/* Stock toggle & qty */}
-        <div className="space-y-2">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input 
-              type="checkbox" 
-              checked={stockEnabled}
-              onChange={(e) => setStockEnabled(e.target.checked)}
-              className="w-5 h-5 border border-border rounded cursor-pointer"
-            />
-            <span className="text-base font-medium text-foreground">স্টক ট্র্যাক (অন/অফ)</span>
-          </label>
-          <p className="text-sm text-muted-foreground">দোকানের ধরন দেখে ডিফল্ট অন/অফ সেট হয়; লাগলে বন্ধ করুন</p>
-          <div className="pt-2">
+          {/* Unit (conditional) */}
+          {isFieldVisible("unit") && (
+            <div className="space-y-2">
+              <label className="block text-base font-medium text-foreground">
+                ইউনিট (ঐচ্ছিক)
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                {isMounted ? (
+                  <div className="w-full">
+                    <input type="hidden" name="baseUnit" value={selectedUnit} />
+                    <Select value={selectedUnit} onValueChange={setSelectedUnit}>
+                      <SelectTrigger className="h-11 w-full rounded-xl border border-border bg-card px-4 text-left text-base text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                        <SelectValue placeholder="ইউনিট বাছাই করুন" />
+                      </SelectTrigger>
+                      <SelectContent
+                        align="start"
+                        className="min-w-[var(--radix-select-trigger-width)]"
+                      >
+                        {unitOptions.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {unitLabels[u as keyof typeof unitLabels] || u}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <select
+                    name="baseUnit"
+                    value={selectedUnit}
+                    onChange={(e) => setSelectedUnit(e.target.value)}
+                    required={isFieldRequired("unit")}
+                    className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    {unitOptions.map((u) => (
+                      <option key={u} value={u}>
+                        {unitLabels[u as keyof typeof unitLabels] || u}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  onClick={handleAddCustomUnit}
+                  className="h-11 px-4 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors sm:w-auto"
+                >
+                  + কাস্টম যোগ করুন
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {unitOptions.slice(0, 5).map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => setSelectedUnit(u)}
+                    className="h-9 px-3 rounded-full border border-primary/30 text-primary bg-primary-soft/80 text-xs font-semibold hover:border-primary/50"
+                  >
+                    {unitLabels[u as keyof typeof unitLabels] || u}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                নাম থেকেই ইউনিট অনুমান হবে: ডিম → পিস, তেল → লিটার, চিনি → কেজি
+              </p>
+            </div>
+          )}
+
+          {/* Stock toggle & qty */}
+          <div
+            className={`rounded-xl border border-border/70 bg-muted/30 p-3 space-y-3 ${
+              stockEnabled ? "" : "blur-[1px]"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={stockEnabled}
+                  onChange={(e) => setStockEnabled(e.target.checked)}
+                  className="h-5 w-5 border border-border rounded cursor-pointer"
+                />
+                <span className="text-sm font-semibold text-foreground">
+                  স্টক ট্র্যাক
+                </span>
+              </label>
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  stockEnabled
+                    ? "bg-success-soft text-success border border-success/30"
+                    : "bg-muted text-muted-foreground border border-border"
+                }`}
+              >
+                {stockEnabled ? "চালু" : "বন্ধ"}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              দোকানের ধরন দেখে ডিফল্ট অন/অফ সেট হয়; লাগলে বন্ধ করুন
+            </p>
             <input
               name="stockQty"
               type="number"
@@ -876,7 +1000,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
               defaultValue="0"
               required={stockEnabled && stock.requiredWhenEnabled}
               disabled={!stockEnabled}
-              className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
+              className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
               placeholder="যেমন: 10, 5.50"
             />
           </div>
@@ -884,9 +1008,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
 
         {/* Recent templates */}
         {recentTemplates.length > 0 && (
-          <div className="border border-border bg-muted rounded-lg p-4 space-y-2">
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-foreground">রিসেন্ট টেমপ্লেট</h3>
+              <h3 className="text-base font-semibold text-foreground">
+                রিসেন্ট টেমপ্লেট
+              </h3>
               <span className="text-xs text-muted-foreground">এক ট্যাপে অটো-ফিল</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -895,7 +1021,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
                   key={`${t.name}-${t.lastUsed}`}
                   type="button"
                   onClick={() => applyTemplate(t)}
-                  className="flex items-center justify-between gap-3 bg-card border border-border rounded-lg px-3 py-2 text-left hover:border-primary/40 transition-colors"
+                  className="flex items-center justify-between gap-3 bg-card border border-border rounded-xl px-3 py-2 text-left shadow-sm hover:border-primary/40 transition-colors"
                 >
                   <div>
                     <p className="font-semibold text-foreground">{t.name}</p>
@@ -914,7 +1040,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
 
         {/* Quick product buttons */}
         {businessAssist?.quickNames?.length ? (
-          <div className="border border-border bg-muted rounded-lg p-4 space-y-2">
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-foreground">এক ট্যাপ পণ্য</h3>
               <span className="text-xs text-muted-foreground">ব্যবসার ধরন অনুযায়ী সাজেশন</span>
@@ -925,7 +1051,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
                   key={n}
                   type="button"
                   onClick={() => setNameWithSmartDefaults(n)}
-                  className="px-3 py-2 rounded-full border border-border bg-card text-foreground text-sm hover:border-primary/30"
+                  className="h-9 px-3 rounded-full border border-border bg-card text-foreground text-xs font-semibold hover:border-primary/30"
                 >
                   {n}
                 </button>
@@ -935,8 +1061,8 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
         ) : null}
         {/* Advanced (optional) */}
         {visibleAdvancedFields.length > 0 && (
-          <details className="border border-border rounded-lg p-4 bg-muted">
-            <summary className="cursor-pointer text-base font-semibold text-foreground">
+          <details className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <summary className="cursor-pointer text-sm font-semibold text-foreground">
               অ্যাডভান্সড অপশন (ঐচ্ছিক)
             </summary>
             <div className="mt-4 space-y-4">
@@ -947,35 +1073,41 @@ const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
           </details>
         )}
 
-{/* Active Status */}
-        <div className="space-y-2">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input 
-              type="checkbox" 
-              name="isActive" 
-              defaultChecked
-              className="w-5 h-5 border border-border rounded cursor-pointer"
-            />
-            <span className="text-base font-medium text-foreground">পণ্য সক্রিয় রাখুন</span>
-          </label>
-          <p className="text-sm text-muted-foreground">অফ-স্টক হলে চাইলে বন্ধ করতে পারেন</p>
-        </div>
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3">
+          {/* Active Status */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="isActive"
+                defaultChecked
+                className="h-5 w-5 border border-border rounded cursor-pointer"
+              />
+              <span className="text-sm font-semibold text-foreground">
+                পণ্য সক্রিয় রাখুন
+              </span>
+            </label>
+            <p className="text-xs text-muted-foreground">
+              অফ-স্টক হলে চাইলে বন্ধ করতে পারেন
+            </p>
+          </div>
 
-        {/* Buttons */}
-        <div className="flex gap-3 pt-4">
-          <button
-            type="submit"
-            className="flex-1 bg-primary-soft text-primary border border-primary/30 hover:bg-primary/15 hover:border-primary/40 font-bold py-4 px-6 rounded-lg text-lg transition-colors"
-          >
-            + দ্রুত পণ্য যুক্ত করুন
-          </button>
-          <button 
-            type="button"
-            onClick={() => router.back()}
-            className="flex-1 border border-border text-foreground font-medium py-4 px-6 rounded-lg text-lg hover:bg-muted transition-colors"
-          >
-            পিছনে যান
-          </button>
+          {/* Buttons */}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="submit"
+              className="flex-1 h-14 sm:h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              + দ্রুত পণ্য যুক্ত করুন
+            </button>
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="flex-1 h-14 sm:h-12 rounded-xl border border-border text-foreground text-base font-semibold hover:bg-muted transition"
+            >
+              পিছনে যান
+            </button>
+          </div>
         </div>
       </form>
     </div>

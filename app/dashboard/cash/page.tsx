@@ -105,6 +105,11 @@ export default async function CashPage({ searchParams }: CashPageProps) {
       }),
       getCashSummaryByRange(selectedShopId, from, to),
     ]);
+  const balance = Number(summary.balance ?? 0);
+  const formattedBalance = Number.isFinite(balance) ? balance.toFixed(2) : "0.00";
+  const today = todayStr();
+  const rangeLabel =
+    from === to ? (from === today ? "আজ" : from) : `${from} → ${to}`;
 
   const buildHref = ({
     page,
@@ -155,32 +160,63 @@ export default async function CashPage({ searchParams }: CashPageProps) {
     : null;
 
   return (
-    <div className="space-y-6 section-gap">
-      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold text-foreground leading-tight">ক্যাশ খাতা</h1>
-            </div>
-            <p className="text-sm text-muted-foreground mt-1 leading-snug">
-              দোকান: <b>{selectedShop.name}</b>
-            </p>
-            <div className="bg-muted border border-border rounded-lg p-4 mt-2">
-              <p className="text-lg text-muted-foreground leading-snug">
-                বর্তমান ব্যালেন্স: <span className={`text-2xl font-bold ${summary.balance >= 0 ? "text-success" : "text-danger"}`}>{summary.balance.toFixed(2)} ৳</span>
+    <div className="space-y-4 sm:space-y-5 section-gap">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/60 via-card to-card" />
+        <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-success/20 blur-3xl" />
+        <div className="relative space-y-3 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-1">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                ক্যাশ
+              </p>
+              <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
+                ক্যাশ খাতা
+              </h1>
+              <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+                দোকান:
+                <span className="truncate font-semibold text-foreground">
+                  {selectedShop.name}
+                </span>
               </p>
             </div>
-          </div>
-
-          <div className="w-full lg:w-auto flex flex-col sm:flex-row sm:items-center gap-3">
-            <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
-
             <Link
               href={`/dashboard/cash/new?shopId=${selectedShopId}`}
-              className="w-full sm:w-auto px-6 py-3 bg-primary-soft border border-primary/30 text-primary rounded-lg font-semibold hover:border-primary/50 hover:bg-primary-soft transition-colors text-center"
+              className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
             >
               ➕ নতুন এন্ট্রি
             </Link>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="w-full sm:w-auto">
+              <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
+            </div>
+            <Link
+              href={`/dashboard/cash/new?shopId=${selectedShopId}`}
+              className="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+            >
+              ➕ নতুন এন্ট্রি যোগ করুন
+            </Link>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3 text-xs">
+            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+              মোট {summary.count ?? 0} টি
+            </span>
+            <span
+              className={`inline-flex h-7 items-center gap-1 rounded-full px-3 font-semibold border ${
+                balance >= 0
+                  ? "bg-success-soft text-success border-success/30"
+                  : "bg-danger-soft text-danger border-danger/30"
+              }`}
+            >
+              নেট: {balance >= 0 ? "+" : ""}
+              {formattedBalance} ৳
+            </span>
+            <span className="inline-flex h-7 max-w-[200px] items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border truncate">
+              সময়: {rangeLabel}
+            </span>
           </div>
         </div>
       </div>

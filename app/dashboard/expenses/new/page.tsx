@@ -2,6 +2,7 @@
 
 import ExpenseFormClient from "./ExpenseFormClient";
 import { createExpense } from "@/app/actions/expenses";
+import { getShop } from "@/app/actions/shops";
 import { redirect } from "next/navigation";
 
 type NewExpensePageProps = {
@@ -22,6 +23,7 @@ export default async function NewExpensePage({ searchParams }: NewExpensePagePro
   }
 
   const backHref = `/dashboard/expenses?shopId=${shopId}`;
+  const shop = await getShop(shopId);
 
   async function handleSubmit(formData: FormData) {
     "use server";
@@ -38,13 +40,13 @@ export default async function NewExpensePage({ searchParams }: NewExpensePagePro
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">খরচ দ্রুত যোগ করুন</h1>
-        <p className="text-muted-foreground mt-2">ভয়েস + এক-ট্যাপ টেমপ্লেট দিয়ে মিনিটে হিসাব সম্পন্ন</p>
-      </div>
-
-      <ExpenseFormClient shopId={shopId} backHref={backHref} action={handleSubmit} />
+    <div className="max-w-2xl mx-auto space-y-4">
+      <ExpenseFormClient
+        shopId={shopId}
+        shopName={shop.name}
+        backHref={backHref}
+        action={handleSubmit}
+      />
     </div>
   );
 }

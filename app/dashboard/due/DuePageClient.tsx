@@ -10,6 +10,13 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdd } from "@/lib/sync/queue";
@@ -176,6 +183,7 @@ export default function DuePageClient({
   const [voiceReady, setVoiceReady] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   const customerTemplateKey = useMemo(
     () => `due:customerTemplates:${shopId}`,
@@ -340,6 +348,10 @@ export default function DuePageClient({
         : null;
     setVoiceReady(Boolean(SpeechRecognitionImpl));
     return () => recognitionRef.current?.stop?.();
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -698,6 +710,27 @@ export default function DuePageClient({
     return dedupe(fromTemplates).slice(0, 6);
   }, [paymentTemplates]);
 
+  const lastSyncLabel =
+    mounted && lastSyncAt
+      ? new Date(lastSyncAt).toLocaleTimeString("bn-BD", {
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : null;
+
+  const openStatementFor = (customerId: string) => {
+    setActiveTab("list");
+    setSelectedCustomerId(customerId);
+    loadStatement(customerId);
+  };
+
+  const openPaymentFor = (customerId: string) => {
+    setActiveTab("payment");
+    setSelectedCustomerId(customerId);
+    setPaymentForm((prev) => ({ ...prev, customerId }));
+    loadStatement(customerId);
+  };
+
   function startVoice(
     field:
       | "customerName"
@@ -785,150 +818,189 @@ export default function DuePageClient({
 
   return (
     <div className="space-y-5 pb-24">
-      {/* Sticky header + tabs */}
-      <div className="sticky top-0 z-30 bg-card/95 backdrop-blur border-b border-border">
-        <div className="px-3 py-3 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] text-muted-foreground font-semibold">দোকান</p>
-            <p className="text-base font-semibold text-foreground leading-tight">
-              {shopName}
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              {customers.length} গ্রাহক
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[11px] text-muted-foreground font-semibold">মোট বাকি</p>
-            <p className="text-2xl font-bold text-foreground leading-tight">
-              {summary.totalDue.toFixed(2)} ৳
-            </p>
-            {topDueName ? (
-              <p className="text-[11px] text-muted-foreground">
-                সর্বোচ্চ: {topDueName} ({topDueAmount.toFixed(2)} ৳)
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="pointer-events-none absolute -bottom-16 right-0 h-32 w-32 rounded-full bg-primary/20 blur-3xl" />
+        <div className="relative space-y-3 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-1">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                বাকি সারসংক্ষেপ
               </p>
+              <p className="text-3xl font-bold text-foreground tracking-tight sm:text-4xl">
+                {summary.totalDue.toFixed(2)} ৳
+              </p>
+              <p className="text-xs text-muted-foreground">
+                দোকান:{" "}
+                <span className="font-semibold text-foreground">{shopName}</span>{" "}
+                • {customers.length} গ্রাহক
+                {topDueName ? (
+                  <span>
+                    {" "}
+                    • সর্বোচ্চ বাকি: {topDueName} ({topDueAmount.toFixed(2)} ৳)
+                  </span>
+                ) : (
+                  <span> • কোনো বাকি নেই</span>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("add")}
+              className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+            >
+              ➕ নতুন গ্রাহক
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3 text-xs">
+            <span
+              className={`inline-flex h-7 items-center gap-1 rounded-full px-3 font-semibold border ${
+                online
+                  ? "bg-success-soft text-success border-success/30"
+                  : "bg-muted text-muted-foreground border-border"
+              }`}
+            >
+              {online ? "অনলাইন" : "অফলাইন"}
+            </span>
+            {syncing ? (
+              <span className="inline-flex h-7 items-center gap-1 rounded-full bg-primary-soft text-primary border border-primary/30 px-3 font-semibold">
+                সিঙ্ক হচ্ছে...
+              </span>
+            ) : null}
+            {pendingCount > 0 ? (
+              <span className="inline-flex h-7 items-center gap-1 rounded-full bg-warning-soft text-warning border border-warning/30 px-3 font-semibold">
+                পেন্ডিং {pendingCount} টি
+              </span>
+            ) : null}
+            {lastSyncLabel ? (
+              <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 text-muted-foreground border border-border px-3 font-semibold">
+                শেষ সিঙ্ক: {lastSyncLabel}
+              </span>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => setActiveTab("add")}
-            className="shrink-0 px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
-          >
-            + গ্রাহক
-          </button>
-        </div>
-        <div className="px-2 pb-2">
-          <div className="relative">
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pr-10">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
-                    activeTab === tab.id
-                      ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
-                      : "bg-muted text-foreground border-transparent"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
-          </div>
         </div>
       </div>
 
-      {/* Summary KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="md:col-span-2 bg-card rounded-xl border border-border p-5 shadow-sm card-lift">
-          <p className="text-sm text-muted-foreground mb-1">মোট বাকি</p>
-          <p className="text-4xl font-bold text-foreground">
-            {summary.totalDue.toFixed(2)} ৳
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            সর্বশেষ আপডেট করা ডেটা
-          </p>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-1 gap-3">
-          <div className="bg-card rounded-xl border border-border p-4 shadow-sm card-lift">
-            <p className="text-xs text-muted-foreground mb-1">মোট গ্রাহক</p>
-            <p className="text-2xl font-bold text-foreground">{customers.length}</p>
-          </div>
-          <div className="bg-card rounded-xl border border-border p-4 shadow-sm card-lift">
-            <p className="text-xs text-muted-foreground mb-1">সর্বোচ্চ বাকি</p>
-            {topDueName ? (
-              <p className="text-sm font-semibold text-foreground leading-snug">
-                {topDueName}: {topDueAmount.toFixed(2)} ৳
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">কোনো বাকি নেই</p>
-            )}
-          </div>
+      <div className="sticky top-0 z-20 bg-card/95 backdrop-blur border-b border-border/70">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar px-2 py-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border transition-colors ${
+                activeTab === tab.id
+                  ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
+                  : "bg-muted text-foreground border-transparent hover:border-border"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Tab Navigation + Content */}
-      <div className="bg-card rounded-lg border border-border shadow-sm">
-        <div className="p-6">
+      <div className="rounded-2xl border border-border bg-card shadow-sm">
+        <div className="p-4 sm:p-6">
           {/* Summary Tab */}
           {activeTab === "summary" && (
             <div className="space-y-4">
-              <h3 className="text-lg font-bold text-foreground">
-                গ্রাহক তালিকা ও বিবরণ
-              </h3>
-              <div className="space-y-3">
-                {customers.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-foreground">
+                  গ্রাহক তালিকা
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  বাকি, ফোন ও শেষ পেমেন্ট এক নজরে দেখুন।
+                </p>
+              </div>
+              {customers.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border/70 bg-muted/40 p-6 text-center">
+                  <p className="text-sm text-muted-foreground">
                     এখনও কোনো গ্রাহক নেই।
                   </p>
-                ) : (
-                  customers.map((c) => (
-                    <div
-                      key={c.id}
-                      className="bg-muted rounded-lg p-4 flex justify-between items-start card-lift"
-                    >
-                      <div>
-                        <h4 className="font-semibold text-foreground">
-                          {c.name}
-                        </h4>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {c.phone || "ফোন নেই"}{" "}
-                          {c.address ? `• ${c.address}` : ""}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-foreground">
-                          {Number(c.totalDue || 0).toFixed(2)} ৳
-                        </p>
-                        {c.lastPaymentAt && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            শেষ পেমেন্ট:{" "}
-                            {new Date(c.lastPaymentAt).toLocaleDateString(
-                              "bn-BD"
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("add")}
+                    className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
+                  >
+                    ➕ প্রথম গ্রাহক যোগ করুন
+                  </button>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {customers.map((c) => {
+                    const dueAmount = Number(c.totalDue || 0).toFixed(2);
+                    return (
+                      <div
+                        key={c.id}
+                        className="rounded-2xl border border-border bg-card p-4 shadow-sm card-lift"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <h4 className="text-base font-semibold text-foreground truncate">
+                              {c.name}
+                            </h4>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {c.phone ? `ফোন: ${c.phone}` : "ফোন নেই"}
+                              {c.address ? ` • ঠিকানা: ${c.address}` : ""}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className="inline-flex items-center rounded-full bg-warning-soft text-warning border border-warning/30 px-3 py-1 text-xs font-semibold">
+                              বাকি {dueAmount} ৳
+                            </span>
+                            {c.lastPaymentAt && (
+                              <p className="text-[11px] text-muted-foreground mt-2">
+                                শেষ পেমেন্ট:{" "}
+                                {new Date(c.lastPaymentAt).toLocaleDateString(
+                                  "bn-BD"
+                                )}
+                              </p>
                             )}
-                          </p>
-                        )}
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openStatementFor(c.id)}
+                            className="h-9 rounded-full border border-border px-3 text-xs font-semibold text-foreground hover:border-primary/40 hover:text-primary transition-colors"
+                          >
+                            স্টেটমেন্ট দেখুন
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openPaymentFor(c.id)}
+                            className="h-9 rounded-full border border-success/30 bg-success-soft px-3 text-xs font-semibold text-success hover:border-success/40 transition-colors"
+                          >
+                            পেমেন্ট নিন
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
           {/* Add Customer Tab */}
           {activeTab === "add" && (
-            <form onSubmit={handleAddCustomer} className="space-y-4 max-w-lg">
+            <form onSubmit={handleAddCustomer} className="space-y-5 max-w-xl">
               <h3 className="text-lg font-bold text-foreground">
                 নতুন গ্রাহক যোগ করুন
               </h3>
+              {voiceError && (
+                <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+                  {voiceError}
+                </div>
+              )}
               <div className="space-y-2">
-                <label className="block text-base font-medium text-foreground">
+                <label className="block text-sm font-semibold text-foreground">
                   গ্রাহকের নাম *
                 </label>
                 <div className="flex gap-3">
                   <input
-                    className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="যেমন: করিম সাহেব"
                     value={newCustomer.name}
                     onChange={(e) =>
@@ -943,7 +1015,7 @@ export default function DuePageClient({
                       listening ? stopVoice : () => startVoice("customerName")
                     }
                     disabled={!voiceReady}
-                    className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                    className={`shrink-0 h-11 px-4 border rounded-xl text-sm font-semibold transition-colors ${
                       listening
                         ? "bg-primary-soft text-primary border-primary/40"
                         : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
@@ -961,7 +1033,7 @@ export default function DuePageClient({
                         onClick={() =>
                           setNewCustomer((p) => ({ ...p, name: n }))
                         }
-                        className="px-3 py-2 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
+                        className="h-9 px-3 rounded-full border border-primary/30 text-primary bg-primary-soft text-xs font-semibold hover:border-primary/50"
                       >
                         {n}
                       </button>
@@ -970,12 +1042,12 @@ export default function DuePageClient({
                 )}
               </div>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-foreground">
+                <label className="block text-sm font-semibold text-foreground">
                   ফোন নম্বর (ঐচ্ছিক)
                 </label>
                 <div className="flex gap-3">
                   <input
-                    className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="যেমন: 01700000000"
                     value={newCustomer.phone}
                     onChange={(e) =>
@@ -988,7 +1060,7 @@ export default function DuePageClient({
                       listening ? stopVoice : () => startVoice("customerPhone")
                     }
                     disabled={!voiceReady}
-                    className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                    className={`shrink-0 h-11 px-4 border rounded-xl text-sm font-semibold transition-colors ${
                       listening
                         ? "bg-primary-soft text-primary border-primary/40"
                         : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
@@ -999,12 +1071,12 @@ export default function DuePageClient({
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-foreground">
+                <label className="block text-sm font-semibold text-foreground">
                   ঠিকানা (ঐচ্ছিক)
                 </label>
                 <div className="flex gap-3">
                   <input
-                    className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="যেমন: বাজার রোড, ঢাকা"
                     value={newCustomer.address}
                     onChange={(e) =>
@@ -1019,7 +1091,7 @@ export default function DuePageClient({
                         : () => startVoice("customerAddress")
                     }
                     disabled={!voiceReady}
-                    className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                    className={`shrink-0 h-11 px-4 border rounded-xl text-sm font-semibold transition-colors ${
                       listening
                         ? "bg-primary-soft text-primary border-primary/40"
                         : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
@@ -1031,7 +1103,7 @@ export default function DuePageClient({
               </div>
               <button
                 type="submit"
-                className="w-full bg-primary-soft text-primary border border-primary/30 hover:bg-primary/15 hover:border-primary/40 font-bold py-4 px-6 rounded-lg text-lg transition-colors"
+                className="w-full h-12 bg-primary-soft text-primary border border-primary/30 hover:bg-primary/15 hover:border-primary/40 font-bold px-6 rounded-xl text-lg transition-colors"
               >
                 ✓ গ্রাহক যোগ করুন
               </button>
@@ -1040,40 +1112,75 @@ export default function DuePageClient({
 
           {/* Payment Tab */}
           {activeTab === "payment" && (
-            <form onSubmit={handlePayment} className="space-y-4 max-w-lg">
+            <form onSubmit={handlePayment} className="space-y-5 max-w-xl">
               <h3 className="text-lg font-bold text-foreground">পেমেন্ট নিন</h3>
+              {voiceError && (
+                <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+                  {voiceError}
+                </div>
+              )}
               <div className="space-y-2">
-                <label className="block text-base font-medium text-foreground">
+                <label className="block text-sm font-semibold text-foreground">
                   গ্রাহক বাছাই করুন *
                 </label>
-                <select
-                  className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  value={paymentForm.customerId}
-                  onChange={(e) => {
-                    setPaymentForm((p) => ({
-                      ...p,
-                      customerId: e.target.value,
-                    }));
-                    setSelectedCustomerId(e.target.value);
-                    loadStatement(e.target.value);
-                  }}
-                  required
-                >
-                  <option value="">-- গ্রাহক বাছাই করুন --</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} — বাকি: {Number(c.totalDue || 0).toFixed(2)} ৳
-                    </option>
-                  ))}
-                </select>
+                {mounted ? (
+                  <Select
+                    value={paymentForm.customerId}
+                    onValueChange={(value) => {
+                      setPaymentForm((p) => ({
+                        ...p,
+                        customerId: value,
+                      }));
+                      setSelectedCustomerId(value);
+                      loadStatement(value);
+                    }}
+                    disabled={customers.length === 0}
+                  >
+                    <SelectTrigger className="h-11 w-full rounded-xl border border-border bg-card px-4 text-left text-base text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                      <SelectValue placeholder="গ্রাহক বাছাই করুন" />
+                    </SelectTrigger>
+                    <SelectContent
+                      align="start"
+                      className="min-w-[var(--radix-select-trigger-width)]"
+                    >
+                      {customers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} — বাকি:{" "}
+                          {Number(c.totalDue || 0).toFixed(2)} ৳
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <select
+                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    value={paymentForm.customerId}
+                    onChange={(e) => {
+                      setPaymentForm((p) => ({
+                        ...p,
+                        customerId: e.target.value,
+                      }));
+                      setSelectedCustomerId(e.target.value);
+                      loadStatement(e.target.value);
+                    }}
+                    disabled={customers.length === 0}
+                  >
+                    <option value="">-- গ্রাহক বাছাই করুন --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} — বাকি: {Number(c.totalDue || 0).toFixed(2)} ৳
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-foreground">
+                <label className="block text-sm font-semibold text-foreground">
                   পেমেন্টের পরিমাণ (৳) *
                 </label>
                 <div className="flex gap-3">
                   <input
-                    className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="যেমন: 500, 1000"
                     type="number"
                     min="0"
@@ -1090,7 +1197,7 @@ export default function DuePageClient({
                       listening ? stopVoice : () => startVoice("paymentAmount")
                     }
                     disabled={!voiceReady}
-                    className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                    className={`shrink-0 h-11 px-4 border rounded-xl text-sm font-semibold transition-colors ${
                       listening
                         ? "bg-primary-soft text-primary border-primary/40"
                         : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
@@ -1108,7 +1215,7 @@ export default function DuePageClient({
                         onClick={() =>
                           setPaymentForm((p) => ({ ...p, amount: a }))
                         }
-                        className="px-3 py-2 rounded-full border border-primary/30 bg-primary-soft text-primary text-sm hover:border-primary/50"
+                        className="h-9 px-3 rounded-full border border-primary/30 bg-primary-soft text-primary text-xs font-semibold hover:border-primary/50"
                       >
                         ৳ {a}
                       </button>
@@ -1117,12 +1224,12 @@ export default function DuePageClient({
                 )}
               </div>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-foreground">
+                <label className="block text-sm font-semibold text-foreground">
                   বিবরণ (ঐচ্ছিক)
                 </label>
                 <div className="flex gap-3">
                   <input
-                    className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="যেমন: নগদ পেমেন্ট"
                     value={paymentForm.description}
                     onChange={(e) =>
@@ -1140,7 +1247,7 @@ export default function DuePageClient({
                         : () => startVoice("paymentDescription")
                     }
                     disabled={!voiceReady}
-                    className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                    className={`shrink-0 h-11 px-4 border rounded-xl text-sm font-semibold transition-colors ${
                       listening
                         ? "bg-primary-soft text-primary border-primary/40"
                         : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
@@ -1157,7 +1264,7 @@ export default function DuePageClient({
                   !paymentForm.amount ||
                   savingPayment
                 }
-                className="w-full bg-success hover:bg-success/90 disabled:bg-muted text-primary-foreground font-bold py-4 px-6 rounded-lg text-lg transition-colors"
+                className="w-full h-12 bg-success hover:bg-success/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground font-bold px-6 rounded-xl text-lg transition-colors"
               >
                 {savingPayment ? "সংরক্ষণ করছে..." : "✓ পেমেন্ট রেকর্ড করুন"}
               </button>
@@ -1169,32 +1276,58 @@ export default function DuePageClient({
             <div className="space-y-4">
               <h3 className="text-lg font-bold text-foreground">সব গ্রাহক</h3>
               <div className="space-y-2">
-                <label className="block text-base font-medium text-foreground">
+                <label className="block text-sm font-semibold text-foreground">
                   বিবরণ দেখতে গ্রাহক বাছাই করুন
                 </label>
-                <select
-                  className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  value={selectedCustomerId}
-                  onChange={(e) => {
-                    setSelectedCustomerId(e.target.value);
-                    loadStatement(e.target.value);
-                  }}
-                >
-                  <option value="">-- গ্রাহক বাছাই করুন --</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                {mounted ? (
+                  <Select
+                    value={selectedCustomerId}
+                    onValueChange={(value) => {
+                      setSelectedCustomerId(value);
+                      loadStatement(value);
+                    }}
+                    disabled={customers.length === 0}
+                  >
+                    <SelectTrigger className="h-11 w-full rounded-xl border border-border bg-card px-4 text-left text-base text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                      <SelectValue placeholder="গ্রাহক বাছাই করুন" />
+                    </SelectTrigger>
+                    <SelectContent
+                      align="start"
+                      className="min-w-[var(--radix-select-trigger-width)]"
+                    >
+                      {customers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <select
+                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    value={selectedCustomerId}
+                    onChange={(e) => {
+                      setSelectedCustomerId(e.target.value);
+                      loadStatement(e.target.value);
+                    }}
+                    disabled={customers.length === 0}
+                  >
+                    <option value="">-- গ্রাহক বাছাই করুন --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {selectedCustomerId && (
                 <div className="mt-6 space-y-4">
                   <h4 className="font-bold text-foreground">লেনদেনের বিবরণ</h4>
-                  <div className="overflow-x-auto hidden md:block">
+                  <div className="hidden md:block overflow-hidden rounded-xl border border-border">
                     <table className="w-full text-sm">
-                      <thead className="bg-muted">
+                      <thead className="bg-muted/70">
                         <tr>
                           <th className="p-3 text-left">তারিখ</th>
                           <th className="p-3 text-left">বিবরণ</th>
@@ -1218,7 +1351,7 @@ export default function DuePageClient({
                           </tr>
                         ) : (
                           statementWithBalance.map((row) => (
-                            <tr key={row.id} className="border-t">
+                            <tr key={row.id} className="border-t border-border/70">
                               <td className="p-3">
                                 {new Date(row.entryDate).toLocaleDateString(
                                   "bn-BD"
@@ -1249,61 +1382,68 @@ export default function DuePageClient({
 
                   <div className="space-y-3 md:hidden">
                     {loadingStatement ? (
-                      <p className="text-center text-muted-foreground bg-card border border-border rounded-lg p-4">
+                      <p className="text-center text-muted-foreground bg-card border border-border rounded-xl p-4">
                         লোড হচ্ছে...
                       </p>
                     ) : statementWithBalance.length === 0 ? (
-                      <p className="text-center text-muted-foreground bg-card border border-border rounded-lg p-4">
+                      <p className="text-center text-muted-foreground bg-card border border-border rounded-xl p-4">
                         কোনো লেনদেন নেই
                       </p>
                     ) : (
                       statementWithBalance.map((row) => {
-        const sale = row.entryType === "SALE";
-        const amount = Number(row.amount || 0).toFixed(2);
-        const running = Number((row as any).running || 0).toFixed(2);
-        return (
-          <div
-            key={row.id}
-            className="relative bg-card border border-border rounded-xl p-4 shadow-sm card-lift overflow-hidden"
-          >
-            <div
-              className={`absolute left-0 top-3 bottom-3 w-1 rounded-full ${
-                sale ? "bg-warning" : "bg-success"
-              }`}
-            />
-            <div className="pl-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(row.entryDate).toLocaleDateString("bn-BD")}
-                </p>
-                <p className="text-base font-semibold text-foreground mt-1">
-                  {row.description || "-"}
-                </p>
-              </div>
-              <span
-                className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                  sale ? "bg-warning-soft text-warning" : "bg-success-soft text-success"
-                }`}
-              >
-                {sale ? "বিক্রি" : "পেমেন্ট"}
-              </span>
-            </div>
+                        const sale = row.entryType === "SALE";
+                        const amount = Number(row.amount || 0).toFixed(2);
+                        const running = Number((row as any).running || 0).toFixed(2);
 
-            <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-              <div className="bg-muted rounded-lg p-3">
-                <p className="text-xs text-muted-foreground">
-                  {sale ? "বিক্রির পরিমাণ" : "পেমেন্টের পরিমাণ"}
-                </p>
-                <p className="text-base font-semibold text-foreground">{amount} ৳</p>
-              </div>
-              <div className="bg-muted rounded-lg p-3">
-                <p className="text-xs text-muted-foreground">চলতি বাকি</p>
-                <p className="text-base font-semibold text-foreground">{running} ৳</p>
-              </div>
-            </div>
-          </div>
-        );
-      })
+                        return (
+                          <div
+                            key={row.id}
+                            className="relative bg-card border border-border rounded-2xl p-4 shadow-sm card-lift overflow-hidden"
+                          >
+                            <div
+                              className={`absolute left-0 top-3 bottom-3 w-1 rounded-full ${
+                                sale ? "bg-warning" : "bg-success"
+                              }`}
+                            />
+                            <div className="pl-3 flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(row.entryDate).toLocaleDateString("bn-BD")}
+                                </p>
+                                <p className="text-base font-semibold text-foreground mt-1">
+                                  {row.description || "-"}
+                                </p>
+                              </div>
+                              <span
+                                className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                  sale
+                                    ? "bg-warning-soft text-warning"
+                                    : "bg-success-soft text-success"
+                                }`}
+                              >
+                                {sale ? "বিক্রি" : "পেমেন্ট"}
+                              </span>
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                              <div className="bg-muted rounded-lg p-3">
+                                <p className="text-xs text-muted-foreground">
+                                  {sale ? "বিক্রির পরিমাণ" : "পেমেন্টের পরিমাণ"}
+                                </p>
+                                <p className="text-base font-semibold text-foreground">
+                                  {amount} ৳
+                                </p>
+                              </div>
+                              <div className="bg-muted rounded-lg p-3">
+                                <p className="text-xs text-muted-foreground">চলতি বাকি</p>
+                                <p className="text-base font-semibold text-foreground">
+                                  {running} ৳
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>

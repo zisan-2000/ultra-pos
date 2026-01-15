@@ -77,6 +77,48 @@ function todayStr() {
   return `${y}-${m}-${day}`;
 }
 
+function formatReason(reason?: string | null) {
+  if (!reason) return "";
+  const trimmed = reason.trim();
+  const noParenId = trimmed.replace(
+    /\s*\(#?[0-9a-f]{6,}(?:-[0-9a-f]{4,})*\)\s*$/i,
+    ""
+  );
+  return noParenId.replace(
+    /\s*#(?:[0-9a-f]{6,}(?:-[0-9a-f]{4,})*)\s*$/i,
+    ""
+  );
+}
+
+function formatDate(d: Date) {
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function resolvePreset(from?: string, to?: string): RangePreset {
+  if (!from && !to) return "all";
+  if (!from || !to) return "custom";
+  if (from === to) {
+    const today = todayStr();
+    if (from === today) return "today";
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    if (from === formatDate(y)) return "yesterday";
+    return "custom";
+  }
+  const today = todayStr();
+  if (to !== today) return "custom";
+  const seven = new Date();
+  seven.setDate(seven.getDate() - 6);
+  if (from === formatDate(seven)) return "7d";
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  if (from === formatDate(monthStart)) return "month";
+  return "custom";
+}
+
 export function CashListClient({
   shopId,
   shopName,
@@ -109,8 +151,10 @@ export function CashListClient({
 
   useEffect(() => {
     if (!online) return;
-    if (from) setCustomFrom(from);
-    if (to) setCustomTo(to);
+    const resolvedPreset = resolvePreset(from, to);
+    setPreset(resolvedPreset);
+    setCustomFrom(from || undefined);
+    setCustomTo(to || undefined);
   }, [online, from, to]);
 
   const applyRangeToUrl = useCallback(
@@ -262,6 +306,18 @@ export function CashListClient({
     );
   }, [rendered, online, summaryIn, summaryOut, summaryNet]);
   const hasItems = rendered.length > 0;
+  const rangeLabel = useMemo(() => {
+    if (online) {
+      if (!from && !to) return "সব সময়";
+      if (from && to && from === to) return from;
+      if (from && to) return `${from} → ${to}`;
+      return "কাস্টম";
+    }
+    if (!range.from && !range.to) return "সব সময়";
+    if (range.from && range.to && range.from === range.to) return range.from;
+    if (range.from && range.to) return `${range.from} → ${range.to}`;
+    return "কাস্টম";
+  }, [online, from, to, range.from, range.to]);
 
   const grouped = useMemo(() => {
     const groups: Record<string, CashEntry[]> = {};
@@ -283,7 +339,7 @@ export function CashListClient({
 
   const DateFilterRow = ({ className = "" }: { className?: string }) => (
     <div className={`relative ${className}`}>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar pr-10 py-2">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pr-10 py-1">
         {PRESETS.map(({ key, label }) => (
           <button
             key={key}
@@ -296,10 +352,10 @@ export function CashListClient({
                 applyRangeToUrl(nextFrom, nextTo);
               }
             }}
-            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
+            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border transition ${
               preset === key
                 ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
-                : "bg-muted text-foreground border-transparent"
+                : "bg-card text-foreground border-border/70 hover:border-primary/30 hover:bg-primary-soft/40"
             }`}
           >
             {label}
@@ -312,115 +368,128 @@ export function CashListClient({
 
   return (
     <div className="space-y-4 pb-16">
-      {/* Sticky mobile header */}
-      <div className="md:hidden sticky top-0 z-30 bg-card/95 backdrop-blur border-b border-border py-2 space-y-2">
-        <div className="px-3 flex items-center justify-between">
-          <div>
-            <p className="text-[11px] text-muted-foreground font-semibold">
-              {shopName || "দোকান"}
-            </p>
-            <p className="text-xl font-bold text-foreground leading-tight">
-              {totals.net.toFixed(2)} ৳
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              {(online && typeof summaryCount === "number")
-                ? summaryCount
-                : rendered.length} এন্ট্রি
-            </p>
-          </div>
-          <Link
-            href={`/dashboard/cash/new?shopId=${shopId}`}
-            className="px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
-          >
-            + নতুন এন্ট্রি
-          </Link>
-        </div>
-        <div className="px-2 space-y-2">
-          <p className="text-[11px] font-semibold text-muted-foreground"> সময়</p>
-          <DateFilterRow />
-          {preset === "custom" && (
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="date"
-                className="border border-border rounded-lg px-3 py-2 text-sm"
-                value={customFrom ?? ""}
-                onChange={(e) => setCustomFrom(e.target.value)}
-              />
-              <input
-                type="date"
-                className="border border-border rounded-lg px-3 py-2 text-sm"
-                value={customTo ?? ""}
-                onChange={(e) => setCustomTo(e.target.value)}
-              />
-              {online && (
-                <button
-                  type="button"
-                  disabled={!canApplyCustom}
-                  onClick={() => {
-                    if (!canApplyCustom) return;
-                    const cf = customFrom;
-                    const ct = customTo;
-                    if (!cf || !ct) return;
-                    applyRangeToUrl(cf, ct);
-                  }}
-                  className="col-span-2 w-full rounded-lg bg-primary-soft text-primary border border-primary/30 py-2 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
-                >
-                  রেঞ্জ প্রয়োগ করুন
-                </button>
-              )}
+      {/* Sticky time filter (mobile only) */}
+      <div className="md:hidden sticky top-0 z-30">
+        <div className="rounded-xl border border-border bg-card/95 backdrop-blur shadow-sm">
+          <div className="px-3 py-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-muted-foreground">সময়</p>
+              <span className="text-[11px] text-muted-foreground">{rangeLabel}</span>
             </div>
-          )}
+            <DateFilterRow />
+            {preset === "custom" && (
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  value={customFrom ?? ""}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                />
+                <input
+                  type="date"
+                  className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  value={customTo ?? ""}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                />
+                {online && (
+                  <button
+                    type="button"
+                    disabled={!canApplyCustom}
+                    onClick={() => {
+                      if (!canApplyCustom) return;
+                      const cf = customFrom;
+                      const ct = customTo;
+                      if (!cf || !ct) return;
+                      applyRangeToUrl(cf, ct);
+                    }}
+                    className="col-span-2 w-full h-11 rounded-xl bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
+                  >
+                    রেঞ্জ প্রয়োগ করুন
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Desktop filter */}
-      <div className="hidden md:block space-y-2">
-        <div className="rounded-xl bg-card border border-border shadow-sm px-4 py-3">
-          <p className="text-xs font-semibold text-muted-foreground mb-2"> সময়</p>
-          <DateFilterRow />
-          {preset === "custom" && (
-            <div className="flex items-center gap-2 mt-2">
-              <input
-                type="date"
-                className="border border-border rounded px-2 py-1 text-sm"
-                value={customFrom ?? ""}
-                onChange={(e) => setCustomFrom(e.target.value)}
-              />
-              <input
-                type="date"
-                className="border border-border rounded px-2 py-1 text-sm"
-                value={customTo ?? ""}
-                onChange={(e) => setCustomTo(e.target.value)}
-              />
-              {online && (
-                <button
-                  type="button"
-                  disabled={!canApplyCustom}
-                  onClick={() => {
-                    if (!canApplyCustom) return;
-                    const cf = customFrom;
-                    const ct = customTo;
-                    if (!cf || !ct) return;
-                    applyRangeToUrl(cf, ct);
-                  }}
-                  className="rounded-lg bg-primary-soft text-primary border border-primary/30 py-1 text-xs font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
-                >
-                  রেঞ্জ প্রয়োগ করুন
-                </button>
-              )}
+      <div className="hidden md:block">
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">নেট ব্যালেন্স</p>
+              <p
+                className={`text-2xl font-bold ${
+                  totals.net >= 0 ? "text-success" : "text-danger"
+                }`}
+              >
+                {totals.net >= 0 ? "+" : ""}
+                {totals.net.toFixed(2)} ৳
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {(online && typeof summaryCount === "number")
+                  ? summaryCount
+                  : rendered.length} এন্ট্রি
+              </p>
             </div>
-          )}
+            <Link
+              href={`/dashboard/cash/new?shopId=${shopId}`}
+              className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
+            >
+              + নতুন এন্ট্রি
+            </Link>
+          </div>
+          <div className="rounded-xl border border-border/70 bg-background/80 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground">সময়</p>
+              <span className="text-xs text-muted-foreground">{rangeLabel}</span>
+            </div>
+            <DateFilterRow />
+            {preset === "custom" && (
+              <div className="grid grid-cols-3 gap-2">
+                <input
+                  type="date"
+                  className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  value={customFrom ?? ""}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                />
+                <input
+                  type="date"
+                  className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  value={customTo ?? ""}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                />
+                {online && (
+                  <button
+                    type="button"
+                    disabled={!canApplyCustom}
+                    onClick={() => {
+                      if (!canApplyCustom) return;
+                      const cf = customFrom;
+                      const ct = customTo;
+                      if (!cf || !ct) return;
+                      applyRangeToUrl(cf, ct);
+                    }}
+                    className="h-11 rounded-xl bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
+                  >
+                    রেঞ্জ প্রয়োগ করুন
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* KPI pills */}
       {(prevHref || nextHref) ? (
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
           <div className="flex items-center gap-2">
             {prevHref ? (
               <Link
                 href={prevHref}
-                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted"
+                className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted"
               >
                 ⬅️ আগের
               </Link>
@@ -432,7 +501,7 @@ export function CashListClient({
           {nextHref ? (
             <Link
               href={nextHref}
-              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted"
+              className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted"
             >
               পরের ➡️
             </Link>
@@ -445,20 +514,20 @@ export function CashListClient({
       ) : null}
 
       <div className="grid grid-cols-3 gap-2 md:gap-3">
-        <div className="bg-success-soft border border-success/30 rounded-xl p-3 text-center">
+        <div className="rounded-2xl border border-success/30 bg-success-soft p-3 text-center shadow-sm">
           <p className="text-xs font-semibold text-success">মোট ইন</p>
           <p className="text-lg font-bold text-success">
             + {totals.in.toFixed(2)} ৳
           </p>
         </div>
 
-        <div className="bg-danger-soft border border-danger/30 rounded-xl p-3 text-center">
+        <div className="rounded-2xl border border-danger/30 bg-danger-soft p-3 text-center shadow-sm">
           <p className="text-xs font-semibold text-danger">মোট আউট</p>
           <p className="text-lg font-bold text-danger">
             - {totals.out.toFixed(2)} ৳
           </p>
         </div>
-        <div className="bg-muted border border-border rounded-xl p-3 text-center">
+        <div className="rounded-2xl border border-border bg-card p-3 text-center shadow-sm">
           <p className="text-xs font-semibold text-muted-foreground">নেট ব্যালেন্স</p>
           <p
             className={`text-lg font-bold ${
@@ -482,12 +551,12 @@ export function CashListClient({
               return (
                 <div key={dateKey} className="space-y-2">
                   <div className="flex items-center justify-between px-1">
-                    <p className="text-sm font-semibold text-foreground">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.2em]">
                       {friendly}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <span className="inline-flex h-7 items-center rounded-full border border-border bg-card px-3 text-xs font-semibold text-muted-foreground">
                       {entries.length} এন্ট্রি
-                    </p>
+                    </span>
                   </div>
                   <div className="space-y-3">
                     {entries.map((e) => {
@@ -505,13 +574,17 @@ export function CashListClient({
                           })
                         : "";
                       const inFlow = e.entryType === "IN";
+                      const reasonLabel = formatReason(e.reason);
                       return (
                         <div
                           key={e.id}
-                          className="bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-all card-lift"
+                          className="bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all card-lift"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="space-y-2">
+                              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                                ক্যাশ {inFlow ? "ইন" : "আউট"}
+                              </p>
                               <p
                                 className={`text-2xl font-bold ${
                                   inFlow ? "text-success" : "text-danger"
@@ -520,31 +593,64 @@ export function CashListClient({
                                 {inFlow ? "+" : "-"}
                                 {val} ৳
                               </p>
-                              <p className="text-sm text-muted-foreground mt-1 truncate max-w-[240px]">
-                                {e.reason || "—"}
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <span
+                                  className={`inline-flex h-7 items-center rounded-full px-3 font-semibold border ${
+                                    inFlow
+                                      ? "bg-success-soft text-success border-success/30"
+                                      : "bg-danger-soft text-danger border-danger/30"
+                                  }`}
+                                >
+                                  {inFlow ? "ইন" : "আউট"}
+                                </span>
+                                {timeStr ? (
+                                  <span className="inline-flex h-7 items-center rounded-full bg-card px-3 font-semibold text-muted-foreground border border-border">
+                                    🕒 {timeStr}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <p className="text-sm text-foreground/80 break-words leading-snug">
+                                <span className="text-xs font-semibold text-muted-foreground">
+                                  বিবরণ:
+                                </span>{" "}
+                                {reasonLabel || "নোট নেই"}
                               </p>
-                              {timeStr ? (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {timeStr}
-                                </p>
-                              ) : null}
+                              <div className="flex flex-wrap items-center gap-2 sm:hidden">
+                                {online ? (
+                                  <Link
+                                    href={`/dashboard/cash/${e.id}`}
+                                    className="inline-flex h-9 items-center justify-center rounded-full bg-primary-soft text-primary text-xs font-semibold border border-primary/30 px-3 shadow-sm hover:bg-primary/15 hover:border-primary/40"
+                                  >
+                                    এডিট
+                                  </Link>
+                                ) : (
+                                  <span className="inline-flex h-9 items-center justify-center rounded-full bg-warning-soft text-warning text-xs font-semibold border border-warning/30 px-3">
+                                    Offline
+                                  </span>
+                                )}
+                                <CashDeleteButton
+                                  id={e.id}
+                                  onDeleted={handleOptimisticDelete}
+                                />
+                              </div>
                             </div>
-                            <div className="flex flex-col items-end gap-2">
+                            <div className="hidden sm:flex sm:flex-col sm:items-end sm:gap-2 sm:min-w-[140px]">
                               {online ? (
                                 <Link
                                   href={`/dashboard/cash/${e.id}`}
-                                  className="px-3 py-1.5 bg-primary-soft border border-primary/30 text-primary rounded-full text-xs font-semibold hover:border-primary/50 hover:bg-primary-soft transition-colors"
+                                  className="inline-flex h-10 items-center justify-center rounded-xl bg-primary-soft text-primary text-sm font-semibold border border-primary/30 shadow-sm hover:bg-primary/15 hover:border-primary/40 px-4"
                                 >
                                   এডিট
                                 </Link>
                               ) : (
-                                <span className="text-[11px] text-muted-foreground">
+                                <span className="inline-flex h-10 items-center justify-center rounded-xl bg-warning-soft text-warning text-xs font-semibold border border-warning/30 px-4">
                                   Offline
                                 </span>
                               )}
                               <CashDeleteButton
                                 id={e.id}
                                 onDeleted={handleOptimisticDelete}
+                                className="h-10 rounded-xl px-4 text-sm"
                               />
                             </div>
                           </div>
@@ -557,11 +663,20 @@ export function CashListClient({
             })}
         </div>
       ) : (
-        <p className="text-center text-muted-foreground py-8 bg-card border border-border rounded-xl">
-          {online
-            ? "এখনো কোনো এন্ট্রি নেই।"
-            : "Offline: ক্যাশ এন্ট্রি ক্যাশে নেই"}
-        </p>
+        <div className="bg-card border border-border rounded-2xl p-6 text-center space-y-2 shadow-sm">
+          <p className="text-lg font-semibold text-foreground">এখনো কোনো এন্ট্রি নেই</p>
+          <p className="text-sm text-muted-foreground">
+            {online ? "প্রথম ক্যাশ এন্ট্রি যোগ করুন" : "Offline: ক্যাশ এন্ট্রি ক্যাশে নেই"}
+          </p>
+          {online ? (
+            <Link
+              href={`/dashboard/cash/new?shopId=${shopId}`}
+              className="inline-flex items-center justify-center h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
+            >
+              + নতুন এন্ট্রি
+            </Link>
+          ) : null}
+        </div>
       )}
     </div>
   );

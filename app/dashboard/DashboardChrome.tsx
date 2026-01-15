@@ -955,21 +955,38 @@ export function DashboardShell({
               <div className="flex flex-col items-end gap-2 shrink-0">
                 <div className="flex items-center gap-2">
                   {shops?.length > 0 ? (
-                    <Select
-                      value={safeShopId ?? undefined}
-                      onValueChange={(value) => handleShopChange(value)}
-                    >
-                      <SelectTrigger className="w-[180px] sm:w-[200px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
-                        <SelectValue placeholder="দোকান নির্বাচন করুন" />
-                      </SelectTrigger>
-                      <SelectContent align="end" className="w-[220px]">
+                    mounted ? (
+                      <Select
+                        value={safeShopId ?? undefined}
+                        onValueChange={(value) => handleShopChange(value)}
+                      >
+                        <SelectTrigger className="w-[180px] sm:w-[200px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                          <SelectValue placeholder="দোকান নির্বাচন করুন" />
+                        </SelectTrigger>
+                        <SelectContent align="end" className="w-[220px]">
+                          {shops.map((shop) => (
+                            <SelectItem key={shop.id} value={shop.id}>
+                              {shop.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <select
+                        value={safeShopId ?? ""}
+                        onChange={(event) => handleShopChange(event.target.value)}
+                        className="h-10 w-[180px] sm:w-[200px] border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      >
+                        <option value="" disabled>
+                          দোকান নির্বাচন করুন
+                        </option>
                         {shops.map((shop) => (
-                          <SelectItem key={shop.id} value={shop.id}>
+                          <option key={shop.id} value={shop.id}>
                             {shop.name}
-                          </SelectItem>
+                          </option>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </select>
+                    )
                   ) : (
                     <Link
                       href="/dashboard/shops/new"

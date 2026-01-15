@@ -51,6 +51,13 @@ function todayStr() {
   return `${y}-${m}-${day}`;
 }
 
+function formatDate(d: Date) {
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function computeRange(preset: RangePreset, customFrom?: string, customTo?: string) {
   const toStr = (d: Date) => d.toISOString().split("T")[0];
   const today = new Date();
@@ -71,6 +78,28 @@ function computeRange(preset: RangePreset, customFrom?: string, customTo?: strin
     return { from: toStr(start), to: toStr(today) };
   }
   return { from: undefined, to: undefined };
+}
+
+function resolvePreset(from?: string, to?: string): RangePreset {
+  if (!from && !to) return "all";
+  if (!from || !to) return "custom";
+  if (from === to) {
+    const today = todayStr();
+    if (from === today) return "today";
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    if (from === formatDate(y)) return "yesterday";
+    return "custom";
+  }
+  const today = todayStr();
+  if (to !== today) return "custom";
+  const seven = new Date();
+  seven.setDate(seven.getDate() - 6);
+  if (from === formatDate(seven)) return "7d";
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  if (from === formatDate(monthStart)) return "month";
+  return "custom";
 }
 
 export function ExpensesListClient({
@@ -214,9 +243,10 @@ export function ExpensesListClient({
 
   useEffect(() => {
     if (!online) return;
-    // When server drives the list (online), reflect URL range into the custom inputs.
-    if (from) setCustomFrom(from);
-    if (to) setCustomTo(to);
+    const resolvedPreset = resolvePreset(from, to);
+    setPreset(resolvedPreset);
+    setCustomFrom(from || undefined);
+    setCustomTo(to || undefined);
   }, [online, from, to]);
 
   const applyRangeToUrl = useCallback(
@@ -257,10 +287,22 @@ export function ExpensesListClient({
     }, 0);
   }, [filteredItems, online, summaryTotal]);
   const hasItems = filteredItems.length > 0;
+  const rangeLabel = useMemo(() => {
+    if (online) {
+      if (!from && !to) return "সব সময়";
+      if (from && to && from === to) return from;
+      if (from && to) return `${from} → ${to}`;
+      return "কাস্টম";
+    }
+    if (!range.from && !range.to) return "সব সময়";
+    if (range.from && range.to && range.from === range.to) return range.from;
+    if (range.from && range.to) return `${range.from} → ${range.to}`;
+    return "কাস্টম";
+  }, [online, from, to, range.from, range.to]);
 
   const DateFilterRow = ({ className = "" }: { className?: string }) => (
     <div className={`relative ${className}`}>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar pr-10 py-2">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pr-10 py-1">
         {PRESETS.map(({ key, label }) => (
           <button
             key={key}
@@ -273,10 +315,10 @@ export function ExpensesListClient({
                 applyRangeToUrl(nextFrom, nextTo);
               }
             }}
-            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
+            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border transition ${
               preset === key
                 ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
-                : "bg-muted text-foreground border-transparent"
+                : "bg-card text-foreground border-border/70 hover:border-primary/30 hover:bg-primary-soft/40"
             }`}
           >
             {label}
@@ -292,13 +334,13 @@ export function ExpensesListClient({
       <div className="grid grid-cols-2 gap-2">
         <input
           type="date"
-          className="border border-border rounded-lg px-3 py-2 text-sm"
+          className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           value={customFrom ?? ""}
           onChange={(e) => setCustomFrom(e.target.value)}
         />
         <input
           type="date"
-          className="border border-border rounded-lg px-3 py-2 text-sm"
+          className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           value={customTo ?? ""}
           onChange={(e) => setCustomTo(e.target.value)}
         />
@@ -313,7 +355,7 @@ export function ExpensesListClient({
               if (!cf || !ct) return;
               applyRangeToUrl(cf, ct);
             }}
-            className="col-span-2 w-full rounded-lg bg-primary-soft text-primary border border-primary/30 py-2 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
+            className="col-span-2 w-full h-11 rounded-xl bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
           >
             রেঞ্জ প্রয়োগ করুন
           </button>
@@ -324,12 +366,12 @@ export function ExpensesListClient({
   return (
     <div className="space-y-4">
       {(prevHref || nextHref) && (
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
           <div className="flex items-center gap-2">
             {prevHref ? (
               <Link
                 href={prevHref}
-                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted"
+                className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted"
               >
                 ⬅️ আগের
               </Link>
@@ -341,7 +383,7 @@ export function ExpensesListClient({
           {nextHref ? (
             <Link
               href={nextHref}
-              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted"
+              className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted"
             >
               পরের ➡️
             </Link>
@@ -354,61 +396,72 @@ export function ExpensesListClient({
       )}
 
       {/* Mobile sticky summary */}
-      <div className="md:hidden sticky top-0 z-30 bg-card/95 backdrop-blur border-b border-border py-2 space-y-2">
-        <div className="px-3 flex items-center justify-between">
-          <div>
-            <p className="text-[11px] text-muted-foreground font-semibold">
-              মোট খরচ (নির্বাচিত সময়)
-            </p>
-            <p className="text-xl font-bold text-foreground leading-tight">
-              {totalAmount.toFixed(2)} ৳
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              {(online && typeof summaryCount === "number")
-                ? summaryCount
-                : filteredItems.length} খরচ
-            </p>
+      <div className="md:hidden sticky top-0 z-30">
+        <div className="rounded-2xl border border-border bg-card/95 backdrop-blur shadow-sm">
+          <div className="p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                  সারাংশ
+                </p>
+                <p className="text-2xl font-bold text-foreground leading-tight">
+                  {totalAmount.toFixed(2)} ৳
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {(online && typeof summaryCount === "number")
+                    ? summaryCount
+                    : filteredItems.length} খরচ
+                </p>
+              </div>
+              <Link
+                href={`/dashboard/expenses/new?shopId=${shopId}`}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm"
+              >
+                + নতুন খরচ
+              </Link>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/80 p-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold text-muted-foreground">📅 সময়</p>
+                <span className="text-[11px] text-muted-foreground">{rangeLabel}</span>
+              </div>
+              <DateFilterRow />
+              <CustomRangeInputs />
+            </div>
           </div>
-
-          <Link
-            href={`/dashboard/expenses/new?shopId=${shopId}`}
-            className="px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold shadow-sm"
-          >
-            + নতুন খরচ
-          </Link>
-        </div>
-        <div className="px-2 space-y-2">
-          <p className="text-[11px] font-semibold text-muted-foreground">📅 সময়</p>
-          <DateFilterRow />
-          <CustomRangeInputs />
         </div>
       </div>
 
       {/* Desktop filter row */}
-      <div className="hidden md:block space-y-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-foreground">মোট খরচ</p>
-            <p className="text-2xl font-bold text-foreground">
-              {totalAmount.toFixed(2)} ৳
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {(online && typeof summaryCount === "number")
-                ? summaryCount
-                : filteredItems.length} খরচ
-            </p>
+      <div className="hidden md:block">
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">মোট খরচ</p>
+              <p className="text-2xl font-bold text-foreground">
+                {totalAmount.toFixed(2)} ৳
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {(online && typeof summaryCount === "number")
+                  ? summaryCount
+                  : filteredItems.length} খরচ
+              </p>
+            </div>
+            <Link
+              href={`/dashboard/expenses/new?shopId=${shopId}`}
+              className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
+            >
+              + নতুন খরচ
+            </Link>
           </div>
-          <Link
-            href={`/dashboard/expenses/new?shopId=${shopId}`}
-            className="px-5 py-2.5 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
-          >
-            + নতুন খরচ
-          </Link>
-        </div>
-        <div className="rounded-xl bg-card border border-border shadow-sm px-4 py-3 space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground">📅 সময়</p>
-          <DateFilterRow />
-          <CustomRangeInputs />
+          <div className="rounded-xl border border-border/70 bg-background/80 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground">📅 সময়</p>
+              <span className="text-xs text-muted-foreground">{rangeLabel}</span>
+            </div>
+            <DateFilterRow />
+            <CustomRangeInputs />
+          </div>
         </div>
       </div>
 
@@ -426,33 +479,40 @@ export function ExpensesListClient({
             return (
               <div
                 key={e.id}
-                className="bg-card border border-border rounded-xl p-5 shadow-sm hover:shadow-md transition-all"
+                className="bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-2">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                      খরচ
+                    </p>
                     <p className="text-2xl font-bold text-foreground">
                       {formattedAmount} ৳
                     </p>
-                    <p className="text-sm font-semibold text-foreground">
-                      {e.category}
-                    </p>
-                    <p className="text-xs text-muted-foreground">তারিখ: {expenseDateStr}</p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="inline-flex h-7 items-center rounded-full bg-primary-soft/70 px-3 font-semibold text-primary border border-primary/30">
+                        {e.category}
+                      </span>
+                      <span className="inline-flex h-7 items-center rounded-full bg-card px-3 font-semibold text-muted-foreground border border-border">
+                        📅 {expenseDateStr}
+                      </span>
+                    </div>
                     {e.note ? (
                       <p className="text-xs text-muted-foreground leading-snug">
                         নোট: {e.note}
                       </p>
                     ) : null}
                   </div>
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[140px] sm:items-end">
                     {online ? (
                       <Link
                         href={`/dashboard/expenses/${e.id}`}
-                        className="px-3 py-1.5 rounded-full bg-primary-soft text-primary text-xs font-semibold border border-primary/30 hover:bg-primary-soft/70"
+                        className="inline-flex h-10 items-center justify-center rounded-xl bg-primary-soft text-primary text-sm font-semibold border border-primary/30 shadow-sm hover:bg-primary/15 hover:border-primary/40"
                       >
                         দেখুন
                       </Link>
                     ) : (
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className="inline-flex h-10 items-center justify-center rounded-xl bg-warning-soft text-warning text-xs font-semibold border border-warning/30">
                         Offline মোড
                       </span>
                     )}
@@ -467,13 +527,13 @@ export function ExpensesListClient({
           })}
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-xl p-6 text-center space-y-2">
+        <div className="bg-card border border-border rounded-2xl p-6 text-center space-y-2 shadow-sm">
           <p className="text-lg font-semibold text-foreground">এখনো কোনো খরচ নেই</p>
           <p className="text-sm text-muted-foreground">প্রথম খরচ যোগ করুন</p>
 
           <Link
             href={`/dashboard/expenses/new?shopId=${shopId}`}
-            className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
+            className="inline-flex items-center justify-center h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
           >
             + নতুন খরচ
           </Link>

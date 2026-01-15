@@ -176,31 +176,22 @@ export default async function ProductsPage({ searchParams }: PageProps) {
   const canCreateProducts = hasPermission(user, "create_product");
 
   return (
-    <div className="space-y-6 section-gap">
-      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold text-foreground leading-tight">
-              পণ্য তালিকা
-            </h1>
-          </div>
-          <ProductsListClient
-            shops={shops}
-            activeShopId={activeShopId}
-            businessLabel={businessLabel}
-            templateProducts={templateProducts}
-            canCreateProducts={canCreateProducts}
-            serverProducts={items}
-            page={normalized.page}
-            prevHref={prevHref}
-            nextHref={nextHref}
-            hasMore={Boolean(hasMore)}
-            totalCount={totalCount}
-            initialQuery={query}
-            initialStatus={status}
-          />
-        </div>
-      </div>
+    <div className="space-y-4 sm:space-y-5 section-gap">
+      <ProductsListClient
+        shops={shops}
+        activeShopId={activeShopId}
+        businessLabel={businessLabel}
+        templateProducts={templateProducts}
+        canCreateProducts={canCreateProducts}
+        serverProducts={items}
+        page={normalized.page}
+        prevHref={prevHref}
+        nextHref={nextHref}
+        hasMore={Boolean(hasMore)}
+        totalCount={totalCount}
+        initialQuery={query}
+        initialStatus={status}
+      />
     </div>
   );
 }

@@ -32,6 +32,9 @@ type Props = {
   backHref: string;
   action: (formData: FormData) => Promise<void>;
   id?: string;
+  title?: string;
+  subtitle?: string;
+  shopName?: string | null;
   initialValues?: {
     entryType?: "IN" | "OUT";
     amount?: string;
@@ -78,12 +81,15 @@ export default function CashFormClient({
   backHref,
   action,
   id,
+  title,
+  subtitle,
+  shopName,
   initialValues,
   submitLabel = "+ দ্রুত ক্যাশ এন্ট্রি করুন",
 }: Props) {
   const online = useOnlineStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const [listening, setListening] = useState(false);
+  const [listeningField, setListeningField] = useState<"amount" | "reason" | null>(null);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
@@ -144,6 +150,27 @@ export default function CashFormClient({
     [recentTemplates, frequentTemplates]
   );
 
+  const headerTitle = title || (id ? "ক্যাশ এন্ট্রি সম্পাদনা" : "নতুন ক্যাশ এন্ট্রি");
+  const headerSubtitle =
+    subtitle ||
+    (id
+      ? "ভয়েস ও টেমপ্লেট দিয়ে দ্রুত পরিবর্তন করুন"
+      : "ভয়েস + স্মার্ট টেমপ্লেট দিয়ে দ্রুত এন্ট্রি করুন");
+  const shopLabel = shopName?.trim() || "";
+  const voiceErrorText = voiceError ? `(${voiceError})` : "";
+  const isListeningAmount = listeningField === "amount";
+  const isListeningReason = listeningField === "reason";
+  const amountVoiceHint = isListeningAmount
+    ? "শুনছি... পরিমাণ বলুন"
+    : voiceReady
+    ? "ভয়েসে বললে অটো পূরণ হবে"
+    : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
+  const reasonVoiceHint = isListeningReason
+    ? "শুনছি... কারণ বলুন"
+    : voiceReady
+    ? "ভয়েসে কারণ বলুন"
+    : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
+
   function persistTemplates(next: CashTemplate[]) {
     setTemplates(next);
     localStorage.setItem(storageKey, JSON.stringify(next));
@@ -156,7 +183,8 @@ export default function CashFormClient({
   }
 
   function startVoice(field: "amount" | "reason") {
-    if (listening) return;
+    if (listeningField === field) return;
+    if (listeningField) stopVoice();
     const SpeechRecognitionImpl =
       typeof window !== "undefined"
         ? ((window as any).SpeechRecognition ||
@@ -174,10 +202,10 @@ export default function CashFormClient({
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onerror = () => {
-      setListening(false);
+      setListeningField(null);
       setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
     };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => setListeningField(null);
     recognition.onresult = (event: any) => {
       const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
       if (spoken) {
@@ -192,18 +220,18 @@ export default function CashFormClient({
           if (parsed && !amount) setAmount(parsed);
         }
       }
-      setListening(false);
+      setListeningField(null);
     };
 
     recognitionRef.current = recognition;
     setVoiceError(null);
-    setListening(true);
+    setListeningField(field);
     recognition.start();
   }
 
   function stopVoice() {
     recognitionRef.current?.stop?.();
-    setListening(false);
+    setListeningField(null);
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -252,159 +280,254 @@ export default function CashFormClient({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-card rounded-lg border border-border p-8 space-y-6">
-      {/* Entry Type */}
-      <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">ক্যাশ টাইপ *</label>
-        <div className="flex flex-wrap gap-2">
-          {["IN", "OUT"].map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => setEntryType(type as "IN" | "OUT")}
-              className={`px-3 py-2 rounded-full border text-sm ${
-                entryType === type
-                  ? type === "IN"
-                    ? "bg-success-soft border-success/30 text-success"
-                    : "bg-danger-soft border-danger/30 text-danger"
-                  : "bg-card border-border text-muted-foreground hover:border-primary/30"
+    <div className="space-y-4">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/60 via-card to-card" />
+        <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-success/20 blur-3xl" />
+        <div className="relative space-y-3 p-4">
+          <div className="min-w-0 space-y-1">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+              ক্যাশ
+            </p>
+            <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
+              {headerTitle}
+            </h1>
+            <p className="text-sm text-muted-foreground">{headerSubtitle}</p>
+            {shopLabel ? (
+              <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+                দোকান:
+                <span className="truncate font-semibold text-foreground">
+                  {shopLabel}
+                </span>
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+              ভয়েস ইনপুট
+            </span>
+            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">
+              টেমপ্লেট
+            </span>
+            <span
+              className={`inline-flex h-7 items-center gap-1 rounded-full px-3 font-semibold border ${
+                online
+                  ? "bg-success-soft text-success border-success/30"
+                  : "bg-warning-soft text-warning border-warning/30"
               }`}
             >
-              {type === "IN" ? "ক্যাশ ইন" : "ক্যাশ আউট"}
-            </button>
-          ))}
+              {online ? "অনলাইন" : "অফলাইন"}
+            </span>
+          </div>
         </div>
-        <input type="hidden" name="entryType" value={entryType} />
-        <p className="text-sm text-muted-foreground">সর্বশেষ ব্যবহৃত টাইপ নির্বাচিত থাকে</p>
       </div>
 
-      {/* Amount */}
-      <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">পরিমাণ (৳) *</label>
-        <div className="flex gap-3">
-          <input
-            name="amount"
-            type="number"
-            step="0.01"
-            min="0"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="যেমন: 500, 1000.50"
-            required
-          />
-          <button
-            type="button"
-            onClick={listening ? stopVoice : () => startVoice("amount")}
-            disabled={!voiceReady}
-            className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
-              listening
-                ? "bg-primary-soft text-primary border-primary/40"
-                : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
-            } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
-          >
-            {listening ? "থামান" : "ভয়েস"}
-          </button>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Entry Type */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <label className="block text-base font-medium text-foreground">
+              ক্যাশ টাইপ *
+            </label>
+            <span className="text-xs text-muted-foreground">ইন/আউট</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setEntryType("IN")}
+              className={`h-11 rounded-full border px-4 text-sm font-semibold transition ${
+                entryType === "IN"
+                  ? "bg-success-soft border-success/30 text-success shadow-sm"
+                  : "bg-card border-border text-foreground hover:border-success/40"
+              }`}
+            >
+              + ক্যাশ ইন
+            </button>
+            <button
+              type="button"
+              onClick={() => setEntryType("OUT")}
+              className={`h-11 rounded-full border px-4 text-sm font-semibold transition ${
+                entryType === "OUT"
+                  ? "bg-danger-soft border-danger/30 text-danger shadow-sm"
+                  : "bg-card border-border text-foreground hover:border-danger/40"
+              }`}
+            >
+              - ক্যাশ আউট
+            </button>
+          </div>
+          <input type="hidden" name="entryType" value={entryType} />
+          <p className="text-xs text-muted-foreground">
+            সর্বশেষ ব্যবহৃত টাইপ নির্বাচিত থাকে
+          </p>
         </div>
-        {amountOptions.length > 0 && (
+
+        {/* Amount */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <label className="block text-base font-medium text-foreground">
+              পরিমাণ (৳) *
+            </label>
+            <span className="text-xs text-muted-foreground">ভয়েস/সাজেশন</span>
+          </div>
+          <div className="relative">
+            <input
+              name="amount"
+              type="number"
+              step="0.01"
+              min="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full h-12 border border-border rounded-xl px-4 pr-16 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="যেমন: 500, 1000.50"
+              required
+            />
+            <button
+              type="button"
+              onClick={isListeningAmount ? stopVoice : () => startVoice("amount")}
+              disabled={!voiceReady}
+              aria-label={isListeningAmount ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
+              className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+                isListeningAmount
+                  ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                  : "bg-primary-soft text-primary border-primary/30 active:scale-95"
+              } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+            >
+              {isListeningAmount ? "🔴" : "🎤"}
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {amountVoiceHint}{" "}
+            {voiceErrorText ? (
+              <span className="text-danger">{voiceErrorText}</span>
+            ) : null}
+          </p>
+          {amountOptions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {amountOptions.slice(0, 6).map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => setAmount(a)}
+                  className="h-9 px-3 rounded-full border border-primary/30 bg-primary-soft/80 text-primary text-xs font-semibold hover:border-primary/50"
+                >
+                  ৳ {a}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Reason */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
+          <label className="block text-base font-medium text-foreground">
+            কারণ (ঐচ্ছিক)
+          </label>
+          <div className="relative">
+            <input
+              name="reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full h-12 border border-border rounded-xl px-4 pr-16 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="যেমন: বিক্রয় টাকা, মালিককে ক্যাশ"
+            />
+            <button
+              type="button"
+              onClick={isListeningReason ? stopVoice : () => startVoice("reason")}
+              disabled={!voiceReady}
+              aria-label={isListeningReason ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
+              className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+                isListeningReason
+                  ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                  : "bg-primary-soft text-primary border-primary/30 active:scale-95"
+              } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+            >
+              {isListeningReason ? "🔴" : "🎤"}
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {reasonVoiceHint}{" "}
+            {voiceErrorText ? (
+              <span className="text-danger">{voiceErrorText}</span>
+            ) : null}
+          </p>
           <div className="flex flex-wrap gap-2">
-            {amountOptions.slice(0, 6).map((a) => (
+            {reasonOptions.slice(0, 6).map((r) => (
               <button
-                key={a}
+                key={r}
                 type="button"
-                onClick={() => setAmount(a)}
-                className="px-3 py-2 rounded-full border border-primary/30 bg-primary-soft text-primary text-sm hover:border-primary/50"
+                onClick={() => setReason(r)}
+                className="h-9 px-3 rounded-full border border-border bg-card text-xs font-semibold text-foreground hover:border-primary/30"
               >
-                ৳ {a}
+                {r}
               </button>
             ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            বেশি ব্যবহৃত কারণগুলো এক ট্যাপে পাওয়া যাবে
+          </p>
+        </div>
+
+        {/* Recent templates */}
+        {recentTemplates.length > 0 && (
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-foreground">
+                রিসেন্ট ক্যাশ
+              </h3>
+              <span className="text-xs text-muted-foreground">
+                এক ট্যাপে অটো-ফিল
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {recentTemplates.slice(0, 4).map((t) => {
+                const isIn = t.entryType === "IN";
+                return (
+                  <button
+                    key={`${t.entryType}-${t.amount}-${t.lastUsed}`}
+                    type="button"
+                    onClick={() => applyTemplate(t)}
+                    className="flex items-center justify-between gap-3 bg-card border border-border rounded-xl px-3 py-2 text-left shadow-sm hover:border-primary/40 transition-colors"
+                  >
+                    <div>
+                      <p
+                        className={`text-xs font-semibold ${
+                          isIn ? "text-success" : "text-danger"
+                        }`}
+                      >
+                        {isIn ? "ক্যাশ ইন" : "ক্যাশ আউট"}
+                      </p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {t.reason || "কারণ নেই"}
+                      </p>
+                    </div>
+                    <span className="text-sm font-bold text-primary">
+                      ৳ {t.amount}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
-        <p className="text-sm text-muted-foreground">“ক্যাশ ইন ৫০০” বললেই পরিমাণ ফিল হবে</p>
-      </div>
 
-      {/* Reason */}
-      <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">কারণ (ঐচ্ছিক)</label>
-        <div className="flex gap-3">
-          <input
-            name="reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="যেমন: বিক্রয় টাকা, মালিককে ক্যাশ"
-          />
-          <button
-            type="button"
-            onClick={listening ? stopVoice : () => startVoice("reason")}
-            disabled={!voiceReady}
-            className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
-              listening
-                ? "bg-primary-soft text-primary border-primary/40"
-                : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
-            } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
-          >
-            {listening ? "থামান" : "ভয়েস"}
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {reasonOptions.slice(0, 6).map((r) => (
+        {/* Buttons */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
-              key={r}
-              type="button"
-              onClick={() => setReason(r)}
-              className="px-3 py-2 rounded-full border border-border bg-card text-sm text-foreground hover:border-primary/30"
+              type="submit"
+              className="flex-1 h-14 sm:h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
-              {r}
+              {submitLabel}
             </button>
-          ))}
-        </div>
-        <p className="text-sm text-muted-foreground">বেশি ব্যবহৃত কারণগুলো এক ট্যাপে পাওয়া যাবে</p>
-      </div>
-
-      {/* Recent templates */}
-      {recentTemplates.length > 0 && (
-        <div className="border border-border bg-muted rounded-lg p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-foreground">রিসেন্ট ক্যাশ</h3>
-            <span className="text-xs text-muted-foreground">এক ট্যাপে অটো-ফিল</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {recentTemplates.slice(0, 4).map((t) => (
-              <button
-                key={`${t.entryType}-${t.amount}-${t.lastUsed}`}
-                type="button"
-                onClick={() => applyTemplate(t)}
-                className="flex items-center justify-between gap-3 bg-card border border-border rounded-lg px-3 py-2 text-left hover:border-primary/40 transition-colors"
-              >
-                <div>
-                  <p className="font-semibold text-foreground">
-                    {t.entryType === "IN" ? "ক্যাশ ইন" : "ক্যাশ আউট"} • ৳ {t.amount}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{t.reason || "কারণ নেই"}</p>
-                </div>
-              </button>
-            ))}
+            <Link
+              href={backHref}
+              className="flex-1 h-14 sm:h-12 rounded-xl border border-border text-foreground text-base font-semibold hover:bg-muted transition text-center flex items-center justify-center"
+            >
+              পিছনে যান
+            </Link>
           </div>
         </div>
-      )}
-
-      {/* Buttons */}
-      <div className="flex gap-3 pt-4">
-        <button
-          type="submit"
-          className="flex-1 bg-primary-soft text-primary border border-primary/30 hover:bg-primary/15 hover:border-primary/40 font-bold py-4 px-6 rounded-lg text-lg transition-colors"
-        >
-          {submitLabel}
-        </button>
-        <Link
-          href={backHref}
-          className="flex-1 border border-border text-foreground font-medium py-4 px-6 rounded-lg text-lg hover:bg-muted transition-colors text-center"
-        >
-          পিছনে যান
-        </Link>
-      </div>
-      {voiceError ? <p className="text-xs text-danger">{voiceError}</p> : null}
-    </form>
+      </form>
+    </div>
   );
 }

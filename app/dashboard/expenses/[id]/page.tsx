@@ -1,6 +1,7 @@
 // app/dashboard/expenses/[id]/page.tsx
 
 import { getExpense, updateExpense } from "@/app/actions/expenses";
+import { getShop } from "@/app/actions/shops";
 import { redirect } from "next/navigation";
 import ExpenseFormClient from "../new/ExpenseFormClient";
 
@@ -20,6 +21,7 @@ export default async function EditExpensePage({ params }: PageProps) {
   }
 
   const expenseShopId = expense.shopId;
+  const shop = await getShop(expenseShopId);
   const backHref = `/dashboard/expenses?shopId=${expenseShopId}`;
   const expenseDateDefault = expense.expenseDate
     ? new Date(expense.expenseDate).toISOString().slice(0, 10)
@@ -40,14 +42,10 @@ export default async function EditExpensePage({ params }: PageProps) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">খরচ সম্পাদনা করুন</h1>
-        <p className="text-muted-foreground mt-2">পরিমাণ ও ক্যাটাগরি ঠিক করে সংরক্ষণ করুন</p>
-      </div>
-
+    <div className="max-w-2xl mx-auto space-y-4">
       <ExpenseFormClient
         shopId={expenseShopId}
+        shopName={shop.name}
         backHref={backHref}
         action={handleUpdate}
         id={id}
