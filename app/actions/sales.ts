@@ -109,9 +109,20 @@ async function attachSaleSummaries(
 // CREATE SALE
 // ------------------------------
 export async function createSale(input: CreateSaleInput) {
+  const startTime = Date.now();
+  console.log("🚀 [PERF] createSale started at:", new Date().toISOString());
+
+  // Add connection warmup for Neon
+  await prisma.$queryRaw`SELECT 1`;
+  const warmupTime = Date.now();
+  console.log(`🔥 [PERF] DB warmup took: ${warmupTime - startTime}ms`);
+
   const user = await requireUser();
   requirePermission(user, "create_sale");
   await assertShopAccess(input.shopId, user);
+
+  const authTime = Date.now();
+  console.log(`🔐 [PERF] Auth checks took: ${authTime - warmupTime}ms`);
 
   if (!input.items || input.items.length === 0) {
     throw new Error("Cart is empty");
@@ -143,6 +154,9 @@ export async function createSale(input: CreateSaleInput) {
     where: { id: { in: productIds } },
   });
 
+  const dbTime = Date.now();
+  console.log(`💾 [PERF] DB product fetch took: ${dbTime - authTime}ms`);
+
   if (dbProducts.length !== productIds.length) {
     throw new Error("Some products not found");
   }
@@ -173,6 +187,9 @@ export async function createSale(input: CreateSaleInput) {
   const payNow = Math.min(Math.max(payNowRaw, 0), totalNum);
 
   const saleId = await prisma.$transaction(async (tx) => {
+    const transactionStart = Date.now();
+    console.log(`🔄 [PERF] Transaction started at: ${new Date().toISOString()}`);
+
     // Pre-calculate stock changes for O(1) lookup
     const stockMap = new Map<string, number>();
     input.items.forEach(item => {
@@ -180,8 +197,8 @@ export async function createSale(input: CreateSaleInput) {
       stockMap.set(item.productId, current + item.qty);
     });
 
-    // Prepare all operations in parallel
-    const salePromise = tx.sale.create({
+    // Create sale first
+    const inserted = await tx.sale.create({
       data: {
         shopId: input.shopId,
         customerId: input.customerId || null,
@@ -199,13 +216,7 @@ export async function createSale(input: CreateSaleInput) {
         ? payNow.toFixed(2)
         : null;
 
-    // Execute sale creation first to get ID
-    const inserted = await salePromise;
-
-    // Prepare all parallel operations
-    const parallelOps = [];
-
-    // Add sale items
+    // Create sale items
     const saleItemRows = input.items.map((item) => ({
       saleId: inserted.id,
       productId: item.productId,
@@ -213,11 +224,11 @@ export async function createSale(input: CreateSaleInput) {
       unitPrice: item.unitPrice.toFixed(2),
       lineTotal: (item.qty * item.unitPrice).toFixed(2),
     }));
-    parallelOps.push(tx.saleItem.createMany({ data: saleItemRows }));
+    await tx.saleItem.createMany({ data: saleItemRows });
 
-    // Add cash entry if needed
+    // Create cash entry if needed
     if (cashCollected) {
-      parallelOps.push(tx.cashEntry.create({
+      await tx.cashEntry.create({
         data: {
           shopId: input.shopId,
           entryType: "IN",
@@ -227,46 +238,38 @@ export async function createSale(input: CreateSaleInput) {
               ? `Partial cash received for due sale #${inserted.id}`
               : `Cash sale #${inserted.id}`,
         },
-      }));
+      });
     }
 
-    // Batch stock updates - ALL IN PARALLEL
-    const stockUpdates = dbProducts
-      .filter(p => {
-        const soldQty = stockMap.get(p.id) || 0;
-        return soldQty > 0 && p.trackStock !== false;
-      })
-      .map(p => {
-        const soldQty = stockMap.get(p.id) || 0;
+    // Update stock - SEQUENTIAL to avoid connection issues
+    for (const p of dbProducts) {
+      const soldQty = stockMap.get(p.id) || 0;
+      if (soldQty > 0 && p.trackStock !== false) {
         const currentStock = Number(p.stockQty || "0");
         const newStock = currentStock - soldQty;
-        return tx.product.update({
+        await tx.product.update({
           where: { id: p.id },
           data: { stockQty: newStock.toFixed(2) },
         });
-      });
-    
-    parallelOps.push(...stockUpdates);
+      }
+    }
 
-    // Handle due customer operations in parallel
+    // Handle due customer
     if (dueCustomer) {
       const dueAmount = Number((totalNum - payNow).toFixed(2));
 
-      // Create ledger entries
-      const ledgerOps = [
-        tx.customerLedger.create({
-          data: {
-            shopId: input.shopId,
-            customerId: dueCustomer.id,
-            entryType: "SALE",
-            amount: totalStr,
-            description: input.note || "Due sale",
-          },
-        })
-      ];
+      await tx.customerLedger.create({
+        data: {
+          shopId: input.shopId,
+          customerId: dueCustomer.id,
+          entryType: "SALE",
+          amount: totalStr,
+          description: input.note || "Due sale",
+        },
+      });
 
       if (payNow > 0) {
-        ledgerOps.push(tx.customerLedger.create({
+        await tx.customerLedger.create({
           data: {
             shopId: input.shopId,
             customerId: dueCustomer.id,
@@ -274,18 +277,13 @@ export async function createSale(input: CreateSaleInput) {
             amount: payNow.toFixed(2),
             description: "Partial payment at sale",
           },
-        }));
+        });
       }
 
-      parallelOps.push(...ledgerOps);
-
-      // Get current due and update in parallel
-      const currentDuePromise = tx.customer.findUnique({
+      const current = await tx.customer.findUnique({
         where: { id: dueCustomer.id },
         select: { totalDue: true },
       });
-
-      const [current] = await Promise.all([currentDuePromise, ...parallelOps]);
       
       const currentDue = new Prisma.Decimal(current?.totalDue ?? 0);
       const newDue = currentDue.add(new Prisma.Decimal(dueAmount));
@@ -297,13 +295,13 @@ export async function createSale(input: CreateSaleInput) {
           lastPaymentAt: payNow > 0 ? new Date() : null,
         },
       });
-    } else {
-      // Execute all operations in parallel if no due customer
-      await Promise.all(parallelOps);
     }
 
     return inserted.id;
   });
+
+  const transactionEnd = Date.now();
+  console.log(`⏱️ [PERF] Transaction completed in: ${transactionEnd - transactionStart}ms`);
 
   // Move revalidate outside transaction for better performance
   // Revalidate paths in parallel (non-blocking)
@@ -314,6 +312,10 @@ export async function createSale(input: CreateSaleInput) {
     revalidatePath("/dashboard/cash"),
     revalidatePath("/dashboard/products"),
   ]).catch(err => console.warn("Revalidation failed:", err));
+
+  const totalTime = Date.now() - startTime;
+  console.log(`🎯 [PERF] TOTAL createSale time: ${totalTime}ms`);
+  console.log(`📊 [PERF] Breakdown: Warmup(${warmupTime - startTime}ms) + Auth(${authTime - warmupTime}ms) + DB(${dbTime - authTime}ms) + Transaction(${transactionEnd - transactionStart}ms)`);
 
   return { success: true, saleId };
 }
