@@ -241,17 +241,32 @@ export async function createSale(input: CreateSaleInput) {
       });
     }
 
-    // Update stock - SEQUENTIAL to avoid connection issues
+    // Update stock - BULK UPDATE for maximum speed
+    const stockUpdates: { id: string; stockQty: string }[] = [];
     for (const p of dbProducts) {
       const soldQty = stockMap.get(p.id) || 0;
       if (soldQty > 0 && p.trackStock !== false) {
         const currentStock = Number(p.stockQty || "0");
         const newStock = currentStock - soldQty;
-        await tx.product.update({
-          where: { id: p.id },
-          data: { stockQty: newStock.toFixed(2) },
+        stockUpdates.push({
+          id: p.id,
+          stockQty: newStock.toFixed(2),
         });
       }
+    }
+
+    // Bulk update all stocks in one query (if possible)
+    if (stockUpdates.length > 0) {
+      // For PostgreSQL, we can use raw query for bulk update
+      const updateCases = stockUpdates
+        .map(u => `WHEN '${u.id}' THEN '${u.stockQty}'`)
+        .join(' ');
+      
+      await tx.$queryRaw`
+        UPDATE "Product" 
+        SET "stockQty" = CASE id ${updateCases} END 
+        WHERE id IN (${stockUpdates.map(u => u.id).join(',')})
+      `;
     }
 
     // Handle due customer
