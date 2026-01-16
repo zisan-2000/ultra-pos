@@ -1,0 +1,15 @@
+{
+  "functions": {
+    "app/api/**/*.ts": {
+      "runtime": "nodejs18.x",
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
+  "regions": ["sin1"],
+  "build": {
+    "env": {
+      "DATABASE_URL": "postgresql://neondb_owner:npg_BbTG2CKSt7gE@ep-sparkling-river-a1f3lzgn.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&connect_timeout=60&pool_timeout=20"
+    }
+  }
+}

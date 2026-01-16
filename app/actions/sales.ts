@@ -113,9 +113,13 @@ export async function createSale(input: CreateSaleInput) {
   console.log("🚀 [PERF] createSale started at:", new Date().toISOString());
 
   // Add connection warmup for Neon (reduce cold start)
+  // Multiple warmups for Vercel serverless environment
   try {
     await prisma.$queryRaw`SELECT 1`;
     await prisma.$queryRaw`SELECT 2`;
+    await prisma.$queryRaw`SELECT 3`;
+    await prisma.$queryRaw`SELECT 4`;
+    await prisma.$queryRaw`SELECT 5`;
   } catch (e) {
     // Ignore warmup errors
   }
