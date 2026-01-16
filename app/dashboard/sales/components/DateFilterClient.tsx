@@ -35,13 +35,15 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
   const [open, setOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState(from);
   const [customTo, setCustomTo] = useState(to);
-  const rangeText = useMemo(
-    () =>
-      from === to
-        ? `আজ · ${formatDate(from)}`
-        : `${formatDate(from)} – ${formatDate(to)}`,
-    [from, to]
-  );
+  const rangeText = useMemo(() => {
+    // Check if this is "all time" range
+    if (from === "1970-01-01" && to === "2099-12-31") {
+      return "সব সময়";
+    }
+    return from === to
+      ? `আজ · ${formatDate(from)}`
+      : `${formatDate(from)} – ${formatDate(to)}`;
+  }, [from, to]);
 
   useEffect(() => {
     setMounted(true);
@@ -57,7 +59,7 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
     setOpen(false);
   };
 
-  const setPreset = (key: "today" | "yesterday" | "last7") => {
+  const setPreset = (key: "today" | "yesterday" | "7d" | "month" | "all") => {
     if (key === "today") {
       const d = todayStr();
       applyRange(d, d);
@@ -73,12 +75,30 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
       applyRange(fromY, fromY);
       return;
     }
-    // last 7 days
-    const end = todayStr();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 6);
-    const start = `${startDate.getFullYear()}-${`${startDate.getMonth() + 1}`.padStart(2, "0")}-${`${startDate.getDate()}`.padStart(2, "0")}`;
-    applyRange(start, end);
+    if (key === "7d") {
+      // last 7 days
+      const end = todayStr();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 6);
+      const start = `${startDate.getFullYear()}-${`${
+        startDate.getMonth() + 1
+      }`.padStart(2, "0")}-${`${startDate.getDate()}`.padStart(2, "0")}`;
+      applyRange(start, end);
+      return;
+    }
+    if (key === "month") {
+      // this month
+      const today = new Date();
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      const end = todayStr();
+      const startStr = `${start.getFullYear()}-${`${
+        start.getMonth() + 1
+      }`.padStart(2, "0")}-${`${start.getDate()}`.padStart(2, "0")}`;
+      applyRange(startStr, end);
+      return;
+    }
+    // all time
+    applyRange("1970-01-01", "2099-12-31");
   };
 
   const canApplyCustom =
@@ -142,10 +162,24 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPreset("last7")}
+                  onClick={() => setPreset("7d")}
                   className="rounded-lg border border-border px-3 py-2 font-semibold text-foreground hover:bg-muted"
                 >
-                  শেষ ৭ দিন
+                  ৭ দিন
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreset("month")}
+                  className="rounded-lg border border-border px-3 py-2 font-semibold text-foreground hover:bg-muted"
+                >
+                  এই মাস
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreset("all")}
+                  className="rounded-lg border border-border px-3 py-2 font-semibold text-foreground hover:bg-muted sm:col-span-1"
+                >
+                  সব
                 </button>
               </div>
 

@@ -181,8 +181,12 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   if (!shops || shops.length === 0) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-foreground">কোন দোকান নেই</h1>
-        <p className="mb-6 text-muted-foreground">বিক্রি দেখতে প্রথমে দোকান যুক্ত করুন</p>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">
+          কোন দোকান নেই
+        </h1>
+        <p className="mb-6 text-muted-foreground">
+          বিক্রি দেখতে প্রথমে দোকান যুক্ত করুন
+        </p>
         <Link
           href="/dashboard/shops/new"
           className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
@@ -240,7 +244,11 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     cursorList = [];
     cursorBase = 2;
   } else {
-    const limited = applyCursorLimit(cursorList, cursorBase, MAX_CURSOR_HISTORY);
+    const limited = applyCursorLimit(
+      cursorList,
+      cursorBase,
+      MAX_CURSOR_HISTORY
+    );
     cursorList = limited.list;
     cursorBase = limited.base;
 
@@ -254,24 +262,22 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     }
   }
 
-  const currentCursor =
-    page > 1 ? cursorList[page - cursorBase] ?? null : null;
+  const currentCursor = page > 1 ? cursorList[page - cursorBase] ?? null : null;
 
-  const [{ items: sales, nextCursor, hasMore }, summary] =
-    await Promise.all([
-      getSalesByShopPaginated({
-        shopId: selectedShopId,
-        limit: PAGE_SIZE,
-        cursor: toCursorInput(currentCursor),
-        dateFrom: rangeStart,
-        dateTo: rangeEndExclusive,
-      }),
-      getSalesSummary({
-        shopId: selectedShopId,
-        dateFrom: rangeStart,
-        dateTo: rangeEndExclusive,
-      }),
-    ]);
+  const [{ items: sales, nextCursor, hasMore }, summary] = await Promise.all([
+    getSalesByShopPaginated({
+      shopId: selectedShopId,
+      limit: PAGE_SIZE,
+      cursor: toCursorInput(currentCursor),
+      dateFrom: rangeStart,
+      dateTo: rangeEndExclusive,
+    }),
+    getSalesSummary({
+      shopId: selectedShopId,
+      dateFrom: rangeStart,
+      dateTo: rangeEndExclusive,
+    }),
+  ]);
 
   const buildPageLink = (targetPage: number) => {
     if (targetPage <= 1) {
@@ -284,7 +290,11 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
 
     if (targetPage === page + 1 && nextCursor) {
       const nextList = [...cursorList, nextCursor];
-      const limited = applyCursorLimit(nextList, cursorBase, MAX_CURSOR_HISTORY);
+      const limited = applyCursorLimit(
+        nextList,
+        cursorBase,
+        MAX_CURSOR_HISTORY
+      );
       return buildSalesHref({
         shopId: selectedShopId,
         page: targetPage,
@@ -321,7 +331,9 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   const clientSales = sales.map((s) => ({
     id: s.id,
     totalAmount:
-      (s.totalAmount as any)?.toString?.() ?? s.totalAmount?.toString?.() ?? "0",
+      (s.totalAmount as any)?.toString?.() ??
+      s.totalAmount?.toString?.() ??
+      "0",
     paymentMethod: s.paymentMethod,
     status: (s as any).status ?? "COMPLETED",
     voidReason: (s as any).voidReason ?? null,
@@ -332,7 +344,12 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   }));
 
   const summaryTotalDisplay = formatCurrency(summary.totalAmount);
-  const rangeLabel = fromStr === toStr ? fromStr : `${fromStr} – ${toStr}`;
+  const isAllTime = fromStr === "1970-01-01" && toStr === "2099-12-31";
+  const rangeLabel = isAllTime
+    ? "সব সময়"
+    : fromStr === toStr
+    ? fromStr
+    : `${fromStr} – ${toStr}`;
 
   return (
     <div className="space-y-4 sm:space-y-5 section-gap pb-[128px] sm:pb-[110px]">
@@ -405,4 +422,3 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     </div>
   );
 }
-
