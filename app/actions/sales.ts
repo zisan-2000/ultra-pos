@@ -112,8 +112,13 @@ export async function createSale(input: CreateSaleInput) {
   const startTime = Date.now();
   console.log("🚀 [PERF] createSale started at:", new Date().toISOString());
 
-  // Add connection warmup for Neon
-  await prisma.$queryRaw`SELECT 1`;
+  // Add connection warmup for Neon (reduce cold start)
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    await prisma.$queryRaw`SELECT 2`;
+  } catch (e) {
+    // Ignore warmup errors
+  }
   const warmupTime = Date.now();
   console.log(`🔥 [PERF] DB warmup took: ${warmupTime - startTime}ms`);
 
