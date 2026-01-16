@@ -173,8 +173,15 @@ export async function createSale(input: CreateSaleInput) {
   const payNow = Math.min(Math.max(payNowRaw, 0), totalNum);
 
   const saleId = await prisma.$transaction(async (tx) => {
-    // Insert sale
-    const inserted = await tx.sale.create({
+    // Pre-calculate stock changes for O(1) lookup
+    const stockMap = new Map<string, number>();
+    input.items.forEach(item => {
+      const current = stockMap.get(item.productId) || 0;
+      stockMap.set(item.productId, current + item.qty);
+    });
+
+    // Prepare all operations in parallel
+    const salePromise = tx.sale.create({
       data: {
         shopId: input.shopId,
         customerId: input.customerId || null,
@@ -192,8 +199,25 @@ export async function createSale(input: CreateSaleInput) {
         ? payNow.toFixed(2)
         : null;
 
+    // Execute sale creation first to get ID
+    const inserted = await salePromise;
+
+    // Prepare all parallel operations
+    const parallelOps = [];
+
+    // Add sale items
+    const saleItemRows = input.items.map((item) => ({
+      saleId: inserted.id,
+      productId: item.productId,
+      quantity: item.qty.toString(),
+      unitPrice: item.unitPrice.toFixed(2),
+      lineTotal: (item.qty * item.unitPrice).toFixed(2),
+    }));
+    parallelOps.push(tx.saleItem.createMany({ data: saleItemRows }));
+
+    // Add cash entry if needed
     if (cashCollected) {
-      await tx.cashEntry.create({
+      parallelOps.push(tx.cashEntry.create({
         data: {
           shopId: input.shopId,
           entryType: "IN",
@@ -203,53 +227,46 @@ export async function createSale(input: CreateSaleInput) {
               ? `Partial cash received for due sale #${inserted.id}`
               : `Cash sale #${inserted.id}`,
         },
-      });
+      }));
     }
 
-    // Insert sale items
-    const saleItemRows = input.items.map((item) => ({
-      saleId: inserted.id,
-      productId: item.productId,
-      quantity: item.qty.toString(),
-      unitPrice: item.unitPrice.toFixed(2),
-      lineTotal: (item.qty * item.unitPrice).toFixed(2),
-    }));
-    await tx.saleItem.createMany({ data: saleItemRows });
-
-    // Update stock
-    for (const p of dbProducts) {
-      const soldQty = input.items
-        .filter((i) => i.productId === p.id)
-        .reduce((sum, i) => sum + i.qty, 0);
-
-      if (soldQty === 0) continue;
-      if (p.trackStock === false) continue;
-
-      const currentStock = Number(p.stockQty || "0");
-      const newStock = currentStock - soldQty;
-
-      await tx.product.update({
-        where: { id: p.id },
-        data: { stockQty: newStock.toFixed(2) },
+    // Batch stock updates - ALL IN PARALLEL
+    const stockUpdates = dbProducts
+      .filter(p => {
+        const soldQty = stockMap.get(p.id) || 0;
+        return soldQty > 0 && p.trackStock !== false;
+      })
+      .map(p => {
+        const soldQty = stockMap.get(p.id) || 0;
+        const currentStock = Number(p.stockQty || "0");
+        const newStock = currentStock - soldQty;
+        return tx.product.update({
+          where: { id: p.id },
+          data: { stockQty: newStock.toFixed(2) },
+        });
       });
-    }
+    
+    parallelOps.push(...stockUpdates);
 
-    // Record due entry if needed
+    // Handle due customer operations in parallel
     if (dueCustomer) {
       const dueAmount = Number((totalNum - payNow).toFixed(2));
 
-      await tx.customerLedger.create({
-        data: {
-          shopId: input.shopId,
-          customerId: dueCustomer.id,
-          entryType: "SALE",
-          amount: totalStr,
-          description: input.note || "Due sale",
-        },
-      });
+      // Create ledger entries
+      const ledgerOps = [
+        tx.customerLedger.create({
+          data: {
+            shopId: input.shopId,
+            customerId: dueCustomer.id,
+            entryType: "SALE",
+            amount: totalStr,
+            description: input.note || "Due sale",
+          },
+        })
+      ];
 
       if (payNow > 0) {
-        await tx.customerLedger.create({
+        ledgerOps.push(tx.customerLedger.create({
           data: {
             shopId: input.shopId,
             customerId: dueCustomer.id,
@@ -257,13 +274,19 @@ export async function createSale(input: CreateSaleInput) {
             amount: payNow.toFixed(2),
             description: "Partial payment at sale",
           },
-        });
+        }));
       }
 
-      const current = await tx.customer.findUnique({
+      parallelOps.push(...ledgerOps);
+
+      // Get current due and update in parallel
+      const currentDuePromise = tx.customer.findUnique({
         where: { id: dueCustomer.id },
         select: { totalDue: true },
       });
+
+      const [current] = await Promise.all([currentDuePromise, ...parallelOps]);
+      
       const currentDue = new Prisma.Decimal(current?.totalDue ?? 0);
       const newDue = currentDue.add(new Prisma.Decimal(dueAmount));
 
@@ -274,16 +297,23 @@ export async function createSale(input: CreateSaleInput) {
           lastPaymentAt: payNow > 0 ? new Date() : null,
         },
       });
+    } else {
+      // Execute all operations in parallel if no due customer
+      await Promise.all(parallelOps);
     }
 
     return inserted.id;
   });
 
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/sales");
-  revalidatePath("/dashboard/reports");
-  revalidatePath("/dashboard/cash");
-  revalidatePath("/dashboard/products");
+  // Move revalidate outside transaction for better performance
+  // Revalidate paths in parallel (non-blocking)
+  Promise.all([
+    revalidatePath("/dashboard"),
+    revalidatePath("/dashboard/sales"),
+    revalidatePath("/dashboard/reports"),
+    revalidatePath("/dashboard/cash"),
+    revalidatePath("/dashboard/products"),
+  ]).catch(err => console.warn("Revalidation failed:", err));
 
   return { success: true, saleId };
 }

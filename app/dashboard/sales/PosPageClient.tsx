@@ -61,7 +61,7 @@ export function PosPageClient({
   const router = useRouter();
   const {
     clear,
-    setShop: setCartShop,
+    setShop,
     items: cartItems,
     currentShopId: cartShopId,
   } = useCart(
@@ -72,6 +72,8 @@ export function PosPageClient({
       currentShopId: s.currentShopId,
     }))
   );
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [barFlash, setBarFlash] = useState(false);
   const cartPanelRef = useRef<HTMLDivElement | null>(null);
@@ -239,8 +241,8 @@ export function PosPageClient({
 
   // Keep cart tied to the currently selected shop; reset when shop changes
   useEffect(() => {
-    setCartShop(shopId);
-  }, [shopId, setCartShop]);
+    setShop(shopId);
+  }, [shopId, setShop]);
 
   // Clear partial payment when switching away from due
   useEffect(() => {
@@ -259,32 +261,37 @@ export function PosPageClient({
       return;
     }
 
+    // Prevent double submission
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
     const totalVal = safeTotalAmount as number;
     const paidNowNumber = isDue
       ? Math.min(Math.max(Number(paidNow || 0), 0), totalVal)
       : 0;
 
-    // Online case - use server action
-    if (online) {
-      const formData = new FormData(e.currentTarget);
+    try {
+      // Online case - use server action
+      if (online) {
+        const formData = new FormData(e.currentTarget);
 
-      formData.set("shopId", shopId);
-      formData.set("paymentMethod", paymentMethod);
-      formData.set("customerId", customerId);
-      formData.set("paidNow", paidNowNumber.toString());
-      formData.set("note", note);
-      formData.set("cart", JSON.stringify(items));
-      formData.set("totalAmount", safeTotalAmount.toString());
+        formData.set("shopId", shopId);
+        formData.set("paymentMethod", paymentMethod);
+        formData.set("customerId", customerId);
+        formData.set("paidNow", paidNowNumber.toString());
+        formData.set("note", note);
+        formData.set("cart", JSON.stringify(items));
+        formData.set("totalAmount", safeTotalAmount.toString());
 
-      const res = await submitSale(formData);
-      applyStockDelta(items);
-      clear();
-      setPaidNow("");
-      setNote("");
-      setCustomerId("");
-      setSuccess({ saleId: res?.saleId });
-      return;
-    }
+        const res = await submitSale(formData);
+        applyStockDelta(items);
+        clear();
+        setPaidNow("");
+        setNote("");
+        setCustomerId("");
+        setSuccess({ saleId: res?.saleId });
+        return;
+      }
 
     // Offline case - save to Dexie + queue
     const nowTs = Date.now();
@@ -351,9 +358,7 @@ export function PosPageClient({
           await db.dueCustomers.put({
             id: customerId,
             shopId,
-            name: customer?.name || "Customer",
-            phone: customer?.phone ?? null,
-            address: null,
+            name: customer?.name || "",
             totalDue: nextDue,
             lastPaymentAt,
             updatedAt: nowTs,
@@ -364,6 +369,7 @@ export function PosPageClient({
     }
 
     const salePayload = {
+      id: crypto.randomUUID(),
       tempId: crypto.randomUUID(),
       shopId,
       items: items.map((i) => ({
@@ -392,6 +398,12 @@ export function PosPageClient({
         : "Sale stored offline. It will sync automatically when you're online."
     );
     clear();
+    } catch (error) {
+      console.error("Sale submission failed:", error);
+      alert("বিল সম্পন্ন করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const itemCount = useMemo(
@@ -585,11 +597,18 @@ export function PosPageClient({
         <form onSubmit={handleSubmit} className="mt-6 space-y-3">
           <button
             type="submit"
-            disabled={items.length === 0}
+            disabled={items.length === 0 || isSubmitting}
             ref={submitButtonRef}
-            className="w-full rounded-lg bg-primary-soft text-primary border border-primary/30 font-semibold py-4 px-4 text-lg transition-colors hover:bg-primary/15 hover:border-primary/40 disabled:bg-muted disabled:text-muted-foreground"
+            className="w-full rounded-lg bg-primary-soft text-primary border border-primary/30 font-semibold py-4 px-4 text-lg transition-colors hover:bg-primary/15 hover:border-primary/40 disabled:bg-muted disabled:text-muted-foreground flex items-center justify-center gap-2"
           >
-            ✓ বিল সম্পন্ন করুন
+            {isSubmitting ? (
+              <>
+                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                বিল সম্পন্ন হচ্ছে...
+              </>
+            ) : (
+              <>✓ বিল সম্পন্ন করুন</>
+            )}
           </button>
 
           <button
@@ -636,9 +655,17 @@ export function PosPageClient({
             <button
               type="button"
               onClick={handleSellFromBar}
-              className="px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold min-w-[140px]"
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold min-w-[140px] flex items-center justify-center gap-1 disabled:opacity-50"
             >
-              বিল সম্পন্ন
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  সম্পন্ন হচ্ছে...
+                </>
+              ) : (
+                "বিল সম্পন্ন"
+              )}
             </button>
           </div>
         </div>
