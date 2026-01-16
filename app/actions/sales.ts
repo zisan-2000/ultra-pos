@@ -297,11 +297,11 @@ export async function createSale(input: CreateSaleInput) {
       });
     }
 
+    const transactionEnd = Date.now();
+    console.log(`⏱️ [PERF] Transaction completed in: ${transactionEnd - transactionStart}ms`);
+
     return inserted.id;
   });
-
-  const transactionEnd = Date.now();
-  console.log(`⏱️ [PERF] Transaction completed in: ${transactionEnd - transactionStart}ms`);
 
   // Move revalidate outside transaction for better performance
   // Revalidate paths in parallel (non-blocking)
@@ -315,7 +315,7 @@ export async function createSale(input: CreateSaleInput) {
 
   const totalTime = Date.now() - startTime;
   console.log(`🎯 [PERF] TOTAL createSale time: ${totalTime}ms`);
-  console.log(`📊 [PERF] Breakdown: Warmup(${warmupTime - startTime}ms) + Auth(${authTime - warmupTime}ms) + DB(${dbTime - authTime}ms) + Transaction(${transactionEnd - transactionStart}ms)`);
+  console.log(`📊 [PERF] Breakdown: Warmup(${warmupTime - startTime}ms) + Auth(${authTime - warmupTime}ms) + DB(${dbTime - authTime}ms) + Transaction (see above)`);
 
   return { success: true, saleId };
 }
