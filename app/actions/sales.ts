@@ -154,13 +154,14 @@ export async function createSale(input: CreateSaleInput) {
 
   // Product IDs
   const productIds = input.items.map((i) => i.productId);
+  console.log(`📦 [DEBUG] Processing ${input.items.length} items, ${productIds.length} products`);
 
   const dbProducts = await prisma.product.findMany({
     where: { id: { in: productIds } },
   });
 
   const dbTime = Date.now();
-  console.log(`💾 [PERF] DB product fetch took: ${dbTime - authTime}ms`);
+  console.log(`💾 [PERF] DB product fetch took: ${dbTime - authTime}ms for ${dbProducts.length} products`);
 
   if (dbProducts.length !== productIds.length) {
     throw new Error("Some products not found");
@@ -247,17 +248,28 @@ export async function createSale(input: CreateSaleInput) {
     }
 
     // Update stock - SEQUENTIAL but optimized
+    console.log(`📊 [DEBUG] Starting stock updates for ${dbProducts.length} products`);
+    let stockUpdateCount = 0;
+    
     for (const p of dbProducts) {
       const soldQty = stockMap.get(p.id) || 0;
       if (soldQty > 0 && p.trackStock !== false) {
         const currentStock = Number(p.stockQty || "0");
         const newStock = currentStock - soldQty;
+        
+        const singleUpdateStart = Date.now();
         await tx.product.update({
           where: { id: p.id },
           data: { stockQty: newStock.toFixed(2) },
         });
+        const singleUpdateEnd = Date.now();
+        
+        stockUpdateCount++;
+        console.log(`🔄 [DEBUG] Stock update ${stockUpdateCount}/${dbProducts.length}: ${singleUpdateEnd - singleUpdateStart}ms for product ${p.id}`);
       }
     }
+    
+    console.log(`📈 [DEBUG] Total stock updates: ${stockUpdateCount} products updated`);
 
     // Handle due customer
     if (dueCustomer) {
