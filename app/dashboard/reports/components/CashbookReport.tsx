@@ -209,36 +209,43 @@ export default function CashbookReport({ shopId, from, to }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">ক্যাশ রিপোর্ট</h2>
-          <p className="text-xs text-muted-foreground">সর্বশেষ 20টি ক্যাশ এন্ট্রি</p>
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="relative space-y-3 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">ক্যাশ রিপোর্ট</h2>
+              <p className="text-xs text-muted-foreground">সর্বশেষ 20টি ক্যাশ এন্ট্রি</p>
+            </div>
+            <Link
+              href={buildHref()}
+              className="inline-flex h-7 items-center rounded-full border border-primary/20 bg-primary-soft px-3 text-xs font-semibold text-primary hover:bg-primary/20"
+            >
+              পূর্ণ রিপোর্ট দেখুন
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 text-xs font-semibold">
+            <div className="rounded-xl bg-success-soft text-success border border-success/30 px-3 py-2">
+              ইন: {totals.inbound.toFixed(2)} ৳
+            </div>
+            <div className="rounded-xl bg-danger-soft text-danger border border-danger/30 px-3 py-2 text-right">
+              আউট: {totals.outbound.toFixed(2)} ৳
+            </div>
+            <div className="rounded-xl bg-muted text-foreground border border-border px-3 py-2 text-right">
+              ব্যালান্স: {totals.balance.toFixed(2)} ৳
+            </div>
+          </div>
         </div>
-        <Link
-          href={buildHref()}
-          className="text-xs font-semibold text-primary hover:text-primary-hover"
-        >
-          পূর্ণ রিপোর্ট দেখুন
-        </Link>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-sm">
-        <div className="rounded-lg bg-success-soft text-success border border-success/30 px-3 py-2">
-          ইন: {totals.inbound.toFixed(2)} ৳
-        </div>
-        <div className="rounded-lg bg-danger-soft text-danger border border-danger/30 px-3 py-2 text-right">
-          আউট: {totals.outbound.toFixed(2)} ৳
-        </div>
-        <div className="rounded-lg bg-muted text-foreground border border-border px-3 py-2 text-right">
-          ব্যালান্স: {totals.balance.toFixed(2)} ৳
-        </div>
-      </div>
-
-      <div className="border border-border rounded-lg bg-card p-4 space-y-2">
+      <div className="rounded-2xl border border-border bg-card p-3 shadow-sm space-y-2">
         {loading ? (
-          <p className="text-sm text-muted-foreground text-center py-4">লোড হচ্ছে...</p>
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+            লোড হচ্ছে...
+          </p>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
             কোনো এন্ট্রি নেই
           </p>
         ) : (
@@ -247,21 +254,23 @@ export default function CashbookReport({ shopId, from, to }: Props) {
             return (
               <div
                 key={r.id}
-                className="border border-border bg-card p-3 rounded-lg flex justify-between items-center hover:bg-muted transition-colors"
+                className="rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:bg-muted/60"
               >
-                <div>
-                  <p
-                    className={`text-sm font-semibold ${
-                      isIn ? "text-success" : "text-danger"
-                    }`}
-                  >
-                    {isIn ? "+" : "-"} {Number(r.amount || 0).toFixed(2)} ৳
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p
+                      className={`text-sm font-semibold ${
+                        isIn ? "text-success" : "text-danger"
+                      }`}
+                    >
+                      {isIn ? "+" : "-"} {Number(r.amount || 0).toFixed(2)} ৳
+                    </p>
+                    <p className="text-xs text-muted-foreground">{r.reason || "অন্যান্য"}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(r.createdAt).toLocaleDateString("bn-BD")}
                   </p>
-                  <p className="text-xs text-muted-foreground">{r.reason || "অন্যান্য"}</p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(r.createdAt).toLocaleDateString("bn-BD")}
-                </p>
               </div>
             );
           })
@@ -278,7 +287,9 @@ export default function CashbookReport({ shopId, from, to }: Props) {
           >
             Prev
           </button>
-          <span className="text-xs text-muted-foreground">Page {page}</span>
+          <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground">
+            Page {page}
+          </span>
           <button
             type="button"
             onClick={handleNext}

@@ -101,6 +101,13 @@ export function PosPageClient({
   const [success, setSuccess] = useState<{ saleId?: string } | null>(null);
   const online = useOnlineStatus();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
+  const lastSyncLabel = useMemo(() => {
+    if (!lastSyncAt) return null;
+    return new Intl.DateTimeFormat("bn-BD", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(lastSyncAt));
+  }, [lastSyncAt]);
   const serverSnapshotRef = useRef(products);
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
@@ -461,27 +468,55 @@ export function PosPageClient({
   }, [success]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-28">
       {/* Left: Products */}
       <div className="lg:col-span-2 flex flex-col gap-6">
-        <div className="mb-6 pb-4 border-b border-border">
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">নতুন বিক্রি</h1>
-              <p className="text-base text-muted-foreground mt-2">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+          <div className="pointer-events-none absolute -top-16 right-0 h-32 w-32 rounded-full bg-primary/20 blur-3xl" />
+          <div className="relative space-y-3 p-4 sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-1">
+                <h1 className="text-3xl font-bold text-foreground tracking-tight leading-tight sm:text-4xl">নতুন বিক্রি</h1>
+                <p className="text-xs text-muted-foreground mt-1">
                 দোকান: <span className="font-semibold">{shopName}</span>
-              </p>
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold ${
+                    online
+                      ? "bg-success-soft text-success border-success/30"
+                      : "bg-muted text-muted-foreground border-border"
+                  }`}
+                >
+                  {online ? "অনলাইন" : "অফলাইন"}
+                </span>
+              </div>
             </div>
-
-            <span
-              className={`text-sm px-4 py-2 rounded-full font-medium ${
-                online
-                  ? "bg-success-soft text-success"
-                  : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {online ? "অনলাইন" : "অফলাইন"}
-            </span>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+              <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
+                {itemCount} আইটেম
+              </span>
+              <span className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-primary">
+                {safeTotalAmount.toFixed(2)} ৳
+              </span>
+              {pendingCount > 0 ? (
+                <span className="inline-flex h-7 items-center rounded-full border border-warning/30 bg-warning-soft px-3 text-warning">
+                  পেন্ডিং {pendingCount} টি
+                </span>
+              ) : null}
+              {syncing ? (
+                <span className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-primary">
+                  সিঙ্ক হচ্ছে...
+                </span>
+              ) : null}
+              {lastSyncLabel ? (
+                <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
+                  শেষ সিঙ্ক: {lastSyncLabel}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -493,22 +528,27 @@ export function PosPageClient({
       {/* Right: Cart */}
       <div
         ref={cartPanelRef}
-        className="lg:col-span-1 bg-card rounded-lg p-6 flex flex-col gap-4 border border-border"
+        className="lg:col-span-1 bg-gradient-to-br from-card via-card to-muted/30 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 border border-border shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
       >
-        <h2 className="text-2xl font-bold text-foreground mb-6">বর্তমান বিল</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-2xl font-bold text-foreground">বর্তমান বিল</h2>
+          <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-xs font-semibold text-muted-foreground">
+            {itemCount} আইটেম
+          </span>
+        </div>
 
-        <div className="mb-6 space-y-3">
+        <div className="rounded-2xl border border-border bg-muted/40 p-3 space-y-3">
           {items.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">কিছু যোগ করা হয়নি</p>
+            <p className="rounded-xl border border-dashed border-border bg-card/60 py-8 text-center text-sm text-muted-foreground">কিছু যোগ করা হয়নি</p>
           ) : (
             cartList
           )}
         </div>
 
         {/* Summary Section */}
-        <div className="border-t border-border pt-4 space-y-4">
-          <div className="bg-muted rounded-lg p-4">
-            <p className="text-sm text-muted-foreground mb-1">মোট পরিমাণ</p>
+        <div className="border-t border-border/70 pt-5 space-y-4">
+          <div className="rounded-2xl border border-border bg-muted/60 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">মোট পরিমাণ</p>
             <p className="text-3xl font-bold text-foreground">
               {(safeTotalAmount as number).toFixed(2)} ৳
             </p>
@@ -519,27 +559,33 @@ export function PosPageClient({
             <label className="text-base font-medium text-foreground">
               পেমেন্ট পদ্ধতি
             </label>
-            <select
-              className="w-full border border-border rounded-lg px-3 py-3 text-base"
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-            >
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {paymentOptions.map((method) => (
-                <option key={method.value} value={method.value}>
+                <button
+                  key={method.value}
+                  type="button"
+                  onClick={() => setPaymentMethod(method.value)}
+                  aria-pressed={paymentMethod === method.value}
+                  className={`h-10 rounded-xl border px-3 text-sm font-semibold transition-colors ${
+                    paymentMethod === method.value
+                      ? "bg-primary-soft text-primary border-primary/40 shadow-sm"
+                      : "bg-card text-foreground border-border hover:border-primary/30"
+                  }`}
+                >
                   {method.label}
-                </option>
+                </button>
               ))}
-            </select>
+            </div>
           </div>
 
           {/* Customer Selection for Due */}
           {isDue && (
-            <div className="space-y-2">
+            <div className="rounded-xl border border-warning/30 bg-warning-soft/40 p-3 space-y-2">
               <label className="text-base font-medium text-foreground">
                 গ্রাহক নির্বাচন করুন
               </label>
               <select
-                className="w-full border border-border rounded-lg px-3 py-2 text-base"
+                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
               >
@@ -557,7 +603,7 @@ export function PosPageClient({
 
           {/* Partial payment - only for due */}
           {isDue && (
-            <div className="space-y-2">
+            <div className="rounded-xl border border-warning/30 bg-warning-soft/40 p-3 space-y-2">
               <label className="text-base font-medium text-foreground">
                 এখন পরিশোধ (আংশিক হলে)
               </label>
@@ -566,12 +612,12 @@ export function PosPageClient({
                 min="0"
                 max={safeTotalAmount}
                 step="0.01"
-                className="w-full border border-border rounded-lg px-3 py-2 text-base"
+                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder="যেমন: 100 (আংশিক পরিশোধের জন্য)"
                 value={paidNow}
                 onChange={(e) => setPaidNow(e.target.value)}
               />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 মোট {safeTotalAmount.toFixed(2)} ৳ | আংশিক দিলে বাকি ধার হিসেবে
                 থাকবে।
               </p>
@@ -584,7 +630,7 @@ export function PosPageClient({
               নোট (ঐচ্ছিক)
             </label>
             <textarea
-              className="w-full border border-border rounded-lg px-3 py-2 text-base"
+              className="min-h-[96px] w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               rows={3}
               placeholder="অতিরিক্ত তথ্য লিখুন..."
               value={note}
@@ -599,7 +645,7 @@ export function PosPageClient({
             type="submit"
             disabled={items.length === 0 || isSubmitting}
             ref={submitButtonRef}
-            className="w-full rounded-lg bg-primary-soft text-primary border border-primary/30 font-semibold py-4 px-4 text-lg transition-colors hover:bg-primary/15 hover:border-primary/40 disabled:bg-muted disabled:text-muted-foreground flex items-center justify-center gap-2"
+            className="w-full h-14 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
               <>
@@ -614,7 +660,7 @@ export function PosPageClient({
           <button
             type="button"
             onClick={() => clear()}
-            className="w-full border border-border text-foreground font-medium py-3 px-4 rounded-lg text-base hover:bg-muted transition-colors"
+            className="w-full h-12 rounded-xl border border-border text-foreground font-semibold text-base hover:bg-muted transition-colors"
           >
             কার্ট পরিষ্কার করুন
           </button>
@@ -624,7 +670,7 @@ export function PosPageClient({
       {items.length > 0 && (
         <div className="lg:hidden fixed bottom-16 inset-x-0 z-40 px-4">
           <div
-            className={`relative bg-card rounded-2xl border-t border-border shadow-[0_-6px_24px_rgba(15,23,42,0.12)] px-4 py-3 flex items-center gap-3 ${
+            className={`relative bg-card/95 backdrop-blur rounded-3xl border border-border shadow-[0_-10px_30px_rgba(15,23,42,0.18)] px-4 py-3 flex items-center gap-3 ${
               barFlash ? "flash-bar" : ""
             }`}
           >
@@ -648,7 +694,7 @@ export function PosPageClient({
             <button
               type="button"
               onClick={handleClearFromBar}
-              className="px-3 py-2 rounded-lg border border-border text-sm font-semibold text-foreground"
+              className="px-3 py-2 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted"
             >
               পরিষ্কার
             </button>
@@ -656,7 +702,7 @@ export function PosPageClient({
               type="button"
               onClick={handleSellFromBar}
               disabled={isSubmitting}
-              className="px-4 py-2 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold min-w-[140px] flex items-center justify-center gap-1 disabled:opacity-50"
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold min-w-[140px] flex items-center justify-center gap-1 shadow-[0_10px_18px_rgba(22,163,74,0.28)] disabled:opacity-60"
             >
               {isSubmitting ? (
                 <>
@@ -700,7 +746,7 @@ export function PosPageClient({
             className="absolute inset-0 bg-foreground/30 animate-fade-in"
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 bg-card rounded-t-2xl shadow-2xl p-4 space-y-4 max-h-[70vh] overflow-y-auto animate-slide-up">
+          <div className="absolute inset-x-0 bottom-0 bg-card rounded-t-3xl shadow-[0_-20px_50px_rgba(15,23,42,0.2)] p-5 space-y-4 max-h-[70vh] overflow-y-auto animate-slide-up">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground">বর্তমান বিল</p>
@@ -711,7 +757,7 @@ export function PosPageClient({
               <button
                 type="button"
                 onClick={() => setDrawerOpen(false)}
-                className="px-3 py-2 rounded-lg border border-border text-sm font-semibold text-foreground"
+                className="px-3 py-2 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted"
               >
                 বন্ধ
               </button>
@@ -729,14 +775,14 @@ export function PosPageClient({
               <button
                 type="button"
                 onClick={scrollToCart}
-                className="flex-1 rounded-lg border border-border py-3 text-sm font-semibold text-foreground"
+                className="flex-1 rounded-xl border border-border py-3 text-sm font-semibold text-foreground"
               >
                 পূর্ণ বিল ফর্ম দেখুন
               </button>
               <button
                 type="button"
                 onClick={() => setDrawerOpen(false)}
-                className="px-4 py-3 rounded-lg bg-primary-soft text-primary border border-primary/30 text-sm font-semibold"
+                className="px-4 py-3 rounded-xl bg-primary-soft text-primary border border-primary/30 text-sm font-semibold"
               >
                 ঠিক আছে
               </button>
@@ -747,4 +793,3 @@ export function PosPageClient({
     </div>
   );
 }
-

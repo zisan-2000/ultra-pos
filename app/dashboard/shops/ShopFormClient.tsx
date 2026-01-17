@@ -31,6 +31,8 @@ type ShopTemplate = {
   lastUsed: number;
 };
 
+type VoiceField = "name" | "address" | "phone";
+
 type Props = {
   backHref: string;
   action: (formData: FormData) => Promise<void>;
@@ -100,7 +102,7 @@ export default function ShopFormClient({
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [templates, setTemplates] = useState<ShopTemplate[]>([]);
   const [voiceReady, setVoiceReady] = useState(false);
-  const [listening, setListening] = useState(false);
+  const [listeningField, setListeningField] = useState<VoiceField | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -179,6 +181,27 @@ export default function ShopFormClient({
       .sort((a, b) => (businessUsage[b.id] ?? 0) - (businessUsage[a.id] ?? 0));
   }, [availableBusinessTypes, businessUsage]);
 
+  const voiceErrorText = voiceError ? `(${voiceError})` : "";
+  const isListeningName = listeningField === "name";
+  const isListeningAddress = listeningField === "address";
+  const isListeningPhone = listeningField === "phone";
+
+  const nameVoiceHint = isListeningName
+    ? "শুনছি... দোকানের নাম বলুন"
+    : voiceReady
+    ? "ভয়েসে নাম বললে অটো পূরণ হবে"
+    : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
+  const addressVoiceHint = isListeningAddress
+    ? "শুনছি... ঠিকানা বলুন"
+    : voiceReady
+    ? "ভয়েসে ঠিকানা বলুন"
+    : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
+  const phoneVoiceHint = isListeningPhone
+    ? "শুনছি... ফোন নম্বর বলুন"
+    : voiceReady
+    ? "ভয়েসে নম্বর বলুন"
+    : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
+
   function persistTemplates(next: ShopTemplate[]) {
     setTemplates(next);
     localStorage.setItem(SHOP_TEMPLATE_KEY, JSON.stringify(next));
@@ -233,7 +256,8 @@ export default function ShopFormClient({
   }
 
   function startVoice(field: "name" | "address" | "phone") {
-    if (listening) return;
+    if (listeningField === field) return;
+    if (listeningField) stopVoice();
     const SpeechRecognitionImpl =
       typeof window !== "undefined"
         ? ((window as any).SpeechRecognition ||
@@ -251,10 +275,10 @@ export default function ShopFormClient({
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onerror = () => {
-      setListening(false);
+      setListeningField(null);
       setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
     };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => setListeningField(null);
     recognition.onresult = (event: any) => {
       const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
       if (spoken) {
@@ -269,18 +293,18 @@ export default function ShopFormClient({
           if (parsedPhone) setPhone(parsedPhone);
         }
       }
-      setListening(false);
+      setListeningField(null);
     };
 
     recognitionRef.current = recognition;
     setVoiceError(null);
-    setListening(true);
+    setListeningField(field);
     recognition.start();
   }
 
   function stopVoice() {
     recognitionRef.current?.stop?.();
-    setListening(false);
+    setListeningField(null);
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -377,15 +401,15 @@ export default function ShopFormClient({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-card rounded-lg border border-border p-8 space-y-6">
+    <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card p-4 sm:p-6 space-y-4 shadow-sm">
       {ownerOptions ? (
         <div className="space-y-2">
-          <label className="block text-base font-medium text-foreground">মালিক নির্বাচন করুন *</label>
+          <label className="block text-sm font-semibold text-foreground">মালিক নির্বাচন করুন *</label>
           <select
             name="ownerId"
             value={selectedOwnerId}
             onChange={(e) => setSelectedOwnerId(e.target.value)}
-            className="w-full border border-border rounded-lg bg-card px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
             required
           >
             {ownerOptions.length === 0 ? (
@@ -404,30 +428,35 @@ export default function ShopFormClient({
 
       {/* Shop Name */}
       <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">দোকানের নাম *</label>
-        <div className="flex gap-3">
+        <label className="block text-sm font-semibold text-foreground">দোকানের নাম *</label>
+        <div className="relative">
           <input
             name="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full border border-border rounded-lg bg-card px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            className="w-full h-12 rounded-xl border border-border bg-card px-4 pr-16 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
             placeholder="যেমন: নিউ মদিনা স্টোর"
             required
             autoComplete="off"
           />
           <button
             type="button"
-            onClick={listening ? stopVoice : () => startVoice("name")}
+            onClick={isListeningName ? stopVoice : () => startVoice("name")}
             disabled={!voiceReady}
-            className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
-              listening
-                ? "bg-primary-soft border-primary/30 text-primary"
-                : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
+            aria-label={isListeningName ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
+            className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+              isListeningName
+                ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                : "bg-primary-soft text-primary border-primary/30 active:scale-95"
             } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
           >
-            {listening ? "থামান" : "ভয়েস"}
+            {isListeningName ? "🔴" : "🎤"}
           </button>
         </div>
+        <p className="text-xs text-muted-foreground">
+          {nameVoiceHint}{" "}
+          {voiceErrorText ? <span className="text-danger">{voiceErrorText}</span> : null}
+        </p>
         {smartNameSuggestions.length > 0 && (
           <div className="flex flex-wrap gap-2 pt-1">
             {smartNameSuggestions.map((title) => (
@@ -439,7 +468,7 @@ export default function ShopFormClient({
                   if (found) applyTemplate(found);
                   else setName(title);
                 }}
-                className="px-3 py-2 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
+                className="h-9 px-3 rounded-full border border-primary/30 text-primary bg-primary-soft text-xs font-semibold hover:border-primary/50"
               >
                 {title}
               </button>
@@ -451,60 +480,70 @@ export default function ShopFormClient({
 
       {/* Address */}
       <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">ঠিকানা (ঐচ্ছিক)</label>
-        <div className="flex gap-3">
+        <label className="block text-sm font-semibold text-foreground">ঠিকানা (ঐচ্ছিক)</label>
+        <div className="relative">
           <input
             name="address"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            className="w-full border border-border rounded-lg bg-card px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            className="w-full h-12 rounded-xl border border-border bg-card px-4 pr-16 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
             placeholder="যেমন: ১২/বি প্রধান সড়ক, ঢাকা"
           />
           <button
             type="button"
-            onClick={listening ? stopVoice : () => startVoice("address")}
+            onClick={isListeningAddress ? stopVoice : () => startVoice("address")}
             disabled={!voiceReady}
-            className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
-              listening
-                ? "bg-primary-soft border-primary/30 text-primary"
-                : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
+            aria-label={isListeningAddress ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
+            className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+              isListeningAddress
+                ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                : "bg-primary-soft text-primary border-primary/30 active:scale-95"
             } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
           >
-            {listening ? "থামান" : "ভয়েস"}
+            {isListeningAddress ? "🔴" : "🎤"}
           </button>
         </div>
+        <p className="text-xs text-muted-foreground">
+          {addressVoiceHint}{" "}
+          {voiceErrorText ? <span className="text-danger">{voiceErrorText}</span> : null}
+        </p>
       </div>
 
       {/* Phone */}
       <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">মোবাইল নাম্বার (ঐচ্ছিক)</label>
-        <div className="flex gap-3">
+        <label className="block text-sm font-semibold text-foreground">মোবাইল নাম্বার (ঐচ্ছিক)</label>
+        <div className="relative">
           <input
             name="phone"
             value={phone}
             onChange={(e) => setPhone(parsePhone(e.target.value))}
-            className="w-full border border-border rounded-lg bg-card px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
             placeholder="যেমন: 01700000000"
           />
           <button
             type="button"
-            onClick={listening ? stopVoice : () => startVoice("phone")}
+            onClick={isListeningPhone ? stopVoice : () => startVoice("phone")}
             disabled={!voiceReady}
-            className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
-              listening
-                ? "bg-primary-soft border-primary/30 text-primary"
-                : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
+            aria-label={isListeningPhone ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
+            className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+              isListeningPhone
+                ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                : "bg-primary-soft text-primary border-primary/30 active:scale-95"
             } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
           >
-            {listening ? "থামান" : "ভয়েস"}
+            {isListeningPhone ? "🔴" : "🎤"}
           </button>
         </div>
+        <p className="text-xs text-muted-foreground">
+          {phoneVoiceHint}{" "}
+          {voiceErrorText ? <span className="text-danger">{voiceErrorText}</span> : null}
+        </p>
         <p className="text-sm text-muted-foreground">সংখ্যা বললে/পেস্ট করলে অটো ক্লিন হবে</p>
       </div>
 
       {/* Business Type */}
       <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">ব্যবসার ধরন</label>
+        <label className="block text-sm font-semibold text-foreground">ব্যবসার ধরন</label>
         <div className="flex flex-wrap gap-2">
           {sortedBusinessOptions.slice(0, 6).map((b) => (
             <button
@@ -525,7 +564,7 @@ export default function ShopFormClient({
           name="businessType"
           value={businessType}
           onChange={(e) => setBusinessType(e.target.value)}
-          className="w-full border border-border rounded-lg bg-card px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+          className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
           required
         >
           {availableBusinessTypes.map((b) => (
@@ -539,7 +578,7 @@ export default function ShopFormClient({
 
       {/* Recent Templates */}
       {recentTemplates.length > 0 && (
-        <div className="border border-primary/20 bg-primary-soft rounded-lg p-4 space-y-2">
+        <div className="rounded-2xl border border-primary/20 bg-primary-soft p-4 space-y-2 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-primary">রিসেন্ট দোকান</h3>
             <span className="text-xs text-primary">এক ট্যাপে অটো-ফিল</span>
@@ -550,7 +589,7 @@ export default function ShopFormClient({
                 key={`${t.name}-${t.lastUsed}`}
                 type="button"
                 onClick={() => applyTemplate(t)}
-                className="flex items-center justify-between gap-3 bg-card border border-primary/20 rounded-lg px-3 py-2 text-left hover:border-primary/50 transition-colors"
+                className="flex items-center justify-between gap-3 bg-card border border-primary/20 rounded-xl px-3 py-2 text-left hover:border-primary/50 transition-colors"
               >
                 <div>
                   <p className="font-semibold text-foreground">{t.name}</p>
@@ -567,17 +606,23 @@ export default function ShopFormClient({
         </div>
       )}
 
+      {submitError ? (
+        <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+          {submitError}
+        </div>
+      ) : null}
+
       {/* Buttons */}
       <div className="flex gap-3 pt-4">
         <button
           type="submit"
-          className="flex-1 bg-primary-soft text-primary border border-primary/30 hover:bg-primary/15 hover:border-primary/40 font-bold py-4 px-6 rounded-lg text-lg transition-colors"
+          className="flex-1 h-14 sm:h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           {submitLabel}
         </button>
         <Link
           href={backHref}
-          className="flex-1 border border-border text-foreground font-medium py-4 px-6 rounded-lg text-lg hover:bg-muted transition-colors text-center"
+          className="flex-1 h-14 sm:h-12 rounded-xl border border-border text-foreground text-base font-semibold hover:bg-muted transition text-center flex items-center justify-center"
         >
           পিছনে যান
         </Link>
@@ -585,10 +630,6 @@ export default function ShopFormClient({
       <p className="text-xs text-muted-foreground text-right">
         মাইক্রোফোনে বলুন: “নিউ রহমান স্টোর 017…” → নাম + ফোন প্রস্তুত
       </p>
-      {voiceError ? <p className="text-xs text-danger">{voiceError}</p> : null}
-      {submitError ? (
-        <p className="text-xs text-danger">{submitError}</p>
-      ) : null}
     </form>
   );
 }

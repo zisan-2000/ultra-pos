@@ -84,6 +84,12 @@ function toNumber(val: string | number | undefined) {
   return Number(val ?? 0);
 }
 
+function formatCategoryLabel(raw: string) {
+  if (!raw) return "বিভাগহীন";
+  if (raw.toLowerCase() === "uncategorized") return "বিভাগহীন";
+  return raw.replace("&", "and");
+}
+
 function buildQuickSlots(
   products: EnrichedProduct[],
   usageSeed: Record<string, UsageEntry>
@@ -131,7 +137,7 @@ const ProductButton = memo(function ProductButton({
     <button
       key={product.id}
       type="button"
-      className={`w-full h-full min-h-[140px] text-left rounded-xl border bg-card border-border hover:border-primary/40 hover:shadow-sm transition-all p-3.5 pressable active:scale-[0.97] active:translate-y-[1px] ${
+      className={`relative w-full h-full min-h-[150px] text-left rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 shadow-[0_8px_20px_rgba(15,23,42,0.08)] hover:border-primary/40 hover:shadow-[0_12px_26px_rgba(15,23,42,0.12)] transition-all p-3.5 pressable active:scale-[0.98] active:translate-y-[1px] ${
         isRecentlyAdded ? "ring-2 ring-success/30" : ""
       } ${stock <= 0 ? "opacity-80" : ""} ${
         isCooldown ? "opacity-95 shadow-inner border-success/30" : ""
@@ -143,7 +149,7 @@ const ProductButton = memo(function ProductButton({
           {product.name}
         </h3>
         <span
-          className={`inline-flex items-center justify-center px-2.5 py-1 min-w-[44px] rounded-full text-[11px] font-semibold ${stockStyle}`}
+          className={`inline-flex items-center justify-center px-2.5 py-1 min-w-[44px] rounded-full text-[11px] font-semibold shadow-sm ${stockStyle}`}
         >
           {stock.toFixed(0)}
         </span>
@@ -153,11 +159,11 @@ const ProductButton = memo(function ProductButton({
           </span>
         )}
       </div>
-      <p className="text-base sm:text-lg font-bold text-foreground mt-1">
+      <p className="text-lg font-bold text-foreground mt-2">
         <span className="text-muted-foreground">৳</span> {product.sellPrice}
       </p>
-      <p className="text-[11px] text-muted-foreground mt-1 capitalize">
-        {(product.category || "Uncategorized").replace("&", "and")}
+      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mt-2">
+        {formatCategoryLabel(product.category)}
       </p>
     </button>
   );
@@ -277,10 +283,10 @@ export const PosProductSearch = memo(function PosProductSearch({
     );
 
     return [
-      { key: "all", label: "All", count: productsWithCategory.length },
+      { key: "all", label: "সব", count: productsWithCategory.length },
       ...sortedCategories.map(([key, count]) => ({
         key,
-        label: key,
+        label: formatCategoryLabel(key),
         count,
       })),
     ];
@@ -443,7 +449,7 @@ export const PosProductSearch = memo(function PosProductSearch({
 
     if (!SpeechRecognitionImpl) {
       setVoiceReady(false);
-      setVoiceError("Voice search is not supported in this browser.");
+      setVoiceError("ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না");
       return;
     }
 
@@ -455,7 +461,7 @@ export const PosProductSearch = memo(function PosProductSearch({
       setListening(false);
       const errorCode = e?.error;
       if (errorCode === "not-allowed" || errorCode === "denied") {
-        setVoiceError("মাইক পারমিশন নেই। ব্রাউজার থেকে মাইক্রোফোন অনুমতি দিন।");
+        setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
       } else {
         setVoiceError("ভয়েস সার্চ ব্যর্থ হয়েছে। পরে আবার চেষ্টা করুন।");
       }
@@ -482,6 +488,12 @@ export const PosProductSearch = memo(function PosProductSearch({
     recognitionRef.current?.stop?.();
     setListening(false);
   };
+  const voiceErrorText = voiceError ? `(${voiceError})` : "";
+  const voiceHint = listening
+    ? "শুনছে... পণ্যের নাম বলুন।"
+    : voiceReady
+    ? "ভয়েসে পণ্যের নাম বলুন।"
+    : "ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না";
 
   const renderProductButton = (product: EnrichedProduct) => (
     <ProductButton
@@ -496,59 +508,66 @@ export const PosProductSearch = memo(function PosProductSearch({
   const renderPlaceholderSlot = (index: number) => (
     <div
       key={`slot-${index}`}
-      className="w-full h-full min-h-[140px] rounded-xl border border-dashed border-border bg-card/70 flex items-center justify-center text-xs text-muted-foreground"
+      className="w-full h-full min-h-[140px] rounded-2xl border border-dashed border-border bg-muted/30 flex items-center justify-center text-xs text-muted-foreground"
     >
-      Fixed slot
+      ফিক্সড স্লট
     </div>
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Search + state toggles */}
-      <div className="bg-card border border-border rounded-xl p-3 shadow-sm space-y-3 sticky top-0 z-30 md:static md:top-auto">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)] space-y-3 sticky top-0 z-30 md:static md:top-auto">
         <div className="flex gap-2 items-center">
-          <input
-            className="flex-1 border border-border rounded-lg px-3 py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="পণ্য খুঁজুন (নাম/কোড)..."
-            value={query}
-            onFocus={() => setShowAllProducts(true)}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <button
-            type="button"
-            onClick={listening ? stopVoice : startVoice}
-            disabled={!voiceReady}
-            className={`px-4 py-3 rounded-lg border font-semibold text-sm transition-colors ${
-              listening
-                ? "bg-primary-soft text-primary border-primary/40"
-                : "bg-secondary border-border text-secondary-foreground hover:bg-muted"
-            } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
-          >
-            {listening ? "বন্ধ করুন" : "ভয়েস"}
-          </button>
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              className="px-3 py-3 rounded-lg border border-border text-muted-foreground hover:bg-muted text-sm"
-            >
-              ক্লিয়ার
-            </button>
-          )}
+          <div className="relative flex-1">
+            <input
+              className="w-full h-11 rounded-xl border border-border bg-card/80 pl-10 pr-24 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="পণ্য খুঁজুন (নাম/কোড)..."
+              value={query}
+              onFocus={() => setShowAllProducts(true)}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-base">
+              🔍
+            </span>
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  aria-label="সার্চ ক্লিয়ার করুন"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground text-sm hover:bg-muted"
+                >
+                  ✕
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={listening ? stopVoice : startVoice}
+                disabled={!voiceReady}
+                aria-label={listening ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
+                className={`inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+                  listening
+                    ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                    : "bg-primary-soft text-primary border-primary/30 active:scale-95"
+                } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+              >
+                {listening ? "🔴" : "🎤"}
+              </button>
+            </div>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          {listening
-            ? "শুনছে... পণ্যের নাম বলুন।"
-            : voiceReady
-            ? "টাইপ না করে ভয়েসে বলুন।"
-            : "এই ব্রাউজারে ভয়েস সার্চ নেই।"}
-          {voiceError ? ` ${voiceError}` : ""}
+          {voiceHint}{" "}
+          {voiceErrorText ? (
+            <span className="text-danger">{voiceErrorText}</span>
+          ) : null}
         </p>
       </div>
 
       {/* Quick buttons: visible only when not searching to prioritize results */}
       {query.trim().length === 0 && (
-        <div className="space-y-3 bg-card border border-border rounded-xl p-3 shadow-sm">
+        <div className="space-y-3 bg-gradient-to-br from-card via-card to-muted/40 border border-border rounded-2xl p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
               ⚡ দ্রুত বিক্রি (সেশন-লকড কুইক বাটন)
@@ -567,10 +586,10 @@ export const PosProductSearch = memo(function PosProductSearch({
       )}
 
       {query.trim().length > 0 && (
-        <div className="space-y-3 bg-card border border-border rounded-xl p-3 shadow-sm">
+        <div className="space-y-3 bg-gradient-to-br from-card via-card to-muted/40 border border-border rounded-2xl p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
-              Smart suggestions
+              স্মার্ট সাজেশন
             </h3>
             <span className="text-xs text-muted-foreground">
               শুধু সার্চ/ফাঁকা কার্টে হিন্ট দেখানো হচ্ছে
@@ -586,7 +605,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         </div>
       )}
 
-      <div className="space-y-3 bg-card border border-border rounded-xl p-3 shadow-sm">
+      <div className="space-y-3 bg-gradient-to-br from-card via-card to-muted/40 border border-border rounded-2xl p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
             সব পণ্য (অটো সাজানো)
@@ -603,7 +622,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         </div>
         {showAllProducts ? (
           <>
-            <div className="bg-muted/60 border border-border rounded-xl p-3 flex flex-wrap gap-2">
+            <div className="bg-muted/40 border border-border rounded-2xl p-3 flex flex-wrap gap-2">
               {availableCategories.map((cat) => (
                 <button
                   key={cat.key}
@@ -625,7 +644,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 px-1 pb-1 max-h-[520px] overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 px-1 pb-1 max-h-[520px] overflow-y-auto pr-2">
               {visibleResults.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8 col-span-full">
                   আপনার ফিল্টারে কোনো পণ্য নেই।

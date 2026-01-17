@@ -196,45 +196,56 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">খরচ রিপোর্ট</h2>
-          <p className="text-xs text-muted-foreground">সর্বশেষ 20টি খরচ</p>
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="relative space-y-3 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">খরচ রিপোর্ট</h2>
+              <p className="text-xs text-muted-foreground">সর্বশেষ 20টি খরচ</p>
+            </div>
+            <Link
+              href={buildHref()}
+              className="inline-flex h-7 items-center rounded-full border border-primary/20 bg-primary-soft px-3 text-xs font-semibold text-primary hover:bg-primary/20"
+            >
+              পূর্ণ রিপোর্ট দেখুন
+            </Link>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
+              এই তালিকায় মোট খরচ: {shownTotal.toFixed(2)} ৳
+            </span>
+          </div>
         </div>
-        <Link
-          href={buildHref()}
-          className="text-xs font-semibold text-primary hover:text-primary-hover"
-        >
-          পূর্ণ রিপোর্ট দেখুন
-        </Link>
       </div>
 
-      <p className="text-sm font-semibold text-foreground">
-        এই তালিকায় মোট খরচ: {shownTotal.toFixed(2)} ?
-      </p>
-
-      <div className="border border-border rounded-lg bg-card p-4 space-y-2">
+      <div className="rounded-2xl border border-border bg-card p-3 shadow-sm space-y-2">
         {loading ? (
-          <p className="text-sm text-muted-foreground text-center py-4">লোড হচ্ছে...</p>
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+            লোড হচ্ছে...
+          </p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
             কোনো খরচ পাওয়া যায়নি
           </p>
         ) : (
           items.map((e) => (
             <div
               key={e.id}
-              className="border border-border bg-card p-3 rounded-lg flex justify-between items-center hover:bg-muted transition-colors"
+              className="rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:bg-muted/60"
             >
-              <div>
-                <p className="text-sm font-semibold text-foreground">
-                  {Number(e.amount).toFixed(2)} ৳
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {Number(e.amount).toFixed(2)} ৳
+                  </p>
+                  <p className="text-xs text-muted-foreground">{e.category}</p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(e.expenseDate).toLocaleDateString("bn-BD")}
                 </p>
-                <p className="text-xs text-muted-foreground">{e.category}</p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {new Date(e.expenseDate).toLocaleDateString("bn-BD")}
-              </p>
             </div>
           ))
         )}
@@ -250,7 +261,9 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
           >
             Prev
           </button>
-          <span className="text-xs text-muted-foreground">Page {page}</span>
+          <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground">
+            Page {page}
+          </span>
           <button
             type="button"
             onClick={handleNext}

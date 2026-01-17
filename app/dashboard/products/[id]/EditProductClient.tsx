@@ -181,14 +181,14 @@ export default function EditProductClient({ product, shop, businessConfig }: Pro
 const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     buyPrice: () => (
       <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">ক্রয়মূল্য (ঐচ্ছিক)</label>
+        <label className="block text-sm font-semibold text-foreground">ক্রয়মূল্য (ঐচ্ছিক)</label>
         <input
           name="buyPrice"
           type="number"
           step="0.01"
           min="0"
           required={isFieldRequired("buyPrice")}
-          className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           placeholder="যেমন: ৫৫.০০"
           defaultValue={product.buyPrice || ""}
         />
@@ -197,24 +197,24 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     ),
     expiry: () => (
       <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">মেয়াদোত্তীর্ণের তারিখ</label>
+        <label className="block text-sm font-semibold text-foreground">মেয়াদোত্তীর্ণের তারিখ</label>
         <input
           name="expiryDate"
           type="date"
           required={isFieldRequired("expiry")}
-          className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           defaultValue={product.expiryDate || ""}
         />
       </div>
     ),
     size: () => (
       <div className="space-y-2">
-        <label className="block text-base font-medium text-foreground">সাইজ / ভ্যারিয়েন্ট</label>
+        <label className="block text-sm font-semibold text-foreground">সাইজ / ভ্যারিয়েন্ট</label>
         <input
           name="size"
           type="text"
           required={isFieldRequired("size")}
-          className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           placeholder="যেমন: L, XL, 100ml"
           defaultValue={product.size || ""}
         />
@@ -230,6 +230,8 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
+
+  const voiceErrorText = voiceError ? `(${voiceError})` : "";
 
   
   const templateCategories = useMemo(
@@ -592,7 +594,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto space-y-4">
       
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground">পণ্য তথ্য সম্পাদনা</h1>
@@ -600,18 +602,18 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         <p className="text-sm text-muted-foreground mt-1">দোকান: {shop.name}</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-card rounded-lg border border-border p-8 space-y-6">
+      <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card p-4 sm:p-6 space-y-4 shadow-sm">
         
         {/* Product Name */}
         {isFieldVisible("name") && (
           <div className="space-y-2">
-            <label className="block text-base font-medium text-foreground">পণ্যের নাম *</label>
-            <div className="flex gap-3">
+            <label className="block text-sm font-semibold text-foreground">পণ্যের নাম *</label>
+            <div className="relative">
               <input
                 name="name"
                 value={name}
                 onChange={(e) => setNameWithSmartDefaults(e.target.value)}
-                className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full h-12 rounded-xl border border-border bg-card px-4 pr-16 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder="যেমন: চা, ডিম, বিস্কুট..."
                 required={isFieldRequired("name")}
                 autoComplete="off"
@@ -620,21 +622,23 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                 type="button"
                 onClick={listening ? stopVoice : startVoice}
                 disabled={!voiceReady}
-                  className={`shrink-0 px-4 py-3 border rounded-lg font-medium transition-colors ${
+                aria-label={listening ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-xl border px-3 text-sm font-semibold transition ${
                     listening
-                      ? "bg-primary-soft text-primary border-primary/40"
-                      : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
+                      ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                      : "bg-primary-soft text-primary border-primary/30 active:scale-95"
                   } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
               >
-                {listening ? "থামান" : "ভয়েস"}
+                {listening ? "🔴" : "🎤"}
               </button>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {listening
-                ? "Listening... say product name and price"
+                ? "শুনছি... নাম আর দাম বলুন"
                 : voiceReady
-                ? "Say product name and price to fill automatically"
-                : "Microphone not ready"} {voiceError ? `(${voiceError})` : ""}
+                ? "ভয়েসে নাম/দাম বললে অটো পূরণ হবে"
+                : "এই ডিভাইসে ভয়েস সাপোর্ট নেই"}{" "}
+              {voiceErrorText}
             </p>
             {smartNameSuggestions.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
@@ -643,7 +647,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                     key={title}
                     type="button"
                     onClick={() => setNameWithSmartDefaults(title)}
-                    className="px-3 py-2 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
+                    className="h-9 px-3 rounded-full border border-primary/30 text-primary bg-primary-soft text-xs font-semibold hover:border-primary/50"
                   >
                     {title}
                   </button>
@@ -655,7 +659,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
         {/* Sell Price */}
         <div className="space-y-2">
-          <label className="block text-base font-medium text-foreground">বিক্রয় মূল্য (৳) *</label>
+          <label className="block text-sm font-semibold text-foreground">বিক্রয় মূল্য (৳) *</label>
           <input
             name="sellPrice"
             type="number"
@@ -663,7 +667,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             min="0"
             value={sellPrice}
             onChange={(e) => setSellPrice(e.target.value)}
-            className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="যেমন: ১০, ২৫.৫০"
             required={isFieldRequired("sellPrice")}
           />
@@ -674,7 +678,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                   key={p}
                   type="button"
                   onClick={() => setSellPrice(p)}
-                  className="px-3 py-2 rounded-full border border-primary/30 bg-primary-soft text-primary text-sm hover:border-primary/50"
+                  className="h-9 px-3 rounded-full border border-primary/30 bg-primary-soft text-primary text-sm hover:border-primary/50"
                 >
                   ৳ {p}
                 </button>
@@ -686,13 +690,13 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
         {/* Category */}
         <div className="space-y-2">
-          <label className="block text-base font-medium text-foreground">ক্যাটাগরি</label>
+          <label className="block text-sm font-semibold text-foreground">ক্যাটাগরি</label>
           <div className="flex gap-3">
             <select
               name="category"
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
               <option value="">ক্যাটাগরি বাছাই করুন</option>
               {categoryOptions.map((c) => (
@@ -704,7 +708,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             <button
               type="button"
               onClick={handleAddCustomCategory}
-              className="shrink-0 px-4 py-3 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              className="shrink-0 h-11 px-4 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors"
             >
               + কাস্টম যোগ করুন
             </button>
@@ -719,7 +723,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                     setCategoryOptions((prev) => (prev.includes(c) ? prev : [...prev, c]));
                     setSelectedCategory(c);
                   }}
-                  className="px-3 py-2 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
+                  className="h-9 px-3 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
                 >
                   {c}
                 </button>
@@ -732,14 +736,14 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         {/* Unit */}
         {isFieldVisible("unit") && (
           <div className="space-y-2">
-            <label className="block text-base font-medium text-foreground">ইউনিট</label>
+            <label className="block text-sm font-semibold text-foreground">ইউনিট</label>
             <div className="flex gap-3">
               <select
                 name="baseUnit"
                 value={selectedUnit}
                 onChange={(e) => setSelectedUnit(e.target.value)}
                 required={isFieldRequired("unit")}
-                className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 {unitOptions.map((u) => (
                   <option key={u} value={u}>
@@ -750,7 +754,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
               <button
                 type="button"
                 onClick={handleAddCustomUnit}
-                className="shrink-0 px-4 py-3 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                className="shrink-0 h-11 px-4 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors"
               >
                 + কাস্টম যোগ করুন
               </button>
@@ -761,7 +765,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                   key={u}
                   type="button"
                   onClick={() => setSelectedUnit(u)}
-                  className="px-3 py-2 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
+                  className="h-9 px-3 rounded-full border border-primary/30 text-primary bg-primary-soft text-sm hover:border-primary/50"
                 >
                   {unitLabels[u as keyof typeof unitLabels] || u}
                 </button>
@@ -780,7 +784,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
               onChange={(e) => setStockEnabled(e.target.checked)}
               className="w-5 h-5 border border-border rounded cursor-pointer"
             />
-            <span className="text-base font-medium text-foreground">স্টক ট্র্যাক (অন/অফ)</span>
+            <span className="text-sm font-semibold text-foreground">স্টক ট্র্যাক (অন/অফ)</span>
           </label>
           <div className="pt-2">
             <input
@@ -791,7 +795,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
               defaultValue={product.stockQty || "0"}
               required={stockEnabled && stock.requiredWhenEnabled}
               disabled={!stockEnabled}
-              className="w-full border border-border rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
+              className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
               placeholder="যেমন: 10, 5.50"
             />
           </div>
@@ -799,7 +803,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
         {/* Advanced */}
         {visibleAdvancedFields.length > 0 && (
-          <details className="border border-border rounded-lg p-4 bg-muted">
+          <details className="rounded-2xl border border-border bg-muted/60 p-4">
             <summary className="cursor-pointer text-base font-semibold text-foreground">
               অ্যাডভান্সড অপশন (ঐচ্ছিক)
             </summary>
@@ -820,13 +824,13 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
               defaultChecked={product.isActive !== false}
               className="w-5 h-5 border border-border rounded cursor-pointer"
             />
-            <span className="text-base font-medium text-foreground">পণ্য সক্রিয় রাখুন</span>
+            <span className="text-sm font-semibold text-foreground">পণ্য সক্রিয় রাখুন</span>
           </label>
         </div>
 
         {/* Recent templates */}
         {recentTemplates.length > 0 && (
-          <div className="border border-border bg-muted rounded-lg p-4 space-y-2">
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-2 shadow-sm">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-foreground">রিসেন্ট টেমপ্লেট</h3>
               <span className="text-xs text-muted-foreground">এক ট্যাপে অটো-ফিল</span>
@@ -837,7 +841,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                   key={`${t.name}-${t.lastUsed}`}
                   type="button"
                   onClick={() => applyTemplate(t)}
-                  className="flex items-center justify-between gap-3 bg-card border border-border rounded-lg px-3 py-2 text-left hover:border-primary/40 transition-colors"
+                  className="flex items-center justify-between gap-3 bg-card border border-border rounded-xl px-3 py-2 text-left hover:border-primary/40 transition-colors"
                 >
                   <div>
                     <p className="font-semibold text-foreground">{t.name}</p>
@@ -858,14 +862,14 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         <div className="flex gap-3 pt-4">
           <button
             type="submit"
-            className="flex-1 bg-primary-soft text-primary border border-primary/30 hover:bg-primary/15 hover:border-primary/40 font-bold py-4 px-6 rounded-lg text-lg transition-colors"
+            className="flex-1 h-14 sm:h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             ✓ পণ্য আপডেট করুন
           </button>
           <button 
             type="button"
             onClick={() => router.back()}
-            className="flex-1 border border-border text-foreground font-medium py-4 px-6 rounded-lg text-lg hover:bg-muted transition-colors"
+            className="flex-1 h-14 sm:h-12 rounded-xl border border-border text-foreground text-base font-semibold hover:bg-muted transition-colors flex items-center justify-center"
           >
             পিছনে যান
           </button>

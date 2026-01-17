@@ -112,17 +112,106 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
                   {(() => {
                     const qty = Number(p.stockQty || 0);
                     const stockClasses = getStockToneClasses(qty);
+  return (
+    <div className="space-y-4">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="relative space-y-3 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">স্টক কম</h2>
+              <p className="text-xs text-muted-foreground">থ্রেশহোল্ডের নিচের পণ্যগুলো</p>
+            </div>
+            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-xs font-semibold text-muted-foreground">
+              Limit {REPORT_ROW_LIMIT}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border overflow-x-auto hidden md:block">
+        <table className="w-full text-sm">
+          <thead className="bg-muted">
+            <tr>
+              <th className="p-3 text-left text-foreground">পণ্য</th>
+              <th className="p-3 text-right text-foreground">মজুত সংখ্যা</th>
+              <th className="p-3 text-right text-foreground">অবস্থা</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {items.length === 0 ? (
+              <tr>
+                <td className="p-3 text-center text-muted-foreground" colSpan={3}>
+                  {loading ? "লোড হচ্ছে..." : "কোনো পণ্য মজুত শূন্য নয়"}
+                </td>
+              </tr>
+            ) : (
+              items.map((p, i) => (
+                <tr
+                  key={i}
+                  className="border-t hover:bg-muted transition-colors"
+                >
+                  {(() => {
+                    const qty = Number(p.stockQty || 0);
+                    const stockClasses = getStockToneClasses(qty);
                     return (
                       <>
-                  <td className="p-3 text-foreground">{p.name}</td>
-                  <td className="p-3 text-right text-foreground">{p.stockQty}</td>
-                  <td
-                    className={`p-3 text-right font-semibold ${stockClasses.text}`}
-                  >
-                    {renderStatus(qty)}
-                  </td>
+                        <td className="p-3 text-foreground">{p.name}</td>
+                        <td className="p-3 text-right text-foreground">{p.stockQty}</td>
+                        <td
+                          className={`p-3 text-right font-semibold ${stockClasses.text}`}
+                        >
+                          {renderStatus(qty)}
+                        </td>
                       </>
                     );
+                  })()}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="space-y-3 md:hidden">
+        {items.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+            {loading ? "লোড হচ্ছে..." : "কোনো পণ্য মজুত শূন্য নয়"}
+          </p>
+        ) : (
+          items.map((p, i) => {
+            const qty = Number(p.stockQty || 0);
+            const stockClasses = getStockToneClasses(qty);
+            return (
+              <div
+                key={i}
+                className="bg-card border border-border rounded-2xl p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">#{i + 1}</p>
+                    <h3 className="text-base font-semibold text-foreground mt-1">
+                      {p.name}
+                    </h3>
+                  </div>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${stockClasses.pill}`}
+                  >
+                    {renderStatus(qty)}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+                  <span>মজুত সংখ্যা</span>
+                  <span className="font-semibold text-foreground">{qty}</span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
                   })()}
                 </tr>
               ))

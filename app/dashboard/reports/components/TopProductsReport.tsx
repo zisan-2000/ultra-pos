@@ -84,22 +84,26 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">
-            সেরা বিক্রি হওয়া পণ্য
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            বিক্রিত সংখ্যা ও আয়ের ভিত্তিতে তালিকা
-          </p>
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="relative space-y-3 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">
+                সেরা বিক্রি হওয়া পণ্য
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                বিক্রিত সংখ্যা ও আয়ের ভিত্তিতে তালিকা
+              </p>
+            </div>
+            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-xs font-semibold text-muted-foreground">
+              Top {REPORT_ROW_LIMIT}
+            </span>
+          </div>
         </div>
-
-        <span className="text-xs text-muted-foreground">
-          Top {REPORT_ROW_LIMIT}
-        </span>
       </div>
 
-      <div className="border border-border rounded-lg overflow-x-auto hidden md:block">
+      <div className="rounded-2xl border border-border overflow-x-auto hidden md:block">
         <table className="w-full text-sm">
           <thead className="bg-muted">
             <tr>
@@ -136,14 +140,14 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
 
       <div className="space-y-3 md:hidden">
         {data.length === 0 ? (
-          <p className="text-center text-muted-foreground bg-card border border-border rounded-lg p-4">
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
             কোনো তথ্য পাওয়া যায়নি
           </p>
         ) : (
           data.map((item, idx) => (
             <div
               key={idx}
-              className="bg-card border border-border rounded-xl p-4 shadow-sm"
+              className="bg-card border border-border rounded-2xl p-4 shadow-sm"
             >
               <div className="flex items-center justify-between">
                 <div>

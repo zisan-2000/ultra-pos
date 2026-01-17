@@ -130,18 +130,25 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">লাভের প্রবণতা</h2>
-          <p className="text-xs text-muted-foreground">দিনওয়ারি লাভ/খরচ</p>
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="relative space-y-3 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">লাভের প্রবণতা</h2>
+              <p className="text-xs text-muted-foreground">দিনওয়ারি লাভ/খরচ</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
+              মোট লাভ: {totalProfit.toFixed(2)} ৳
+            </span>
+          </div>
         </div>
       </div>
 
-      <p className="text-sm font-semibold text-foreground">
-        মোট লাভ: {totalProfit.toFixed(2)} ৳
-      </p>
-
-      <div className="border border-border rounded-lg overflow-x-auto hidden md:block">
+      <div className="rounded-2xl border border-border overflow-x-auto hidden md:block">
         <table className="w-full text-sm">
           <thead className="bg-muted">
             <tr>
@@ -200,11 +207,11 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
 
       <div className="space-y-3 md:hidden">
         {loading ? (
-          <p className="text-center text-muted-foreground bg-card border border-border rounded-lg p-4">
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
             লোড হচ্ছে...
           </p>
         ) : data.length === 0 ? (
-          <p className="text-center text-muted-foreground bg-card border border-border rounded-lg p-4">
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
             কোনো তথ্য নেই
           </p>
         ) : (
@@ -214,7 +221,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
             return (
               <div
                 key={`${row.date}-${idx}`}
-                className="bg-card border border-border rounded-xl p-4 shadow-sm flex gap-3"
+                className="bg-card border border-border rounded-2xl p-4 shadow-sm flex gap-3"
               >
                 <div
                   className={`w-1 rounded-full ${

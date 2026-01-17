@@ -82,6 +82,13 @@ type PaymentTemplate = {
   lastUsed: number;
 };
 
+type VoiceField =
+  | "customerName"
+  | "customerPhone"
+  | "customerAddress"
+  | "paymentAmount"
+  | "paymentDescription";
+
 function toNumber(value: string | number | null | undefined) {
   if (value === null || value === undefined) return 0;
   const num = Number(value);
@@ -181,7 +188,7 @@ export default function DuePageClient({
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [voiceReady, setVoiceReady] = useState(false);
-  const [listening, setListening] = useState(false);
+  const [listeningField, setListeningField] = useState<VoiceField | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -710,6 +717,68 @@ export default function DuePageClient({
     return dedupe(fromTemplates).slice(0, 6);
   }, [paymentTemplates]);
 
+  const voiceErrorText = voiceError ? `(${voiceError})` : "";
+  const isListeningName = listeningField === "customerName";
+  const isListeningPhone = listeningField === "customerPhone";
+  const isListeningAddress = listeningField === "customerAddress";
+  const isListeningPaymentAmount = listeningField === "paymentAmount";
+  const isListeningPaymentDescription = listeningField === "paymentDescription";
+
+  const nameVoiceHint = isListeningName
+    ? "শুনছি... গ্রাহকের নাম বলুন"
+    : voiceReady
+    ? "ভয়েসে নাম বললে অটো পূরণ হবে"
+    : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
+  const phoneVoiceHint = isListeningPhone
+    ? "শুনছি... ফোন নম্বর বলুন"
+    : voiceReady
+    ? "ভয়েসে নম্বর বলুন"
+    : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
+  const addressVoiceHint = isListeningAddress
+    ? "শুনছি... ঠিকানা বলুন"
+    : voiceReady
+    ? "ভয়েসে ঠিকানা বলুন"
+    : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
+  const paymentAmountVoiceHint = isListeningPaymentAmount
+    ? "শুনছি... পরিমাণ বলুন"
+    : voiceReady
+    ? "ভয়েসে পরিমাণ বলুন"
+    : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
+  const paymentDescriptionVoiceHint = isListeningPaymentDescription
+    ? "শুনছি... বিবরণ বলুন"
+    : voiceReady
+    ? "ভয়েসে বিবরণ বলুন"
+    : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
+
+  const latestPaymentLabel = useMemo(() => {
+    const timestamps = customers
+      .map((c) => (c.lastPaymentAt ? new Date(c.lastPaymentAt).getTime() : 0))
+      .filter((t) => t > 0);
+    if (timestamps.length === 0) return null;
+    const latest = Math.max(...timestamps);
+    return new Date(latest).toLocaleDateString("bn-BD", {
+      day: "numeric",
+      month: "short",
+    });
+  }, [customers]);
+
+  const selectedCustomer = useMemo(() => {
+    const id = paymentForm.customerId || selectedCustomerId;
+    return customers.find((c) => c.id === id) || null;
+  }, [customers, paymentForm.customerId, selectedCustomerId]);
+
+  const selectedCustomerDue = selectedCustomer
+    ? Number(selectedCustomer.totalDue || 0)
+    : null;
+  const selectedCustomerDueLabel =
+    selectedCustomerDue !== null ? selectedCustomerDue.toFixed(2) : null;
+  const selectedCustomerHasDue = selectedCustomerDue !== null && selectedCustomerDue > 0;
+
+  const statementCustomer = useMemo(
+    () => customers.find((c) => c.id === selectedCustomerId) || null,
+    [customers, selectedCustomerId]
+  );
+
   const lastSyncLabel =
     mounted && lastSyncAt
       ? new Date(lastSyncAt).toLocaleTimeString("bn-BD", {
@@ -731,15 +800,9 @@ export default function DuePageClient({
     loadStatement(customerId);
   };
 
-  function startVoice(
-    field:
-      | "customerName"
-      | "customerPhone"
-      | "customerAddress"
-      | "paymentAmount"
-      | "paymentDescription"
-  ) {
-    if (listening) return;
+  function startVoice(field: VoiceField) {
+    if (listeningField === field) return;
+    if (listeningField) stopVoice();
     const SpeechRecognitionImpl =
       typeof window !== "undefined"
         ? (window as any).SpeechRecognition ||
@@ -757,10 +820,10 @@ export default function DuePageClient({
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onerror = () => {
-      setListening(false);
+      setListeningField(null);
       setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
     };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => setListeningField(null);
     recognition.onresult = (event: any) => {
       const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
       if (spoken) {
@@ -792,18 +855,18 @@ export default function DuePageClient({
             setPaymentForm((p) => ({ ...p, amount: amt }));
         }
       }
-      setListening(false);
+      setListeningField(null);
     };
 
     recognitionRef.current = recognition;
     setVoiceError(null);
-    setListening(true);
+    setListeningField(field);
     recognition.start();
   }
 
   function stopVoice() {
     recognitionRef.current?.stop?.();
-    setListening(false);
+    setListeningField(null);
   }
 
   const tabs = [
@@ -873,6 +936,11 @@ export default function DuePageClient({
                 পেন্ডিং {pendingCount} টি
               </span>
             ) : null}
+            {latestPaymentLabel ? (
+              <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 text-muted-foreground border border-border px-3 font-semibold">
+                শেষ পেমেন্ট: {latestPaymentLabel}
+              </span>
+            ) : null}
             {lastSyncLabel ? (
               <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 text-muted-foreground border border-border px-3 font-semibold">
                 শেষ সিঙ্ক: {lastSyncLabel}
@@ -883,20 +951,22 @@ export default function DuePageClient({
       </div>
 
       <div className="sticky top-0 z-20 bg-card/95 backdrop-blur border-b border-border/70">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar px-2 py-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border transition-colors ${
-                activeTab === tab.id
-                  ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
-                  : "bg-muted text-foreground border-transparent hover:border-border"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="px-2 py-2">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar rounded-full bg-muted/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border border-transparent transition-colors ${
+                  activeTab === tab.id
+                    ? "bg-card text-foreground border-border shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -929,29 +999,43 @@ export default function DuePageClient({
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {customers.map((c) => {
-                    const dueAmount = Number(c.totalDue || 0).toFixed(2);
+                    const dueValue = Number(c.totalDue || 0);
+                    const dueAmount = dueValue.toFixed(2);
+                    const hasDue = dueValue > 0;
+                    const initial = c.name?.trim()?.charAt(0) || "•";
                     return (
                       <div
                         key={c.id}
                         className="rounded-2xl border border-border bg-card p-4 shadow-sm card-lift"
                       >
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <h4 className="text-base font-semibold text-foreground truncate">
-                              {c.name}
-                            </h4>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {c.phone ? `ফোন: ${c.phone}` : "ফোন নেই"}
-                              {c.address ? ` • ঠিকানা: ${c.address}` : ""}
-                            </p>
+                          <div className="flex items-start gap-3 min-w-0">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-soft text-primary text-sm font-bold">
+                              {initial}
+                            </span>
+                            <div className="min-w-0">
+                              <h4 className="text-base font-semibold text-foreground truncate">
+                                {c.name}
+                              </h4>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {c.phone ? `ফোন: ${c.phone}` : "ফোন নেই"}
+                                {c.address ? ` • ঠিকানা: ${c.address}` : ""}
+                              </p>
+                            </div>
                           </div>
                           <div className="text-right">
-                            <span className="inline-flex items-center rounded-full bg-warning-soft text-warning border border-warning/30 px-3 py-1 text-xs font-semibold">
-                              বাকি {dueAmount} ৳
+                            <span
+                              className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                                hasDue
+                                  ? "bg-warning-soft text-warning border-warning/30"
+                                  : "bg-success-soft text-success border-success/30"
+                              }`}
+                            >
+                              {hasDue ? `বাকি ${dueAmount} ৳` : "পরিশোধিত"}
                             </span>
                             {c.lastPaymentAt && (
                               <p className="text-[11px] text-muted-foreground mt-2">
-                                শেষ পেমেন্ট:{" "}
+                                শেষ পেমেন্ট: {" "}
                                 {new Date(c.lastPaymentAt).toLocaleDateString(
                                   "bn-BD"
                                 )}
@@ -989,18 +1073,13 @@ export default function DuePageClient({
               <h3 className="text-lg font-bold text-foreground">
                 নতুন গ্রাহক যোগ করুন
               </h3>
-              {voiceError && (
-                <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
-                  {voiceError}
-                </div>
-              )}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-foreground">
                   গ্রাহকের নাম *
                 </label>
-                <div className="flex gap-3">
+                <div className="relative">
                   <input
-                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-12 w-full rounded-xl border border-border bg-card px-4 pr-16 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="যেমন: করিম সাহেব"
                     value={newCustomer.name}
                     onChange={(e) =>
@@ -1012,18 +1091,31 @@ export default function DuePageClient({
                   <button
                     type="button"
                     onClick={
-                      listening ? stopVoice : () => startVoice("customerName")
+                      isListeningName
+                        ? stopVoice
+                        : () => startVoice("customerName")
                     }
                     disabled={!voiceReady}
-                    className={`shrink-0 h-11 px-4 border rounded-xl text-sm font-semibold transition-colors ${
-                      listening
-                        ? "bg-primary-soft text-primary border-primary/40"
-                        : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
+                    aria-label={
+                      isListeningName
+                        ? "ভয়েস বন্ধ করুন"
+                        : "ভয়েস ইনপুট চালু করুন"
+                    }
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+                      isListeningName
+                        ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                        : "bg-primary-soft text-primary border-primary/30 active:scale-95"
                     } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
-                    {listening ? "থামান" : "ভয়েস"}
+                    {isListeningName ? "🔴" : "🎤"}
                   </button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  {nameVoiceHint}{" "}
+                  {voiceErrorText ? (
+                    <span className="text-danger">{voiceErrorText}</span>
+                  ) : null}
+                </p>
                 {customerSuggestions.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-1">
                     {customerSuggestions.map((n) => (
@@ -1045,9 +1137,9 @@ export default function DuePageClient({
                 <label className="block text-sm font-semibold text-foreground">
                   ফোন নম্বর (ঐচ্ছিক)
                 </label>
-                <div className="flex gap-3">
+                <div className="relative">
                   <input
-                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-12 w-full rounded-xl border border-border bg-card px-4 pr-16 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="যেমন: 01700000000"
                     value={newCustomer.phone}
                     onChange={(e) =>
@@ -1057,26 +1149,39 @@ export default function DuePageClient({
                   <button
                     type="button"
                     onClick={
-                      listening ? stopVoice : () => startVoice("customerPhone")
+                      isListeningPhone
+                        ? stopVoice
+                        : () => startVoice("customerPhone")
                     }
                     disabled={!voiceReady}
-                    className={`shrink-0 h-11 px-4 border rounded-xl text-sm font-semibold transition-colors ${
-                      listening
-                        ? "bg-primary-soft text-primary border-primary/40"
-                        : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
+                    aria-label={
+                      isListeningPhone
+                        ? "ভয়েস বন্ধ করুন"
+                        : "ভয়েস ইনপুট চালু করুন"
+                    }
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+                      isListeningPhone
+                        ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                        : "bg-primary-soft text-primary border-primary/30 active:scale-95"
                     } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
-                    {listening ? "থামান" : "ভয়েস"}
+                    {isListeningPhone ? "🔴" : "🎤"}
                   </button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  {phoneVoiceHint}{" "}
+                  {voiceErrorText ? (
+                    <span className="text-danger">{voiceErrorText}</span>
+                  ) : null}
+                </p>
               </div>
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-foreground">
                   ঠিকানা (ঐচ্ছিক)
                 </label>
-                <div className="flex gap-3">
+                <div className="relative">
                   <input
-                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-12 w-full rounded-xl border border-border bg-card px-4 pr-16 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="যেমন: বাজার রোড, ঢাকা"
                     value={newCustomer.address}
                     onChange={(e) =>
@@ -1086,20 +1191,31 @@ export default function DuePageClient({
                   <button
                     type="button"
                     onClick={
-                      listening
+                      isListeningAddress
                         ? stopVoice
                         : () => startVoice("customerAddress")
                     }
                     disabled={!voiceReady}
-                    className={`shrink-0 h-11 px-4 border rounded-xl text-sm font-semibold transition-colors ${
-                      listening
-                        ? "bg-primary-soft text-primary border-primary/40"
-                        : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
+                    aria-label={
+                      isListeningAddress
+                        ? "ভয়েস বন্ধ করুন"
+                        : "ভয়েস ইনপুট চালু করুন"
+                    }
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+                      isListeningAddress
+                        ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                        : "bg-primary-soft text-primary border-primary/30 active:scale-95"
                     } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
-                    {listening ? "থামান" : "ভয়েস"}
+                    {isListeningAddress ? "🔴" : "🎤"}
                   </button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  {addressVoiceHint}{" "}
+                  {voiceErrorText ? (
+                    <span className="text-danger">{voiceErrorText}</span>
+                  ) : null}
+                </p>
               </div>
               <button
                 type="submit"
@@ -1114,11 +1230,18 @@ export default function DuePageClient({
           {activeTab === "payment" && (
             <form onSubmit={handlePayment} className="space-y-5 max-w-xl">
               <h3 className="text-lg font-bold text-foreground">পেমেন্ট নিন</h3>
-              {voiceError && (
-                <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
-                  {voiceError}
+              {customers.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border/70 bg-muted/40 p-4 text-center text-sm text-muted-foreground">
+                  কোনো গ্রাহক নেই। আগে গ্রাহক যোগ করুন।
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("add")}
+                    className="mt-3 inline-flex h-9 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-xs font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
+                  >
+                    ➕ গ্রাহক যোগ করুন
+                  </button>
                 </div>
-              )}
+              ) : null}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-foreground">
                   গ্রাহক বাছাই করুন *
@@ -1174,13 +1297,42 @@ export default function DuePageClient({
                   </select>
                 )}
               </div>
+              {selectedCustomer ? (
+                <div className="rounded-xl border border-border bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground">নির্বাচিত গ্রাহক</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-foreground truncate">
+                      {selectedCustomer.name}
+                    </p>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                        selectedCustomerHasDue
+                          ? "bg-warning-soft text-warning border-warning/30"
+                          : "bg-success-soft text-success border-success/30"
+                      }`}
+                    >
+                      {selectedCustomerHasDue && selectedCustomerDueLabel
+                        ? `বাকি ${selectedCustomerDueLabel} ৳`
+                        : "পরিশোধিত"}
+                    </span>
+                  </div>
+                  {selectedCustomer.lastPaymentAt && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      শেষ পেমেন্ট: {" "}
+                      {new Date(selectedCustomer.lastPaymentAt).toLocaleDateString(
+                        "bn-BD"
+                      )}
+                    </p>
+                  )}
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-foreground">
                   পেমেন্টের পরিমাণ (৳) *
                 </label>
-                <div className="flex gap-3">
+                <div className="relative">
                   <input
-                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-12 w-full rounded-xl border border-border bg-card px-4 pr-16 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="যেমন: 500, 1000"
                     type="number"
                     min="0"
@@ -1194,18 +1346,31 @@ export default function DuePageClient({
                   <button
                     type="button"
                     onClick={
-                      listening ? stopVoice : () => startVoice("paymentAmount")
+                      isListeningPaymentAmount
+                        ? stopVoice
+                        : () => startVoice("paymentAmount")
                     }
                     disabled={!voiceReady}
-                    className={`shrink-0 h-11 px-4 border rounded-xl text-sm font-semibold transition-colors ${
-                      listening
-                        ? "bg-primary-soft text-primary border-primary/40"
-                        : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
+                    aria-label={
+                      isListeningPaymentAmount
+                        ? "ভয়েস বন্ধ করুন"
+                        : "ভয়েস ইনপুট চালু করুন"
+                    }
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+                      isListeningPaymentAmount
+                        ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                        : "bg-primary-soft text-primary border-primary/30 active:scale-95"
                     } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
-                    {listening ? "থামান" : "ভয়েস"}
+                    {isListeningPaymentAmount ? "🔴" : "🎤"}
                   </button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  {paymentAmountVoiceHint}{" "}
+                  {voiceErrorText ? (
+                    <span className="text-danger">{voiceErrorText}</span>
+                  ) : null}
+                </p>
                 {amountSuggestions.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {amountSuggestions.map((a) => (
@@ -1227,9 +1392,9 @@ export default function DuePageClient({
                 <label className="block text-sm font-semibold text-foreground">
                   বিবরণ (ঐচ্ছিক)
                 </label>
-                <div className="flex gap-3">
+                <div className="relative">
                   <input
-                    className="h-11 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-12 w-full rounded-xl border border-border bg-card px-4 pr-16 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="যেমন: নগদ পেমেন্ট"
                     value={paymentForm.description}
                     onChange={(e) =>
@@ -1242,20 +1407,31 @@ export default function DuePageClient({
                   <button
                     type="button"
                     onClick={
-                      listening
+                      isListeningPaymentDescription
                         ? stopVoice
                         : () => startVoice("paymentDescription")
                     }
                     disabled={!voiceReady}
-                    className={`shrink-0 h-11 px-4 border rounded-xl text-sm font-semibold transition-colors ${
-                      listening
-                        ? "bg-primary-soft text-primary border-primary/40"
-                        : "bg-primary-soft border-primary/30 text-primary hover:border-primary/50"
+                    aria-label={
+                      isListeningPaymentDescription
+                        ? "ভয়েস বন্ধ করুন"
+                        : "ভয়েস ইনপুট চালু করুন"
+                    }
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+                      isListeningPaymentDescription
+                        ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                        : "bg-primary-soft text-primary border-primary/30 active:scale-95"
                     } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
-                    {listening ? "থামান" : "ভয়েস"}
+                    {isListeningPaymentDescription ? "🔴" : "🎤"}
                   </button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  {paymentDescriptionVoiceHint}{" "}
+                  {voiceErrorText ? (
+                    <span className="text-danger">{voiceErrorText}</span>
+                  ) : null}
+                </p>
               </div>
               <button
                 type="submit"
@@ -1325,6 +1501,27 @@ export default function DuePageClient({
               {selectedCustomerId && (
                 <div className="mt-6 space-y-4">
                   <h4 className="font-bold text-foreground">লেনদেনের বিবরণ</h4>
+                  {statementCustomer ? (
+                    <div className="rounded-xl border border-border bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">গ্রাহক</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold text-foreground truncate">
+                          {statementCustomer.name}
+                        </p>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                            Number(statementCustomer.totalDue || 0) > 0
+                              ? "bg-warning-soft text-warning border-warning/30"
+                              : "bg-success-soft text-success border-success/30"
+                          }`}
+                        >
+                          {Number(statementCustomer.totalDue || 0) > 0
+                            ? `বাকি ${Number(statementCustomer.totalDue || 0).toFixed(2)} ৳`
+                            : "পরিশোধিত"}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="hidden md:block overflow-hidden rounded-xl border border-border">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/70">
@@ -1392,8 +1589,11 @@ export default function DuePageClient({
                     ) : (
                       statementWithBalance.map((row) => {
                         const sale = row.entryType === "SALE";
-                        const amount = Number(row.amount || 0).toFixed(2);
+                        const amountValue = Number(row.amount || 0);
+                        const amount = amountValue.toFixed(2);
                         const running = Number((row as any).running || 0).toFixed(2);
+                        const title = row.description || (sale ? "বিক্রি" : "পেমেন্ট");
+                        const sign = sale ? "+" : "-";
 
                         return (
                           <div
@@ -1411,7 +1611,7 @@ export default function DuePageClient({
                                   {new Date(row.entryDate).toLocaleDateString("bn-BD")}
                                 </p>
                                 <p className="text-base font-semibold text-foreground mt-1">
-                                  {row.description || "-"}
+                                  {title}
                                 </p>
                               </div>
                               <span
@@ -1426,15 +1626,19 @@ export default function DuePageClient({
                             </div>
 
                             <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-                              <div className="bg-muted rounded-lg p-3">
+                              <div className="bg-muted/80 rounded-xl p-3">
                                 <p className="text-xs text-muted-foreground">
                                   {sale ? "বিক্রির পরিমাণ" : "পেমেন্টের পরিমাণ"}
                                 </p>
-                                <p className="text-base font-semibold text-foreground">
-                                  {amount} ৳
+                                <p
+                                  className={`text-base font-semibold ${
+                                    sale ? "text-warning" : "text-success"
+                                  }`}
+                                >
+                                  {sign}{amount} ৳
                                 </p>
                               </div>
-                              <div className="bg-muted rounded-lg p-3">
+                              <div className="bg-muted/80 rounded-xl p-3">
                                 <p className="text-xs text-muted-foreground">চলতি বাকি</p>
                                 <p className="text-base font-semibold text-foreground">
                                   {running} ৳

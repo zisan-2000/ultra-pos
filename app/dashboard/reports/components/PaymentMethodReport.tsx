@@ -142,18 +142,31 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">পেমেন্ট মাধ্যম</h2>
-          <p className="text-xs text-muted-foreground">শেয়ার ও পরিমাণ</p>
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="relative space-y-3 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">পেমেন্ট মাধ্যম</h2>
+              <p className="text-xs text-muted-foreground">শেয়ার ও পরিমাণ</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
+              মোট: {totalAmount.toFixed(2)} ৳
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="border border-border rounded-lg bg-card divide-y divide-border">
+      <div className="rounded-2xl border border-border bg-card p-2 shadow-sm space-y-2">
         {loading ? (
-          <p className="p-4 text-sm text-muted-foreground text-center">লোড হচ্ছে...</p>
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+            লোড হচ্ছে...
+          </p>
         ) : data.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground text-center">
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
             কোনো পেমেন্ট ডেটা নেই
           </p>
         ) : (
@@ -166,7 +179,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
             return (
               <div
                 key={`${item.name}-${idx}`}
-                className="p-4 hover:bg-muted transition-colors space-y-2"
+                className="rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:bg-muted/60 space-y-2"
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -183,7 +196,9 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
                     <p className="font-semibold text-foreground">
                       {Number(item.value || 0)} ৳
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">{percent}% শেয়ার</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {percent}% শেয়ার
+                    </p>
                   </div>
                 </div>
                 <div className="h-2 w-full rounded-full bg-muted overflow-hidden">

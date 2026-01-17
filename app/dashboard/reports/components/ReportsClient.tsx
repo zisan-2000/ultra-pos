@@ -147,6 +147,16 @@ export default function ReportsClient({
   const summarySnapshot = `${liveSummary.sales.totalAmount.toFixed(
     1
   )}৳ বিক্রি · লাভ ${liveSummary.profit.profit.toFixed(1)}৳`;
+  const presetLabel = useMemo(
+    () => PRESETS.find((item) => item.key === preset)?.label ?? "",
+    [preset]
+  );
+  const rangeLabel = useMemo(() => {
+    if (range.from && range.to) {
+      return range.from === range.to ? range.from : `${range.from} - ${range.to}`;
+    }
+    return range.from ?? range.to ?? null;
+  }, [range.from, range.to]);
 
   const buildSummaryKey = useCallback(
     (rangeFrom?: string, rangeTo?: string) =>
@@ -253,7 +263,7 @@ export default function ReportsClient({
     switch (active) {
       case "summary":
         return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <StatCard
               title="মোট বিক্রি"
               value={`${liveSummary.sales.totalAmount.toFixed(2)} ৳`}
@@ -310,66 +320,110 @@ export default function ReportsClient({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 pb-24">
       {!online && (
-        <div className="rounded-lg border border-warning/30 bg-warning-soft text-warning text-xs font-semibold px-3 py-2">
+        <div className="rounded-xl border border-warning/30 bg-warning-soft text-warning text-xs font-semibold px-3 py-2 shadow-sm">
           অফলাইন: আগের রিপোর্ট ডাটা দেখানো হচ্ছে।
         </div>
       )}
-      <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground leading-tight">
-            রিপোর্ট ও বিশ্লেষণ
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            দোকান: <span className="font-semibold">{shopName}</span>
-          </p>
-          <p className="text-sm text-muted-foreground">
-            বিক্রি, খরচ, ক্যাশ, লাভ এক জায়গায়
-          </p>
-        </div>
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="pointer-events-none absolute -bottom-16 right-0 h-32 w-32 rounded-full bg-primary/20 blur-3xl" />
+        <div className="relative space-y-4 p-4 sm:p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0 space-y-1">
+            <h1 className="text-3xl font-bold text-foreground leading-tight">
+              রিপোর্ট ও বিশ্লেষণ
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              দোকান: <span className="font-semibold">{shopName}</span>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              বিক্রি, খরচ, ক্যাশ, লাভ এক জায়গায়
+            </p>
+            </div>
 
-        <div className="flex items-center gap-3">
-          <ShopSelectorClient shops={shops} selectedShopId={shopId} />
+            <div className="w-full md:w-auto">
+              <ShopSelectorClient shops={shops} selectedShopId={shopId} />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
+              {presetLabel}
+            </span>
+            {rangeLabel ? (
+              <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
+                {rangeLabel}
+              </span>
+            ) : null}
+            <span className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-primary">
+              {summarySnapshot}
+            </span>
+            {summaryLoading ? (
+              <span
+                aria-hidden="true"
+                className="inline-flex h-7 w-16 animate-pulse rounded-full bg-muted"
+              />
+            ) : null}
+            <span
+              className={`inline-flex h-7 items-center rounded-full border px-3 ${
+                online
+                  ? "bg-success-soft text-success border-success/30"
+                  : "bg-muted text-muted-foreground border-border"
+              }`}
+            >
+              {online ? "অনলাইন" : "অফলাইন"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Mobile sticky controls */}
-      <div className="md:hidden sticky top-0 z-30 space-y-3 bg-card/95 backdrop-blur border-b border-border py-2">
-        <div className="px-2 space-y-1">
-          <p className="text-[11px] font-semibold text-muted-foreground"> রিপোর্ট</p>
-          <div className="relative">
-            <div className="overflow-x-auto flex gap-2 pr-6">
-              {NAV.map((item) => (
-                <button
-                  key={item.key}
-                  onClick={() => setActive(item.key)}
-                  className={`px-3 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
-                    active === item.key
-                      ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
-                      : "bg-muted text-foreground border-transparent"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
+      {/* Mobile controls */}
+      <div className="md:hidden space-y-3">
+        <div className="sticky top-0 z-30 bg-card/95 backdrop-blur border-b border-border/70 pt-3 pb-2">
+          <div className="px-3 space-y-2">
+            <p className="text-[11px] font-semibold text-muted-foreground"> রিপোর্ট</p>
+            <div className="relative">
+              <div className="flex gap-2 overflow-x-auto no-scrollbar rounded-full bg-muted/70 p-1 pr-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                {NAV.map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => setActive(item.key)}
+                    className={`h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border border-transparent transition-colors ${
+                      active === item.key
+                        ? "bg-card text-foreground border-border shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
             </div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
           </div>
         </div>
 
-        <div className="px-2 space-y-2">
-          <p className="text-[11px] font-semibold text-muted-foreground"> সময়</p>
+        <div className="px-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-muted-foreground"> সময়</p>
+            {rangeLabel ? (
+              <span className="text-[11px] font-semibold text-muted-foreground">
+                {rangeLabel}
+              </span>
+            ) : null}
+          </div>
           <div className="relative">
-            <div className="overflow-x-auto flex gap-2 pr-8 pb-1">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar rounded-full bg-muted/70 p-1 pr-8 pb-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
               {PRESETS.map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setPreset(key)}
-                  className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
+                  className={`h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border border-transparent transition-colors ${
                     preset === key
-                      ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
-                      : "bg-muted text-foreground border-transparent"
+                      ? "bg-card text-foreground border-border shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {label}
@@ -382,40 +436,39 @@ export default function ReportsClient({
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="date"
-                className="border border-border rounded-lg bg-card text-foreground px-3 py-2 text-sm"
+                className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 value={customFrom ?? ""}
                 onChange={(e) => setCustomFrom(e.target.value)}
               />
               <input
                 type="date"
-                className="border border-border rounded-lg bg-card text-foreground px-3 py-2 text-sm"
+                className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 value={customTo ?? ""}
                 onChange={(e) => setCustomTo(e.target.value)}
               />
             </div>
           )}
           <div>
-            <div className="rounded-lg border border-primary/30 bg-primary-soft px-3 py-2 text-xs font-semibold text-primary">
+            <div className="rounded-xl border border-primary/30 bg-primary-soft px-3 py-2 text-xs font-semibold text-primary shadow-sm">
               {summarySnapshot}
             </div>
           </div>
         </div>
       </div>
-
       {/* Desktop: primary tabs + date filter separated */}
-      <div className="hidden md:block space-y-3">
-        <div className="rounded-xl bg-card border border-border shadow-sm px-4 py-3 relative">
+      <div className="hidden md:block space-y-4">
+        <div className="rounded-2xl bg-card border border-border shadow-sm px-4 py-3 relative">
           <p className="text-xs font-semibold text-muted-foreground mb-2"> রিপোর্ট</p>
           <div className="relative">
-            <div className="overflow-x-auto flex gap-2 pr-10">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar rounded-full bg-muted/70 p-1 pr-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
               {NAV.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => setActive(item.key)}
-                  className={`px-3 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
+                  className={`h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border border-transparent transition-colors ${
                     active === item.key
-                      ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
-                      : "bg-muted text-foreground border-transparent hover:bg-muted"
+                      ? "bg-card text-foreground border-border shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {item.label}
@@ -426,18 +479,18 @@ export default function ReportsClient({
           </div>
         </div>
 
-        <div className="rounded-xl bg-card border border-border shadow-sm px-4 py-3 space-y-3">
+        <div className="rounded-2xl bg-card border border-border shadow-sm px-4 py-3 space-y-4">
           <p className="text-xs font-semibold text-muted-foreground"> সময়</p>
           <div className="relative">
-            <div className="overflow-x-auto flex items-center gap-2 pr-12 pb-1">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar rounded-full bg-muted/70 p-1 pr-12 pb-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
               {PRESETS.map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setPreset(key)}
-                  className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${
+                  className={`h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border border-transparent transition-colors ${
                     preset === key
-                      ? "bg-primary-soft text-primary border-primary/30"
-                      : "bg-muted text-foreground border-transparent hover:bg-muted"
+                      ? "bg-card text-foreground border-border shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {label}
@@ -450,27 +503,30 @@ export default function ReportsClient({
             <div className="flex items-center gap-2 flex-wrap">
               <input
                 type="date"
-                className="border border-border rounded bg-card text-foreground px-2 py-1 text-sm"
+                className="h-9 rounded-lg border border-border bg-card px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 value={customFrom ?? ""}
                 onChange={(e) => setCustomFrom(e.target.value)}
               />
               <input
                 type="date"
-                className="border border-border rounded bg-card text-foreground px-2 py-1 text-sm"
+                className="h-9 rounded-lg border border-border bg-card px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 value={customTo ?? ""}
                 onChange={(e) => setCustomTo(e.target.value)}
               />
             </div>
           )}
+          <div className="rounded-xl border border-primary/20 bg-primary-soft px-3 py-2 text-xs font-semibold text-primary">
+            {summarySnapshot}
+          </div>
           {summaryLoading && (
             <span className="text-xs text-muted-foreground">রিফ্রেশ হচ্ছে...</span>
           )}
         </div>
       </div>
       {/* Desktop grid */}
-      <div className="hidden md:block space-y-4">
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="hidden md:block space-y-6">
+        <div className="bg-card border border-border rounded-2xl p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <StatCard
               title="মোট বিক্রি"
               value={`${liveSummary.sales.totalAmount.toFixed(2)} ৳`}
@@ -503,19 +559,19 @@ export default function ReportsClient({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
+          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <LazyReport fallback={<ReportSkeleton />}>
               <SalesReport shopId={shopId} from={range.from} to={range.to} />
             </LazyReport>
           </div>
 
-          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
+          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <LazyReport fallback={<ReportSkeleton />}>
               <ExpenseReport shopId={shopId} from={range.from} to={range.to} />
             </LazyReport>
           </div>
 
-          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
+          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <LazyReport fallback={<ReportSkeleton />}>
               <CashbookReport shopId={shopId} from={range.from} to={range.to} />
             </LazyReport>
@@ -523,7 +579,7 @@ export default function ReportsClient({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
+          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <LazyReport fallback={<ReportSkeleton />}>
               <PaymentMethodReport
                 shopId={shopId}
@@ -533,7 +589,7 @@ export default function ReportsClient({
             </LazyReport>
           </div>
 
-          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
+          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <LazyReport fallback={<ReportSkeleton />}>
               <ProfitTrendReport
                 shopId={shopId}
@@ -545,13 +601,13 @@ export default function ReportsClient({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
+          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <LazyReport fallback={<ReportSkeleton />}>
               <TopProductsReport shopId={shopId} />
             </LazyReport>
           </div>
 
-          <div className="border border-border rounded-lg p-6 bg-card shadow-sm">
+          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <LazyReport fallback={<ReportSkeleton />}>
               <LowStockReport shopId={shopId} />
             </LazyReport>
@@ -560,7 +616,7 @@ export default function ReportsClient({
       </div>
 
       {/* Mobile single report view */}
-      <div className="md:hidden">{renderReport()}</div>
+      <div className="md:hidden animate-fade-in">{renderReport()}</div>
     </div>
   );
 }
