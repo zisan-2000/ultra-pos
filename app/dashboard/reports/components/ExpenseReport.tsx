@@ -200,9 +200,16 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
         <div className="relative space-y-3 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold text-foreground">খরচ রিপোর্ট</h2>
-              <p className="text-xs text-muted-foreground">সর্বশেষ 20টি খরচ</p>
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-danger/15 text-danger text-lg">
+                💸
+              </span>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">খরচ রিপোর্ট</h2>
+                <p className="text-xs text-muted-foreground">
+                  সর্বশেষ 20টি খরচ
+                </p>
+              </div>
             </div>
             <Link
               href={buildHref()}
@@ -220,7 +227,7 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-3 shadow-sm space-y-2">
+      <div className="rounded-2xl border border-border/70 bg-card/80 p-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
         {loading ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
             লোড হচ্ছে...
@@ -233,14 +240,22 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
           items.map((e) => (
             <div
               key={e.id}
-              className="rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:bg-muted/60"
+              className="relative overflow-hidden rounded-2xl border border-danger/20 bg-card p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
             >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    {Number(e.amount).toFixed(2)} ৳
-                  </p>
-                  <p className="text-xs text-muted-foreground">{e.category}</p>
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-danger-soft/40 via-transparent to-transparent" />
+              <div className="relative flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-danger/15 text-danger text-lg">
+                    💸
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {Number(e.amount).toFixed(2)} ৳
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {e.category}
+                    </p>
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {new Date(e.expenseDate).toLocaleDateString("bn-BD")}

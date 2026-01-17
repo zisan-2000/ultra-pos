@@ -146,9 +146,14 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
         <div className="relative space-y-3 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold text-foreground">পেমেন্ট মাধ্যম</h2>
-              <p className="text-xs text-muted-foreground">শেয়ার ও পরিমাণ</p>
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/15 text-primary text-lg">
+                💳
+              </span>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">পেমেন্ট মাধ্যম</h2>
+                <p className="text-xs text-muted-foreground">শেয়ার ও পরিমাণ</p>
+              </div>
             </div>
           </div>
 
@@ -160,7 +165,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-2 shadow-sm space-y-2">
+      <div className="rounded-2xl border border-border/70 bg-card/80 p-2 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
         {loading ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
             লোড হচ্ছে...
@@ -179,18 +184,24 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
             return (
               <div
                 key={`${item.name}-${idx}`}
-                className="rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:bg-muted/60 space-y-2"
+                className="relative overflow-hidden rounded-2xl border border-primary/20 bg-card p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 space-y-2"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-foreground">
-                      {item.name || "নগদ"}
-                    </p>
-                    {typeof item.count === "number" && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {item.count} টি লেনদেন
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/40 via-transparent to-transparent" />
+                <div className="relative flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/15 text-primary text-lg">
+                      💳
+                    </span>
+                    <div>
+                      <p className="font-semibold text-foreground">
+                        {item.name || "নগদ"}
                       </p>
-                    )}
+                      {typeof item.count === "number" && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {item.count} টি লেনদেন
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-foreground">
@@ -201,9 +212,9 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
                     </p>
                   </div>
                 </div>
-                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                <div className="relative h-2 w-full rounded-full bg-muted/70 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-primary"
+                    className="h-full rounded-full bg-gradient-to-r from-primary via-primary-hover to-primary"
                     style={{ width: `${percent}%` }}
                   />
                 </div>

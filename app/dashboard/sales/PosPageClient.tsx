@@ -471,36 +471,22 @@ export function PosPageClient({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-28">
       {/* Left: Products */}
       <div className="lg:col-span-2 flex flex-col gap-6">
-        <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
-          <div className="pointer-events-none absolute -top-16 right-0 h-32 w-32 rounded-full bg-primary/20 blur-3xl" />
-          <div className="relative space-y-3 p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_28px_rgba(15,23,42,0.08)] animate-fade-in">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/30 via-card to-card" />
+          <div className="pointer-events-none absolute -top-12 right-0 h-24 w-24 rounded-full bg-primary/15 blur-3xl" />
+          <div className="relative space-y-2 p-3 sm:p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 space-y-1">
-                <h1 className="text-3xl font-bold text-foreground tracking-tight leading-tight sm:text-4xl">নতুন বিক্রি</h1>
-                <p className="text-xs text-muted-foreground mt-1">
-                দোকান: <span className="font-semibold">{shopName}</span>
+                <h1 className="text-2xl font-bold text-foreground tracking-tight leading-tight sm:text-3xl">
+                  নতুন বিক্রি
+                </h1>
+                <p className="text-xs text-muted-foreground">
+                  দোকান: <span className="font-semibold">{shopName}</span>
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className={`inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold ${
-                    online
-                      ? "bg-success-soft text-success border-success/30"
-                      : "bg-muted text-muted-foreground border-border"
-                  }`}
-                >
-                  {online ? "অনলাইন" : "অফলাইন"}
-                </span>
-              </div>
+              <div className="flex flex-wrap items-center gap-2" />
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-              <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
-                {itemCount} আইটেম
-              </span>
-              <span className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-primary">
-                {safeTotalAmount.toFixed(2)} ৳
-              </span>
               {pendingCount > 0 ? (
                 <span className="inline-flex h-7 items-center rounded-full border border-warning/30 bg-warning-soft px-3 text-warning">
                   পেন্ডিং {pendingCount} টি

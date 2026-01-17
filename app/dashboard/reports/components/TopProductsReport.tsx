@@ -88,13 +88,18 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
         <div className="relative space-y-3 p-4">
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold text-foreground">
-                সেরা বিক্রি হওয়া পণ্য
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                বিক্রিত সংখ্যা ও আয়ের ভিত্তিতে তালিকা
-              </p>
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/15 text-primary text-lg">
+                🏆
+              </span>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">
+                  সেরা বিক্রি হওয়া পণ্য
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  বিক্রিত সংখ্যা ও আয়ের ভিত্তিতে তালিকা
+                </p>
+              </div>
             </div>
             <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-xs font-semibold text-muted-foreground">
               Top {REPORT_ROW_LIMIT}
@@ -147,14 +152,20 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
           data.map((item, idx) => (
             <div
               key={idx}
-              className="bg-card border border-border rounded-2xl p-4 shadow-sm"
+              className="relative overflow-hidden bg-card border border-border/70 rounded-2xl p-4 shadow-[0_10px_20px_rgba(15,23,42,0.06)]"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">#{idx + 1}</p>
-                  <h3 className="text-base font-semibold text-foreground mt-1">
-                    {item.name}
-                  </h3>
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/35 via-transparent to-transparent" />
+              <div className="relative flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/15 text-primary text-lg">
+                    🏆
+                  </span>
+                  <div>
+                    <p className="text-xs text-muted-foreground">#{idx + 1}</p>
+                    <h3 className="text-base font-semibold text-foreground mt-1">
+                      {item.name}
+                    </h3>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-muted-foreground">বিক্রিত</p>
@@ -163,7 +174,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
                   </p>
                 </div>
               </div>
-              <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+              <div className="relative mt-3 flex items-center justify-between text-sm text-muted-foreground">
                 <span>আয়</span>
                 <span className="font-semibold text-foreground">
                   {Number(item.revenue || 0).toFixed(2)} ৳

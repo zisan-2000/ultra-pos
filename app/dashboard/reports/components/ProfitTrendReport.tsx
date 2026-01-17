@@ -134,9 +134,14 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
         <div className="relative space-y-3 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold text-foreground">লাভের প্রবণতা</h2>
-              <p className="text-xs text-muted-foreground">দিনওয়ারি লাভ/খরচ</p>
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/15 text-primary text-lg">
+                📈
+              </span>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">লাভের প্রবণতা</h2>
+                <p className="text-xs text-muted-foreground">দিনওয়ারি লাভ/খরচ</p>
+              </div>
             </div>
           </div>
 
@@ -221,14 +226,19 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
             return (
               <div
                 key={`${row.date}-${idx}`}
-                className="bg-card border border-border rounded-2xl p-4 shadow-sm flex gap-3"
+                className="relative overflow-hidden bg-card border border-border/70 rounded-2xl p-4 shadow-[0_10px_20px_rgba(15,23,42,0.06)] flex gap-3"
               >
                 <div
-                  className={`w-1 rounded-full ${
+                  className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${
+                    positive ? "from-success-soft/35" : "from-danger-soft/35"
+                  } via-transparent to-transparent`}
+                />
+                <div
+                  className={`relative w-1 rounded-full ${
                     positive ? "bg-success" : "bg-danger"
                   }`}
                 />
-                <div className="flex-1 space-y-2">
+                <div className="relative flex-1 space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs text-muted-foreground">#{idx + 1}</p>
@@ -248,13 +258,13 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
-                    <div className="bg-muted rounded-lg p-3">
+                    <div className="bg-muted/60 rounded-xl p-3">
                       <p className="text-xs text-muted-foreground">বিক্রি</p>
                       <p className="text-base font-semibold text-foreground">
                         {Number(row.sales || 0).toFixed(2)} ৳
                       </p>
                     </div>
-                    <div className="bg-muted rounded-lg p-3">
+                    <div className="bg-muted/60 rounded-xl p-3">
                       <p className="text-xs text-muted-foreground">খরচ</p>
                       <p className="text-base font-semibold text-foreground">
                         {Number(row.expense || 0).toFixed(2)} ৳
