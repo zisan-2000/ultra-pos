@@ -26,7 +26,9 @@ type PosProductSearchProps = {
 };
 
 type UsageEntry = { count: number; lastUsed: number; favorite?: boolean };
-type EnrichedProduct = PosProductSearchProps["products"][number] & { category: string };
+type EnrichedProduct = PosProductSearchProps["products"][number] & {
+  category: string;
+};
 type QuickSlot = EnrichedProduct | null;
 type SpeechRecognitionInstance = {
   lang: string;
@@ -46,7 +48,10 @@ const RENDER_BATCH = 40;
 
 function scheduleIdle(callback: () => void) {
   const g = globalThis as typeof globalThis & {
-    requestIdleCallback?: (cb: () => void, options?: { timeout?: number }) => number;
+    requestIdleCallback?: (
+      cb: () => void,
+      options?: { timeout?: number }
+    ) => number;
     cancelIdleCallback?: (id: number) => void;
   };
 
@@ -83,24 +88,22 @@ function buildQuickSlots(
   products: EnrichedProduct[],
   usageSeed: Record<string, UsageEntry>
 ): QuickSlot[] {
-  const sorted = products
-    .slice()
-    .sort((a, b) => {
-      const ua = usageSeed[a.id] || {};
-      const ub = usageSeed[b.id] || {};
+  const sorted = products.slice().sort((a, b) => {
+    const ua = usageSeed[a.id] || {};
+    const ub = usageSeed[b.id] || {};
 
-      const favoriteDiff =
-        Number(ub.favorite || false) - Number(ua.favorite || false);
-      if (favoriteDiff !== 0) return favoriteDiff;
+    const favoriteDiff =
+      Number(ub.favorite || false) - Number(ua.favorite || false);
+    if (favoriteDiff !== 0) return favoriteDiff;
 
-      const countDiff = (ub.count ?? 0) - (ua.count ?? 0);
-      if (countDiff !== 0) return countDiff;
+    const countDiff = (ub.count ?? 0) - (ua.count ?? 0);
+    if (countDiff !== 0) return countDiff;
 
-      const recencyDiff = (ub.lastUsed ?? 0) - (ua.lastUsed ?? 0);
-      if (recencyDiff !== 0) return recencyDiff;
+    const recencyDiff = (ub.lastUsed ?? 0) - (ua.lastUsed ?? 0);
+    if (recencyDiff !== 0) return recencyDiff;
 
-      return a.name.localeCompare(b.name);
-    });
+    return a.name.localeCompare(b.name);
+  });
 
   const slots: QuickSlot[] = Array(QUICK_LIMIT).fill(null);
   const limit = Math.min(QUICK_LIMIT, sorted.length);
@@ -172,7 +175,9 @@ export const PosProductSearch = memo(function PosProductSearch({
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
-  const [cooldownProductId, setCooldownProductId] = useState<string | null>(null);
+  const [cooldownProductId, setCooldownProductId] = useState<string | null>(
+    null
+  );
 
   const add = useCart((s) => s.add);
 
@@ -230,7 +235,8 @@ export const PosProductSearch = memo(function PosProductSearch({
   useEffect(() => {
     const SpeechRecognitionImpl =
       typeof window !== "undefined"
-        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        ? (window as any).SpeechRecognition ||
+          (window as any).webkitSpeechRecognition
         : null;
 
     setVoiceReady(Boolean(SpeechRecognitionImpl));
@@ -255,7 +261,8 @@ export const PosProductSearch = memo(function PosProductSearch({
   }, []);
 
   const productsWithCategory = useMemo<EnrichedProduct[]>(
-    () => products.map((p) => ({ ...p, category: normalizeCategory(p.category) })),
+    () =>
+      products.map((p) => ({ ...p, category: normalizeCategory(p.category) })),
     [products]
   );
 
@@ -291,35 +298,65 @@ export const PosProductSearch = memo(function PosProductSearch({
     const term = debouncedQuery.trim().toLowerCase();
     if (!term) return filteredByCategory;
 
-    return filteredByCategory.filter((p) => p.name.toLowerCase().includes(term));
+    return filteredByCategory.filter((p) =>
+      p.name.toLowerCase().includes(term)
+    );
   }, [filteredByCategory, debouncedQuery]);
 
   const sortedResults = useMemo(() => {
     const term = debouncedQuery.trim().toLowerCase();
-    return filteredByQuery.slice().sort((a, b) => {
-      const ua = usage[a.id] || {};
-      const ub = usage[b.id] || {};
 
-      const favoriteDiff = Number(ub.favorite || false) - Number(ua.favorite || false);
+    // Build sort key cache for efficiency
+    const sortKeyCache = new Map<
+      string,
+      [number, number, number, number, string]
+    >();
+
+    return filteredByQuery.slice().sort((a, b) => {
+      // Get or compute sort keys for both products
+      if (!sortKeyCache.has(a.id)) {
+        const ua = usage[a.id] || {};
+        sortKeyCache.set(a.id, [
+          Number(ua.favorite || false),
+          Number(term && a.name.toLowerCase().startsWith(term)),
+          ua.count ?? 0,
+          ua.lastUsed ?? 0,
+          a.name,
+        ]);
+      }
+      if (!sortKeyCache.has(b.id)) {
+        const ub = usage[b.id] || {};
+        sortKeyCache.set(b.id, [
+          Number(ub.favorite || false),
+          Number(term && b.name.toLowerCase().startsWith(term)),
+          ub.count ?? 0,
+          ub.lastUsed ?? 0,
+          b.name,
+        ]);
+      }
+
+      const [aFav, aStart, aCount, aRecency, aName] = sortKeyCache.get(a.id)!;
+      const [bFav, bStart, bCount, bRecency, bName] = sortKeyCache.get(b.id)!;
+
+      const favoriteDiff = bFav - aFav;
       if (favoriteDiff !== 0) return favoriteDiff;
 
-      const startDiff =
-        Number(term && b.name.toLowerCase().startsWith(term)) -
-        Number(term && a.name.toLowerCase().startsWith(term));
+      const startDiff = bStart - aStart;
       if (startDiff !== 0) return startDiff;
 
-      const countDiff = (ub.count ?? 0) - (ua.count ?? 0);
+      const countDiff = bCount - aCount;
       if (countDiff !== 0) return countDiff;
 
-      const recencyDiff = (ub.lastUsed ?? 0) - (ua.lastUsed ?? 0);
+      const recencyDiff = bRecency - aRecency;
       if (recencyDiff !== 0) return recencyDiff;
 
-      return a.name.localeCompare(b.name);
+      return aName.localeCompare(bName);
     });
   }, [filteredByQuery, usage, debouncedQuery]);
 
   const smartSuggestions = useMemo(() => {
-    const quickSlots = (quickSlotsRef.current ?? Array(QUICK_LIMIT).fill(null)) as QuickSlot[];
+    const quickSlots = (quickSlotsRef.current ??
+      Array(QUICK_LIMIT).fill(null)) as QuickSlot[];
     if (debouncedQuery.trim()) return sortedResults.slice(0, 6);
 
     const quickIds = new Set(
@@ -328,7 +365,9 @@ export const PosProductSearch = memo(function PosProductSearch({
 
     const recent = filteredByCategory
       .filter((p) => usage[p.id]?.lastUsed)
-      .sort((a, b) => (usage[b.id]?.lastUsed ?? 0) - (usage[a.id]?.lastUsed ?? 0))
+      .sort(
+        (a, b) => (usage[b.id]?.lastUsed ?? 0) - (usage[a.id]?.lastUsed ?? 0)
+      )
       .slice(0, 6);
 
     if (recent.length > 0) return recent;
@@ -398,8 +437,8 @@ export const PosProductSearch = memo(function PosProductSearch({
     if (listening) return;
     const SpeechRecognitionImpl =
       typeof window !== "undefined"
-        ? ((window as any).SpeechRecognition ||
-            (window as any).webkitSpeechRecognition)
+        ? (window as any).SpeechRecognition ||
+          (window as any).webkitSpeechRecognition
         : null;
 
     if (!SpeechRecognitionImpl) {
@@ -519,8 +558,9 @@ export const PosProductSearch = memo(function PosProductSearch({
             </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-3.5 px-1 pb-1">
-            {(quickSlotsRef.current ?? Array(QUICK_LIMIT).fill(null)).map((slot, idx) =>
-              slot ? renderProductButton(slot) : renderPlaceholderSlot(idx)
+            {(quickSlotsRef.current ?? Array(QUICK_LIMIT).fill(null)).map(
+              (slot, idx) =>
+                slot ? renderProductButton(slot) : renderPlaceholderSlot(idx)
             )}
           </div>
         </div>
@@ -579,7 +619,9 @@ export const PosProductSearch = memo(function PosProductSearch({
                   }`}
                 >
                   {cat.label}
-                  <span className="ml-2 text-xs text-muted-foreground">({cat.count})</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    ({cat.count})
+                  </span>
                 </button>
               ))}
             </div>

@@ -1,0 +1,111 @@
+
+> pos-app@0.1.0 build
+> prisma generate && next build
+
+warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).
+For more information, see: https://pris.ly/prisma-config
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+
+Γ£ö Generated Prisma Client (v6.19.0) to .\node_modules\@prisma\client in 327ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Interested in query caching in just a few lines of code? Try Accelerate today! https://pris.ly/tip-3-accelerate
+
+   Γû▓ Next.js 15.5.9
+   - Environments: .env.local, .env
+
+   Creating an optimized production build ...
+ Γ£ô Compiled successfully in 7.4s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/61) ...
+   Generating static pages (15/61) 
+   Generating static pages (30/61) 
+   Generating static pages (45/61) 
+ Γ£ô Generating static pages (61/61)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                       Size  First Load JS
+Γöî Γùï /                                          1.71 kB         116 kB
+Γö£ Γùï /_not-found                                  998 B         103 kB
+Γö£ ╞Æ /admin/dashboard                           3.55 kB         120 kB
+Γö£ ╞Æ /agent/dashboard                           2.06 kB         119 kB
+Γö£ ╞Æ /api/admin/user-creation-log                 216 B         103 kB
+Γö£ ╞Æ /api/auth/[...betterauth]                    216 B         103 kB
+Γö£ ╞Æ /api/auth/password/forgot                    216 B         103 kB
+Γö£ ╞Æ /api/auth/password/reset                     216 B         103 kB
+Γö£ ╞Æ /api/auth/session-rbac                       216 B         103 kB
+Γö£ ╞Æ /api/cron/billing                            216 B         103 kB
+Γö£ ╞Æ /api/due/customers                           216 B         103 kB
+Γö£ ╞Æ /api/due/payment                             216 B         103 kB
+Γö£ ╞Æ /api/due/statement                           216 B         103 kB
+Γö£ ╞Æ /api/due/summary                             216 B         103 kB
+Γö£ ╞Æ /api/health                                  216 B         103 kB
+Γö£ ╞Æ /api/rbac/me                                 216 B         103 kB
+Γö£ ╞Æ /api/reports/cash                            216 B         103 kB
+Γö£ ╞Æ /api/reports/expenses                        216 B         103 kB
+Γö£ ╞Æ /api/reports/low-stock                       216 B         103 kB
+Γö£ ╞Æ /api/reports/payment-method                  216 B         103 kB
+Γö£ ╞Æ /api/reports/profit-trend                    216 B         103 kB
+Γö£ ╞Æ /api/reports/sales                           216 B         103 kB
+Γö£ ╞Æ /api/reports/summary                         216 B         103 kB
+Γö£ ╞Æ /api/reports/today-mini                      216 B         103 kB
+Γö£ ╞Æ /api/reports/today-summary                   216 B         103 kB
+Γö£ ╞Æ /api/reports/top-products                    216 B         103 kB
+Γö£ ╞Æ /api/sync/admin                              216 B         103 kB
+Γö£ ╞Æ /api/sync/cash                               216 B         103 kB
+Γö£ ╞Æ /api/sync/due                                216 B         103 kB
+Γö£ ╞Æ /api/sync/expenses                           216 B         103 kB
+Γö£ ╞Æ /api/sync/products                           216 B         103 kB
+Γö£ ╞Æ /api/sync/sales                              216 B         103 kB
+Γö£ ╞Æ /dashboard                                 2.09 kB         170 kB
+Γö£ ╞Æ /dashboard/admin/billing                     216 B         103 kB
+Γö£ ╞Æ /dashboard/admin/business-product-library  4.42 kB         137 kB
+Γö£ ╞Æ /dashboard/admin/business-types             6.2 kB         139 kB
+Γö£ ╞Æ /dashboard/admin/rbac                      3.78 kB         142 kB
+Γö£ ╞Æ /dashboard/admin/user-creation-log         2.83 kB         105 kB
+Γö£ ╞Æ /dashboard/cash                            7.99 kB         185 kB
+Γö£ ╞Æ /dashboard/cash/[id]                         133 B         141 kB
+Γö£ ╞Æ /dashboard/cash/new                          132 B         141 kB
+Γö£ ╞Æ /dashboard/due                             10.2 kB         187 kB
+Γö£ ╞Æ /dashboard/expenses                        7.35 kB         184 kB
+Γö£ ╞Æ /dashboard/expenses/[id]                     131 B         141 kB
+Γö£ ╞Æ /dashboard/expenses/new                      131 B         141 kB
+Γö£ ╞Æ /dashboard/products                        11.3 kB         188 kB
+Γö£ ╞Æ /dashboard/products/[id]                   7.74 kB         146 kB
+Γö£ ╞Æ /dashboard/products/new                    9.91 kB         183 kB
+Γö£ ╞Æ /dashboard/profile                         3.79 kB         111 kB
+Γö£ ╞Æ /dashboard/reports                         6.79 kB         114 kB
+Γö£ ╞Æ /dashboard/sales                           7.89 kB         185 kB
+Γö£ ╞Æ /dashboard/sales/new                       10.4 kB         152 kB
+Γö£ ╞Æ /dashboard/shops                            3.9 kB         145 kB
+Γö£ ╞Æ /dashboard/shops/[id]                        174 B         147 kB
+Γö£ ╞Æ /dashboard/shops/new                         186 B         147 kB
+Γö£ ╞Æ /dashboard/users                           7.71 kB         149 kB
+Γö£ ╞Æ /dashboard/users/[userId]/access           3.61 kB         158 kB
+Γö£ Γùï /forgot-password                            2.9 kB         117 kB
+Γö£ Γùï /login                                     2.56 kB         126 kB
+Γö£ Γùï /manifest.webmanifest                        216 B         103 kB
+Γö£ Γùï /offline                                     216 B         103 kB
+Γö£ ╞Æ /owner/dashboard                           1.28 kB         163 kB
+Γö£ Γùï /register                                  2.05 kB         126 kB
+Γö£ Γùï /reset-password                            3.08 kB         117 kB
+Γö£ ╞Æ /service-worker                              216 B         103 kB
+Γö£ ╞Æ /staff/dashboard                           1.28 kB         163 kB
+Γö£ ╞Æ /super-admin/dashboard                       173 B         121 kB
+Γöö ╞Æ /super-admin/system-settings               2.48 kB         135 kB
++ First Load JS shared by all                   102 kB
+  Γö£ chunks/1255-9494d7e861e97d68.js            45.9 kB
+  Γö£ chunks/4bd1b696-f785427dddbba9fb.js        54.2 kB
+  Γöö other shared chunks (total)                 2.3 kB
+
+
+╞Æ Middleware                                     35 kB
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

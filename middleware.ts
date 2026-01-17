@@ -22,6 +22,8 @@ export async function middleware(req: NextRequest) {
     if (!req.headers.get("x-request-id")) {
       res.headers.set("x-request-id", crypto.randomUUID());
     }
+    // Cache API responses for 60 seconds to improve performance
+    res.headers.set("Cache-Control", "private, max-age=60");
     return res;
   }
 
@@ -46,14 +48,14 @@ export async function middleware(req: NextRequest) {
   if (!session && isProtectedRoute && !isAuthPage) {
     return appendCookies(
       NextResponse.redirect(new URL("/login", req.url)),
-      cookiesToSet,
+      cookiesToSet
     );
   }
 
   if (session && isAuthPage) {
     return appendCookies(
       NextResponse.redirect(new URL("/dashboard", req.url)),
-      cookiesToSet,
+      cookiesToSet
     );
   }
 
@@ -78,7 +80,7 @@ export async function middleware(req: NextRequest) {
       normalized === "/dashboard" ? "/dashboard" : "/dashboard" + normalized;
     return appendCookies(
       NextResponse.redirect(new URL(rewriteTarget + search, req.url)),
-      cookiesToSet,
+      cookiesToSet
     );
   }
 

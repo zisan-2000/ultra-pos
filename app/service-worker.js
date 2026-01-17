@@ -1,9 +1,12 @@
 // app/service-worker.js
-// Basic offline support + precaching key assets for the POS app.
+// Enhanced offline support + intelligent caching for POS app.
+// Strategies: Precache, Network-First for assets, Stale-While-Revalidate for APIs
 
 const CACHE_PREFIX = "pos-cache-";
 // Bump this when deploying so clients drop old Next.js bundles & action IDs.
-const CACHE_NAME = `${CACHE_PREFIX}v4`;
+const CACHE_NAME = `${CACHE_PREFIX}v5`;
+const API_CACHE_NAME = `${CACHE_PREFIX}api-v5`;
+const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v5`;
 
 const PRECACHE_URLS = [
   "/offline",
@@ -32,12 +35,18 @@ const STATIC_EXTENSIONS = [
   ".webmanifest",
 ];
 
+const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 minutes
+
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
-    })
+    Promise.all([
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.addAll(PRECACHE_URLS);
+      }),
+      caches.open(STATIC_CACHE_NAME),
+      caches.open(API_CACHE_NAME),
+    ])
   );
 });
 
@@ -49,7 +58,9 @@ self.addEventListener("activate", (event) => {
         Promise.all(
           keys
             .filter(
-              (key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME
+              (key) =>
+                key.startsWith(CACHE_PREFIX) &&
+                ![CACHE_NAME, API_CACHE_NAME, STATIC_CACHE_NAME].includes(key)
             )
             .map((key) => caches.delete(key))
         )
@@ -71,9 +82,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // API calls: Stale-While-Revalidate for better perceived performance
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(staleWhileRevalidate(request, API_CACHE_NAME));
+    return;
+  }
+
   // Next.js build assets: always prefer network so we don't serve stale bundles or action manifests.
   if (url.pathname.startsWith("/_next/")) {
-    event.respondWith(networkFirstStatic(request, url));
+    event.respondWith(networkFirstStatic(request, url, STATIC_CACHE_NAME));
     return;
   }
 
@@ -84,7 +101,7 @@ self.addEventListener("fetch", (event) => {
       url.pathname.startsWith("/screenshots/") ||
       STATIC_EXTENSIONS.some((ext) => url.pathname.endsWith(ext)))
   ) {
-    event.respondWith(cacheFirstStatic(request, url));
+    event.respondWith(cacheFirstStatic(request, url, STATIC_CACHE_NAME));
     return;
   }
 });
@@ -124,8 +141,8 @@ async function cacheFirst(request) {
   }
 }
 
-async function cacheFirstStatic(request, url) {
-  const cache = await caches.open(CACHE_NAME);
+async function cacheFirstStatic(request, url, cacheName) {
+  const cache = await caches.open(cacheName);
   const cleanUrl = url.origin + url.pathname; // strip query params for stable keys
   const cacheKey = new Request(cleanUrl, {
     method: "GET",
@@ -154,8 +171,8 @@ async function cacheFirstStatic(request, url) {
   }
 }
 
-async function networkFirstStatic(request, url) {
-  const cache = await caches.open(CACHE_NAME);
+async function networkFirstStatic(request, url, cacheName) {
+  const cache = await caches.open(cacheName);
   const cleanUrl = url.origin + url.pathname;
   const cacheKey = new Request(cleanUrl, {
     method: "GET",
@@ -178,4 +195,49 @@ async function networkFirstStatic(request, url) {
     if (cached) return cached;
     throw error;
   }
+}
+
+async function staleWhileRevalidate(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const url = new URL(request.url);
+  const cacheKey = new Request(url.origin + url.pathname, {
+    method: "GET",
+    headers: request.headers,
+    credentials: request.credentials,
+    mode: "same-origin",
+  });
+
+  try {
+    // Try network first
+    const networkResponse = await fetchWithTimeout(request, 5000);
+    if (networkResponse && networkResponse.ok) {
+      // Update cache with fresh response
+      const responseToCache = networkResponse.clone();
+      responseToCache.headers.set("x-cache-time", Date.now().toString());
+      cache.put(cacheKey, responseToCache);
+    }
+    return networkResponse;
+  } catch (error) {
+    // Fall back to cache on network error
+    const cachedResponse = await cache.match(cacheKey);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    // If nothing cached and network failed, try again with longer timeout
+    try {
+      return await fetchWithTimeout(request, 10000);
+    } catch {
+      return Response.error();
+    }
+  }
+}
+
+// Helper: fetch with timeout
+function fetchWithTimeout(request, timeout = 5000) {
+  return Promise.race([
+    fetch(request),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("fetch timeout")), timeout)
+    ),
+  ]);
 }

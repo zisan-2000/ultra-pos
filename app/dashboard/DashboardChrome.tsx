@@ -165,7 +165,9 @@ export function DashboardShell({
 
   const currentShopName = useMemo(() => {
     if (!safeShopId) return "দোকান নির্বাচন করুন";
-    return shops.find((s) => s.id === safeShopId)?.name || "দোকান নির্বাচন করুন";
+    return (
+      shops.find((s) => s.id === safeShopId)?.name || "দোকান নির্বাচন করুন"
+    );
   }, [safeShopId, shops]);
 
   // Sync URL ?shopId with global shop store & cookie
@@ -491,6 +493,8 @@ export function DashboardShell({
                         href={targetHref}
                         prefetch
                         onClick={(event) => {
+                          // Prevent multi-clicks on rapid consecutive clicks
+                          if (event.detail > 1) return;
                           setDrawerOpen(false);
                           handleNavClick(event, targetHref);
                         }}
@@ -652,7 +656,10 @@ export function DashboardShell({
                       prefetch
                       onClick={(event) => {
                         setDrawerOpen(false);
-                        handleNavClick(event, "/dashboard/admin/business-types");
+                        handleNavClick(
+                          event,
+                          "/dashboard/admin/business-types"
+                        );
                       }}
                       onMouseEnter={() =>
                         handleNavPrefetch("/dashboard/admin/business-types")
@@ -726,7 +733,9 @@ export function DashboardShell({
                       >
                         <Package
                           className={`h-4 w-4 ${
-                            isActive("/dashboard/admin/business-product-library")
+                            isActive(
+                              "/dashboard/admin/business-product-library"
+                            )
                               ? "text-sidebar-primary-foreground"
                               : "text-sidebar-accent-foreground"
                           }`}
@@ -974,7 +983,9 @@ export function DashboardShell({
                     ) : (
                       <select
                         value={safeShopId ?? ""}
-                        onChange={(event) => handleShopChange(event.target.value)}
+                        onChange={(event) =>
+                          handleShopChange(event.target.value)
+                        }
                         className="h-10 w-[180px] sm:w-[200px] border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                       >
                         <option value="" disabled>
@@ -1001,7 +1012,9 @@ export function DashboardShell({
                         handleNavPrefetch("/dashboard/shops/new")
                       }
                       className="text-sm font-semibold text-primary hover:text-primary-hover"
-                    >নতুন দোকান যোগ করুন</Link>
+                    >
+                      নতুন দোকান যোগ করুন
+                    </Link>
                   )}
                   <ThemeToggle />
                 </div>
@@ -1067,9 +1080,7 @@ export function DashboardShell({
         >
           {mobileNavItems.map((item) => {
             const targetHref =
-              item.href === "/dashboard"
-                ? effectiveDashboardHref
-                : item.href;
+              item.href === "/dashboard" ? effectiveDashboardHref : item.href;
             const Icon = item.Icon;
 
             return (
@@ -1146,6 +1157,3 @@ export function DashboardShell({
 }
 
 export default DashboardShell;
-
-
-

@@ -72,6 +72,15 @@ export async function getCustomersByShop(shopId: string) {
 
   const rows = await prisma.customer.findMany({
     where: { shopId },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      address: true,
+      totalDue: true,
+      lastPaymentAt: true,
+      createdAt: true,
+    },
     orderBy: { totalDue: "desc" },
   });
 

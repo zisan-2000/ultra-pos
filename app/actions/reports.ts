@@ -146,7 +146,10 @@ function parseDateRange(from?: string, to?: string) {
   return parseTimestampRange(from, to);
 }
 
-function normalizeLimit(limit?: number | null, defaultLimit = REPORT_ROW_LIMIT) {
+function normalizeLimit(
+  limit?: number | null,
+  defaultLimit = REPORT_ROW_LIMIT
+) {
   const n = Number(limit);
   if (!Number.isFinite(n)) return defaultLimit;
   return Math.max(1, Math.min(n, REPORT_ROW_LIMIT));
@@ -214,9 +217,7 @@ export async function getSalesWithFilterPaginated({
   const pageRows = rows.slice(0, safeLimit);
   const last = pageRows[pageRows.length - 1];
   const nextCursor: ReportCursor | null =
-    hasMore && last
-      ? { at: last.saleDate.toISOString(), id: last.id }
-      : null;
+    hasMore && last ? { at: last.saleDate.toISOString(), id: last.id } : null;
 
   return { rows: pageRows, nextCursor, hasMore };
 }
@@ -354,9 +355,7 @@ export async function getCashWithFilterPaginated({
   const pageRows = rows.slice(0, safeLimit);
   const last = pageRows[pageRows.length - 1];
   const nextCursor: ReportCursor | null =
-    hasMore && last
-      ? { at: last.createdAt.toISOString(), id: last.id }
-      : null;
+    hasMore && last ? { at: last.createdAt.toISOString(), id: last.id } : null;
 
   return { rows: pageRows, nextCursor, hasMore };
 }
@@ -522,9 +521,14 @@ export async function getProfitSummary(
   const rangeFrom = bounded.start.toISOString();
   const rangeTo = bounded.end.toISOString();
 
-  const salesData = await getSalesSummary(shopId, rangeFrom, rangeTo);
-  const expenseData = await getExpenseSummary(shopId, rangeFrom, rangeTo);
-  const needsCogs = await shopNeedsCogs(shopId);
+  // Fetch shop type and sales/expense data in parallel (not sequential)
+  const [salesData, expenseData, needsCogs] = await Promise.all([
+    getSalesSummary(shopId, rangeFrom, rangeTo),
+    getExpenseSummary(shopId, rangeFrom, rangeTo),
+    shopNeedsCogs(shopId),
+  ]);
+
+  // Only fetch COGS if needed
   const cogs = needsCogs
     ? await getCogsTotal(shopId, bounded.start, bounded.end)
     : 0;

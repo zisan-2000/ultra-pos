@@ -28,6 +28,22 @@ export default function RootLayout({
   return (
     <html lang="bn" suppressHydrationWarning>
       <head>
+        {/* Preload custom font to prevent FOUT (Flash of Unstyled Text) */}
+        <link
+          rel="preload"
+          href="https://cdn.jsdelivr.net/npm/sutonnytype@1.1.0/fonts/SutonnyMJ.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        {/* Preconnect to CDN for faster font delivery */}
+        <link
+          rel="preconnect"
+          href="https://cdn.jsdelivr.net"
+          crossOrigin="anonymous"
+        />
+        {/* DNS prefetch for faster lookups */}
+        <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
         <ThemeScript />
       </head>
       <body

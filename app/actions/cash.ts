@@ -58,7 +58,10 @@ export async function getCashSummaryByRange(
             lte: end,
           },
     },
-    select: { entryType: true, amount: true },
+    select: {
+      entryType: true,
+      amount: true,
+    },
   });
 
   const totals = rows.reduce(
@@ -129,6 +132,14 @@ export async function getCashByShopCursorPaginated({
 
   const rows = await prisma.cashEntry.findMany({
     where,
+    select: {
+      id: true,
+      shopId: true,
+      entryType: true,
+      amount: true,
+      reason: true,
+      createdAt: true,
+    },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: safeLimit + 1,
   });

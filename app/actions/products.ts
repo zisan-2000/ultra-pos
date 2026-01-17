@@ -104,8 +104,7 @@ function normalizeUnitCreate(input: {
   displayUnit?: string | null;
   conversion?: string | number;
 }) {
-  const baseUnit =
-    input.baseUnit?.toString().trim().toLowerCase() || "pcs";
+  const baseUnit = input.baseUnit?.toString().trim().toLowerCase() || "pcs";
 
   const displayUnit =
     input.displayUnit === undefined
@@ -169,7 +168,8 @@ export async function createProduct(input: CreateProductInput) {
     defaultValue: "0",
     field: "Stock quantity",
   });
-  const trackStock = input.trackStock === undefined ? false : Boolean(input.trackStock);
+  const trackStock =
+    input.trackStock === undefined ? false : Boolean(input.trackStock);
   const stockQty = trackStock ? normalizedStock : "0";
 
   await prisma.product.create({
@@ -198,6 +198,17 @@ export async function getProductsByShop(shopId: string) {
 
   return prisma.product.findMany({
     where: { shopId },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      buyPrice: true,
+      sellPrice: true,
+      stockQty: true,
+      isActive: true,
+      trackStock: true,
+      createdAt: true,
+    },
   });
 }
 
@@ -240,6 +251,16 @@ export async function getProductsByShopPaginated({
 
   const rows = await prisma.product.findMany({
     where,
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      buyPrice: true,
+      sellPrice: true,
+      stockQty: true,
+      isActive: true,
+      createdAt: true,
+    },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     skip,
     take: safePageSize,
@@ -249,7 +270,8 @@ export async function getProductsByShopPaginated({
     id: product.id,
     name: product.name,
     category: product.category,
-    buyPrice: product.buyPrice === null ? null : product.buyPrice?.toString() ?? null,
+    buyPrice:
+      product.buyPrice === null ? null : product.buyPrice?.toString() ?? null,
     sellPrice: product.sellPrice.toString(),
     stockQty: product.stockQty.toString(),
     isActive: product.isActive,
