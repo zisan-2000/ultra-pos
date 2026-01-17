@@ -112,6 +112,47 @@ const bottomNav: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/dashboard/reports", label: "রিপোর্ট", Icon: BarChart3 },
 ];
 
+const bottomNavTone: Record<
+  string,
+  { icon: string; iconActive: string; itemActive: string }
+> = {
+  "/dashboard": {
+    icon:
+      "bg-gradient-to-br from-sky-400/25 via-sky-300/10 to-sky-600/25 text-sky-600",
+    iconActive:
+      "bg-gradient-to-br from-sky-500/40 via-sky-400/25 to-sky-600/40 text-sky-700",
+    itemActive: "text-sky-700 bg-sky-500/10",
+  },
+  "/dashboard/sales": {
+    icon:
+      "bg-gradient-to-br from-emerald-400/25 via-emerald-300/10 to-emerald-600/25 text-emerald-600",
+    iconActive:
+      "bg-gradient-to-br from-emerald-500/40 via-emerald-400/25 to-emerald-600/40 text-emerald-700",
+    itemActive: "text-emerald-700 bg-emerald-500/10",
+  },
+  "/dashboard/products": {
+    icon:
+      "bg-gradient-to-br from-violet-400/25 via-violet-300/10 to-violet-600/25 text-violet-600",
+    iconActive:
+      "bg-gradient-to-br from-violet-500/40 via-violet-400/25 to-violet-600/40 text-violet-700",
+    itemActive: "text-violet-700 bg-violet-500/10",
+  },
+  "/dashboard/expenses": {
+    icon:
+      "bg-gradient-to-br from-rose-400/25 via-rose-300/10 to-rose-600/25 text-rose-600",
+    iconActive:
+      "bg-gradient-to-br from-rose-500/40 via-rose-400/25 to-rose-600/40 text-rose-700",
+    itemActive: "text-rose-700 bg-rose-500/10",
+  },
+  "/dashboard/reports": {
+    icon:
+      "bg-gradient-to-br from-amber-400/25 via-amber-300/10 to-amber-600/25 text-amber-600",
+    iconActive:
+      "bg-gradient-to-br from-amber-500/40 via-amber-400/25 to-amber-600/40 text-amber-700",
+    itemActive: "text-amber-700 bg-amber-500/10",
+  },
+};
+
 const fabByRoute: Record<string, { href: string; label: string } | null> = {
   "/dashboard": { href: "/dashboard/sales/new", label: "নতুন বিক্রি যোগ করুন" },
   "/dashboard/sales": {
@@ -929,111 +970,110 @@ export function DashboardShell({
 
         {/* Main content */}
         <div className="flex-1 flex flex-col h-full lg:pl-0 overflow-hidden">
-          <header className="sticky top-0 z-20 bg-card/80 backdrop-blur border-b border-border relative">
+          <header className="sticky top-0 z-20 bg-card/90 backdrop-blur border-b border-border/70 shadow-[0_1px_0_rgba(15,23,42,0.08)] relative">
             {isNavigating && (
               <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/20">
                 <div className="h-full w-1/3 bg-primary animate-pulse" />
               </div>
             )}
-            <div className="flex items-start gap-3 px-4 sm:px-6 lg:px-8 py-3">
-              {/* Drawer toggle */}
-              <button
-                className="lg:hidden inline-flex items-center justify-center rounded-lg border border-border bg-card text-foreground shadow-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background shrink-0 mt-1 h-10 w-10"
-                onClick={() => setDrawerOpen((p) => !p)}
-                aria-label="Toggle navigation"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
+            <div className="flex flex-col gap-2 px-4 sm:px-6 lg:px-8 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  {/* Drawer toggle */}
+                  <button
+                    className="lg:hidden inline-flex items-center justify-center rounded-lg border border-border bg-card text-foreground shadow-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background shrink-0 h-10 w-10"
+                    onClick={() => setDrawerOpen((p) => !p)}
+                    aria-label="Toggle navigation"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </button>
 
-              {/* Left content */}
-              <div className="flex-1 min-w-0">
-                {/* <p className="text-[11px] text-muted-foreground mb-1">বর্তমান দোকান</p> */}
-
-                {/* Shop name (click to view full name) */}
-                <button
-                  onClick={() => setShopNameOpen(true)}
-                  className="text-left w-full"
-                >
-                  <h2 className="text-base font-bold text-foreground leading-snug line-clamp-2 hover:underline">
-                    {currentShopName}
-                  </h2>
-                </button>
-              </div>
-
-              {/* Shop selector + Status */}
-              <div className="flex flex-col items-end gap-2 shrink-0">
-                <div className="flex items-center gap-2">
-                  {shops?.length > 0 ? (
-                    mounted ? (
-                      <Select
-                        value={safeShopId ?? undefined}
-                        onValueChange={(value) => handleShopChange(value)}
-                      >
-                        <SelectTrigger className="w-[180px] sm:w-[200px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
-                          <SelectValue placeholder="দোকান নির্বাচন করুন" />
-                        </SelectTrigger>
-                        <SelectContent align="end" className="w-[220px]">
-                          {shops.map((shop) => (
-                            <SelectItem key={shop.id} value={shop.id}>
-                              {shop.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <select
-                        value={safeShopId ?? ""}
-                        onChange={(event) =>
-                          handleShopChange(event.target.value)
-                        }
-                        className="h-10 w-[180px] sm:w-[200px] border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      >
-                        <option value="" disabled>
-                          দোকান নির্বাচন করুন
-                        </option>
-                        {shops.map((shop) => (
-                          <option key={shop.id} value={shop.id}>
-                            {shop.name}
-                          </option>
-                        ))}
-                      </select>
-                    )
-                  ) : (
-                    <Link
-                      href="/dashboard/shops/new"
-                      prefetch
-                      onClick={(event) =>
-                        handleNavClick(event, "/dashboard/shops/new")
-                      }
-                      onMouseEnter={() =>
-                        handleNavPrefetch("/dashboard/shops/new")
-                      }
-                      onTouchStart={() =>
-                        handleNavPrefetch("/dashboard/shops/new")
-                      }
-                      className="text-sm font-semibold text-primary hover:text-primary-hover"
+                  {/* Shop name (click to view full name) */}
+                  <div className="flex-1 min-w-0">
+                    <button
+                      onClick={() => setShopNameOpen(true)}
+                      className="text-left w-full"
                     >
-                      নতুন দোকান যোগ করুন
-                    </Link>
-                  )}
-                  <ThemeToggle />
+                      <h2 className="text-base font-bold text-foreground leading-snug tracking-tight line-clamp-1 sm:line-clamp-2 hover:underline">
+                        {currentShopName}
+                      </h2>
+                    </button>
+                  </div>
                 </div>
 
-                {/* Online / Offline status under select */}
-                <div className="flex items-center gap-1 text-xs font-semibold mt-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <span
-                    className={`inline-flex h-2 w-2 rounded-full ${
-                      online ? "bg-success" : "bg-muted-foreground"
+                    className={`inline-flex h-7 items-center gap-1 rounded-full border px-3 text-[11px] font-semibold shadow-sm ${
+                      online
+                        ? "border-success/30 bg-success-soft text-success"
+                        : "border-border bg-muted text-muted-foreground"
                     }`}
-                  />
-                  <span
-                    className={
-                      online ? "text-success" : "text-muted-foreground"
-                    }
                   >
+                    <span
+                      className={`inline-flex h-1.5 w-1.5 rounded-full ${
+                        online ? "bg-success" : "bg-muted-foreground"
+                      }`}
+                    />
                     {online ? "অনলাইন" : "অফলাইন"}
                   </span>
+                  <ThemeToggle />
                 </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {shops?.length > 0 ? (
+                  mounted ? (
+                    <Select
+                      value={safeShopId ?? undefined}
+                      onValueChange={(value) => handleShopChange(value)}
+                    >
+                      <SelectTrigger className="w-full sm:w-[240px] h-11 rounded-xl border border-border/80 bg-muted/40 text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                        <SelectValue placeholder="দোকান নির্বাচন করুন" />
+                      </SelectTrigger>
+                      <SelectContent align="start" className="w-[240px]">
+                        {shops.map((shop) => (
+                          <SelectItem key={shop.id} value={shop.id}>
+                            {shop.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <select
+                      value={safeShopId ?? ""}
+                      onChange={(event) =>
+                        handleShopChange(event.target.value)
+                      }
+                      className="h-11 w-full sm:w-[240px] rounded-xl border border-border/80 bg-muted/40 px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="" disabled>
+                        দোকান নির্বাচন করুন
+                      </option>
+                      {shops.map((shop) => (
+                        <option key={shop.id} value={shop.id}>
+                          {shop.name}
+                        </option>
+                      ))}
+                    </select>
+                  )
+                ) : (
+                  <Link
+                    href="/dashboard/shops/new"
+                    prefetch
+                    onClick={(event) =>
+                      handleNavClick(event, "/dashboard/shops/new")
+                    }
+                    onMouseEnter={() =>
+                      handleNavPrefetch("/dashboard/shops/new")
+                    }
+                    onTouchStart={() =>
+                      handleNavPrefetch("/dashboard/shops/new")
+                    }
+                    className="text-sm font-semibold text-primary hover:text-primary-hover"
+                  >
+                    নতুন দোকান যোগ করুন
+                  </Link>
+                )}
               </div>
             </div>
 
@@ -1082,6 +1122,12 @@ export function DashboardShell({
             const targetHref =
               item.href === "/dashboard" ? effectiveDashboardHref : item.href;
             const Icon = item.Icon;
+            const isActiveItem = isActive(targetHref);
+            const tone = bottomNavTone[item.href] ?? {
+              icon: "bg-muted/40 text-muted-foreground",
+              iconActive: "bg-primary/15 text-primary",
+              itemActive: "text-primary bg-primary-soft",
+            };
 
             return (
               <Link
@@ -1091,13 +1137,20 @@ export function DashboardShell({
                 onClick={(event) => handleNavClick(event, targetHref)}
                 onMouseEnter={() => handleNavPrefetch(targetHref)}
                 onTouchStart={() => handleNavPrefetch(targetHref)}
-                className={`flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 rounded-xl transition-colors ${
-                  isActive(targetHref)
-                    ? "text-primary bg-primary-soft"
-                    : "text-muted-foreground"
+                aria-current={isActiveItem ? "page" : undefined}
+                className={`group flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 rounded-2xl transition-colors ${
+                  isActiveItem
+                    ? tone.itemActive
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Icon className="h-5 w-5" />
+                <span
+                  className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl transition-transform group-active:scale-95 ${
+                    isActiveItem ? tone.iconActive : tone.icon
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                </span>
                 <span className="leading-none">{item.label}</span>
               </Link>
             );

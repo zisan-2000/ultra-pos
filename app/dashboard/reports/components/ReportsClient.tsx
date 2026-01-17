@@ -272,11 +272,15 @@ export default function ReportsClient({
                   ? ` · বাতিল: ${liveSummary.sales.voidedCount}`
                   : ""
               }`}
+              icon="🧾"
+              tone="success"
             />
             <StatCard
               title="খরচ"
               value={`${liveSummary.expense.totalAmount.toFixed(2)} ৳`}
               subtitle={`মোট খরচ: ${liveSummary.expense.count ?? 0}`}
+              icon="💸"
+              tone="danger"
             />
             <StatCard
               title="ক্যাশ ব্যালান্স"
@@ -284,6 +288,8 @@ export default function ReportsClient({
               subtitle={`ইন: ${liveSummary.cash.totalIn.toFixed(
                 2
               )} ৳ | আউট: ${liveSummary.cash.totalOut.toFixed(2)} ৳`}
+              icon="💵"
+              tone="warning"
             />
             <StatCard
               title="লাভ"
@@ -291,6 +297,8 @@ export default function ReportsClient({
               subtitle={`বিক্রি: ${liveSummary.profit.salesTotal.toFixed(
                 2
               )} ৳ | খরচ: ${liveSummary.profit.expenseTotal.toFixed(2)} ৳`}
+              icon="📈"
+              tone="primary"
             />
           </div>
         );
@@ -535,11 +543,15 @@ export default function ReportsClient({
                   ? ` · বাতিল: ${liveSummary.sales.voidedCount}`
                   : ""
               }`}
+              icon="🧾"
+              tone="success"
             />
             <StatCard
               title="খরচ"
               value={`${liveSummary.expense.totalAmount.toFixed(2)} ৳`}
               subtitle={`মোট খরচ: ${liveSummary.expense.count ?? 0}`}
+              icon="💸"
+              tone="danger"
             />
             <StatCard
               title="ক্যাশ ব্যালান্স"
@@ -547,6 +559,8 @@ export default function ReportsClient({
               subtitle={`ইন: ${liveSummary.cash.totalIn.toFixed(
                 2
               )} ৳ | আউট: ${liveSummary.cash.totalOut.toFixed(2)} ৳`}
+              icon="💵"
+              tone="warning"
             />
             <StatCard
               title="লাভ"
@@ -554,6 +568,8 @@ export default function ReportsClient({
               subtitle={`বিক্রি: ${liveSummary.profit.salesTotal.toFixed(
                 2
               )} ৳ | খরচ: ${liveSummary.profit.expenseTotal.toFixed(2)} ৳`}
+              icon="📈"
+              tone="primary"
             />
           </div>
         </div>

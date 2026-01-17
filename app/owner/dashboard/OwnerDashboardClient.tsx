@@ -175,35 +175,40 @@ export default function OwnerDashboardClient({
     }
     return null;
   }, [supportContact.supportPhone, supportContact.supportWhatsapp]);
+  const lastSyncLabel = useMemo(() => {
+    if (!lastSyncAt) return null;
+    return new Intl.DateTimeFormat("bn-BD", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(lastSyncAt));
+  }, [lastSyncAt]);
 
   return (
-    <div className="space-y-6 -mt-1 mb-6">
-      {!online && (
-        <div className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-xs font-semibold text-warning">
-          Offline: showing cached owner dashboard data.
+    <div className="space-y-5 -mt-1 mb-6">
+      {!online || cacheMissing ? (
+        <div className="space-y-2">
+          {!online && (
+            <div className="rounded-xl border border-warning/30 bg-warning-soft px-3 py-2 text-xs font-semibold text-warning">
+              Offline: showing cached owner dashboard data.
+            </div>
+          )}
+          {!online && cacheMissing && (
+            <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+              Offline: cached owner dashboard data not available.
+            </div>
+          )}
         </div>
-      )}
-      {!online && cacheMissing && (
-        <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
-          Offline: cached owner dashboard data not available.
-        </div>
-      )}
-      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground leading-tight">
-              দৈনিক সারসংক্ষেপ
-            </h1>
-            {/* <p className="text-sm text-muted-foreground mt-1 leading-snug">
-              আজকের সারসংক্ষেপ, বিক্রি ও খরচ
-            </p> */}
-          </div>
-        </div>
+      ) : null}
+
+      <div className="px-1">
+        <h1 className="text-[22px] sm:text-3xl font-bold text-foreground leading-tight tracking-tight">
+          আজকের সারসংক্ষেপ
+        </h1>
       </div>
 
       {showBillingWarning && (
         <div
-          className={`rounded-xl border p-4 shadow-sm ${
+          className={`rounded-2xl border p-4 shadow-[0_12px_26px_rgba(15,23,42,0.08)] ${
             isPastDue
               ? "border-danger/30 bg-danger-soft"
               : "border-warning/30 bg-warning-soft"
@@ -387,7 +392,17 @@ export default function OwnerDashboardClient({
         </div>
       )}
 
-      <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-4">
+      <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.2em]">
+            হাইলাইটস
+          </span>
+          {lastSyncLabel ? (
+            <span className="text-xs text-muted-foreground">
+              শেষ আপডেট {lastSyncLabel}
+            </span>
+          ) : null}
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card
             title="আজকের বিক্রি"
@@ -419,28 +434,90 @@ export default function OwnerDashboardClient({
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-foreground mb-3">
-          দ্রুত কাজ
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
+      <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-foreground">দ্রুত কাজ</h2>
+          <span className="text-xs text-muted-foreground">এক ক্লিকে শুরু</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <Link
             href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-            className="block bg-primary-soft border border-primary/30 text-primary font-semibold rounded-lg py-4 px-3 text-base text-center transition-colors hover:border-primary/50 hover:bg-primary/20 pressable card-lift h-full"
+            className="group relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary-soft/60 via-card to-card p-3 text-left shadow-sm transition hover:shadow-md pressable"
           >
-            <span className="flex flex-col items-center gap-1">
-              <span className="text-xl">⚡</span>
-              <span>নতুন বিক্রি শুরু করুন</span>
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 text-primary text-lg">
+              ⚡
             </span>
+            <div className="mt-2 space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                নতুন বিক্রি
+              </p>
+              <p className="text-xs text-muted-foreground">POS শুরু করুন</p>
+            </div>
           </Link>
+
           <Link
             href={`/dashboard/due?shopId=${selectedShopId}`}
-            className="block bg-warning-soft border border-warning/30 text-warning font-semibold rounded-lg py-4 px-3 text-base text-center transition-colors hover:border-warning/50 hover:bg-warning/20 pressable card-lift h-full"
+            className="group relative overflow-hidden rounded-2xl border border-warning/30 bg-gradient-to-br from-warning-soft/70 via-card to-card p-3 text-left shadow-sm transition hover:shadow-md pressable"
           >
-            <span className="flex flex-col items-center gap-1">
-              <span className="text-xl">🧾</span>
-              <span>ধার / বাকি লিখে রাখুন</span>
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-warning/15 text-warning text-lg">
+              🧾
             </span>
+            <div className="mt-2 space-y-1">
+              <p className="text-sm font-semibold text-foreground">ধার বাকি</p>
+              <p className="text-xs text-muted-foreground">বাকি লিখে রাখুন</p>
+            </div>
+          </Link>
+
+          <Link
+            href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
+            className="group relative overflow-hidden rounded-2xl border border-danger/30 bg-gradient-to-br from-danger-soft/60 via-card to-card p-3 text-left shadow-sm transition hover:shadow-md pressable"
+          >
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-danger/15 text-danger text-lg">
+              💸
+            </span>
+            <div className="mt-2 space-y-1">
+              <p className="text-sm font-semibold text-foreground">খরচ যোগ</p>
+              <p className="text-xs text-muted-foreground">দ্রুত খরচ লিখুন</p>
+            </div>
+          </Link>
+
+          <Link
+            href={`/dashboard/cash?shopId=${selectedShopId}`}
+            className="group relative overflow-hidden rounded-2xl border border-success/30 bg-gradient-to-br from-success-soft/60 via-card to-card p-3 text-left shadow-sm transition hover:shadow-md pressable"
+          >
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-success/15 text-success text-lg">
+              💵
+            </span>
+            <div className="mt-2 space-y-1">
+              <p className="text-sm font-semibold text-foreground">ক্যাশবুক</p>
+              <p className="text-xs text-muted-foreground">লেনদেন দেখুন</p>
+            </div>
+          </Link>
+
+          <Link
+            href={`/dashboard/products/new?shopId=${selectedShopId}`}
+            className="group relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 p-3 text-left shadow-sm transition hover:shadow-md pressable"
+          >
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground text-lg">
+              🧺
+            </span>
+            <div className="mt-2 space-y-1">
+              <p className="text-sm font-semibold text-foreground">পণ্য যোগ</p>
+              <p className="text-xs text-muted-foreground">নতুন পণ্য বানান</p>
+            </div>
+          </Link>
+
+          <Link
+            href={`/dashboard/reports?shopId=${selectedShopId}`}
+            className="group relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 p-3 text-left shadow-sm transition hover:shadow-md pressable"
+          >
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground text-lg">
+              📊
+            </span>
+            <div className="mt-2 space-y-1">
+              <p className="text-sm font-semibold text-foreground">রিপোর্ট</p>
+              <p className="text-xs text-muted-foreground">ইনসাইট দেখুন</p>
+            </div>
           </Link>
         </div>
       </div>
@@ -465,6 +542,12 @@ function Card({
     primary: "bg-primary/15 text-primary",
     warning: "bg-warning/15 text-warning",
   };
+  const accent: Record<string, string> = {
+    success: "from-success-soft/60",
+    danger: "from-danger-soft/60",
+    primary: "from-primary-soft/60",
+    warning: "from-warning-soft/60",
+  };
   const valueColor: Record<string, string> = {
     success: "text-success",
     danger: "text-danger",
@@ -477,18 +560,23 @@ function Card({
   const amount = parts.join(" ");
 
   return (
-    <div className="bg-card text-foreground p-5 rounded-2xl border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all pressable">
-      <div className="flex items-start gap-3">
+    <div className="relative overflow-hidden bg-card text-foreground p-4 rounded-2xl border border-border/70 shadow-[0_10px_20px_rgba(15,23,42,0.08)] hover:shadow-[0_14px_26px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 transition-all pressable">
+      <div
+        className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${
+          accent[color] ?? "from-muted/30"
+        } to-transparent`}
+      />
+      <div className="relative flex items-start gap-3">
         {icon ? (
           <span
-            className={`inline-flex items-center justify-center h-8 w-8 rounded-full text-[18px] ${
+            className={`inline-flex items-center justify-center h-9 w-9 rounded-full text-[18px] ${
               iconBg[color] ?? "bg-muted text-muted-foreground"
             }`}
           >
             {icon}
           </span>
         ) : null}
-        <div className="space-y-3">
+        <div className="space-y-2">
           <p className="text-[13px] font-medium text-foreground/80">{title}</p>
           <div className="flex items-end gap-1">
             <span
