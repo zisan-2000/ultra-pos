@@ -313,7 +313,7 @@ export default function CashFormClient({
               className={`inline-flex h-7 items-center gap-1 rounded-full px-3 font-semibold border ${
                 online
                   ? "bg-success-soft text-success border-success/30"
-                  : "bg-warning-soft text-warning border-warning/30"
+                  : "bg-danger-soft text-danger border-danger/30"
               }`}
             >
               {online ? "অনলাইন" : "অফলাইন"}

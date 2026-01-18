@@ -396,7 +396,7 @@ export default function ReportsClient({
               className={`inline-flex h-7 items-center rounded-full border px-3 ${
                 online
                   ? "bg-success-soft text-success border-success/30"
-                  : "bg-muted text-muted-foreground border-border"
+                  : "bg-danger-soft text-danger border-danger/30"
               }`}
             >
               {online ? "অনলাইন" : "অফলাইন"}

@@ -496,7 +496,7 @@ export function DashboardShell({
                   className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                     online
                       ? "bg-success-soft text-success"
-                      : "bg-muted text-muted-foreground"
+                      : "bg-danger-soft text-danger"
                   } ${sidebarCollapsed ? "lg:hidden" : ""}`}
                 >
                   {online ? "অনলাইন" : "অফলাইন"}
@@ -1029,12 +1029,12 @@ export function DashboardShell({
                     className={`inline-flex h-7 items-center gap-1 rounded-full border px-3 text-[11px] font-semibold shadow-sm ${
                       online
                         ? "border-success/30 bg-success-soft text-success"
-                        : "border-border bg-muted text-muted-foreground"
+                        : "border-danger/30 bg-danger-soft text-danger"
                     }`}
                   >
                     <span
                       className={`inline-flex h-1.5 w-1.5 rounded-full ${
-                        online ? "bg-success" : "bg-muted-foreground"
+                        online ? "bg-success" : "bg-danger"
                       }`}
                     />
                     {online ? "অনলাইন" : "অফলাইন"}

@@ -110,7 +110,7 @@ export default function PosShell({
                 className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                   online
                     ? "bg-success-soft text-success"
-                    : "bg-muted text-muted-foreground"
+                    : "bg-danger-soft text-danger"
                 }`}
               >
                 {online ? "Online" : "Offline"}

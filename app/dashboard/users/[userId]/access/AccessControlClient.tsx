@@ -268,7 +268,7 @@ export default function AccessControlClient({
                 "rounded-full px-3 py-1 font-semibold",
                 online
                   ? "bg-success-soft text-success"
-                  : "bg-warning-soft text-warning",
+                  : "bg-danger-soft text-danger",
               )}
             >
               {online ? "অনলাইন" : "অফলাইন"}
