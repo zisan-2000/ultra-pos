@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
+import { Prisma } from "@prisma/client";
 
 import { type CursorToken } from "@/lib/cursor-pagination";
 
@@ -173,7 +174,7 @@ export async function createProduct(input: CreateProductInput) {
     input.trackStock === undefined ? false : Boolean(input.trackStock);
   const stockQty = trackStock ? normalizedStock : "0";
 
-  const data: Record<string, any> = {
+  const data: Prisma.ProductUncheckedCreateInput = {
     shopId: input.shopId,
     name: input.name,
     category: input.category || "Uncategorized",

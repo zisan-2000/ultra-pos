@@ -47,7 +47,9 @@ type PosPageClientProps = {
     id: string;
     name: string;
     phone: string | null;
+    address?: string | null;
     totalDue: string | number;
+    lastPaymentAt?: string | null;
   }[];
   shopName: string;
   shopId: string;
