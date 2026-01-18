@@ -13,6 +13,7 @@ import { type CursorToken } from "@/lib/cursor-pagination";
 // TYPES
 // ---------------------------------
 type CreateProductInput = {
+  id?: string;
   shopId: string;
   name: string;
   category: string;
@@ -172,20 +173,24 @@ export async function createProduct(input: CreateProductInput) {
     input.trackStock === undefined ? false : Boolean(input.trackStock);
   const stockQty = trackStock ? normalizedStock : "0";
 
-  await prisma.product.create({
-    data: {
-      shopId: input.shopId,
-      name: input.name,
-      category: input.category || "Uncategorized",
-      buyPrice: buyPrice === null ? null : buyPrice ?? undefined,
-      sellPrice,
-      stockQty,
-      isActive: input.isActive,
-      trackStock,
-    },
-  });
+  const data: Record<string, any> = {
+    shopId: input.shopId,
+    name: input.name,
+    category: input.category || "Uncategorized",
+    buyPrice: buyPrice === null ? null : buyPrice ?? undefined,
+    sellPrice,
+    stockQty,
+    isActive: input.isActive,
+    trackStock,
+  };
 
-  return { success: true };
+  if (input.id) {
+    data.id = input.id;
+  }
+
+  const created = await prisma.product.create({ data });
+
+  return { success: true, id: created.id };
 }
 
 // ---------------------------------
@@ -498,24 +503,21 @@ export async function getActiveProductsByShop(shopId: string) {
     where: { shopId, isActive: true },
     select: {
       id: true,
-      shopId: true,
       name: true,
       category: true,
-      buyPrice: true,
       sellPrice: true,
       stockQty: true,
       trackStock: true,
-      isActive: true,
-      createdAt: true,
     },
   });
 
-  // Convert Prisma Decimal/Date values to plain serializable primitives for client components
+  // Convert Prisma Decimal values to serializable primitives for client components
   return rows.map((p) => ({
-    ...p,
-    buyPrice: p.buyPrice === null ? null : p.buyPrice.toString(),
+    id: p.id,
+    name: p.name,
+    category: p.category,
     sellPrice: p.sellPrice.toString(),
-    stockQty: p.stockQty.toString(),
-    createdAt: p.createdAt.toISOString(),
+    stockQty: p.stockQty?.toString() ?? "0",
+    trackStock: p.trackStock,
   }));
 }

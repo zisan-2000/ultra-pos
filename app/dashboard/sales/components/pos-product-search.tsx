@@ -309,7 +309,9 @@ export const PosProductSearch = memo(function PosProductSearch({
     );
   }, [filteredByCategory, debouncedQuery]);
 
+  const shouldSort = showAllProducts || debouncedQuery.trim().length > 0;
   const sortedResults = useMemo(() => {
+    if (!shouldSort) return filteredByQuery;
     const term = debouncedQuery.trim().toLowerCase();
 
     // Build sort key cache for efficiency
@@ -358,7 +360,7 @@ export const PosProductSearch = memo(function PosProductSearch({
 
       return aName.localeCompare(bName);
     });
-  }, [filteredByQuery, usage, debouncedQuery]);
+  }, [filteredByQuery, usage, debouncedQuery, shouldSort]);
 
   const smartSuggestions = useMemo(() => {
     const quickSlots = (quickSlotsRef.current ??

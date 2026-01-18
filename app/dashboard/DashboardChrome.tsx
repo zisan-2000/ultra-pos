@@ -24,6 +24,7 @@ import LogoutButton from "@/components/LogoutButton";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useCurrentShop } from "@/hooks/use-current-shop";
+import { scheduleIdle } from "@/lib/schedule-idle";
 import {
   BarChart3,
   ChevronDown,
@@ -262,6 +263,25 @@ export function DashboardShell({
   }, [drawerOpen]);
 
   useEffect(() => {
+    if (!mounted || !shops || shops.length <= 1) return;
+    const maxPrefetch = 4;
+    const candidates = shops
+      .filter((shop) => shop.id !== safeShopId)
+      .slice(0, maxPrefetch);
+    if (candidates.length === 0) return;
+
+    const cancel = scheduleIdle(() => {
+      candidates.forEach((shop) => {
+        const params = new URLSearchParams(searchParams?.toString() || "");
+        params.set("shopId", shop.id);
+        router.prefetch(`${pathname}?${params.toString()}`);
+      });
+    }, 600);
+
+    return () => cancel();
+  }, [mounted, pathname, router, safeShopId, searchParams, shops]);
+
+  useEffect(() => {
     if (!userMenuOpen) return;
 
     const onPointerDown = (e: MouseEvent | TouchEvent) => {
@@ -374,6 +394,7 @@ export function DashboardShell({
   };
 
   const handleShopChange = (id: string) => {
+    if (!id || id === safeShopId) return;
     setShop(id);
     document.cookie = `activeShopId=${id}; path=/; max-age=${
       60 * 60 * 24 * 30
@@ -382,8 +403,10 @@ export function DashboardShell({
     const params = new URLSearchParams(searchParams?.toString() || "");
     params.set("shopId", id);
     const next = `${pathname}?${params.toString()}`;
-    router.replace(next);
-    router.refresh();
+    router.prefetch(next);
+    startTransition(() => {
+      router.replace(next, { scroll: false });
+    });
   };
 
   const profileHref = "/dashboard/profile";

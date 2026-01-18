@@ -3,6 +3,7 @@
 "use client";
 
 import {
+  useCallback,
   useState,
   FormEvent,
   useEffect,
@@ -21,6 +22,8 @@ import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { subscribeDueCustomersEvent } from "@/lib/due/customer-events";
+import { subscribeProductEvent } from "@/lib/products/product-events";
 
 type ProductOption = {
   id: string;
@@ -85,6 +88,10 @@ export function PosPageClient({
         sellPrice: p.sellPrice.toString(),
       })) as ProductOption[]
   );
+  const [customerList, setCustomerList] = useState(customers);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const customersLoadedRef = useRef(customers.length > 0);
+  const customersLastFetchRef = useRef(0);
   const items = useMemo(
     () => (cartShopId === shopId ? cartItems : []),
     [cartItems, cartShopId, shopId]
@@ -99,6 +106,7 @@ export function PosPageClient({
   const [paidNow, setPaidNow] = useState<string>("");
   const [note, setNote] = useState("");
   const [success, setSuccess] = useState<{ saleId?: string } | null>(null);
+  const [productsRefreshing, setProductsRefreshing] = useState(false);
   const online = useOnlineStatus();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const lastSyncLabel = useMemo(() => {
@@ -109,6 +117,17 @@ export function PosPageClient({
     }).format(new Date(lastSyncAt));
   }, [lastSyncAt]);
   const serverSnapshotRef = useRef(products);
+  useEffect(() => {
+    if (customers.length === 0) return;
+    setCustomerList(customers);
+    customersLoadedRef.current = true;
+    customersLastFetchRef.current = Date.now();
+  }, [customers]);
+  useEffect(() => {
+    customersLoadedRef.current = false;
+    customersLastFetchRef.current = 0;
+    setCustomerList([]);
+  }, [shopId]);
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
   const REFRESH_MIN_INTERVAL_MS = 15_000;
@@ -124,6 +143,103 @@ export function PosPageClient({
     ],
     []
   );
+  const loadCustomersFromDexie = useCallback(async () => {
+    try {
+      const rows = await db.dueCustomers
+        .where("shopId")
+        .equals(shopId)
+        .toArray();
+      const cachedRows = rows.map((c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone ?? null,
+        totalDue: c.totalDue,
+      }));
+      if (cachedRows.length > 0) {
+        setCustomerList(cachedRows);
+      }
+      return cachedRows;
+    } catch (err) {
+      handlePermissionError(err);
+      console.warn("Load due customers cache failed", err);
+      return [] as typeof customers;
+    }
+  }, [shopId]);
+
+  const loadCustomers = useCallback(
+    async (force = false) => {
+      if (customersLoading) return;
+      const now = Date.now();
+      const CUSTOMER_REFRESH_MIN_MS = 15_000;
+      if (
+        !force &&
+        customersLoadedRef.current &&
+        now - customersLastFetchRef.current < CUSTOMER_REFRESH_MIN_MS
+      ) {
+        return;
+      }
+
+      customersLoadedRef.current = true;
+      customersLastFetchRef.current = now;
+      setCustomersLoading(true);
+
+      try {
+        await loadCustomersFromDexie();
+
+        if (!online) return;
+
+        const res = await fetch(`/api/due/customers?shopId=${shopId}`);
+        const json = (await res.json()) as { data?: typeof customers };
+        const list = Array.isArray(json?.data) ? json.data : [];
+        setCustomerList(list);
+
+        if (list.length > 0) {
+          const nowTs = Date.now();
+          const rows = list.map((c) => ({
+            id: c.id,
+            shopId,
+            name: c.name,
+            phone: c.phone ?? null,
+            address: c.address ?? null,
+            totalDue: c.totalDue ?? 0,
+            lastPaymentAt: c.lastPaymentAt ?? null,
+            updatedAt: nowTs,
+            syncStatus: "synced" as const,
+          }));
+          await db.transaction("rw", db.dueCustomers, async () => {
+            await db.dueCustomers.where("shopId").equals(shopId).delete();
+            await db.dueCustomers.bulkPut(rows);
+          });
+        }
+      } catch (err) {
+        handlePermissionError(err);
+        console.error("Load due customers failed", err);
+      } finally {
+        setCustomersLoading(false);
+      }
+    },
+    [customersLoading, loadCustomersFromDexie, online, shopId]
+  );
+
+  const loadProductsFromDexie = useCallback(async () => {
+    try {
+      const rows = await db.products.where("shopId").equals(shopId).toArray();
+      const mapped = rows.map((p) => ({
+        id: p.id,
+        name: p.name,
+        sellPrice: p.sellPrice.toString(),
+        stockQty: p.stockQty?.toString(),
+        category: p.category,
+        trackStock: p.trackStock,
+      }));
+      setProductOptions(mapped);
+      return mapped;
+    } catch (err) {
+      handlePermissionError(err);
+      console.error("Load offline products failed", err);
+      return [] as ProductOption[];
+    }
+  }, [shopId]);
 
   const applyStockDelta = (soldItems: typeof items) => {
     if (!soldItems || soldItems.length === 0) return;
@@ -169,6 +285,7 @@ export function PosPageClient({
     if (serverSnapshotRef.current !== products) {
       serverSnapshotRef.current = products;
       refreshInFlightRef.current = false;
+      setProductsRefreshing(false);
     }
   }, [products]);
 
@@ -182,36 +299,51 @@ export function PosPageClient({
     router.refresh();
   }, [online, lastSyncAt, syncing, pendingCount, router]);
 
-  // Keep Dexie seeded when online; load from Dexie when offline.
   useEffect(() => {
-    let cancelled = false;
+    if (!isDue) return;
+    loadCustomers();
+  }, [isDue, loadCustomers]);
 
-    const loadFromDexie = async () => {
-      try {
-        const rows = await db.products.where("shopId").equals(shopId).toArray();
-        if (cancelled) return;
-        setProductOptions(
-          rows.map((p) => ({
-            id: p.id,
-            name: p.name,
-            sellPrice: p.sellPrice.toString(),
-            stockQty: p.stockQty?.toString(),
-            category: p.category,
-            trackStock: p.trackStock,
-          }))
-        );
-      } catch (err) {
-        handlePermissionError(err);
-        console.error("Load offline products failed", err);
+  useEffect(() => {
+    if (!isDue || !online) return;
+    const handleFocus = () => {
+      loadCustomers(true);
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadCustomers(true);
       }
     };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [isDue, loadCustomers, online]);
 
+  useEffect(() => {
+    return subscribeDueCustomersEvent((detail) => {
+      if (detail.shopId !== shopId) return;
+      customersLoadedRef.current = true;
+      customersLastFetchRef.current = Date.now();
+      loadCustomersFromDexie();
+    });
+  }, [loadCustomersFromDexie, shopId]);
+
+  useEffect(() => {
+    return subscribeProductEvent((detail) => {
+      if (detail.shopId !== shopId) return;
+      loadProductsFromDexie();
+    });
+  }, [loadProductsFromDexie, shopId]);
+
+  // Keep Dexie seeded when online; load from Dexie when offline.
+  useEffect(() => {
     if (online) {
       if (syncing || pendingCount > 0 || refreshInFlightRef.current) {
-        loadFromDexie();
-        return () => {
-          cancelled = true;
-        };
+        loadProductsFromDexie();
+        return;
       }
 
       setProductOptions(
@@ -235,16 +367,11 @@ export function PosPageClient({
       db.products.bulkPut(rows).catch((err) => {
         console.error("Seed Dexie products failed", err);
       });
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
 
-    loadFromDexie();
-    return () => {
-      cancelled = true;
-    };
-  }, [online, products, shopId, pendingCount, syncing]);
+    loadProductsFromDexie();
+  }, [online, products, shopId, pendingCount, syncing, loadProductsFromDexie]);
 
   // Keep cart tied to the currently selected shop; reset when shop changes
   useEffect(() => {
@@ -344,7 +471,7 @@ export function PosPageClient({
         const existing = await db.dueCustomers.get(customerId);
         const baseDueRaw =
           existing?.totalDue ??
-          customers.find((c) => c.id === customerId)?.totalDue ??
+          customerList.find((c) => c.id === customerId)?.totalDue ??
           0;
         const baseDue = Number(baseDueRaw);
         const nextDue = Number(
@@ -361,7 +488,7 @@ export function PosPageClient({
             syncStatus: "synced",
           });
         } else {
-          const customer = customers.find((c) => c.id === customerId);
+          const customer = customerList.find((c) => c.id === customerId);
           await db.dueCustomers.put({
             id: customerId,
             shopId,
@@ -423,12 +550,12 @@ export function PosPageClient({
   );
   const customerOptions = useMemo(
     () =>
-      customers.map((c) => (
+      customerList.map((c) => (
         <option key={c.id} value={c.id}>
           {c.name} - বকেয়া: {Number(c.totalDue || 0).toFixed(2)} ৳
         </option>
       )),
-    [customers]
+    [customerList]
   );
 
   const scrollToCart = () => {
@@ -438,6 +565,18 @@ export function PosPageClient({
         block: "start",
       });
     }
+  };
+
+  const handleProductRefresh = () => {
+    if (!online) {
+      loadProductsFromDexie();
+      return;
+    }
+    if (productsRefreshing) return;
+    setProductsRefreshing(true);
+    refreshInFlightRef.current = true;
+    lastRefreshAtRef.current = Date.now();
+    router.refresh();
   };
 
   const handleSellFromBar = () => {
@@ -492,6 +631,18 @@ export function PosPageClient({
                   পেন্ডিং {pendingCount} টি
                 </span>
               ) : null}
+              <button
+                type="button"
+                onClick={handleProductRefresh}
+                disabled={productsRefreshing}
+                className={`inline-flex h-7 items-center rounded-full border px-3 transition ${
+                  productsRefreshing
+                    ? "border-primary/40 bg-primary-soft text-primary"
+                    : "border-border bg-card/80 text-muted-foreground hover:border-primary/30"
+                }`}
+              >
+                {productsRefreshing ? "রিফ্রেশ হচ্ছে..." : "রিফ্রেশ"}
+              </button>
               {syncing ? (
                 <span className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-primary">
                   সিঙ্ক হচ্ছে...
@@ -574,8 +725,18 @@ export function PosPageClient({
                 className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
+                disabled={customersLoading}
               >
                 <option value="">-- একজন গ্রাহক নির্বাচন করুন --</option>
+                {customersLoading ? (
+                  <option value="" disabled>
+                    গ্রাহক লোড হচ্ছে...
+                  </option>
+                ) : customerList.length === 0 ? (
+                  <option value="" disabled>
+                    কোনো গ্রাহক পাওয়া যায়নি
+                  </option>
+                ) : null}
                 {customerOptions}
               </select>
               <a

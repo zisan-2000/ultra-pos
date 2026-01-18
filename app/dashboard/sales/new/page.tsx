@@ -4,7 +4,6 @@ import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getActiveProductsByShop } from "@/app/actions/products";
 import { createSale } from "@/app/actions/sales";
-import { getCustomersByShop } from "@/app/actions/customers";
 import Link from "next/link";
 import { PosPageClient } from "../PosPageClient";
 
@@ -13,8 +12,10 @@ type NewSalePageProps = {
 };
 
 export default async function NewSalePage({ searchParams }: NewSalePageProps) {
-  const shops = await getShopsByUser();
-  const resolvedSearch = await searchParams;
+  const [shops, resolvedSearch] = await Promise.all([
+    getShopsByUser(),
+    searchParams,
+  ]);
 
   if (!shops || shops.length === 0) {
     return (
@@ -47,7 +48,6 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
   const products = await getActiveProductsByShop(selectedShopId);
-  const customers = await getCustomersByShop(selectedShopId);
 
   async function submitSale(formData: FormData) {
     "use server";
@@ -87,7 +87,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
     <PosPageClient
       key={selectedShopId}
       products={products as any}
-      customers={customers as any}
+      customers={[] as any}
       shopName={selectedShop.name}
       shopId={selectedShopId}
       submitSale={submitSale}

@@ -21,6 +21,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { emitDueCustomersEvent } from "@/lib/due/customer-events";
 import {
   db,
   type LocalDueCustomer,
@@ -187,6 +188,9 @@ export default function DuePageClient({
   const online = useOnlineStatus();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const lastRefreshAtRef = useRef(0);
+  const REFRESH_MIN_INTERVAL_MS = 15_000;
   const [voiceReady, setVoiceReady] = useState(false);
   const [listeningField, setListeningField] = useState<VoiceField | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -397,18 +401,40 @@ export default function DuePageClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customers]);
 
-  async function refreshData() {
-    const customersRes = await fetch(
-      `/api/due/customers?shopId=${shopId}`
-    ).then((r) => r.json());
-    const list = Array.isArray(customersRes?.data) ? customersRes.data : [];
+  async function refreshData(options?: {
+    force?: boolean;
+    source?: "refresh" | "create" | "payment" | "sync" | "local";
+  }) {
+    if (refreshInFlightRef.current) return;
+    const now = Date.now();
+    if (!options?.force && now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) {
+      return;
+    }
+    refreshInFlightRef.current = true;
+    lastRefreshAtRef.current = now;
     try {
-      await seedCustomersToDexie(list);
+      const customersRes = await fetch(
+        `/api/due/customers?shopId=${shopId}`
+      ).then((r) => r.json());
+      const list = Array.isArray(customersRes?.data) ? customersRes.data : [];
+      try {
+        await seedCustomersToDexie(list);
+      } catch (err) {
+        handlePermissionError(err);
+        console.error("Refresh due customers failed", err);
+      }
+      await loadCustomersFromDexie();
+      emitDueCustomersEvent({
+        shopId,
+        at: Date.now(),
+        source: options?.source ?? "refresh",
+      });
     } catch (err) {
       handlePermissionError(err);
-      console.error("Refresh due customers failed", err);
+      console.error("Refresh due customers request failed", err);
+    } finally {
+      refreshInFlightRef.current = false;
     }
-    await loadCustomersFromDexie();
   }
 
   async function loadStatement(customerId: string) {
@@ -473,7 +499,7 @@ export default function DuePageClient({
     if (!lastSyncAt) return;
     if (syncing) return;
     if (pendingCount > 0) return;
-    refreshData();
+    refreshData({ source: "sync" });
     if (selectedCustomerId) {
       loadStatement(selectedCustomerId);
     }
@@ -510,6 +536,7 @@ export default function DuePageClient({
       localStorage.setItem(customerTemplateKey, JSON.stringify(merged));
       setNewCustomer({ name: "", phone: "", address: "" });
       await loadCustomersFromDexie();
+      emitDueCustomersEvent({ shopId, at: Date.now(), source: "local" });
       return;
     }
 
@@ -536,7 +563,7 @@ export default function DuePageClient({
     localStorage.setItem(customerTemplateKey, JSON.stringify(merged));
 
     setNewCustomer({ name: "", phone: "", address: "" });
-    await refreshData();
+    await refreshData({ force: true, source: "create" });
   }
 
   function persistPaymentTemplate(
@@ -689,7 +716,7 @@ export default function DuePageClient({
         amount: "",
         description: "",
       });
-      await refreshData();
+      await refreshData({ force: true, source: "payment" });
       await loadStatement(paymentForm.customerId);
     } finally {
       setSavingPayment(false);

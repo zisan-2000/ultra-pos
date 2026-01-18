@@ -26,6 +26,7 @@ import { createProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
+import { emitProductEvent } from "@/lib/products/product-events";
 import toast from "react-hot-toast";
 import { handlePermissionError } from "@/lib/permission-toast";
 
@@ -659,11 +660,33 @@ function ProductForm({ shop, businessConfig }: Props) {
 
     try {
       if (online) {
-        await createProduct(payload);
+        const result = await createProduct(payload);
+        const createdId = result?.id || payload.id;
+        try {
+          await db.products.put({
+            ...payload,
+            id: createdId,
+            updatedAt: Date.now(),
+            syncStatus: "synced",
+          });
+        } catch (err) {
+          handlePermissionError(err);
+          console.warn("Seed local product failed", err);
+        }
+        emitProductEvent({
+          shopId: ensuredShopId,
+          at: Date.now(),
+          source: "create",
+        });
         toast.success("পণ্য তৈরি হয়েছে।");
       } else {
         await db.products.put(payload);
         await queueAdd("product", "create", payload);
+        emitProductEvent({
+          shopId: ensuredShopId,
+          at: Date.now(),
+          source: "local",
+        });
         toast.success("অফলাইন: পণ্য কিউ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
       }
 
