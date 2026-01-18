@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Select,
   SelectContent,
@@ -186,6 +187,7 @@ export default function DuePageClient({
   initialCustomers,
 }: Props) {
   const online = useOnlineStatus();
+  const queryClient = useQueryClient();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const refreshInFlightRef = useRef(false);
@@ -213,8 +215,6 @@ export default function DuePageClient({
   );
   const summary = useMemo(() => computeSummary(customers), [customers]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
-  const [statement, setStatement] = useState<StatementRow[]>([]);
-  const [loadingStatement, setLoadingStatement] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: "",
@@ -283,12 +283,32 @@ export default function DuePageClient({
     });
   }, [shopId]);
 
+  const customerQueryKey = useMemo(() => ["due", "customers", shopId], [shopId]);
+
+  const fetchCustomers = useCallback(async () => {
+    const res = await fetch(`/api/due/customers?shopId=${shopId}`);
+    if (!res.ok) {
+      throw new Error("Due customers fetch failed");
+    }
+    const json = await res.json();
+    return Array.isArray(json?.data) ? json.data : [];
+  }, [shopId]);
+
+  const customersQuery = useQuery({
+    queryKey: customerQueryKey,
+    queryFn: fetchCustomers,
+    enabled: online,
+    staleTime: 15_000,
+    initialData: () => initialCustomers ?? [],
+    placeholderData: (prev) => prev ?? [],
+  });
+
   // Seed Dexie when online; always read from Dexie as source of truth.
   useEffect(() => {
     const run = async () => {
       if (online) {
         try {
-          await seedCustomersToDexie(initialCustomers || []);
+          await seedCustomersToDexie(customersQuery.data ?? initialCustomers ?? []);
         } catch (err) {
           handlePermissionError(err);
           console.error("Seed Dexie due customers failed", err);
@@ -297,7 +317,13 @@ export default function DuePageClient({
       await loadCustomersFromDexie();
     };
     run();
-  }, [online, initialCustomers, loadCustomersFromDexie, seedCustomersToDexie]);
+  }, [
+    online,
+    initialCustomers,
+    customersQuery.data,
+    loadCustomersFromDexie,
+    seedCustomersToDexie,
+  ]);
 
   function mergeCustomerTemplates(
     existing: CustomerTemplate[],
@@ -388,7 +414,6 @@ export default function DuePageClient({
   useEffect(() => {
     setSelectedCustomerId("");
     setPaymentForm({ customerId: "", amount: "", description: "" });
-    setStatement([]);
     loadCustomersFromDexie();
   }, [shopId, loadCustomersFromDexie]);
 
@@ -396,7 +421,6 @@ export default function DuePageClient({
     if (!selectedCustomerId && customers.length > 0) {
       setSelectedCustomerId(customers[0].id);
       setPaymentForm((prev) => ({ ...prev, customerId: customers[0].id }));
-      loadStatement(customers[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customers]);
@@ -413,15 +437,11 @@ export default function DuePageClient({
     refreshInFlightRef.current = true;
     lastRefreshAtRef.current = now;
     try {
-      const customersRes = await fetch(
-        `/api/due/customers?shopId=${shopId}`
-      ).then((r) => r.json());
-      const list = Array.isArray(customersRes?.data) ? customersRes.data : [];
-      try {
-        await seedCustomersToDexie(list);
-      } catch (err) {
-        handlePermissionError(err);
-        console.error("Refresh due customers failed", err);
+      if (online) {
+        await queryClient.invalidateQueries({
+          queryKey: customerQueryKey,
+          refetchType: "active",
+        });
       }
       await loadCustomersFromDexie();
       emitDueCustomersEvent({
@@ -437,62 +457,101 @@ export default function DuePageClient({
     }
   }
 
-  async function loadStatement(customerId: string) {
-    if (!customerId) return;
-    setLoadingStatement(true);
-    try {
-      if (online) {
-        const res = await fetch(
-          `/api/due/statement?shopId=${shopId}&customerId=${customerId}`
-        );
-        const json = await res.json();
-        const rows = Array.isArray(json?.data) ? json.data : [];
-        const mapped = rows.map((row: any) =>
-          toLocalDueLedger(
-            {
-              id: row.id,
-              entryType: row.entryType,
-              amount: row.amount,
-              description: row.description ?? null,
-              entryDate: row.entryDate,
-            },
-            shopId,
-            customerId
-          )
-        );
-
-        await db.transaction("rw", db.dueLedger, async () => {
-          await db.dueLedger
-            .where("[shopId+customerId]")
-            .equals([shopId, customerId])
-            .and((row) => row.syncStatus === "synced")
-            .delete();
-          if (mapped.length > 0) {
-            await db.dueLedger.bulkPut(mapped);
-          }
-        });
-      }
-
+  const readStatementFromDexie = useCallback(
+    async (customerId: string) => {
       const localRows = await db.dueLedger
         .where("[shopId+customerId]")
         .equals([shopId, customerId])
         .toArray();
-      const localStatement = localRows
+      return localRows
         .map(fromLocalDueLedger)
         .sort(
           (a, b) =>
             new Date(a.entryDate).getTime() -
             new Date(b.entryDate).getTime()
         );
-      setStatement(localStatement);
-    } catch (err) {
-      handlePermissionError(err);
-      console.error("Load due statement failed", err);
-      setStatement([]);
-    } finally {
-      setLoadingStatement(false);
-    }
-  }
+    },
+    [shopId]
+  );
+
+  const fetchStatement = useCallback(
+    async (customerId: string) => {
+      if (!customerId) return [];
+      try {
+        if (online) {
+          const res = await fetch(
+            `/api/due/statement?shopId=${shopId}&customerId=${customerId}`
+          );
+          if (res.ok) {
+            const json = await res.json();
+            const rows = Array.isArray(json?.data) ? json.data : [];
+            const mapped = rows.map((row: any) =>
+              toLocalDueLedger(
+                {
+                  id: row.id,
+                  entryType: row.entryType,
+                  amount: row.amount,
+                  description: row.description ?? null,
+                  entryDate: row.entryDate,
+                },
+                shopId,
+                customerId
+              )
+            );
+
+            await db.transaction("rw", db.dueLedger, async () => {
+              await db.dueLedger
+                .where("[shopId+customerId]")
+                .equals([shopId, customerId])
+                .and((row) => row.syncStatus === "synced")
+                .delete();
+              if (mapped.length > 0) {
+                await db.dueLedger.bulkPut(mapped);
+              }
+            });
+          }
+        }
+      } catch (err) {
+        handlePermissionError(err);
+        console.error("Load due statement failed", err);
+      }
+
+      try {
+        return await readStatementFromDexie(customerId);
+      } catch (err) {
+        handlePermissionError(err);
+        console.error("Load due statement cache failed", err);
+        return [];
+      }
+    },
+    [online, shopId, readStatementFromDexie]
+  );
+
+  const statementQueryKey = useMemo(
+    () => ["due", "statement", shopId, selectedCustomerId],
+    [shopId, selectedCustomerId]
+  );
+
+  const statementQuery = useQuery({
+    queryKey: statementQueryKey,
+    queryFn: () => fetchStatement(selectedCustomerId),
+    enabled: Boolean(selectedCustomerId),
+    staleTime: 15_000,
+    placeholderData: (prev) => prev ?? [],
+  });
+
+  const statement = statementQuery.data ?? [];
+  const loadingStatement = statementQuery.isFetching && online;
+  const refreshStatement = useCallback(
+    (customerId?: string) => {
+      if (!customerId) return;
+      queryClient.invalidateQueries({
+        queryKey: ["due", "statement", shopId, customerId],
+        refetchType: "active",
+      });
+    },
+    [queryClient, shopId]
+  );
 
   useEffect(() => {
     if (!online) return;
@@ -501,7 +560,7 @@ export default function DuePageClient({
     if (pendingCount > 0) return;
     refreshData({ source: "sync" });
     if (selectedCustomerId) {
-      loadStatement(selectedCustomerId);
+      refreshStatement(selectedCustomerId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online, lastSyncAt, syncing, pendingCount]);
@@ -689,7 +748,7 @@ export default function DuePageClient({
           description: "",
         });
 
-        await loadStatement(paymentForm.customerId);
+        refreshStatement(paymentForm.customerId);
         alert("অফলাইন: পেমেন্ট সেভ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
         return;
       }
@@ -717,7 +776,7 @@ export default function DuePageClient({
         description: "",
       });
       await refreshData({ force: true, source: "payment" });
-      await loadStatement(paymentForm.customerId);
+      refreshStatement(paymentForm.customerId);
     } finally {
       setSavingPayment(false);
     }
@@ -817,14 +876,12 @@ export default function DuePageClient({
   const openStatementFor = (customerId: string) => {
     setActiveTab("list");
     setSelectedCustomerId(customerId);
-    loadStatement(customerId);
   };
 
   const openPaymentFor = (customerId: string) => {
     setActiveTab("payment");
     setSelectedCustomerId(customerId);
     setPaymentForm((prev) => ({ ...prev, customerId }));
-    loadStatement(customerId);
   };
 
   function startVoice(field: VoiceField) {
@@ -1282,7 +1339,6 @@ export default function DuePageClient({
                         customerId: value,
                       }));
                       setSelectedCustomerId(value);
-                      loadStatement(value);
                     }}
                     disabled={customers.length === 0}
                   >
@@ -1311,7 +1367,6 @@ export default function DuePageClient({
                         customerId: e.target.value,
                       }));
                       setSelectedCustomerId(e.target.value);
-                      loadStatement(e.target.value);
                     }}
                     disabled={customers.length === 0}
                   >
@@ -1487,7 +1542,6 @@ export default function DuePageClient({
                     value={selectedCustomerId}
                     onValueChange={(value) => {
                       setSelectedCustomerId(value);
-                      loadStatement(value);
                     }}
                     disabled={customers.length === 0}
                   >
@@ -1511,7 +1565,6 @@ export default function DuePageClient({
                     value={selectedCustomerId}
                     onChange={(e) => {
                       setSelectedCustomerId(e.target.value);
-                      loadStatement(e.target.value);
                     }}
                     disabled={customers.length === 0}
                   >
@@ -1686,5 +1739,6 @@ export default function DuePageClient({
     </div>
   );
 }
+
 
 

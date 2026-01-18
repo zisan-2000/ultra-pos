@@ -4,6 +4,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
@@ -24,12 +25,9 @@ type ReportCursor = { at: string; id: string };
 
 export default function CashbookReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
-  const [rows, setRows] = useState<CashRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [cursorList, setCursorList] = useState<ReportCursor[]>([]);
-  const [nextCursor, setNextCursor] = useState<ReportCursor | null>(null);
-  const [hasMore, setHasMore] = useState(false);
   const prefetchKeyRef = useRef<string | null>(null);
 
   const currentCursor = page > 1 ? cursorList[page - 2] ?? null : null;
@@ -43,101 +41,123 @@ export default function CashbookReport({ shopId, from, to }: Props) {
   useEffect(() => {
     setPage(1);
     setCursorList([]);
-    setNextCursor(null);
-    setHasMore(false);
   }, [shopId, from, to]);
 
-  const loadCached = useCallback(
+  const readCached = useCallback(
     (rangeFrom?: string, rangeTo?: string) => {
+      if (typeof window === "undefined") return null;
       try {
         const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
         if (!raw) {
-          return false;
+          return null;
         }
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setRows(parsed);
-          return true;
-        }
+        return Array.isArray(parsed) ? (parsed as CashRow[]) : null;
       } catch (err) {
         handlePermissionError(err);
         console.warn("Cash report cache read failed", err);
+        return null;
       }
-      return false;
     },
     [buildCacheKey]
   );
 
-  const load = useCallback(
-    async (rangeFrom?: string, rangeTo?: string) => {
-      if (page > 1 && !currentCursor) {
-        setPage(1);
-        return;
+  const fetchCash = useCallback(
+    async (
+      rangeFrom?: string,
+      rangeTo?: string,
+      cursor?: ReportCursor | null,
+      shouldCache = false
+    ) => {
+      const params = new URLSearchParams({
+        shopId,
+        limit: `${REPORT_ROW_LIMIT}`,
+      });
+      if (rangeFrom) params.append("from", rangeFrom);
+      if (rangeTo) params.append("to", rangeTo);
+      if (cursor) {
+        params.append("cursorAt", cursor.at);
+        params.append("cursorId", cursor.id);
       }
-      const cachedApplied = page === 1 ? loadCached(rangeFrom, rangeTo) : false;
-      if (!online) {
-        setLoading(false);
-        setHasMore(false);
-        setNextCursor(null);
-        if (page !== 1) {
-          setPage(1);
-          return;
-        }
-        return;
-      }
-      setLoading(!cachedApplied || page > 1);
-      try {
-        const params = new URLSearchParams({ shopId });
-        if (rangeFrom) params.append("from", rangeFrom);
-        if (rangeTo) params.append("to", rangeTo);
-        params.append("limit", `${REPORT_ROW_LIMIT}`);
-        if (currentCursor) {
-          params.append("cursorAt", currentCursor.at);
-          params.append("cursorId", currentCursor.id);
-        }
 
-        const res = await fetch(`/api/reports/cash?${params.toString()}`);
-        if (!res.ok) {
-          if (page === 1) {
-            loadCached(rangeFrom, rangeTo);
-          }
-          setHasMore(false);
-          setNextCursor(null);
-          return;
+      const res = await fetch(`/api/reports/cash?${params.toString()}`);
+      if (!res.ok) {
+        const cached = readCached(rangeFrom, rangeTo);
+        if (cached && !cursor) {
+          return { rows: cached, hasMore: false, nextCursor: null };
         }
-        const data = await res.json();
-        const rows = data.rows || [];
-        setRows(rows);
-        setHasMore(Boolean(data.hasMore));
-        setNextCursor(data.nextCursor ?? null);
-        if (data.nextCursor) {
-          setCursorList((prev) => {
-            const next = [...prev];
-            next[page - 1] = data.nextCursor;
-            return next;
-          });
-        }
-        if (page === 1) {
-          try {
-            localStorage.setItem(
-              buildCacheKey(rangeFrom, rangeTo),
-              JSON.stringify(rows)
-            );
-          } catch (err) {
-            handlePermissionError(err);
-            console.warn("Cash report cache write failed", err);
-          }
-        }
-      } finally {
-        setLoading(false);
+        throw new Error("Cash report fetch failed");
       }
+      const data = await res.json();
+      const rows = data.rows || [];
+      if (shouldCache && !cursor && typeof window !== "undefined") {
+        try {
+          localStorage.setItem(
+            buildCacheKey(rangeFrom, rangeTo),
+            JSON.stringify(rows)
+          );
+        } catch (err) {
+          handlePermissionError(err);
+          console.warn("Cash report cache write failed", err);
+        }
+      }
+      return {
+        rows,
+        hasMore: Boolean(data.hasMore),
+        nextCursor: data.nextCursor ?? null,
+      };
     },
-    [online, shopId, buildCacheKey, loadCached, page, currentCursor]
+    [shopId, buildCacheKey, readCached]
   );
 
+  const cashQueryKey = useMemo(
+    () => [
+      "reports",
+      "cash",
+      shopId,
+      from ?? "all",
+      to ?? "all",
+      page,
+      currentCursor?.at ?? "start",
+      currentCursor?.id ?? "start",
+    ],
+    [shopId, from, to, page, currentCursor?.at, currentCursor?.id]
+  );
+
+  const cashQuery = useQuery({
+    queryKey: cashQueryKey,
+    queryFn: () => fetchCash(from, to, currentCursor, page === 1),
+    enabled: online,
+    initialData: () => {
+      if (page !== 1) {
+        return { rows: [], hasMore: false, nextCursor: null };
+      }
+      const cached = readCached(from, to);
+      return cached
+        ? { rows: cached, hasMore: false, nextCursor: null }
+        : { rows: [], hasMore: false, nextCursor: null };
+    },
+    placeholderData: (prev) =>
+      prev ?? { rows: [], hasMore: false, nextCursor: null },
+  });
+
+  const rows: CashRow[] = cashQuery.data?.rows ?? [];
+  const hasMore = cashQuery.data?.hasMore ?? false;
+  const nextCursor = cashQuery.data?.nextCursor ?? null;
+  const loading = cashQuery.isFetching && online;
+
   useEffect(() => {
-    void load(from, to);
-  }, [load, from, to]);
+    if (!online && page > 1) {
+      setPage(1);
+      setCursorList([]);
+    }
+  }, [online, page]);
+
+  useEffect(() => {
+    if (page > 1 && !currentCursor) {
+      setPage(1);
+    }
+  }, [page, currentCursor]);
 
   useEffect(() => {
     if (!online || typeof window === "undefined") return;
@@ -146,30 +166,25 @@ export default function CashbookReport({ shopId, from, to }: Props) {
     const cancel = scheduleIdle(() => {
       PREFETCH_PRESETS.forEach((presetKey) => {
         const { from: rangeFrom, to: rangeTo } = computePresetRange(presetKey);
-        const cacheKey = buildCacheKey(rangeFrom, rangeTo);
-        if (localStorage.getItem(cacheKey)) return;
-        const params = new URLSearchParams({ shopId, limit: `${REPORT_ROW_LIMIT}` });
-        if (rangeFrom) params.append("from", rangeFrom);
-        if (rangeTo) params.append("to", rangeTo);
-        fetch(`/api/reports/cash?${params.toString()}`)
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            if (data?.rows) {
-              try {
-                localStorage.setItem(cacheKey, JSON.stringify(data.rows));
-              } catch (err) {
-                handlePermissionError(err);
-                console.warn("Cash prefetch cache write failed", err);
-              }
-            }
-          })
-          .catch(() => {
-            // ignore prefetch errors
-          });
+        const queryKey = [
+          "reports",
+          "cash",
+          shopId,
+          rangeFrom ?? "all",
+          rangeTo ?? "all",
+          1,
+          "start",
+          "start",
+        ];
+        if (queryClient.getQueryData(queryKey)) return;
+        queryClient.prefetchQuery({
+          queryKey,
+          queryFn: () => fetchCash(rangeFrom, rangeTo, null, true),
+        });
       });
     }, 50);
     return () => cancel();
-  }, [online, shopId, buildCacheKey]);
+  }, [online, shopId, fetchCash, queryClient]);
 
   const totals = useMemo(() => {
     const inbound = rows

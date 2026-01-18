@@ -3,6 +3,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import ThemeScript from "@/components/theme-script";
+import QueryProvider from "@/components/providers/QueryProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -51,7 +52,7 @@ export default function RootLayout({
         style={{ fontFamily: "'SutonnyMJ', 'Noto Sans Bengali', sans-serif" }}
         suppressHydrationWarning
       >
-        {children}
+        <QueryProvider>{children}</QueryProvider>
       </body>
     </html>
   );

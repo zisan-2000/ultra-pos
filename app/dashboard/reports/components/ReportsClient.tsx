@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import dynamic from "next/dynamic";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ShopSelectorClient from "../ShopSelectorClient";
 import { StatCard } from "./StatCard";
 import { useOnlineStatus } from "@/lib/sync/net-status";
@@ -133,6 +134,7 @@ export default function ReportsClient({
   summary,
 }: Props) {
   const online = useOnlineStatus();
+  const queryClient = useQueryClient();
   const [active, setActive] = useState<(typeof NAV)[number]["key"]>("summary");
   const [preset, setPreset] = useState<RangePreset>("today");
   const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
@@ -141,12 +143,6 @@ export default function ReportsClient({
     () => computeRange(preset, customFrom, customTo),
     [preset, customFrom, customTo]
   );
-  const [liveSummary, setLiveSummary] = useState<Summary>(summary);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-
-  const summarySnapshot = `${liveSummary.sales.totalAmount.toFixed(
-    1
-  )}৳ বিক্রি · লাভ ${liveSummary.profit.profit.toFixed(1)}৳`;
   const presetLabel = useMemo(
     () => PRESETS.find((item) => item.key === preset)?.label ?? "",
     [preset]
@@ -164,45 +160,39 @@ export default function ReportsClient({
     [shopId]
   );
 
-  const loadCachedSummary = useCallback(() => {
-    if (typeof window === "undefined") return false;
-    const key = buildSummaryKey(range.from, range.to);
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return false;
-      const parsed = JSON.parse(raw) as Summary;
-      if (parsed && parsed.sales) {
-        setLiveSummary(parsed);
-        return true;
+  
+  const readCachedSummary = useCallback(
+    (rangeFrom?: string, rangeTo?: string) => {
+      if (typeof window === "undefined") return null;
+      const key = buildSummaryKey(rangeFrom, rangeTo);
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Summary;
+        return parsed && parsed.sales ? parsed : null;
+      } catch (err) {
+        handlePermissionError(err);
+        console.warn("Summary cache read failed", err);
+        return null;
       }
-    } catch (err) {
-      handlePermissionError(err);
-      console.warn("Summary cache read failed", err);
-    }
-    return false;
-  }, [buildSummaryKey, range.from, range.to]);
+    },
+    [buildSummaryKey]
+  );
 
-  const fetchSummary = useCallback(async () => {
-    if (!online) {
-      setSummaryLoading(false);
-      loadCachedSummary();
-      return;
-    }
-    const hasCached = loadCachedSummary();
-    setSummaryLoading(!hasCached);
-    try {
+  const fetchSummary = useCallback(
+    async (rangeFrom?: string, rangeTo?: string) => {
       const params = new URLSearchParams({ shopId });
-      if (range.from) params.append("from", range.from);
-      if (range.to) params.append("to", range.to);
+      if (rangeFrom) params.append("from", rangeFrom);
+      if (rangeTo) params.append("to", rangeTo);
       const res = await fetch(`/api/reports/summary?${params.toString()}`);
       if (!res.ok) {
-        loadCachedSummary();
-        return;
+        const cached = readCachedSummary(rangeFrom, rangeTo);
+        if (cached) return cached;
+        throw new Error("Summary fetch failed");
       }
-      const json = await res.json();
-      if (json && json.sales) {
-        setLiveSummary(json as Summary);
-        const key = buildSummaryKey(range.from, range.to);
+      const json = (await res.json()) as Summary;
+      if (typeof window !== "undefined") {
+        const key = buildSummaryKey(rangeFrom, rangeTo);
         try {
           localStorage.setItem(key, JSON.stringify(json));
         } catch (err) {
@@ -210,48 +200,50 @@ export default function ReportsClient({
           console.warn("Summary cache write failed", err);
         }
       }
-    } catch (err) {
-      handlePermissionError(err);
-      console.error("summary load failed", err);
-      loadCachedSummary();
-    } finally {
-      setSummaryLoading(false);
-    }
-  }, [online, shopId, range.from, range.to, loadCachedSummary, buildSummaryKey]);
+      return json;
+    },
+    [shopId, buildSummaryKey, readCachedSummary]
+  );
 
-  useEffect(() => {
-    fetchSummary();
-  }, [fetchSummary]);
+  const summaryQueryKey = useMemo(
+    () => ["reports", "summary", shopId, range.from ?? "all", range.to ?? "all"],
+    [shopId, range.from, range.to]
+  );
+
+  const summaryQuery = useQuery({
+    queryKey: summaryQueryKey,
+    queryFn: () => fetchSummary(range.from, range.to),
+    enabled: online,
+    initialData: () => readCachedSummary(range.from, range.to) ?? summary,
+    placeholderData: (prev) => prev ?? summary,
+  });
+
+  const liveSummary = summaryQuery.data ?? summary;
+  const summaryLoading = summaryQuery.isFetching && online;
+  const summarySnapshot = `${liveSummary.sales.totalAmount.toFixed(1)} ৳ বিক্রি | লাভ ${liveSummary.profit.profit.toFixed(1)} ৳`;
 
   useEffect(() => {
     if (!online || typeof window === "undefined") return;
     const cancel = scheduleIdle(() => {
       PREFETCH_PRESETS.forEach((presetKey) => {
         const { from, to } = computePresetRange(presetKey);
-        const cacheKey = buildSummaryKey(from, to);
-        if (localStorage.getItem(cacheKey)) return;
-        const params = new URLSearchParams({ shopId });
-        if (from) params.append("from", from);
-        if (to) params.append("to", to);
-        fetch(`/api/reports/summary?${params.toString()}`)
-          .then((res) => (res.ok ? res.json() : null))
-          .then((json) => {
-            if (json && json.sales) {
-              try {
-                localStorage.setItem(cacheKey, JSON.stringify(json));
-              } catch (err) {
-                handlePermissionError(err);
-                console.warn("Summary prefetch cache write failed", err);
-              }
-            }
-          })
-          .catch(() => {
-            // ignore prefetch errors
-          });
+        const queryKey = [
+          "reports",
+          "summary",
+          shopId,
+          from ?? "all",
+          to ?? "all",
+        ];
+        if (queryClient.getQueryData(queryKey)) return;
+        queryClient.prefetchQuery({
+          queryKey,
+          queryFn: () => fetchSummary(from, to),
+        });
       });
     }, 50);
     return () => cancel();
-  }, [online, shopId, buildSummaryKey]);
+  }, [online, shopId, fetchSummary, queryClient]);
+
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -654,3 +646,4 @@ export default function ReportsClient({
     </div>
   );
 }
+

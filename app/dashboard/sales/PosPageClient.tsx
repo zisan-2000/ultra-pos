@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
 } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PosProductSearch } from "./components/pos-product-search";
@@ -64,6 +65,7 @@ export function PosPageClient({
   submitSale,
 }: PosPageClientProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const {
     clear,
     setShop,
@@ -91,9 +93,6 @@ export function PosPageClient({
       })) as ProductOption[]
   );
   const [customerList, setCustomerList] = useState(customers);
-  const [customersLoading, setCustomersLoading] = useState(false);
-  const customersLoadedRef = useRef(customers.length > 0);
-  const customersLastFetchRef = useRef(0);
   const items = useMemo(
     () => (cartShopId === shopId ? cartItems : []),
     [cartItems, cartShopId, shopId]
@@ -122,12 +121,8 @@ export function PosPageClient({
   useEffect(() => {
     if (customers.length === 0) return;
     setCustomerList(customers);
-    customersLoadedRef.current = true;
-    customersLastFetchRef.current = Date.now();
   }, [customers]);
   useEffect(() => {
-    customersLoadedRef.current = false;
-    customersLastFetchRef.current = 0;
     setCustomerList([]);
   }, [shopId]);
   const refreshInFlightRef = useRef(false);
@@ -168,60 +163,69 @@ export function PosPageClient({
     }
   }, [shopId]);
 
-  const loadCustomers = useCallback(
-    async (force = false) => {
-      if (customersLoading) return;
-      const now = Date.now();
-      const CUSTOMER_REFRESH_MIN_MS = 15_000;
-      if (
-        !force &&
-        customersLoadedRef.current &&
-        now - customersLastFetchRef.current < CUSTOMER_REFRESH_MIN_MS
-      ) {
-        return;
+  const dueCustomerQueryKey = useMemo(
+    () => ["due", "customers", shopId],
+    [shopId]
+  );
+
+  const fetchDueCustomers = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/due/customers?shopId=${shopId}`);
+      if (!res.ok) {
+        throw new Error("Load due customers failed");
       }
+      const json = (await res.json()) as { data?: typeof customers };
+      const list = Array.isArray(json?.data) ? json.data : [];
 
-      customersLoadedRef.current = true;
-      customersLastFetchRef.current = now;
-      setCustomersLoading(true);
-
-      try {
-        await loadCustomersFromDexie();
-
-        if (!online) return;
-
-        const res = await fetch(`/api/due/customers?shopId=${shopId}`);
-        const json = (await res.json()) as { data?: typeof customers };
-        const list = Array.isArray(json?.data) ? json.data : [];
-        setCustomerList(list);
-
-        if (list.length > 0) {
-          const nowTs = Date.now();
-          const rows = list.map((c) => ({
-            id: c.id,
-            shopId,
-            name: c.name,
-            phone: c.phone ?? null,
-            address: c.address ?? null,
-            totalDue: c.totalDue ?? 0,
-            lastPaymentAt: c.lastPaymentAt ?? null,
-            updatedAt: nowTs,
-            syncStatus: "synced" as const,
-          }));
+      if (list.length > 0) {
+        const nowTs = Date.now();
+        const rows = list.map((c) => ({
+          id: c.id,
+          shopId,
+          name: c.name,
+          phone: c.phone ?? null,
+          address: c.address ?? null,
+          totalDue: c.totalDue ?? 0,
+          lastPaymentAt: c.lastPaymentAt ?? null,
+          updatedAt: nowTs,
+          syncStatus: "synced" as const,
+        }));
+        try {
           await db.transaction("rw", db.dueCustomers, async () => {
             await db.dueCustomers.where("shopId").equals(shopId).delete();
             await db.dueCustomers.bulkPut(rows);
           });
+        } catch (err) {
+          handlePermissionError(err);
+          console.warn("Update due customers cache failed", err);
         }
-      } catch (err) {
-        handlePermissionError(err);
-        console.error("Load due customers failed", err);
-      } finally {
-        setCustomersLoading(false);
       }
-    },
-    [customersLoading, loadCustomersFromDexie, online, shopId]
-  );
+
+      return list;
+    } catch (err) {
+      handlePermissionError(err);
+      console.error("Load due customers failed", err);
+      return loadCustomersFromDexie();
+    }
+  }, [shopId, loadCustomersFromDexie]);
+
+  const dueCustomersQuery = useQuery({
+    queryKey: dueCustomerQueryKey,
+    queryFn: fetchDueCustomers,
+    enabled: online && isDue,
+    staleTime: 15_000,
+    initialData: () => customers ?? [],
+    placeholderData: (prev) => prev ?? [],
+  });
+
+  const customersLoading = dueCustomersQuery.isFetching && online && isDue;
+
+  useEffect(() => {
+    if (!isDue) return;
+    if (dueCustomersQuery.data) {
+      setCustomerList(dueCustomersQuery.data);
+    }
+  }, [isDue, dueCustomersQuery.data]);
 
   const loadProductsFromDexie = useCallback(async () => {
     try {
@@ -303,35 +307,26 @@ export function PosPageClient({
 
   useEffect(() => {
     if (!isDue) return;
-    loadCustomers();
-  }, [isDue, loadCustomers]);
+    loadCustomersFromDexie();
+  }, [isDue, loadCustomersFromDexie]);
 
   useEffect(() => {
-    if (!isDue || !online) return;
-    const handleFocus = () => {
-      loadCustomers(true);
-    };
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        loadCustomers(true);
-      }
-    };
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [isDue, loadCustomers, online]);
+    if (!isDue || online) return;
+    loadCustomersFromDexie();
+  }, [isDue, online, loadCustomersFromDexie]);
 
   useEffect(() => {
     return subscribeDueCustomersEvent((detail) => {
       if (detail.shopId !== shopId) return;
-      customersLoadedRef.current = true;
-      customersLastFetchRef.current = Date.now();
       loadCustomersFromDexie();
+      if (online) {
+        queryClient.invalidateQueries({
+          queryKey: dueCustomerQueryKey,
+          refetchType: "active",
+        });
+      }
     });
-  }, [loadCustomersFromDexie, shopId]);
+  }, [loadCustomersFromDexie, shopId, online, queryClient, dueCustomerQueryKey]);
 
   useEffect(() => {
     return subscribeProductEvent((detail) => {

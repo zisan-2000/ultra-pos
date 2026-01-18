@@ -31,6 +31,8 @@ export default function SystemSettingsClient({
   const [cacheMissing, setCacheMissing] = useState(false);
   const [queued, setQueued] = useState(false);
   const refreshInFlightRef = useRef(false);
+  const lastRefreshAtRef = useRef(0);
+  const REFRESH_MIN_INTERVAL_MS = 15_000;
   const serverSnapshotRef = useRef({ support: initialSupport, saved });
 
   const cacheKey = useMemo(() => "super-admin:system-settings", []);
@@ -75,6 +77,9 @@ export default function SystemSettingsClient({
   useEffect(() => {
     if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
     if (refreshInFlightRef.current) return;
+    const now = Date.now();
+    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+    lastRefreshAtRef.current = now;
     refreshInFlightRef.current = true;
     router.refresh();
   }, [online, lastSyncAt, syncing, pendingCount, router]);

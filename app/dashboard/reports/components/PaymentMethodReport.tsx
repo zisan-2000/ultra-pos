@@ -2,7 +2,8 @@
 
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
 import { scheduleIdle } from "@/lib/schedule-idle";
@@ -13,8 +14,7 @@ type Props = { shopId: string; from?: string; to?: string };
 
 export default function PaymentMethodReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
-  const [data, setData] = useState<PaymentRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const prefetchKeyRef = useRef<string | null>(null);
 
   const buildCacheKey = useCallback(
@@ -23,57 +23,51 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
     [shopId]
   );
 
-  const loadCached = useCallback(
+  
+  const readCached = useCallback(
     (rangeFrom?: string, rangeTo?: string) => {
+      if (typeof window === "undefined") return null;
       try {
         const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
         if (!raw) {
-          return false;
+          return null;
         }
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setData(parsed);
-          return true;
-        }
+        return Array.isArray(parsed) ? (parsed as PaymentRow[]) : null;
       } catch (err) {
         handlePermissionError(err);
         console.warn("Payment report cache read failed", err);
+        return null;
       }
-      return false;
     },
     [buildCacheKey]
   );
 
-  const load = useCallback(
+  const fetchPayment = useCallback(
     async (rangeFrom?: string, rangeTo?: string) => {
-      const cachedApplied = loadCached(rangeFrom, rangeTo);
-      if (!online) {
-        setLoading(false);
-        return;
+      const params = new URLSearchParams({ shopId });
+      if (rangeFrom) params.append("from", rangeFrom);
+      if (rangeTo) params.append("to", rangeTo);
+
+      const res = await fetch(
+        `/api/reports/payment-method?${params.toString()}`
+      );
+
+      if (!res.ok) {
+        const cached = readCached(rangeFrom, rangeTo);
+        if (cached) return cached;
+        throw new Error("Payment report fetch failed");
       }
-      setLoading(!cachedApplied);
-      try {
-        const params = new URLSearchParams({ shopId });
-        if (rangeFrom) params.append("from", rangeFrom);
-        if (rangeTo) params.append("to", rangeTo);
 
-        const res = await fetch(
-          `/api/reports/payment-method?${params.toString()}`
-        );
-
-        if (!res.ok) {
-          loadCached(rangeFrom, rangeTo);
-          return;
-        }
-
-        const text = await res.text();
-        if (!text) {
-          loadCached(rangeFrom, rangeTo);
-          return;
-        }
-        const json = JSON.parse(text);
-        const rows = Array.isArray(json?.data) ? json.data : [];
-        setData(rows);
+      const text = await res.text();
+      if (!text) {
+        const cached = readCached(rangeFrom, rangeTo);
+        if (cached) return cached;
+        return [];
+      }
+      const json = JSON.parse(text);
+      const rows = Array.isArray(json?.data) ? json.data : [];
+      if (typeof window !== "undefined") {
         try {
           localStorage.setItem(
             buildCacheKey(rangeFrom, rangeTo),
@@ -83,20 +77,27 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
           handlePermissionError(err);
           console.warn("Payment report cache write failed", err);
         }
-      } catch (err) {
-        handlePermissionError(err);
-        console.error("Payment method load failed", err);
-        loadCached(rangeFrom, rangeTo);
-      } finally {
-        setLoading(false);
       }
+      return rows;
     },
-    [online, shopId, buildCacheKey, loadCached]
+    [shopId, buildCacheKey, readCached]
   );
 
-  useEffect(() => {
-    void load(from, to);
-  }, [load, from, to]);
+  const paymentQueryKey = useMemo(
+    () => ["reports", "payment", shopId, from ?? "all", to ?? "all"],
+    [shopId, from, to]
+  );
+
+  const paymentQuery = useQuery({
+    queryKey: paymentQueryKey,
+    queryFn: () => fetchPayment(from, to),
+    enabled: online,
+    initialData: () => readCached(from, to) ?? [],
+    placeholderData: (prev) => prev ?? [],
+  });
+
+  const data: PaymentRow[] = paymentQuery.data ?? [];
+  const loading = paymentQuery.isFetching && online;
 
   useEffect(() => {
     if (!online || typeof window === "undefined") return;
@@ -105,30 +106,22 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
     const cancel = scheduleIdle(() => {
       PREFETCH_PRESETS.forEach((presetKey) => {
         const { from: rangeFrom, to: rangeTo } = computePresetRange(presetKey);
-        const cacheKey = buildCacheKey(rangeFrom, rangeTo);
-        if (localStorage.getItem(cacheKey)) return;
-        const params = new URLSearchParams({ shopId });
-        if (rangeFrom) params.append("from", rangeFrom);
-        if (rangeTo) params.append("to", rangeTo);
-        fetch(`/api/reports/payment-method?${params.toString()}`)
-          .then((res) => (res.ok ? res.json() : null))
-          .then((json) => {
-            const rows = Array.isArray(json?.data) ? json.data : null;
-            if (!rows) return;
-            try {
-              localStorage.setItem(cacheKey, JSON.stringify(rows));
-            } catch (err) {
-              handlePermissionError(err);
-              console.warn("Payment prefetch cache write failed", err);
-            }
-          })
-          .catch(() => {
-            // ignore prefetch errors
-          });
+        const queryKey = [
+          "reports",
+          "payment",
+          shopId,
+          rangeFrom ?? "all",
+          rangeTo ?? "all",
+        ];
+        if (queryClient.getQueryData(queryKey)) return;
+        queryClient.prefetchQuery({
+          queryKey,
+          queryFn: () => fetchPayment(rangeFrom, rangeTo),
+        });
       });
     }, 50);
     return () => cancel();
-  }, [online, shopId, buildCacheKey]);
+  }, [online, shopId, fetchPayment, queryClient]);
 
   const totalAmount = useMemo(
     () => data.reduce((sum, item) => sum + Number(item.value || 0), 0),

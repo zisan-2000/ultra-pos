@@ -2,7 +2,8 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { handlePermissionError } from "@/lib/permission-toast";
@@ -11,73 +12,72 @@ type TopProduct = { name: string; qty: number; revenue: number };
 
 export default function TopProductsReport({ shopId }: { shopId: string }) {
   const online = useOnlineStatus();
-  const [data, setData] = useState<TopProduct[]>([]);
 
   const buildCacheKey = useCallback(
     () => `reports:top-products:${shopId}:${REPORT_ROW_LIMIT}`,
     [shopId]
   );
 
-  const loadCached = useCallback(
-    () => {
+  
+  const readCached = useCallback(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = localStorage.getItem(buildCacheKey());
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as TopProduct[]) : null;
+    } catch (err) {
+      handlePermissionError(err);
+      console.warn("Top products cache read failed", err);
+      return null;
+    }
+  }, [buildCacheKey]);
+
+  const fetchTopProducts = useCallback(async () => {
+    if (!online) {
+      return readCached() ?? [];
+    }
+    const res = await fetch(
+      `/api/reports/top-products?shopId=${shopId}&limit=${REPORT_ROW_LIMIT}`
+    );
+    if (!res.ok) {
+      const cached = readCached();
+      if (cached) return cached;
+      throw new Error("Top products fetch failed");
+    }
+    const text = await res.text();
+    if (!text) {
+      return readCached() ?? [];
+    }
+    const json = JSON.parse(text);
+    const rows = Array.isArray(json?.data) ? json.data : [];
+    if (typeof window !== "undefined") {
       try {
-        const raw = localStorage.getItem(buildCacheKey());
-        if (!raw) {
-          return false;
-        }
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setData(parsed);
-          return true;
-        }
+        localStorage.setItem(buildCacheKey(), JSON.stringify(rows));
       } catch (err) {
         handlePermissionError(err);
-        console.warn("Top products cache read failed", err);
+        console.warn("Top products cache write failed", err);
       }
-      return false;
-    },
-    [buildCacheKey]
+    }
+    return rows;
+  }, [online, shopId, buildCacheKey, readCached]);
+
+  const queryKey = useMemo(
+    () => ["reports", "top-products", shopId, REPORT_ROW_LIMIT],
+    [shopId]
   );
 
-  const load = useCallback(
-    async () => {
-      try {
-        if (!online) {
-          loadCached();
-          return;
-        }
-        const res = await fetch(
-          `/api/reports/top-products?shopId=${shopId}&limit=${REPORT_ROW_LIMIT}`
-        );
-        if (!res.ok) {
-          loadCached();
-          return;
-        }
-        const text = await res.text();
-        if (!text) {
-          loadCached();
-          return;
-        }
-        const json = JSON.parse(text);
-        const rows = Array.isArray(json?.data) ? json.data : [];
-        setData(rows);
-        try {
-          localStorage.setItem(buildCacheKey(), JSON.stringify(rows));
-        } catch (err) {
-          handlePermissionError(err);
-          console.warn("Top products cache write failed", err);
-        }
-      } catch (e) {
-        console.error("Top products load failed", e);
-        loadCached();
-      }
-    },
-    [online, shopId, buildCacheKey, loadCached]
-  );
+  const topProductsQuery = useQuery({
+    queryKey,
+    queryFn: fetchTopProducts,
+    enabled: online,
+    initialData: () => readCached() ?? [],
+    placeholderData: (prev) => prev ?? [],
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const data: TopProduct[] = topProductsQuery.data ?? [];
 
   return (
     <div className="space-y-4">

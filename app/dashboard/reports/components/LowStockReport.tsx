@@ -2,128 +2,100 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { getStockToneClasses } from "@/lib/stock-level";
 import { handlePermissionError } from "@/lib/permission-toast";
 
+type StockRow = { id?: string; name: string; stockQty: number };
+
 export default function LowStockReport({ shopId }: { shopId: string }) {
   const online = useOnlineStatus();
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
 
   const buildCacheKey = useCallback(
     () => `reports:low-stock:${shopId}:${REPORT_ROW_LIMIT}`,
     [shopId]
   );
 
-  const loadCached = useCallback(
-    () => {
+  const readCached = useCallback(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = localStorage.getItem(buildCacheKey());
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as StockRow[]) : null;
+    } catch (err) {
+      handlePermissionError(err);
+      console.warn("Low stock cache read failed", err);
+      return null;
+    }
+  }, [buildCacheKey]);
+
+  const fetchLowStock = useCallback(async () => {
+    if (!online) {
+      return readCached() ?? [];
+    }
+    const res = await fetch(
+      `/api/reports/low-stock?shopId=${shopId}&limit=${REPORT_ROW_LIMIT}`
+    );
+    if (!res.ok) {
+      const cached = readCached();
+      if (cached) return cached;
+      throw new Error("Low stock fetch failed");
+    }
+    const text = await res.text();
+    if (!text) {
+      return readCached() ?? [];
+    }
+    const json = JSON.parse(text);
+    const rows = Array.isArray(json?.data) ? json.data : [];
+    if (typeof window !== "undefined") {
       try {
-        const raw = localStorage.getItem(buildCacheKey());
-        if (!raw) {
-          return false;
-        }
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setItems(parsed);
-          return true;
-        }
+        localStorage.setItem(buildCacheKey(), JSON.stringify(rows));
       } catch (err) {
         handlePermissionError(err);
-        console.warn("Low stock cache read failed", err);
+        console.warn("Low stock cache write failed", err);
       }
-      return false;
-    },
-    [buildCacheKey]
+    }
+    return rows;
+  }, [online, shopId, buildCacheKey, readCached]);
+
+  const queryKey = useMemo(
+    () => ["reports", "low-stock", shopId, REPORT_ROW_LIMIT],
+    [shopId]
   );
 
-  const load = useCallback(
-    async () => {
-      try {
-        if (!online) {
-          setLoading(false);
-          loadCached();
-          return;
-        }
-        setLoading(true);
-        const res = await fetch(
-          `/api/reports/low-stock?shopId=${shopId}&limit=${REPORT_ROW_LIMIT}`
-        );
-        const json = await res.json();
-        const rows = json.data || [];
-        setItems(rows);
-        try {
-          localStorage.setItem(buildCacheKey(), JSON.stringify(rows));
-        } catch (err) {
-          handlePermissionError(err);
-          console.warn("Low stock cache write failed", err);
-        }
-      } finally {
-        setLoading(false);
-      }
-    },
-    [online, shopId, buildCacheKey, loadCached]
-  );
+  const lowStockQuery = useQuery({
+    queryKey,
+    queryFn: fetchLowStock,
+    enabled: online,
+    initialData: () => readCached() ?? [],
+    placeholderData: (prev) => prev ?? [],
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const items: StockRow[] = lowStockQuery.data ?? [];
+  const loading = lowStockQuery.isFetching && online;
 
   const renderStatus = (qty: number) => (qty <= 5 ? "জরুরি" : "কম");
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">স্টক কম</h2>
-          <p className="text-xs text-muted-foreground">থ্রেশহোল্ডের নিচের পণ্যগুলো</p>
-        </div>
-
-        <span className="text-xs text-muted-foreground">Limit {REPORT_ROW_LIMIT}</span>
-      </div>
-
-      <div className="border border-border rounded-lg overflow-x-auto hidden md:block">
-        <table className="w-full text-sm">
-          <thead className="bg-muted">
-            <tr>
-              <th className="p-3 text-left text-foreground">পণ্য</th>
-              <th className="p-3 text-right text-foreground">মজুত সংখ্যা</th>
-              <th className="p-3 text-right text-foreground">অবস্থা</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {items.length === 0 ? (
-              <tr>
-                <td className="p-3 text-center text-muted-foreground" colSpan={3}>
-                  {loading ? "লোড হচ্ছে..." : "কোনো পণ্য মজুত শূন্য নয়"}
-                </td>
-              </tr>
-            ) : (
-              items.map((p, i) => (
-                <tr
-                  key={i}
-                  className="border-t hover:bg-muted transition-colors"
-                >
-                  {(() => {
-                    const qty = Number(p.stockQty || 0);
-                    const stockClasses = getStockToneClasses(qty);
-  return (
-    <div className="space-y-4">
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-warning-soft/50 via-card to-card" />
         <div className="relative space-y-3 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-warning/15 text-warning text-lg">
-                ⚠️
+                📦
               </span>
               <div>
-                <h2 className="text-lg font-bold text-foreground">স্টক কম</h2>
+                <h2 className="text-lg font-bold text-foreground">কম স্টক</h2>
                 <p className="text-xs text-muted-foreground">
-                  থ্রেশহোল্ডের নিচের পণ্যগুলো
+                  জরুরি পণ্যের তালিকা ও বর্তমান পরিমাণ
                 </p>
               </div>
             </div>
@@ -139,8 +111,8 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
           <thead className="bg-muted">
             <tr>
               <th className="p-3 text-left text-foreground">পণ্য</th>
-              <th className="p-3 text-right text-foreground">মজুত সংখ্যা</th>
-              <th className="p-3 text-right text-foreground">অবস্থা</th>
+              <th className="p-3 text-right text-foreground">স্টক পরিমাণ</th>
+              <th className="p-3 text-right text-foreground">স্ট্যাটাস</th>
             </tr>
           </thead>
 
@@ -148,32 +120,23 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
             {items.length === 0 ? (
               <tr>
                 <td className="p-3 text-center text-muted-foreground" colSpan={3}>
-                  {loading ? "লোড হচ্ছে..." : "কোনো পণ্য মজুত শূন্য নয়"}
+                  {loading ? "লোড হচ্ছে..." : "কম স্টকের পণ্য নেই"}
                 </td>
               </tr>
             ) : (
-              items.map((p, i) => (
-                <tr
-                  key={i}
-                  className="border-t hover:bg-muted transition-colors"
-                >
-                  {(() => {
-                    const qty = Number(p.stockQty || 0);
-                    const stockClasses = getStockToneClasses(qty);
-                    return (
-                      <>
-                        <td className="p-3 text-foreground">{p.name}</td>
-                        <td className="p-3 text-right text-foreground">{p.stockQty}</td>
-                        <td
-                          className={`p-3 text-right font-semibold ${stockClasses.text}`}
-                        >
-                          {renderStatus(qty)}
-                        </td>
-                      </>
-                    );
-                  })()}
-                </tr>
-              ))
+              items.map((p, i) => {
+                const qty = Number(p.stockQty || 0);
+                const stockClasses = getStockToneClasses(qty);
+                return (
+                  <tr key={p.id ?? p.name ?? i} className="border-t hover:bg-muted">
+                    <td className="p-3 text-foreground">{p.name}</td>
+                    <td className="p-3 text-right text-foreground">{qty}</td>
+                    <td className={`p-3 text-right font-semibold ${stockClasses.text}`}>
+                      {renderStatus(qty)}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -182,89 +145,50 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
       <div className="space-y-3 md:hidden">
         {items.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {loading ? "লোড হচ্ছে..." : "কোনো পণ্য মজুত শূন্য নয়"}
+            {loading ? "লোড হচ্ছে..." : "কম স্টকের পণ্য নেই"}
           </p>
         ) : (
-          items.map((p, i) => {
-            const qty = Number(p.stockQty || 0);
-            const stockClasses = getStockToneClasses(qty);
-            return (
-              <div
-                key={i}
-                className="relative overflow-hidden bg-card border border-border/70 rounded-2xl p-4 shadow-[0_10px_20px_rgba(15,23,42,0.06)]"
-              >
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-warning-soft/35 via-transparent to-transparent" />
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-warning/15 text-warning text-lg">
-                      ⚠️
-                    </span>
-                    <div>
-                      <p className="text-xs text-muted-foreground">#{i + 1}</p>
-                      <h3 className="text-base font-semibold text-foreground mt-1">
-                        {p.name}
-                      </h3>
+          <>
+            {items.map((p, i) => {
+              const qty = Number(p.stockQty || 0);
+              const stockClasses = getStockToneClasses(qty);
+              return (
+                <div
+                  key={p.id ?? p.name ?? i}
+                  className="relative overflow-hidden bg-card border border-border/70 rounded-2xl p-4 shadow-[0_10px_20px_rgba(15,23,42,0.06)]"
+                >
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-warning-soft/35 via-transparent to-transparent" />
+                  <div className="relative flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-warning/15 text-warning text-lg">
+                        📦
+                      </span>
+                      <div>
+                        <p className="text-xs text-muted-foreground">#{i + 1}</p>
+                        <h3 className="text-base font-semibold text-foreground mt-1">
+                          {p.name}
+                        </h3>
+                      </div>
                     </div>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-semibold ${stockClasses.pill}`}
+                    >
+                      {renderStatus(qty)}
+                    </span>
                   </div>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${stockClasses.pill}`}
-                  >
-                    {renderStatus(qty)}
-                  </span>
+                  <div className="relative mt-3 flex items-center justify-between text-sm text-muted-foreground">
+                    <span>স্টক পরিমাণ</span>
+                    <span className="font-semibold text-foreground">{qty}</span>
+                  </div>
                 </div>
-                <div className="relative mt-3 flex items-center justify-between text-sm text-muted-foreground">
-                  <span>মজুত সংখ্যা</span>
-                  <span className="font-semibold text-foreground">{qty}</span>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-                  })()}
-                </tr>
-              ))
+              );
+            })}
+            {loading && (
+              <p className="text-xs text-muted-foreground text-center">
+                আপডেট হচ্ছে...
+              </p>
             )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="space-y-3 md:hidden">
-        {items.length === 0 ? (
-          <p className="text-center text-muted-foreground bg-card border border-border rounded-lg p-4">
-            {loading ? "লোড হচ্ছে..." : "কোনো পণ্য মজুত শূন্য নয়"}
-          </p>
-        ) : (
-          items.map((p, i) => {
-            const qty = Number(p.stockQty || 0);
-            const stockClasses = getStockToneClasses(qty);
-            return (
-              <div
-                key={i}
-                className="bg-card border border-border rounded-xl p-4 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">#{i + 1}</p>
-                    <h3 className="text-base font-semibold text-foreground mt-1">
-                      {p.name}
-                    </h3>
-                  </div>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${stockClasses.pill}`}
-                  >
-                    {renderStatus(qty)}
-                  </span>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-                  <span>মজুত সংখ্যা</span>
-                  <span className="font-semibold text-foreground">{qty}</span>
-                </div>
-              </div>
-            );
-          })
+          </>
         )}
       </div>
     </div>

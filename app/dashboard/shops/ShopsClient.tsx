@@ -41,6 +41,8 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const serverSnapshotRef = useRef(initialShops);
   const refreshInFlightRef = useRef(false);
+  const lastRefreshAtRef = useRef(0);
+  const REFRESH_MIN_INTERVAL_MS = 15_000;
   const [shops, setShops] = useState<Shop[]>(initialShops || []);
   const [supportContact, setSupportContact] = useState<SupportContact>(support);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -104,6 +106,9 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
   useEffect(() => {
     if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
     if (refreshInFlightRef.current) return;
+    const now = Date.now();
+    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+    lastRefreshAtRef.current = now;
     refreshInFlightRef.current = true;
     router.refresh();
   }, [online, lastSyncAt, syncing, pendingCount, router]);

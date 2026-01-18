@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 
 type ActivityEntry = {
@@ -30,10 +31,14 @@ type Filters = {
   q: string;
 };
 
+type CachePayload = {
+  entries: ActivityEntry[];
+  creators: Creator[];
+  meta: { count: number; updatedAt: string };
+};
+
 export function UserCreationLogClient() {
   const online = useOnlineStatus();
-  const [entries, setEntries] = useState<ActivityEntry[]>([]);
-  const [creators, setCreators] = useState<Creator[]>([]);
   const [filters, setFilters] = useState<Filters>({
     startDate: "",
     endDate: "",
@@ -41,37 +46,24 @@ export function UserCreationLogClient() {
     q: "",
   });
   const [searchDraft, setSearchDraft] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [resultCount, setResultCount] = useState(0);
-
-  const abortRef = useRef<AbortController | null>(null);
   const cacheKey = "admin:user-creation-log";
 
-  const loadFromCache = useCallback(() => {
-    if (typeof window === "undefined") return false;
+  const readCache = useCallback((): CachePayload | null => {
+    if (typeof window === "undefined") return null;
     try {
       const raw = localStorage.getItem(cacheKey);
-      if (!raw) return false;
-      const parsed = JSON.parse(raw) as {
-        entries?: ActivityEntry[];
-        creators?: Creator[];
-        meta?: { count?: number; updatedAt?: string };
-      };
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as CachePayload;
       const cachedEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
       const cachedCreators = Array.isArray(parsed.creators) ? parsed.creators : [];
-      setEntries(cachedEntries);
-      setCreators(cachedCreators);
       const count =
         typeof parsed.meta?.count === "number"
           ? parsed.meta.count
           : cachedEntries.length;
-      setResultCount(count);
-      setLastUpdated(parsed.meta?.updatedAt ? new Date(parsed.meta.updatedAt) : null);
-      return true;
+      const updatedAt = parsed.meta?.updatedAt ?? new Date().toISOString();
+      return { entries: cachedEntries, creators: cachedCreators, meta: { count, updatedAt } };
     } catch {
-      return false;
+      return null;
     }
   }, [cacheKey]);
 
@@ -90,36 +82,21 @@ export function UserCreationLogClient() {
     return () => clearTimeout(timer);
   }, [searchDraft]);
 
-  useEffect(() => {
-    if (hasInvalidRange) {
-      setError("Start date cannot be after end date.");
-      setEntries([]);
-      setCreators([]);
-      setResultCount(0);
-      setLastUpdated(null);
-      setLoading(false);
-      return;
-    }
+  const cachedPayload = useMemo(() => readCache(), [readCache]);
 
-    if (!online) {
-      abortRef.current?.abort();
-      setLoading(false);
-      setError(null);
-      const loaded = loadFromCache();
-      if (!loaded) {
-        setEntries([]);
-        setCreators([]);
-        setResultCount(0);
-        setLastUpdated(null);
-        setError("Offline: cached activity log not available.");
-      }
-      return;
-    }
+  const queryKey = useMemo(
+    () => [
+      "admin",
+      "user-creation-log",
+      filters.startDate || "all",
+      filters.endDate || "all",
+      filters.creatorId || "all",
+      filters.q || "all",
+    ],
+    [filters.creatorId, filters.endDate, filters.q, filters.startDate]
+  );
 
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
+  const fetchLog = useCallback(async () => {
     const params = new URLSearchParams();
     if (filters.startDate) params.set("startDate", filters.startDate);
     if (filters.endDate) params.set("endDate", filters.endDate);
@@ -127,53 +104,66 @@ export function UserCreationLogClient() {
     if (filters.q) params.set("q", filters.q);
     params.set("limit", "200");
 
-    setLoading(true);
-    setError(null);
-
-    fetch(`/api/admin/user-creation-log?${params.toString()}`, {
+    const res = await fetch(`/api/admin/user-creation-log?${params.toString()}`, {
       cache: "no-store",
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          throw new Error(body?.error || "Failed to load activity log");
-        }
-        return res.json();
-      })
-      .then((payload) => {
-        const data = Array.isArray(payload?.data) ? payload.data : [];
-        const creatorsData = Array.isArray(payload?.creators) ? payload.creators : [];
-        const count = payload?.meta?.count ?? data.length;
-        setEntries(data);
-        setCreators(creatorsData);
-        setResultCount(count);
-        const updatedAt = new Date();
-        setLastUpdated(updatedAt);
-        try {
-          localStorage.setItem(
-            cacheKey,
-            JSON.stringify({
-              entries: data,
-              creators: creatorsData,
-              meta: { count, updatedAt: updatedAt.toISOString() },
-            }),
-          );
-        } catch {
-          // ignore cache errors
-        }
-      })
-      .catch((err) => {
-        if (err.name === "AbortError") return;
-        const loaded = loadFromCache();
-        if (!loaded) {
-          setError(err.message || "Failed to load activity log");
-        }
-      })
-      .finally(() => setLoading(false));
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error || "Failed to load activity log");
+    }
+    const payload = await res.json();
+    const data = Array.isArray(payload?.data) ? payload.data : [];
+    const creatorsData = Array.isArray(payload?.creators) ? payload.creators : [];
+    const count = payload?.meta?.count ?? data.length;
+    const updatedAt = new Date().toISOString();
+    const nextPayload = {
+      entries: data,
+      creators: creatorsData,
+      meta: { count, updatedAt },
+    };
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(nextPayload));
+      } catch {
+        // ignore cache errors
+      }
+    }
+    return nextPayload;
+  }, [filters, cacheKey]);
 
-    return () => controller.abort();
-  }, [filters, hasInvalidRange, online, loadFromCache, cacheKey]);
+  const logQuery = useQuery({
+    queryKey,
+    queryFn: fetchLog,
+    enabled: online && !hasInvalidRange,
+    staleTime: 15_000,
+    initialData: () => cachedPayload ?? undefined,
+    placeholderData: (prev) => prev ?? undefined,
+  });
+
+  const queryError =
+    logQuery.error instanceof Error ? logQuery.error.message : null;
+  const data = logQuery.data ?? cachedPayload;
+  const offlineNoCache = !online && !data;
+  const error = hasInvalidRange
+    ? "Start date cannot be after end date."
+    : offlineNoCache
+      ? "Offline: cached activity log not available."
+      : data
+        ? null
+        : queryError;
+  const entries: ActivityEntry[] =
+    hasInvalidRange || offlineNoCache ? [] : (data?.entries ?? []);
+  const creators: Creator[] =
+    hasInvalidRange || offlineNoCache ? [] : (data?.creators ?? []);
+  const resultCount =
+    hasInvalidRange || offlineNoCache
+      ? 0
+      : data?.meta?.count ?? entries.length;
+  const lastUpdated =
+    hasInvalidRange || offlineNoCache || !data?.meta?.updatedAt
+      ? null
+      : new Date(data.meta.updatedAt);
+  const loading = logQuery.isFetching && online;
 
   const applyFilter = (patch: Partial<Filters>) => {
     setFilters((prev) => ({ ...prev, ...patch }));
@@ -190,7 +180,8 @@ export function UserCreationLogClient() {
   };
 
   const refresh = () => {
-    setFilters((prev) => ({ ...prev }));
+    if (!online || hasInvalidRange) return;
+    logQuery.refetch();
   };
 
   return (
