@@ -9,6 +9,7 @@ import { cashSchema } from "@/lib/validators/cash";
 import { requirePermission } from "@/lib/rbac";
 
 import { Prisma } from "@prisma/client";
+import { unstable_cache, revalidateTag } from "next/cache";
 import { type CursorToken } from "@/lib/cursor-pagination";
 
 function parseTimestampRange(from?: string, to?: string) {
@@ -36,6 +37,67 @@ function parseTimestampRange(from?: string, to?: string) {
   return { start: parse(from, "start"), end: parse(to, "end") };
 }
 
+const CASH_SUMMARY_TAG = "cash-summary";
+
+async function computeCashSummaryByRange(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const { start, end } = parseTimestampRange(from, to);
+  const useUnbounded = !from && !to;
+
+  const where: Prisma.CashEntryWhereInput = {
+    shopId,
+    createdAt: useUnbounded
+      ? undefined
+      : {
+          gte: start,
+          lte: end,
+        },
+  };
+
+  const grouped = await prisma.cashEntry.groupBy({
+    by: ["entryType"],
+    where,
+    _sum: { amount: true },
+    _count: { _all: true },
+  });
+
+  const totals = grouped.reduce(
+    (acc, group) => {
+      const amt = Number(
+        (group._sum.amount as any)?.toString?.() ?? group._sum.amount ?? 0
+      );
+      if (!Number.isFinite(amt)) return acc;
+      const entryType = (group.entryType || "").toString().toUpperCase();
+      if (entryType === "IN") acc.totalIn += amt;
+      else acc.totalOut += amt;
+      acc.count += group._count?._all ?? 0;
+      return acc;
+    },
+    { totalIn: 0, totalOut: 0, count: 0 }
+  );
+
+  return {
+    totalIn: totals.totalIn,
+    totalOut: totals.totalOut,
+    balance: totals.totalIn - totals.totalOut,
+    count: totals.count,
+  };
+}
+
+const getCashSummaryCached = unstable_cache(
+  async (shopId: string, from?: string, to?: string) =>
+    computeCashSummaryByRange(shopId, from, to),
+  [CASH_SUMMARY_TAG],
+  { revalidate: 30, tags: [CASH_SUMMARY_TAG] }
+);
+
+function revalidateCashSummary() {
+  revalidateTag(CASH_SUMMARY_TAG);
+}
+
 export async function getCashSummaryByRange(
   shopId: string,
   from?: string,
@@ -44,43 +106,7 @@ export async function getCashSummaryByRange(
   const user = await requireUser();
   requirePermission(user, "view_cashbook");
   await assertShopAccess(shopId, user);
-
-  const { start, end } = parseTimestampRange(from, to);
-  const useUnbounded = !from && !to;
-
-  const rows = await prisma.cashEntry.findMany({
-    where: {
-      shopId,
-      createdAt: useUnbounded
-        ? undefined
-        : {
-            gte: start,
-            lte: end,
-          },
-    },
-    select: {
-      entryType: true,
-      amount: true,
-    },
-  });
-
-  const totals = rows.reduce(
-    (acc, r) => {
-      const amt = Number((r.amount as any)?.toString?.() ?? r.amount ?? 0);
-      if (!Number.isFinite(amt)) return acc;
-      if ((r.entryType || "").toUpperCase() === "IN") acc.totalIn += amt;
-      else acc.totalOut += amt;
-      return acc;
-    },
-    { totalIn: 0, totalOut: 0 }
-  );
-
-  return {
-    totalIn: totals.totalIn,
-    totalOut: totals.totalOut,
-    balance: totals.totalIn - totals.totalOut,
-    count: rows.length,
-  };
+  return getCashSummaryCached(shopId, from, to);
 }
 
 export async function getCashByShopCursorPaginated({
@@ -134,7 +160,6 @@ export async function getCashByShopCursorPaginated({
     where,
     select: {
       id: true,
-      shopId: true,
       entryType: true,
       amount: true,
       reason: true,
@@ -155,7 +180,6 @@ export async function getCashByShopCursorPaginated({
 
   const items = pageRows.map((e) => ({
     id: e.id,
-    shopId: e.shopId,
     entryType: (e.entryType as "IN" | "OUT") || "IN",
     amount: e.amount?.toString?.() ?? (e as any).amount ?? "0",
     reason: e.reason,
@@ -184,6 +208,7 @@ export async function createCashEntry(input: any) {
     },
   });
 
+  revalidateCashSummary();
   return { success: true };
 }
 
@@ -214,6 +239,7 @@ export async function updateCashEntry(id: string, input: any) {
     },
   });
 
+  revalidateCashSummary();
   return { success: true };
 }
 
@@ -265,5 +291,6 @@ export async function deleteCashEntry(id: string) {
   await assertShopAccess(entry.shopId, user);
 
   await prisma.cashEntry.delete({ where: { id } });
+  revalidateCashSummary();
   return { success: true };
 }

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
+import { unstable_cache } from "next/cache";
 
 /* --------------------------------------------------
    DATE FILTER HELPER
@@ -209,6 +210,13 @@ export async function getSalesWithFilterPaginated({
 
   const rows = await prisma.sale.findMany({
     where,
+    select: {
+      id: true,
+      saleDate: true,
+      totalAmount: true,
+      paymentMethod: true,
+      note: true,
+    },
     orderBy: [{ saleDate: "desc" }, { id: "desc" }],
     take: safeLimit + 1,
   });
@@ -277,6 +285,12 @@ export async function getExpensesWithFilterPaginated({
 
   const rows = await prisma.expense.findMany({
     where,
+    select: {
+      id: true,
+      expenseDate: true,
+      amount: true,
+      category: true,
+    },
     orderBy: [{ expenseDate: "desc" }, { id: "desc" }],
     take: safeLimit + 1,
   });
@@ -347,6 +361,13 @@ export async function getCashWithFilterPaginated({
 
   const rows = await prisma.cashEntry.findMany({
     where,
+    select: {
+      id: true,
+      entryType: true,
+      amount: true,
+      reason: true,
+      createdAt: true,
+    },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: safeLimit + 1,
   });
@@ -378,13 +399,11 @@ export async function getCashWithFilter(
 /* --------------------------------------------------
    SALES SUMMARY (DATE AWARE)
 -------------------------------------------------- */
-export async function getSalesSummary(
+async function computeSalesSummary(
   shopId: string,
   from?: string,
   to?: string
 ) {
-  const user = await requireUser();
-  await assertShopAccess(shopId, user);
   const parsed = parseTimestampRange(from, to);
   const useUnbounded = !from && !to;
   const { start, end } = useUnbounded
@@ -428,6 +447,23 @@ export async function getSalesSummary(
     voidedCount,
   };
 }
+
+const getSalesSummaryCached = unstable_cache(
+  async (shopId: string, from?: string, to?: string) =>
+    computeSalesSummary(shopId, from, to),
+  ["reports-sales-summary"],
+  { revalidate: 30 }
+);
+
+export async function getSalesSummary(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
+  return getSalesSummaryCached(shopId, from, to);
+}
 export async function getExpenseSummary(
   shopId: string,
   from?: string,
@@ -435,6 +471,32 @@ export async function getExpenseSummary(
 ) {
   const user = await requireUser();
   await assertShopAccess(shopId, user);
+  return getExpenseSummaryCached(shopId, from, to);
+}
+export async function getCashSummary(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
+  return getCashSummaryCached(shopId, from, to);
+}
+export async function getProfitSummary(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
+  return getProfitSummaryCached(shopId, from, to);
+}
+
+async function computeExpenseSummary(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
   const parsed = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const { start, end } = useUnbounded
@@ -459,61 +521,65 @@ export async function getExpenseSummary(
     count: agg._count._all ?? 0,
   };
 }
-export async function getCashSummary(
+
+const getExpenseSummaryCached = unstable_cache(
+  async (shopId: string, from?: string, to?: string) =>
+    computeExpenseSummary(shopId, from, to),
+  ["reports-expense-summary"],
+  { revalidate: 30 }
+);
+
+async function computeCashSummary(
   shopId: string,
   from?: string,
   to?: string
 ) {
-  const user = await requireUser();
-  await assertShopAccess(shopId, user);
   const parsed = parseTimestampRange(from, to);
   const useUnbounded = !from && !to;
   const { start, end } = useUnbounded
     ? { start: undefined, end: undefined }
     : clampRange(parsed.start, parsed.end, 90);
-  const [inAgg, outAgg] = await Promise.all([
-    prisma.cashEntry.aggregate({
-      where: {
-        shopId,
-        entryType: "IN",
-        createdAt: {
-          gte: start ?? undefined,
-          lte: end ?? undefined,
-        },
+  const grouped = await prisma.cashEntry.groupBy({
+    by: ["entryType"],
+    where: {
+      shopId,
+      createdAt: {
+        gte: start ?? undefined,
+        lte: end ?? undefined,
       },
-      _sum: { amount: true },
-    }),
-    prisma.cashEntry.aggregate({
-      where: {
-        shopId,
-        entryType: "OUT",
-        createdAt: {
-          gte: start ?? undefined,
-          lte: end ?? undefined,
-        },
-      },
-      _sum: { amount: true },
-    }),
-  ]);
+    },
+    _sum: { amount: true },
+  });
 
-  const totalIn = Number(inAgg._sum.amount ?? 0);
-  const totalOut = Number(outAgg._sum.amount ?? 0);
-
-  const balance = totalIn - totalOut;
+  const totals = grouped.reduce(
+    (acc, row) => {
+      const amount = Number(row._sum.amount ?? 0);
+      if (row.entryType === "IN") acc.in += amount;
+      else acc.out += amount;
+      return acc;
+    },
+    { in: 0, out: 0 }
+  );
 
   return {
-    totalIn,
-    totalOut,
-    balance,
+    totalIn: totals.in,
+    totalOut: totals.out,
+    balance: totals.in - totals.out,
   };
 }
-export async function getProfitSummary(
+
+const getCashSummaryCached = unstable_cache(
+  async (shopId: string, from?: string, to?: string) =>
+    computeCashSummary(shopId, from, to),
+  ["reports-cash-summary"],
+  { revalidate: 30 }
+);
+
+async function computeProfitSummary(
   shopId: string,
   from?: string,
   to?: string
 ) {
-  const user = await requireUser();
-  await assertShopAccess(shopId, user);
   const { start, end } = parseTimestampRange(from, to);
   const fallbackDays = !from && !to ? 3650 : 30;
   const bounded = ensureBoundedRange(start, end, fallbackDays);
@@ -523,8 +589,8 @@ export async function getProfitSummary(
 
   // Fetch shop type and sales/expense data in parallel (not sequential)
   const [salesData, expenseData, needsCogs] = await Promise.all([
-    getSalesSummary(shopId, rangeFrom, rangeTo),
-    getExpenseSummary(shopId, rangeFrom, rangeTo),
+    computeSalesSummary(shopId, rangeFrom, rangeTo),
+    computeExpenseSummary(shopId, rangeFrom, rangeTo),
     shopNeedsCogs(shopId),
   ]);
 
@@ -543,3 +609,10 @@ export async function getProfitSummary(
     cogs,
   };
 }
+
+const getProfitSummaryCached = unstable_cache(
+  async (shopId: string, from?: string, to?: string) =>
+    computeProfitSummary(shopId, from, to),
+  ["reports-profit-summary"],
+  { revalidate: 30 }
+);

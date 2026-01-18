@@ -1,10 +1,59 @@
 // app/api/reports/top-products/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { clampReportLimit } from "@/lib/reporting-config";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
+
+async function computeTopProductsReport(shopId: string, limit: number) {
+  const topProducts = await prisma.saleItem.groupBy({
+    by: ["productId"],
+    where: {
+      sale: {
+        shopId,
+        status: { not: "VOIDED" },
+      },
+    },
+    _sum: {
+      quantity: true,
+      lineTotal: true,
+    },
+    orderBy: {
+      _sum: {
+        lineTotal: "desc",
+      },
+    },
+    take: limit,
+  });
+
+  const productIds = topProducts.map((p) => p.productId);
+  const products = await prisma.product.findMany({
+    where: {
+      id: { in: productIds },
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  const productMap = new Map(products.map((p) => [p.id, p.name]));
+
+  return topProducts.map((item) => ({
+    name: productMap.get(item.productId) || "Unknown",
+    qty: Number(item._sum.quantity || 0),
+    revenue: Number(item._sum.lineTotal || 0),
+  }));
+}
+
+const getTopProductsCached = unstable_cache(
+  async (shopId: string, limit: number) =>
+    computeTopProductsReport(shopId, limit),
+  ["reports-top-products"],
+  { revalidate: 60 }
+);
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,47 +67,7 @@ export async function GET(request: NextRequest) {
     }
 
     await assertShopAccess(shopId, user);
-
-    const topProducts = await prisma.saleItem.groupBy({
-      by: ["productId"],
-      where: {
-        sale: {
-          shopId,
-          status: { not: "VOIDED" },
-        },
-      },
-      _sum: {
-        quantity: true,
-        lineTotal: true,
-      },
-      orderBy: {
-        _sum: {
-          lineTotal: "desc",
-        },
-      },
-      take: limit,
-    });
-
-    // Get product names
-    const productIds = topProducts.map((p) => p.productId);
-    const products = await prisma.product.findMany({
-      where: {
-        id: { in: productIds },
-      },
-      select: {
-        id: true,
-        name: true,
-      },
-    });
-
-    const productMap = new Map(products.map((p) => [p.id, p.name]));
-
-    const data = topProducts.map((item) => ({
-      name: productMap.get(item.productId) || "Unknown",
-      qty: Number(item._sum.quantity || 0),
-      revenue: Number(item._sum.lineTotal || 0),
-    }));
-
+    const data = await getTopProductsCached(shopId, limit);
     return NextResponse.json({ data });
   } catch (error: any) {
     console.error("Top products report error:", error);

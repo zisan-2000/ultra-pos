@@ -30,7 +30,15 @@ export type SaleCursor = {
   id: string;
 };
 
-type SaleRow = Prisma.SaleGetPayload<{}>;
+type SaleRow = {
+  id: string;
+  saleDate: Date;
+  totalAmount: Prisma.Decimal | string;
+  paymentMethod: string;
+  status?: string | null;
+  voidReason?: string | null;
+  customerId?: string | null;
+};
 
 type SaleWithSummary = SaleRow & {
   itemCount: number;
@@ -351,6 +359,15 @@ export async function getSalesByShop(shopId: string) {
 
   const rows = await prisma.sale.findMany({
     where: { shopId },
+    select: {
+      id: true,
+      saleDate: true,
+      totalAmount: true,
+      paymentMethod: true,
+      status: true,
+      voidReason: true,
+      customerId: true,
+    },
     orderBy: [{ saleDate: "desc" }, { id: "desc" }],
   });
 
@@ -394,6 +411,15 @@ export async function getSalesByShopPaginated({
 
   const rows = await prisma.sale.findMany({
     where,
+    select: {
+      id: true,
+      saleDate: true,
+      totalAmount: true,
+      paymentMethod: true,
+      status: true,
+      voidReason: true,
+      customerId: true,
+    },
     orderBy: [{ saleDate: "desc" }, { id: "desc" }],
     take: safeLimit + 1,
   });

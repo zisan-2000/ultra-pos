@@ -5,6 +5,10 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { revalidatePath } from "next/cache";
+import {
+  getSupportContactCachedData,
+  revalidateSupportContact,
+} from "@/lib/system/support-contact";
 
 type SupportContactInput = {
   supportPhone?: string | null;
@@ -27,11 +31,7 @@ async function ensureSettingsRow() {
 
 export async function getSupportContact() {
   await ensureSettingsRow();
-  const row = await prisma.systemSetting.findFirst();
-  return {
-    supportPhone: row?.supportPhone || null,
-    supportWhatsapp: row?.supportWhatsapp || null,
-  };
+  return getSupportContactCachedData();
 }
 
 export async function updateSupportContact(input: SupportContactInput) {
@@ -55,6 +55,7 @@ export async function updateSupportContact(input: SupportContactInput) {
     },
   });
 
+  revalidateSupportContact();
   revalidatePath("/dashboard/shops");
   revalidatePath("/super-admin/system-settings");
 }

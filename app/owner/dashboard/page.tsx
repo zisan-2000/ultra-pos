@@ -7,33 +7,12 @@ import { getSupportContact } from "@/app/actions/system-settings";
 import { requireUser } from "@/lib/auth-session";
 import { resolveBillingStatus } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
+import { getTodaySummaryForShop } from "@/lib/reports/today-summary";
 import OwnerDashboardClient from "./OwnerDashboardClient";
 
 type DashboardPageProps = {
   searchParams?: Promise<{ shopId?: string } | undefined>;
 };
-
-async function fetchSummary(shopId: string, cookieHeader: string) {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-    "http://localhost:3000";
-
-  const res = await fetch(
-    `${baseUrl}/api/reports/today-summary?shopId=${shopId}`,
-    {
-      cache: "no-store",
-      headers: {
-        cookie: cookieHeader,
-      },
-    }
-  );
-
-  if (!res.ok) {
-    throw new Error(`Failed to load summary (${res.status})`);
-  }
-
-  return await res.json();
-}
 
 export default async function OwnerDashboardPage({
   searchParams,
@@ -53,10 +32,6 @@ export default async function OwnerDashboardPage({
   const resolvedSearch = await searchParams;
   const cookieStore = await cookies();
   const cookieShopId = cookieStore.get("activeShopId")?.value;
-  const cookieHeader = cookieStore
-    .getAll()
-    .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
-    .join("; ");
 
   const cookieSelectedShopId =
     cookieShopId && shops.some((s) => s.id === cookieShopId)
@@ -68,43 +43,43 @@ export default async function OwnerDashboardPage({
       ? resolvedSearch.shopId
       : cookieSelectedShopId ?? shops[0].id;
 
-  const summary = await fetchSummary(selectedShopId, cookieHeader);
   const shopSnapshot = shops.map((shop) => ({ id: shop.id, name: shop.name }));
-  const supportContact = await getSupportContact();
 
-  const subscription = await prisma.shopSubscription.findUnique({
-    where: { shopId: selectedShopId },
-    select: {
-      status: true,
-      currentPeriodEnd: true,
-      trialEndsAt: true,
-      graceEndsAt: true,
-    },
-  });
-
-  const invoice = await prisma.invoice.findFirst({
-    where: { shopId: selectedShopId },
-    select: {
-      id: true,
-      status: true,
-      dueDate: true,
-      periodEnd: true,
-      paidAt: true,
-      amount: true,
-    },
-    orderBy: { periodEnd: "desc" },
-  });
-
-  const paymentRequest = invoice
-    ? await prisma.billingPaymentRequest.findFirst({
-        where: {
-          invoiceId: invoice.id,
-          ownerId: user.id,
-          status: "pending",
+  const [summary, supportContact, subscription, invoice] = await Promise.all([
+    getTodaySummaryForShop(selectedShopId, user),
+    getSupportContact(),
+    prisma.shopSubscription.findUnique({
+      where: { shopId: selectedShopId },
+      select: {
+        status: true,
+        currentPeriodEnd: true,
+        trialEndsAt: true,
+        graceEndsAt: true,
+      },
+    }),
+    prisma.invoice.findFirst({
+      where: { shopId: selectedShopId },
+      select: {
+        id: true,
+        status: true,
+        dueDate: true,
+        periodEnd: true,
+        paidAt: true,
+        amount: true,
+        paymentRequests: {
+          where: {
+            ownerId: user.id,
+            status: "pending",
+          },
+          select: { id: true },
+          take: 1,
         },
-        select: { id: true },
-      })
-    : null;
+      },
+      orderBy: { periodEnd: "desc" },
+    }),
+  ]);
+
+  const paymentRequest = invoice?.paymentRequests?.[0] ?? null;
 
   const billingStatus = resolveBillingStatus(
     subscription

@@ -1,6 +1,7 @@
 // app/api/reports/payment-method/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
@@ -25,6 +26,48 @@ function parseTimestampRange(from?: string, to?: string) {
   return { start: parse(from, "start"), end: parse(to, "end") };
 }
 
+async function computePaymentMethodReport(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const { start, end } = parseTimestampRange(from, to);
+  const useUnbounded = !from && !to;
+
+  const sales = await prisma.sale.groupBy({
+    by: ["paymentMethod"],
+    where: {
+      shopId,
+      status: { not: "VOIDED" },
+      saleDate: useUnbounded
+        ? undefined
+        : {
+            gte: start,
+            lte: end,
+          },
+    },
+    _sum: {
+      totalAmount: true,
+    },
+    _count: {
+      id: true,
+    },
+  });
+
+  return sales.map((s) => ({
+    name: s.paymentMethod || "???",
+    value: Number(s._sum.totalAmount || 0),
+    count: s._count.id,
+  }));
+}
+
+const getPaymentMethodCached = unstable_cache(
+  async (shopId: string, from?: string, to?: string) =>
+    computePaymentMethodReport(shopId, from, to),
+  ["reports-payment-method"],
+  { revalidate: 60 }
+);
+
 export async function GET(request: NextRequest) {
   try {
     const user = await requireUser();
@@ -39,34 +82,7 @@ export async function GET(request: NextRequest) {
 
     await assertShopAccess(shopId, user);
 
-    const { start, end } = parseTimestampRange(from, to);
-    const useUnbounded = !from && !to;
-
-    const sales = await prisma.sale.groupBy({
-      by: ["paymentMethod"],
-      where: {
-        shopId,
-        status: { not: "VOIDED" },
-        saleDate: useUnbounded
-          ? undefined
-          : {
-              gte: start,
-              lte: end,
-            },
-      },
-      _sum: {
-        totalAmount: true,
-      },
-      _count: {
-        id: true,
-      },
-    });
-
-    const data = sales.map((s) => ({
-      name: s.paymentMethod || "নগদ",
-      value: Number(s._sum.totalAmount || 0),
-      count: s._count.id,
-    }));
+    const data = await getPaymentMethodCached(shopId, from, to);
 
     return NextResponse.json({ data });
   } catch (error: any) {

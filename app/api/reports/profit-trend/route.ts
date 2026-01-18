@@ -1,6 +1,8 @@
 // app/api/reports/profit-trend/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
@@ -25,6 +27,89 @@ function parseTimestampRange(from?: string, to?: string) {
   return { start: parse(from, "start"), end: parse(to, "end") };
 }
 
+async function computeProfitTrend(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const { start, end } = parseTimestampRange(from, to);
+  const useUnbounded = !from && !to;
+
+  const salesWhere: Prisma.Sql[] = [
+    Prisma.sql` s.shop_id = CAST(${shopId} AS uuid)`,
+    Prisma.sql` s.status <> 'VOIDED'`,
+  ];
+  const expenseWhere: Prisma.Sql[] = [
+    Prisma.sql` e.shop_id = CAST(${shopId} AS uuid)`,
+  ];
+
+  if (!useUnbounded) {
+    if (start) {
+      salesWhere.push(Prisma.sql` s.sale_date >= ${start}`);
+      expenseWhere.push(Prisma.sql` e.expense_date >= ${start}`);
+    }
+    if (end) {
+      salesWhere.push(Prisma.sql` s.sale_date <= ${end}`);
+      expenseWhere.push(Prisma.sql` e.expense_date <= ${end}`);
+    }
+  }
+
+  const [salesRows, expenseRows] = await Promise.all([
+    prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+      Prisma.sql`
+        SELECT
+          DATE(s.sale_date AT TIME ZONE 'Asia/Dhaka')::text AS day,
+          SUM(COALESCE(s.total_amount, 0)) AS sum
+        FROM "sales" s
+        WHERE ${Prisma.join(salesWhere, " AND ")}
+        GROUP BY day
+        ORDER BY day
+      `
+    ),
+    prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+      Prisma.sql`
+        SELECT
+          e.expense_date::text AS day,
+          SUM(COALESCE(e.amount, 0)) AS sum
+        FROM "expenses" e
+        WHERE ${Prisma.join(expenseWhere, " AND ")}
+        GROUP BY day
+        ORDER BY day
+      `
+    ),
+  ]);
+
+  const salesByDate = new Map<string, number>();
+  salesRows.forEach((row) => {
+    salesByDate.set(row.day, Number(row.sum ?? 0));
+  });
+
+  const expensesByDate = new Map<string, number>();
+  expenseRows.forEach((row) => {
+    expensesByDate.set(row.day, Number(row.sum ?? 0));
+  });
+
+  const allDates = new Set<string>([
+    ...salesByDate.keys(),
+    ...expensesByDate.keys(),
+  ]);
+
+  return Array.from(allDates)
+    .sort()
+    .map((date) => ({
+      date,
+      sales: salesByDate.get(date) || 0,
+      expense: expensesByDate.get(date) || 0,
+    }));
+}
+
+const getProfitTrendCached = unstable_cache(
+  async (shopId: string, from?: string, to?: string) =>
+    computeProfitTrend(shopId, from, to),
+  ["reports-profit-trend"],
+  { revalidate: 60 }
+);
+
 export async function GET(request: NextRequest) {
   try {
     const user = await requireUser();
@@ -38,83 +123,7 @@ export async function GET(request: NextRequest) {
     }
 
     await assertShopAccess(shopId, user);
-
-    const { start, end } = parseTimestampRange(from, to);
-    const useUnbounded = !from && !to;
-
-    // Get all sales
-    const sales = await prisma.sale.findMany({
-      where: {
-        shopId,
-        status: { not: "VOIDED" },
-        saleDate: useUnbounded
-          ? undefined
-          : {
-              gte: start,
-              lte: end,
-            },
-      },
-      select: {
-        saleDate: true,
-        totalAmount: true,
-      },
-    });
-
-    // Get all expenses
-    const expenses = await prisma.expense.findMany({
-      where: {
-        shopId,
-        expenseDate: useUnbounded
-          ? undefined
-          : {
-              gte: start,
-              lte: end,
-            },
-      },
-      select: {
-        expenseDate: true,
-        amount: true,
-      },
-    });
-
-    // Group by date manually
-    const salesByDate = new Map<string, number>();
-    const expensesByDate = new Map<string, number>();
-
-    const dhakaKey = (d: Date) =>
-      new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Dhaka",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(d);
-
-    sales.forEach((sale) => {
-      const dateKey = dhakaKey(new Date(sale.saleDate));
-      const current = salesByDate.get(dateKey) || 0;
-      salesByDate.set(dateKey, current + Number(sale.totalAmount));
-    });
-
-    expenses.forEach((expense) => {
-      const dateKey = dhakaKey(new Date(expense.expenseDate));
-      const current = expensesByDate.get(dateKey) || 0;
-      expensesByDate.set(dateKey, current + Number(expense.amount));
-    });
-
-    // Get all unique dates
-    const allDates = new Set([
-      ...Array.from(salesByDate.keys()),
-      ...Array.from(expensesByDate.keys()),
-    ]);
-
-    const data = Array.from(allDates)
-      .sort()
-      .map((date) => ({
-        date,
-        sales: salesByDate.get(date) || 0,
-        expense: expensesByDate.get(date) || 0,
-      }));
-
+    const data = await getProfitTrendCached(shopId, from, to);
     return NextResponse.json({ data });
   } catch (error: any) {
     console.error("Profit trend report error:", error);

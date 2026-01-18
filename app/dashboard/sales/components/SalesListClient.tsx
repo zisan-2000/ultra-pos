@@ -76,6 +76,8 @@ export default function SalesListClient({
   const [items, setItems] = useState<SaleSummary[]>(sales);
   const serverSnapshotRef = useRef(sales);
   const refreshInFlightRef = useRef(false);
+  const lastRefreshAtRef = useRef(0);
+  const REFRESH_MIN_INTERVAL_MS = 15_000;
 
   useEffect(() => {
     if (serverSnapshotRef.current !== sales) {
@@ -87,6 +89,9 @@ export default function SalesListClient({
   useEffect(() => {
     if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
     if (refreshInFlightRef.current) return;
+    const now = Date.now();
+    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+    lastRefreshAtRef.current = now;
     refreshInFlightRef.current = true;
     router.refresh();
   }, [online, lastSyncAt, syncing, pendingCount, router]);
@@ -213,9 +218,9 @@ export default function SalesListClient({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {!online && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-xs font-semibold text-warning border border-warning/30">
+            <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning border border-warning/30">
               📡 Offline - শুধু দেখা যাবে
             </span>
           )}
@@ -270,19 +275,19 @@ export default function SalesListClient({
                 isVoided ? "opacity-90 border-danger/30" : "border-border"
               }`}
             >
-              <div className="space-y-2 p-3 sm:p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2">
-                    <p className="text-xl font-bold text-foreground sm:text-2xl">
+              <div className="space-y-1.5 p-2.5 sm:p-3">
+                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-lg font-bold text-foreground sm:text-xl">
                       ৳ {totalStr}
                     </p>
                     <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold border shadow-[0_1px_0_rgba(0,0,0,0.04)] ${statusPill}`}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border shadow-[0_1px_0_rgba(0,0,0,0.04)] ${statusPill}`}
                     >
                       {statusText}
                     </span>
                   </div>
-                  <div className="text-left text-xs text-muted-foreground sm:text-right">
+                  <div className="text-left text-[11px] text-muted-foreground sm:text-xs sm:text-right">
                     <p className="font-semibold flex items-center gap-1 justify-start sm:justify-end">
                       ⏱ {timeStr}
                     </p>
@@ -290,8 +295,8 @@ export default function SalesListClient({
                   </div>
                 </div>
 
-                <p className="text-sm text-muted-foreground flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs font-semibold text-foreground border border-border">
+                <p className="text-[12px] text-muted-foreground flex flex-wrap items-center gap-2 sm:text-sm">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-foreground border border-border">
                     {paymentText}
                   </span>
                   {s.customerName && (
@@ -300,7 +305,7 @@ export default function SalesListClient({
                     </span>
                   )}
                 </p>
-                <p className="text-[13px] text-muted-foreground flex items-center gap-2 leading-snug break-words sm:text-sm">
+                <p className="text-[12px] text-muted-foreground flex items-center gap-1.5 leading-snug break-words line-clamp-1 sm:text-[13px] sm:line-clamp-2">
                   🧾 {itemLine}
                 </p>
                 {isVoided && voidReason && (
@@ -315,15 +320,15 @@ export default function SalesListClient({
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 bg-muted/40 px-3 py-2 sm:px-4 sm:py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 bg-muted/40 px-3 py-1.5 sm:px-4 sm:py-2">
                 <div className="flex flex-wrap items-center gap-2">
                   {!online && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-xs font-semibold text-warning border border-warning/30">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning border border-warning/30">
                       বাতিল করা যাবে না (Offline)
                     </span>
                   )}
                   {!online && isPending && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-xs font-semibold text-warning border border-warning/30">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning border border-warning/30">
                       Pending sync
                     </span>
                   )}
@@ -354,7 +359,7 @@ export default function SalesListClient({
           {online && nextHref ? (
             <Link
               href={nextHref}
-              className="inline-flex items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
             >
               ⬇️ আরও দেখুন
             </Link>
@@ -362,7 +367,7 @@ export default function SalesListClient({
             <button
               type="button"
               disabled
-              className="inline-flex items-center gap-2 rounded-full bg-muted px-4 py-2 text-sm font-semibold text-muted-foreground"
+              className="inline-flex items-center gap-1.5 rounded-full bg-muted px-4 py-2 text-sm font-semibold text-muted-foreground"
             >
               ⬇️ আরও দেখুন
             </button>
