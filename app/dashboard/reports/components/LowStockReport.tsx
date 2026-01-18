@@ -23,7 +23,6 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
       try {
         const raw = localStorage.getItem(buildCacheKey());
         if (!raw) {
-          setItems([]);
           return false;
         }
         const parsed = JSON.parse(raw);
@@ -35,7 +34,6 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
         handlePermissionError(err);
         console.warn("Low stock cache read failed", err);
       }
-      setItems([]);
       return false;
     },
     [buildCacheKey]

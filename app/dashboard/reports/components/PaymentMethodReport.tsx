@@ -28,7 +28,6 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
       try {
         const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
         if (!raw) {
-          setData([]);
           return false;
         }
         const parsed = JSON.parse(raw);
@@ -40,7 +39,6 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
         handlePermissionError(err);
         console.warn("Payment report cache read failed", err);
       }
-      setData([]);
       return false;
     },
     [buildCacheKey]
@@ -60,8 +58,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
         if (rangeTo) params.append("to", rangeTo);
 
         const res = await fetch(
-          `/api/reports/payment-method?${params.toString()}`,
-          { cache: "no-store" }
+          `/api/reports/payment-method?${params.toString()}`
         );
 
         if (!res.ok) {
@@ -113,9 +110,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
         const params = new URLSearchParams({ shopId });
         if (rangeFrom) params.append("from", rangeFrom);
         if (rangeTo) params.append("to", rangeTo);
-        fetch(`/api/reports/payment-method?${params.toString()}`, {
-          cache: "no-store",
-        })
+        fetch(`/api/reports/payment-method?${params.toString()}`)
           .then((res) => (res.ok ? res.json() : null))
           .then((json) => {
             const rows = Array.isArray(json?.data) ? json.data : null;
@@ -131,7 +126,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
             // ignore prefetch errors
           });
       });
-    });
+    }, 50);
     return () => cancel();
   }, [online, shopId, buildCacheKey]);
 
@@ -166,61 +161,64 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
       </div>
 
       <div className="rounded-2xl border border-border/70 bg-card/80 p-2 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
-        {loading ? (
+        {data.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            লোড হচ্ছে...
-          </p>
-        ) : data.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            কোনো পেমেন্ট ডেটা নেই
+            {loading ? "??? ?????..." : "???? ??????? ???? ???"}
           </p>
         ) : (
-          data.map((item, idx) => {
-            const percent =
-              totalAmount > 0
-                ? Math.round((Number(item.value || 0) / totalAmount) * 100)
-                : 0;
+          <>
+            {data.map((item, idx) => {
+              const percent =
+                totalAmount > 0
+                  ? Math.round((Number(item.value || 0) / totalAmount) * 100)
+                  : 0;
 
-            return (
-              <div
-                key={`${item.name}-${idx}`}
-                className="relative overflow-hidden rounded-2xl border border-primary/20 bg-card p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 space-y-2"
-              >
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/40 via-transparent to-transparent" />
-                <div className="relative flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/15 text-primary text-lg">
-                      💳
-                    </span>
-                    <div>
-                      <p className="font-semibold text-foreground">
-                        {item.name || "নগদ"}
-                      </p>
-                      {typeof item.count === "number" && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {item.count} টি লেনদেন
+              return (
+                <div
+                  key={`${item.name}-${idx}`}
+                  className="relative overflow-hidden rounded-2xl border border-primary/20 bg-card p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 space-y-2"
+                >
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/40 via-transparent to-transparent" />
+                  <div className="relative flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/15 text-primary text-lg">
+                        ??
+                      </span>
+                      <div>
+                        <p className="font-semibold text-foreground">
+                          {item.name || "???"}
                         </p>
-                      )}
+                        {typeof item.count === "number" && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {item.count} ?? ??????
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-foreground">
+                        {Number(item.value || 0)} ?
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {percent}% ?????
+                      </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-foreground">
-                      {Number(item.value || 0)} ৳
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {percent}% শেয়ার
-                    </p>
+                  <div className="relative h-2 w-full rounded-full bg-muted/70 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-primary via-primary-hover to-primary"
+                      style={{ width: `${percent}%` }}
+                    />
                   </div>
                 </div>
-                <div className="relative h-2 w-full rounded-full bg-muted/70 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-primary via-primary-hover to-primary"
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })
+              );
+            })}
+            {loading && (
+              <p className="text-xs text-muted-foreground text-center pt-1">
+                ??????? ?????...
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>

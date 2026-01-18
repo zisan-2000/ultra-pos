@@ -249,9 +249,27 @@ export default function ReportsClient({
             // ignore prefetch errors
           });
       });
-    });
+    }, 50);
     return () => cancel();
   }, [online, shopId, buildSummaryKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const id = setTimeout(() => {
+      Promise.all([
+        import("./SalesReport"),
+        import("./ExpenseReport"),
+        import("./CashbookReport"),
+        import("./PaymentMethodReport"),
+        import("./ProfitTrendReport"),
+        import("./TopProductsReport"),
+        import("./LowStockReport"),
+      ]).catch(() => {
+        // ignore prefetch errors
+      });
+    }, 0);
+    return () => clearTimeout(id);
+  }, []);
 
   useEffect(() => {
     if (preset === "custom" && customFrom && customTo && customFrom > customTo) {

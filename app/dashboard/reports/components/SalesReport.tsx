@@ -46,7 +46,6 @@ export default function SalesReport({ shopId, from, to }: Props) {
       try {
         const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
         if (!raw) {
-          setItems([]);
           return false;
         }
         const parsed = JSON.parse(raw);
@@ -58,7 +57,6 @@ export default function SalesReport({ shopId, from, to }: Props) {
         handlePermissionError(err);
         console.warn("Sales report cache read failed", err);
       }
-      setItems([]);
       return false;
     },
     [buildCacheKey]
@@ -96,8 +94,6 @@ export default function SalesReport({ shopId, from, to }: Props) {
         if (!res.ok) {
           if (page === 1) {
             loadCached(rangeFrom, rangeTo);
-          } else {
-            setItems([]);
           }
           setHasMore(false);
           setNextCursor(null);
@@ -166,7 +162,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
             // ignore prefetch errors
           });
       });
-    });
+    }, 50);
     return () => cancel();
   }, [online, shopId, buildCacheKey]);
 
@@ -245,41 +241,44 @@ export default function SalesReport({ shopId, from, to }: Props) {
 
       {/* List */}
       <div className="rounded-2xl border border-border/70 bg-card/80 p-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
-        {loading ? (
+        {items.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            লোড হচ্ছে...
-          </p>
-        ) : items.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            কোনো বিক্রি পাওয়া যায়নি
+            {loading ? "??? ?????..." : "???? ?????? ????? ?????"}
           </p>
         ) : (
-          items.map((s) => (
-            <div
-              key={s.id}
-              className="relative overflow-hidden rounded-2xl border border-success/20 bg-card p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
-            >
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-success-soft/40 via-transparent to-transparent" />
-              <div className="relative flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-success/15 text-success text-lg">
-                    🧾
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {s.totalAmount} ৳
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {s.paymentMethod}
-                    </p>
+          <>
+            {items.map((s) => (
+              <div
+                key={s.id}
+                className="relative overflow-hidden rounded-2xl border border-success/20 bg-card p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
+              >
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-success-soft/40 via-transparent to-transparent" />
+                <div className="relative flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-success/15 text-success text-lg">
+                      ??
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">
+                        {s.totalAmount} ?
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {s.paymentMethod}
+                      </p>
+                    </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(s.saleDate).toLocaleDateString("bn-BD")}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(s.saleDate).toLocaleDateString("bn-BD")}
-                </p>
               </div>
-            </div>
-          ))
+            ))}
+            {loading && (
+              <p className="text-xs text-muted-foreground text-center pt-1">
+                ??????? ?????...
+              </p>
+            )}
+          </>
         )}
       </div>
 

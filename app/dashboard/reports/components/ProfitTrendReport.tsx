@@ -28,7 +28,6 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
       try {
         const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
         if (!raw) {
-          setData([]);
           return false;
         }
         const parsed = JSON.parse(raw);
@@ -40,7 +39,6 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
         handlePermissionError(err);
         console.warn("Profit report cache read failed", err);
       }
-      setData([]);
       return false;
     },
     [buildCacheKey]
@@ -115,7 +113,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
             // ignore prefetch errors
           });
       });
-    });
+    }, 50);
     return () => cancel();
   }, [online, shopId, buildCacheKey]);
 
@@ -165,16 +163,10 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
           </thead>
 
           <tbody>
-            {loading ? (
+            {data.length === 0 ? (
               <tr>
                 <td className="p-3 text-center text-muted-foreground" colSpan={4}>
-                  লোড হচ্ছে...
-                </td>
-              </tr>
-            ) : data.length === 0 ? (
-              <tr>
-                <td className="p-3 text-center text-muted-foreground" colSpan={4}>
-                  কোনো তথ্য নেই
+                  {loading ? "??? ?????..." : "???? ???? ???"}
                 </td>
               </tr>
             ) : (
@@ -208,84 +200,92 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
             )}
           </tbody>
         </table>
+        {loading && data.length > 0 && (
+          <p className="p-2 text-center text-xs text-muted-foreground">
+            ??????? ?????...
+          </p>
+        )}
       </div>
 
       <div className="space-y-3 md:hidden">
-        {loading ? (
+        {data.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            লোড হচ্ছে...
-          </p>
-        ) : data.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            কোনো তথ্য নেই
+            {loading ? "??? ?????..." : "???? ???? ???"}
           </p>
         ) : (
-          data.map((row, idx) => {
-            const profit = Number(row.sales || 0) - Number(row.expense || 0);
-            const positive = profit >= 0;
-            return (
-              <div
-                key={`${row.date}-${idx}`}
-                className="relative overflow-hidden bg-card border border-border/70 rounded-2xl p-4 shadow-[0_10px_20px_rgba(15,23,42,0.06)] flex gap-3"
-              >
+          <>
+            {data.map((row, idx) => {
+              const profit = Number(row.sales || 0) - Number(row.expense || 0);
+              const positive = profit >= 0;
+              return (
                 <div
-                  className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${
-                    positive ? "from-success-soft/35" : "from-danger-soft/35"
-                  } via-transparent to-transparent`}
-                />
-                <div
-                  className={`relative w-1 rounded-full ${
-                    positive ? "bg-success" : "bg-danger"
-                  }`}
-                />
-                <div className="relative flex-1 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-muted-foreground">#{idx + 1}</p>
-                      <h3 className="text-base font-semibold text-foreground mt-1">
-                        {new Date(row.date).toLocaleDateString("bn-BD")}
-                      </h3>
+                  key={`${row.date}-${idx}`}
+                  className="relative overflow-hidden bg-card border border-border/70 rounded-2xl p-4 shadow-[0_10px_20px_rgba(15,23,42,0.06)] flex gap-3"
+                >
+                  <div
+                    className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${
+                      positive ? "from-success-soft/35" : "from-danger-soft/35"
+                    } via-transparent to-transparent`}
+                  />
+                  <div
+                    className={`relative w-1 rounded-full ${
+                      positive ? "bg-success" : "bg-danger"
+                    }`}
+                  />
+                  <div className="relative flex-1 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-muted-foreground">#{idx + 1}</p>
+                        <h3 className="text-base font-semibold text-foreground mt-1">
+                          {new Date(row.date).toLocaleDateString("bn-BD")}
+                        </h3>
+                      </div>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          positive
+                            ? "bg-success-soft text-success"
+                            : "bg-danger-soft text-danger"
+                        }`}
+                      >
+                        {positive ? "???" : "?????"}
+                      </span>
                     </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        positive
-                          ? "bg-success-soft text-success"
-                          : "bg-danger-soft text-danger"
-                      }`}
-                    >
-                      {positive ? "লাভ" : "ক্ষতি"}
-                    </span>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
-                    <div className="bg-muted/60 rounded-xl p-3">
-                      <p className="text-xs text-muted-foreground">বিক্রি</p>
-                      <p className="text-base font-semibold text-foreground">
-                        {Number(row.sales || 0).toFixed(2)} ৳
-                      </p>
+                    <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+                      <div className="bg-muted/60 rounded-xl p-3">
+                        <p className="text-xs text-muted-foreground">??????</p>
+                        <p className="text-base font-semibold text-foreground">
+                          {Number(row.sales || 0).toFixed(2)} ?
+                        </p>
+                      </div>
+                      <div className="bg-muted/60 rounded-xl p-3">
+                        <p className="text-xs text-muted-foreground">???</p>
+                        <p className="text-base font-semibold text-foreground">
+                          {Number(row.expense || 0).toFixed(2)} ?
+                        </p>
+                      </div>
                     </div>
-                    <div className="bg-muted/60 rounded-xl p-3">
-                      <p className="text-xs text-muted-foreground">খরচ</p>
-                      <p className="text-base font-semibold text-foreground">
-                        {Number(row.expense || 0).toFixed(2)} ৳
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <span>লাভ</span>
-                    <span
-                      className={`font-semibold ${
-                        positive ? "text-success" : "text-danger"
-                      }`}
-                    >
-                      {profit.toFixed(2)} ৳
-                    </span>
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>???</span>
+                      <span
+                        className={`font-semibold ${
+                          positive ? "text-success" : "text-danger"
+                        }`}
+                      >
+                        {profit.toFixed(2)} ?
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+            {loading && (
+              <p className="text-xs text-muted-foreground text-center">
+                ??????? ?????...
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>

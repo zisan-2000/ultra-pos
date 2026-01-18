@@ -23,7 +23,6 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
       try {
         const raw = localStorage.getItem(buildCacheKey());
         if (!raw) {
-          setData([]);
           return false;
         }
         const parsed = JSON.parse(raw);
@@ -35,7 +34,6 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
         handlePermissionError(err);
         console.warn("Top products cache read failed", err);
       }
-      setData([]);
       return false;
     },
     [buildCacheKey]
@@ -49,8 +47,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
           return;
         }
         const res = await fetch(
-          `/api/reports/top-products?shopId=${shopId}&limit=${REPORT_ROW_LIMIT}`,
-          { cache: "no-store" }
+          `/api/reports/top-products?shopId=${shopId}&limit=${REPORT_ROW_LIMIT}`
         );
         if (!res.ok) {
           loadCached();

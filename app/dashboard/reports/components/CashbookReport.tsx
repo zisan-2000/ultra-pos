@@ -52,7 +52,6 @@ export default function CashbookReport({ shopId, from, to }: Props) {
       try {
         const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
         if (!raw) {
-          setRows([]);
           return false;
         }
         const parsed = JSON.parse(raw);
@@ -64,7 +63,6 @@ export default function CashbookReport({ shopId, from, to }: Props) {
         handlePermissionError(err);
         console.warn("Cash report cache read failed", err);
       }
-      setRows([]);
       return false;
     },
     [buildCacheKey]
@@ -102,8 +100,6 @@ export default function CashbookReport({ shopId, from, to }: Props) {
         if (!res.ok) {
           if (page === 1) {
             loadCached(rangeFrom, rangeTo);
-          } else {
-            setRows([]);
           }
           setHasMore(false);
           setNextCursor(null);
@@ -171,7 +167,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
             // ignore prefetch errors
           });
       });
-    });
+    }, 50);
     return () => cancel();
   }, [online, shopId, buildCacheKey]);
 
@@ -247,56 +243,59 @@ export default function CashbookReport({ shopId, from, to }: Props) {
       </div>
 
       <div className="rounded-2xl border border-border/70 bg-card/80 p-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
-        {loading ? (
+        {rows.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            লোড হচ্ছে...
-          </p>
-        ) : rows.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            কোনো এন্ট্রি নেই
+            {loading ? "??? ?????..." : "???? ??????? ???"}
           </p>
         ) : (
-          rows.map((r) => {
-            const isIn = (r.entryType || "").toUpperCase() === "IN";
-            const accent = isIn
-              ? "border-success/25 from-success-soft/40"
-              : "border-danger/25 from-danger-soft/40";
-            const iconTone = isIn
-              ? "bg-success/15 text-success"
-              : "bg-danger/15 text-danger";
-            return (
-              <div
-                key={r.id}
-                className={`relative overflow-hidden rounded-2xl border bg-card p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 ${accent}`}
-              >
-                <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${accent}`} />
-                <div className="relative flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl text-lg ${iconTone}`}
-                    >
-                      {isIn ? "⬆️" : "⬇️"}
-                    </span>
-                    <div>
-                      <p
-                        className={`text-sm font-semibold ${
-                          isIn ? "text-success" : "text-danger"
-                        }`}
+          <>
+            {rows.map((r) => {
+              const isIn = (r.entryType || "").toUpperCase() === "IN";
+              const accent = isIn
+                ? "border-success/25 from-success-soft/40"
+                : "border-danger/25 from-danger-soft/40";
+              const iconTone = isIn
+                ? "bg-success/15 text-success"
+                : "bg-danger/15 text-danger";
+              return (
+                <div
+                  key={r.id}
+                  className={`relative overflow-hidden rounded-2xl border bg-card p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 ${accent}`}
+                >
+                  <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${accent}`} />
+                  <div className="relative flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl text-lg ${iconTone}`}
                       >
-                        {isIn ? "+" : "-"} {Number(r.amount || 0).toFixed(2)} ৳
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {r.reason || "অন্যান্য"}
-                      </p>
+                        {isIn ? "??" : "??"}
+                      </span>
+                      <div>
+                        <p
+                          className={`text-sm font-semibold ${
+                            isIn ? "text-success" : "text-danger"
+                          }`}
+                        >
+                          {isIn ? "+" : "-"} {Number(r.amount || 0).toFixed(2)} ?
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {r.reason || "????????"}
+                        </p>
+                      </div>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(r.createdAt).toLocaleDateString("bn-BD")}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(r.createdAt).toLocaleDateString("bn-BD")}
-                  </p>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+            {loading && (
+              <p className="text-xs text-muted-foreground text-center pt-1">
+                ??????? ?????...
+              </p>
+            )}
+          </>
         )}
       </div>
 
