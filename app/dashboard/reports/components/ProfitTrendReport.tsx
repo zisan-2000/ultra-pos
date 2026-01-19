@@ -56,7 +56,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
         throw new Error("Profit report fetch failed");
       }
       const json = await res.json();
-      const rows = json.data || [];
+      const rows = Array.isArray(json?.data) ? json.data : [];
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem(
@@ -162,7 +162,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
             {data.length === 0 ? (
               <tr>
                 <td className="p-3 text-center text-muted-foreground" colSpan={4}>
-                  {loading ? "??? ?????..." : "???? ???? ???"}
+                  {loading ? "লোড হচ্ছে..." : "কোনো তথ্য নেই"}
                 </td>
               </tr>
             ) : (
@@ -198,7 +198,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
         </table>
         {loading && data.length > 0 && (
           <p className="p-2 text-center text-xs text-muted-foreground">
-            ??????? ?????...
+            আপডেট হচ্ছে...
           </p>
         )}
       </div>
@@ -206,7 +206,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
       <div className="space-y-3 md:hidden">
         {data.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {loading ? "??? ?????..." : "???? ???? ???"}
+            {loading ? "লোড হচ্ছে..." : "কোনো তথ্য নেই"}
           </p>
         ) : (
           <>
@@ -243,33 +243,33 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
                             : "bg-danger-soft text-danger"
                         }`}
                       >
-                        {positive ? "???" : "?????"}
+                        {positive ? "লাভ" : "ক্ষতি"}
                       </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
                       <div className="bg-muted/60 rounded-xl p-3">
-                        <p className="text-xs text-muted-foreground">??????</p>
+                        <p className="text-xs text-muted-foreground">বিক্রি</p>
                         <p className="text-base font-semibold text-foreground">
-                          {Number(row.sales || 0).toFixed(2)} ?
+                          {Number(row.sales || 0).toFixed(2)} ৳
                         </p>
                       </div>
                       <div className="bg-muted/60 rounded-xl p-3">
-                        <p className="text-xs text-muted-foreground">???</p>
+                        <p className="text-xs text-muted-foreground">খরচ</p>
                         <p className="text-base font-semibold text-foreground">
-                          {Number(row.expense || 0).toFixed(2)} ?
+                          {Number(row.expense || 0).toFixed(2)} ৳
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>???</span>
+                      <span>লাভ</span>
                       <span
                         className={`font-semibold ${
                           positive ? "text-success" : "text-danger"
                         }`}
                       >
-                        {profit.toFixed(2)} ?
+                        {profit.toFixed(2)} ৳
                       </span>
                     </div>
                   </div>
@@ -278,7 +278,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
             })}
             {loading && (
               <p className="text-xs text-muted-foreground text-center">
-                ??????? ?????...
+                আপডেট হচ্ছে...
               </p>
             )}
           </>

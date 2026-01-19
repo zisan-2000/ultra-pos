@@ -264,7 +264,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
       <div className="rounded-2xl border border-border/70 bg-card/80 p-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
         {items.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {loading ? "??? ?????..." : "???? ?????? ????? ?????"}
+            {loading ? "লোড হচ্ছে..." : "কোনো বিক্রি পাওয়া যায়নি"}
           </p>
         ) : (
           <>
@@ -277,11 +277,11 @@ export default function SalesReport({ shopId, from, to }: Props) {
                 <div className="relative flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-success/15 text-success text-lg">
-                      ??
+                      🛒
                     </span>
                     <div>
                       <p className="text-sm font-semibold text-foreground">
-                        {s.totalAmount} ?
+                        {s.totalAmount} ৳
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {s.paymentMethod}
@@ -296,7 +296,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
             ))}
             {loading && (
               <p className="text-xs text-muted-foreground text-center pt-1">
-                ??????? ?????...
+                আপডেট হচ্ছে...
               </p>
             )}
           </>

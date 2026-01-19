@@ -156,7 +156,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
       <div className="rounded-2xl border border-border/70 bg-card/80 p-2 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
         {data.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {loading ? "??? ?????..." : "???? ??????? ???? ???"}
+            {loading ? "লোড হচ্ছে..." : "কোনো পেমেন্ট ডাটা নেই"}
           </p>
         ) : (
           <>
@@ -175,25 +175,25 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
                   <div className="relative flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/15 text-primary text-lg">
-                        ??
+                        💳
                       </span>
                       <div>
                         <p className="font-semibold text-foreground">
-                          {item.name || "???"}
+                          {item.name || "অজানা"}
                         </p>
                         {typeof item.count === "number" && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            {item.count} ?? ??????
+                            {item.count} টি লেনদেন
                           </p>
                         )}
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-foreground">
-                        {Number(item.value || 0)} ?
+                        {Number(item.value || 0)} ৳
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {percent}% ?????
+                        {percent}% শেয়ার
                       </p>
                     </div>
                   </div>
@@ -208,7 +208,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
             })}
             {loading && (
               <p className="text-xs text-muted-foreground text-center pt-1">
-                ??????? ?????...
+                আপডেট হচ্ছে...
               </p>
             )}
           </>

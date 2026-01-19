@@ -260,7 +260,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
       <div className="rounded-2xl border border-border/70 bg-card/80 p-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
         {rows.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {loading ? "??? ?????..." : "???? ??????? ???"}
+            {loading ? "লোড হচ্ছে..." : "কোনো ক্যাশ এন্ট্রি নেই"}
           </p>
         ) : (
           <>
@@ -283,7 +283,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
                       <span
                         className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl text-lg ${iconTone}`}
                       >
-                        {isIn ? "??" : "??"}
+                        {isIn ? "⬆️" : "⬇️"}
                       </span>
                       <div>
                         <p
@@ -291,10 +291,10 @@ export default function CashbookReport({ shopId, from, to }: Props) {
                             isIn ? "text-success" : "text-danger"
                           }`}
                         >
-                          {isIn ? "+" : "-"} {Number(r.amount || 0).toFixed(2)} ?
+                          {isIn ? "+" : "-"} {Number(r.amount || 0).toFixed(2)} ৳
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {r.reason || "????????"}
+                          {r.reason || "ক্যাশ এন্ট্রি"}
                         </p>
                       </div>
                     </div>
@@ -307,7 +307,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
             })}
             {loading && (
               <p className="text-xs text-muted-foreground text-center pt-1">
-                ??????? ?????...
+                আপডেট হচ্ছে...
               </p>
             )}
           </>

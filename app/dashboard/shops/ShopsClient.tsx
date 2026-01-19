@@ -212,7 +212,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-primary">
-              ??
+              🏪
             </span>
             <h1 className="text-xl md:text-3xl font-bold text-foreground">
               দোকানসমূহ
@@ -269,7 +269,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
             {/* SUPPORT */}
             <div className="pt-1 space-y-1 text-sm">
               <div className="flex items-center gap-2">
-                ??
+                📞
                 {phoneHref ? (
                   <a
                     href={phoneHref}
@@ -283,7 +283,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
               </div>
 
               <div className="flex items-center gap-2">
-                ??
+                💬
                 {whatsappHref ? (
                   <a
                     href={whatsappHref}
