@@ -184,27 +184,27 @@ export default function PWAInstallPrompt() {
   return (
     <>
       <Dialog open={showInstallPrompt} onOpenChange={setShowInstallPrompt}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="text-center">
-            <DialogTitle className="text-2xl font-bold text-black">
-              Install My POS
-            </DialogTitle>
-            <DialogDescription className="text-base text-gray-600 mt-2">
-              Install our POS app on your device for faster access and a better experience
-            </DialogDescription>
-          </DialogHeader>
+      <DialogContent className="sm:max-w-md bg-card border-border shadow-2xl">
+        <DialogHeader className="text-center">
+          <DialogTitle className="text-2xl font-bold text-foreground">
+            My POS অ্যাপ ইনস্টল করুন
+          </DialogTitle>
+          <DialogDescription className="text-base text-muted-foreground mt-2">
+            দ্রুত অ্যাক্সেস, অফলাইন সাপোর্ট এবং ফুল স্ক্রিন অভিজ্ঞতার জন্য ডিভাইসে ইনস্টল করুন।
+          </DialogDescription>
+        </DialogHeader>
           
           <div className="flex flex-col items-center space-y-4 py-4">
-            <div className="w-20 h-20 bg-black rounded-2xl flex items-center justify-center">
-              <span className="text-white text-2xl font-bold">POS</span>
-            </div>
+          <div className="w-20 h-20 rounded-2xl border border-primary/20 bg-primary-soft text-primary flex items-center justify-center shadow-sm">
+            <span className="text-2xl font-bold tracking-wide">POS</span>
+          </div>
             
             <div className="text-center space-y-2">
-              <p className="text-sm text-gray-600">
-                - Works offline<br/>
-                - Faster loading<br/>
-                - Full screen experience<br/>
-                - No browser tabs needed
+              <p className="text-sm text-muted-foreground">
+                - অফলাইন সাপোর্ট<br/>
+                - দ্রুত লোডিং<br/>
+                - ফুল স্ক্রিন মোড<br/>
+                - ব্রাউজার ট্যাব ছাড়াই ব্যবহার
               </p>
             </div>
           </div>
@@ -212,28 +212,28 @@ export default function PWAInstallPrompt() {
           <div className="flex flex-col sm:flex-row gap-3 mt-6">
             <Button 
               onClick={handleInstallClick}
-              className="flex-1 bg-black text-white hover:bg-gray-800 text-base py-3"
+              className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover text-base py-3"
               size="lg"
             >
-              Install Now
+              এখনই ইনস্টল
             </Button>
             
             <Button 
               variant="outline" 
               onClick={handleInstallLater}
-              className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-50 text-base py-3"
+              className="flex-1 border-border text-foreground/80 hover:bg-muted text-base py-3"
               size="lg"
             >
-              Later
+              পরে করব
             </Button>
             
             <Button 
               variant="ghost" 
               onClick={handleDismiss}
-              className="text-gray-500 hover:text-gray-700 text-base py-3"
+              className="text-muted-foreground hover:text-foreground text-base py-3"
               size="lg"
             >
-              Dismiss
+              এখন নয়
             </Button>
           </div>
         </DialogContent>
@@ -245,7 +245,7 @@ export default function PWAInstallPrompt() {
             variant="outline"
             className="w-auto border-border bg-card/95 text-foreground shadow-lg"
           >
-            Install app
+            অ্যাপ ইনস্টল
           </Button>
         </div>
       ) : null}
