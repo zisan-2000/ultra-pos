@@ -2,7 +2,6 @@
 
 import { useEffect, type ReactNode } from "react";
 import { Toaster } from "react-hot-toast";
-import ServiceWorkerRegister from "@/components/service-worker-register";
 import SyncBootstrap from "@/components/sync-bootstrap";
 import { handlePermissionError } from "@/lib/permission-toast";
 
@@ -32,7 +31,6 @@ export default function DashboardClientShell({
 
   return (
     <>
-      <ServiceWorkerRegister />
       <SyncBootstrap />
       <Toaster
         position="top-center"

@@ -6,7 +6,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
-import PWAInstallPrompt from "@/components/pwa-install-prompt";
 
 type Shop = { id: string; name: string };
 
@@ -84,7 +83,6 @@ export default function PosShell({
 
   return (
     <div className="min-h-screen bg-background">
-      <PWAInstallPrompt />
       {shops.length > 0 ? (
         <header className="sticky top-0 z-20 bg-card/80 backdrop-blur border-b border-border">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 lg:px-8 py-3">

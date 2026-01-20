@@ -4,8 +4,9 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "My POS",
     short_name: "POS",
-    id: "/dashboard",
-    start_url: "/dashboard",
+    id: "/",
+    start_url: "/",
+    scope: "/",
     display: "standalone",
     background_color: "#000000",
     theme_color: "#000000",
