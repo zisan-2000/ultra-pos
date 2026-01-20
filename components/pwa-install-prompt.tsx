@@ -39,12 +39,18 @@ export default function PWAInstallPrompt() {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       
-      // Show install prompt after 2 seconds
-      setTimeout(() => {
+      // Show install prompt after 1 second, then repeat every 1 second
+      const showPrompt = () => {
         if (!isInstalled) {
           setShowInstallPrompt(true);
         }
-      }, 2000);
+      };
+      
+      setTimeout(showPrompt, 1000);
+      const interval = setInterval(showPrompt, 1000);
+      
+      // Store interval ID for cleanup
+      (window as any).pwaInstallInterval = interval;
     };
 
     // Listen for app installed event
@@ -60,6 +66,11 @@ export default function PWAInstallPrompt() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      // Clear the interval
+      const interval = (window as any).pwaInstallInterval;
+      if (interval) {
+        clearInterval(interval);
+      }
     };
   }, [isInstalled]);
 
