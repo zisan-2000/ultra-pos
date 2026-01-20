@@ -3,7 +3,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { getStockToneClasses } from "@/lib/stock-level";
@@ -39,9 +39,14 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
     if (!online) {
       return readCached() ?? [];
     }
-    const res = await fetch(
-      `/api/reports/low-stock?shopId=${shopId}&limit=${REPORT_ROW_LIMIT}`
-    );
+    const params = new URLSearchParams({
+      shopId,
+      limit: `${REPORT_ROW_LIMIT}`,
+      fresh: "1",
+    });
+    const res = await fetch(`/api/reports/low-stock?${params.toString()}`, {
+      cache: "no-store",
+    });
     if (!res.ok) {
       const cached = readCached();
       if (cached) return cached;
@@ -74,11 +79,13 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
     queryFn: fetchLowStock,
     enabled: online,
     initialData: () => readCached() ?? [],
-    placeholderData: (prev) => prev ?? [],
+    placeholderData: keepPreviousData,
   });
 
   const items: StockRow[] = lowStockQuery.data ?? [];
   const loading = lowStockQuery.isFetching && online;
+  const hasFetched = lowStockQuery.isFetchedAfterMount;
+  const showEmpty = items.length === 0 && (!online || hasFetched) && !loading;
 
   const renderStatus = (qty: number) => (qty <= 5 ? "জরুরি" : "কম");
 
@@ -120,7 +127,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
             {items.length === 0 ? (
               <tr>
                 <td className="p-3 text-center text-muted-foreground" colSpan={3}>
-                  {loading ? "লোড হচ্ছে..." : "কম স্টকের পণ্য নেই"}
+                  {showEmpty ? "কম স্টকের পণ্য নেই" : "লোড হচ্ছে..."}
                 </td>
               </tr>
             ) : (
@@ -145,7 +152,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
       <div className="space-y-3 md:hidden">
         {items.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {loading ? "লোড হচ্ছে..." : "কম স্টকের পণ্য নেই"}
+            {showEmpty ? "কম স্টকের পণ্য নেই" : "লোড হচ্ছে..."}
           </p>
         ) : (
           <>

@@ -5,19 +5,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* SutonnyMJ Font Import - with fallback */
-@font-face {
-  font-family: "SutonnyMJ";
-  src: url("https://cdn.jsdelivr.net/npm/sutonnytype@1.1.0/fonts/SutonnyMJ.woff2")
-      format("woff2"),
-    url("https://cdn.jsdelivr.net/npm/sutonnytype@1.1.0/fonts/SutonnyMJ.woff")
-      format("woff");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0980-09FF; /* Bengali characters */
-}
-
 @layer base {
   :root {
     /* Core palette aligned with POS UI rules */
@@ -175,7 +162,8 @@ html.theme-switch * {
   --color-destructive: var(--destructive);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
-  --font-sans: "Inter", "SutonnyMJ", "Noto Sans Bengali", sans-serif;
+  --font-sans: var(--font-bengali), var(--font-geist-sans), "Inter",
+    sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);

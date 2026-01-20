@@ -30,11 +30,10 @@ function parseTimestampRange(from?: string, to?: string) {
   const parse = (value?: string, mode?: "start" | "end") => {
     if (!value) return undefined;
     if (isDateOnly(value)) {
-      const tzOffset = "+06:00";
       const iso =
         mode === "end"
-          ? `${value}T23:59:59.999${tzOffset}`
-          : `${value}T00:00:00.000${tzOffset}`;
+          ? `${value}T23:59:59.999Z`
+          : `${value}T00:00:00.000Z`;
       const d = new Date(iso);
       return Number.isNaN(d.getTime()) ? undefined : d;
     }

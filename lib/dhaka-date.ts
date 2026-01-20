@@ -1,4 +1,5 @@
 const DHAKA_TZ_OFFSET = "+06:00";
+const DHAKA_TIMEZONE = "Asia/Dhaka";
 
 export function getDhakaRangeFromDays(from: string, to: string) {
   const start = new Date(`${from}T00:00:00.000${DHAKA_TZ_OFFSET}`);
@@ -10,14 +11,24 @@ export function getDhakaRangeFromDays(from: string, to: string) {
 }
 
 export function getDhakaDayRange(date: Date = new Date()) {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Dhaka",
+  const day = getDhakaDateString(date);
+  const start = new Date(`${day}T00:00:00.000${DHAKA_TZ_OFFSET}`);
+  const end = new Date(`${day}T23:59:59.999${DHAKA_TZ_OFFSET}`);
+  return { start, end };
+}
+
+export function getDhakaDateString(date: Date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: DHAKA_TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  });
-  const day = formatter.format(date);
-  const start = new Date(`${day}T00:00:00.000${DHAKA_TZ_OFFSET}`);
-  const end = new Date(`${day}T23:59:59.999${DHAKA_TZ_OFFSET}`);
+  }).format(date);
+}
+
+export function getDhakaDateOnlyRange(date: Date = new Date()) {
+  const day = getDhakaDateString(date);
+  const start = new Date(`${day}T00:00:00.000Z`);
+  const end = new Date(`${day}T23:59:59.999Z`);
   return { start, end };
 }

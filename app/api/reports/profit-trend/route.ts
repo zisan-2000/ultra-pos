@@ -27,12 +27,34 @@ function parseTimestampRange(from?: string, to?: string) {
   return { start: parse(from, "start"), end: parse(to, "end") };
 }
 
+function parseDateOnlyRange(from?: string, to?: string) {
+  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const parse = (value?: string, mode?: "start" | "end") => {
+    if (!value) return undefined;
+    if (isDateOnly(value)) {
+      const iso =
+        mode === "end"
+          ? `${value}T23:59:59.999Z`
+          : `${value}T00:00:00.000Z`;
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? undefined : d;
+    }
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return undefined;
+    if (mode === "start") d.setUTCHours(0, 0, 0, 0);
+    if (mode === "end") d.setUTCHours(23, 59, 59, 999);
+    return d;
+  };
+  return { start: parse(from, "start"), end: parse(to, "end") };
+}
+
 async function computeProfitTrend(
   shopId: string,
   from?: string,
   to?: string
 ) {
   const { start, end } = parseTimestampRange(from, to);
+  const { start: expenseStart, end: expenseEnd } = parseDateOnlyRange(from, to);
   const useUnbounded = !from && !to;
 
   const salesWhere: Prisma.Sql[] = [
@@ -46,11 +68,15 @@ async function computeProfitTrend(
   if (!useUnbounded) {
     if (start) {
       salesWhere.push(Prisma.sql` s.sale_date >= ${start}`);
-      expenseWhere.push(Prisma.sql` e.expense_date >= ${start}`);
     }
     if (end) {
       salesWhere.push(Prisma.sql` s.sale_date <= ${end}`);
-      expenseWhere.push(Prisma.sql` e.expense_date <= ${end}`);
+    }
+    if (expenseStart) {
+      expenseWhere.push(Prisma.sql` e.expense_date >= ${expenseStart}`);
+    }
+    if (expenseEnd) {
+      expenseWhere.push(Prisma.sql` e.expense_date <= ${expenseEnd}`);
     }
   }
 
@@ -117,13 +143,16 @@ export async function GET(request: NextRequest) {
     const shopId = searchParams.get("shopId");
     const from = searchParams.get("from") || undefined;
     const to = searchParams.get("to") || undefined;
+    const fresh = searchParams.get("fresh") === "1";
 
     if (!shopId) {
       return NextResponse.json({ error: "shopId required" }, { status: 400 });
     }
 
     await assertShopAccess(shopId, user);
-    const data = await getProfitTrendCached(shopId, from, to);
+    const data = fresh
+      ? await computeProfitTrend(shopId, from, to)
+      : await getProfitTrendCached(shopId, from, to);
     return NextResponse.json({ data });
   } catch (error: any) {
     console.error("Profit trend report error:", error);

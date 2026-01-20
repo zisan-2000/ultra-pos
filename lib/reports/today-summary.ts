@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCogsTotal } from "@/app/actions/reports";
-import { getDhakaDayRange } from "@/lib/dhaka-date";
+import { getDhakaDateOnlyRange, getDhakaDayRange } from "@/lib/dhaka-date";
 import { assertShopAccess } from "@/lib/shop-access";
 import type { UserContext } from "@/lib/rbac";
 
@@ -25,6 +25,7 @@ async function computeTodaySummary(
   businessType?: string | null
 ): Promise<TodaySummary> {
   const { start: todayStart, end: todayEnd } = getDhakaDayRange();
+  const { start: expenseStart, end: expenseEnd } = getDhakaDateOnlyRange();
 
   const [resolvedShopType, salesAgg, expenseAgg, cashAgg] = await Promise.all([
     businessType
@@ -45,7 +46,7 @@ async function computeTodaySummary(
       _count: { _all: true },
     }),
     prisma.expense.aggregate({
-      where: { shopId, expenseDate: { gte: todayStart, lte: todayEnd } },
+      where: { shopId, expenseDate: { gte: expenseStart, lte: expenseEnd } },
       _sum: { amount: true },
       _count: { _all: true },
     }),

@@ -10,6 +10,7 @@ import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { ExpensesDeleteButton } from "./ExpensesDeleteButton";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
 
 type Expense = {
   id: string;
@@ -125,6 +126,9 @@ export function ExpensesListClient({
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
   const REFRESH_MIN_INTERVAL_MS = 15_000;
+  const lastEventAtRef = useRef(0);
+  const POLL_INTERVAL_MS = 15_000;
+  const EVENT_DEBOUNCE_MS = 800;
 
   const canApplyCustom = (() => {
     if (!customFrom || !customTo) return false;
@@ -164,6 +168,48 @@ export function ExpensesListClient({
     refreshInFlightRef.current = true;
     router.refresh();
   }, [online, lastSyncAt, syncing, pendingCount, router]);
+
+  useEffect(() => {
+    if (!online) return;
+
+    const handleExpenseUpdate = (event: ReportEventData) => {
+      if (event.shopId !== shopId) return;
+      const now = event.timestamp ?? Date.now();
+      if (now - lastEventAtRef.current < EVENT_DEBOUNCE_MS) return;
+      if (refreshInFlightRef.current) return;
+      if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+      lastEventAtRef.current = now;
+      lastRefreshAtRef.current = now;
+      refreshInFlightRef.current = true;
+      router.refresh();
+    };
+
+    const listenerId = reportEvents.addListener(
+      "expense-update",
+      handleExpenseUpdate,
+      { shopId, priority: 5 }
+    );
+
+    return () => {
+      reportEvents.removeListener(listenerId);
+    };
+  }, [online, router, shopId]);
+
+  useEffect(() => {
+    if (!online) return;
+    const intervalId = setInterval(() => {
+      const now = Date.now();
+      if (now - lastEventAtRef.current < POLL_INTERVAL_MS / 2) return;
+      if (refreshInFlightRef.current) return;
+      if (syncing || pendingCount > 0) return;
+      if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+      lastRefreshAtRef.current = now;
+      refreshInFlightRef.current = true;
+      router.refresh();
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [online, router, syncing, pendingCount]);
 
   // Keep Dexie/cache synced for offline use
   useEffect(() => {

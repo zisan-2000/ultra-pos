@@ -22,7 +22,10 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
-import { emitDueCustomersEvent } from "@/lib/due/customer-events";
+import {
+  emitDueCustomersEvent,
+  subscribeDueCustomersEvent,
+} from "@/lib/due/customer-events";
 import {
   db,
   type LocalDueCustomer,
@@ -193,6 +196,9 @@ export default function DuePageClient({
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
   const REFRESH_MIN_INTERVAL_MS = 15_000;
+  const lastEventAtRef = useRef(0);
+  const POLL_INTERVAL_MS = 15_000;
+  const EVENT_DEBOUNCE_MS = 800;
   const [voiceReady, setVoiceReady] = useState(false);
   const [listeningField, setListeningField] = useState<VoiceField | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -564,6 +570,57 @@ export default function DuePageClient({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online, lastSyncAt, syncing, pendingCount]);
+
+  useEffect(() => {
+    return subscribeDueCustomersEvent((detail) => {
+      if (detail.shopId !== shopId) return;
+      const now = detail.at ?? Date.now();
+      if (now - lastEventAtRef.current < EVENT_DEBOUNCE_MS) return;
+      lastEventAtRef.current = now;
+      loadCustomersFromDexie();
+      if (online) {
+        queryClient.invalidateQueries({
+          queryKey: customerQueryKey,
+          refetchType: "active",
+        });
+      }
+      if (selectedCustomerId) {
+        refreshStatement(selectedCustomerId);
+      }
+    });
+  }, [
+    shopId,
+    online,
+    loadCustomersFromDexie,
+    queryClient,
+    customerQueryKey,
+    selectedCustomerId,
+    refreshStatement,
+  ]);
+
+  useEffect(() => {
+    if (!online) return;
+    const intervalId = setInterval(() => {
+      const now = Date.now();
+      if (now - lastEventAtRef.current < POLL_INTERVAL_MS / 2) return;
+      if (refreshInFlightRef.current) return;
+      if (syncing || pendingCount > 0) return;
+      if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+      refreshData({ source: "refresh" });
+      if (selectedCustomerId) {
+        refreshStatement(selectedCustomerId);
+      }
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [
+    online,
+    syncing,
+    pendingCount,
+    refreshData,
+    selectedCustomerId,
+    refreshStatement,
+  ]);
 
   async function handleAddCustomer(e: FormEvent) {
     e.preventDefault();

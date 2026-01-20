@@ -55,7 +55,7 @@ async function computePaymentMethodReport(
   });
 
   return sales.map((s) => ({
-    name: s.paymentMethod || "???",
+    name: s.paymentMethod || "Unknown",
     value: Number(s._sum.totalAmount || 0),
     count: s._count.id,
   }));
@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
     const shopId = searchParams.get("shopId");
     const from = searchParams.get("from") || undefined;
     const to = searchParams.get("to") || undefined;
+    const fresh = searchParams.get("fresh") === "1";
 
     if (!shopId) {
       return NextResponse.json({ error: "shopId required" }, { status: 400 });
@@ -82,7 +83,9 @@ export async function GET(request: NextRequest) {
 
     await assertShopAccess(shopId, user);
 
-    const data = await getPaymentMethodCached(shopId, from, to);
+    const data = fresh
+      ? await computePaymentMethodReport(shopId, from, to)
+      : await getPaymentMethodCached(shopId, from, to);
 
     return NextResponse.json({ data });
   } catch (error: any) {

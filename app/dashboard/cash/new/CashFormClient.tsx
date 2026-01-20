@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
+import useRealTimeReports from "@/hooks/useRealTimeReports";
+import { emitCashUpdate } from "@/lib/events/reportEvents";
 import Link from "next/link";
 
 type SpeechRecognitionInstance = {
@@ -87,6 +89,9 @@ export default function CashFormClient({
   initialValues,
   submitLabel = "+ দ্রুত ক্যাশ এন্ট্রি করুন",
 }: Props) {
+  // World-Class Real-time Reports Integration
+  const realTimeReports = useRealTimeReports(shopId);
+  
   const online = useOnlineStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [listeningField, setListeningField] = useState<"amount" | "reason" | null>(null);
@@ -242,9 +247,12 @@ export default function CashFormClient({
     form.set("amount", (form.get("amount") as string) || amount);
     form.set("reason", (form.get("reason") as string) || reason);
 
+    const cashAmount = parseFloat((form.get("amount") as string) || "0");
+    const cashEntryType = (form.get("entryType") as "IN" | "OUT") || "IN";
+
     if (!initialValues) {
       const template: CashTemplate = {
-        entryType: (form.get("entryType") as "IN" | "OUT") || entryType,
+        entryType: cashEntryType,
         amount: (form.get("amount") as string) || "0",
         reason: (form.get("reason") as string) || "",
         count: 1,
@@ -253,8 +261,44 @@ export default function CashFormClient({
       persistTemplates(mergeTemplates(templates, template));
     }
 
+    // World-Class Real-time Update: Instant optimistic update
+    const updateId = realTimeReports.updateCashReport(
+      cashAmount,
+      cashEntryType === "IN" ? "cash-in" : "cash-out",
+      {
+        cashEntryId: id || crypto.randomUUID(),
+        timestamp: Date.now()
+      }
+    );
+    
+    // Emit real-time event
+    emitCashUpdate(shopId, {
+      type: cashEntryType === "IN" ? "cash-in" : "cash-out",
+      operation: 'add',
+      amount: cashAmount,
+      shopId,
+      metadata: {
+        cashEntryId: id || crypto.randomUUID(),
+        timestamp: Date.now()
+      }
+    }, {
+      source: 'ui',
+      priority: 'high',
+      correlationId: updateId
+    });
+
     if (online) {
-      await action(form);
+      try {
+        await action(form);
+        // Background sync for consistency
+        setTimeout(() => {
+          realTimeReports.syncWithServer(updateId);
+        }, 500);
+      } catch (error) {
+        // Rollback on error
+        realTimeReports.rollbackLastUpdate();
+        console.error('Cash entry creation failed:', error);
+      }
       return;
     }
 
@@ -263,7 +307,7 @@ export default function CashFormClient({
     const payload = {
       id: entryId,
       shopId,
-      entryType: (form.get("entryType") as "IN" | "OUT") || "IN",
+      entryType: cashEntryType,
       amount: form.get("amount") as string,
       reason: (form.get("reason") as string) || "",
       createdAt: Date.now(),

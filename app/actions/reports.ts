@@ -4,7 +4,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
+import { REPORT_ROW_LIMIT, clampReportLimit } from "@/lib/reporting-config";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { unstable_cache } from "next/cache";
@@ -144,7 +144,26 @@ export async function getCogsByDay(
 }
 
 function parseDateRange(from?: string, to?: string) {
-  return parseTimestampRange(from, to);
+  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+  const parse = (value?: string, mode?: "start" | "end") => {
+    if (!value) return undefined;
+    if (isDateOnly(value)) {
+      const iso =
+        mode === "end"
+          ? `${value}T23:59:59.999Z`
+          : `${value}T00:00:00.000Z`;
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? undefined : d;
+    }
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return undefined;
+    if (mode === "start") d.setUTCHours(0, 0, 0, 0);
+    if (mode === "end") d.setUTCHours(23, 59, 59, 999);
+    return d;
+  };
+
+  return { start: parse(from, "start"), end: parse(to, "end") };
 }
 
 function normalizeLimit(
@@ -464,6 +483,15 @@ export async function getSalesSummary(
   await assertShopAccess(shopId, user);
   return getSalesSummaryCached(shopId, from, to);
 }
+export async function getSalesSummaryFresh(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
+  return computeSalesSummary(shopId, from, to);
+}
 export async function getExpenseSummary(
   shopId: string,
   from?: string,
@@ -472,6 +500,15 @@ export async function getExpenseSummary(
   const user = await requireUser();
   await assertShopAccess(shopId, user);
   return getExpenseSummaryCached(shopId, from, to);
+}
+export async function getExpenseSummaryFresh(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
+  return computeExpenseSummary(shopId, from, to);
 }
 export async function getCashSummary(
   shopId: string,
@@ -482,6 +519,15 @@ export async function getCashSummary(
   await assertShopAccess(shopId, user);
   return getCashSummaryCached(shopId, from, to);
 }
+export async function getCashSummaryFresh(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
+  return computeCashSummary(shopId, from, to);
+}
 export async function getProfitSummary(
   shopId: string,
   from?: string,
@@ -490,6 +536,15 @@ export async function getProfitSummary(
   const user = await requireUser();
   await assertShopAccess(shopId, user);
   return getProfitSummaryCached(shopId, from, to);
+}
+export async function getProfitSummaryFresh(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
+  return computeProfitSummary(shopId, from, to);
 }
 
 async function computeExpenseSummary(
@@ -616,3 +671,262 @@ const getProfitSummaryCached = unstable_cache(
   ["reports-profit-summary"],
   { revalidate: 30 }
 );
+
+/* --------------------------------------------------
+   PAYMENT METHOD REPORT
+-------------------------------------------------- */
+async function computePaymentMethodReport(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const { start, end } = parseTimestampRange(from, to);
+  const useUnbounded = !from && !to;
+
+  const sales = await prisma.sale.groupBy({
+    by: ["paymentMethod"],
+    where: {
+      shopId,
+      status: { not: "VOIDED" },
+      saleDate: useUnbounded
+        ? undefined
+        : {
+            gte: start,
+            lte: end,
+          },
+    },
+    _sum: {
+      totalAmount: true,
+    },
+    _count: {
+      id: true,
+    },
+  });
+
+  return sales.map((s) => ({
+    name: s.paymentMethod || "Unknown",
+    value: Number(s._sum.totalAmount || 0),
+    count: s._count.id,
+  }));
+}
+
+const getPaymentMethodCached = unstable_cache(
+  async (shopId: string, from?: string, to?: string) =>
+    computePaymentMethodReport(shopId, from, to),
+  ["reports-payment-method"],
+  { revalidate: 60 }
+);
+
+export async function getPaymentMethodReport(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
+  return getPaymentMethodCached(shopId, from, to);
+}
+
+/* --------------------------------------------------
+   PROFIT TREND REPORT
+-------------------------------------------------- */
+async function computeProfitTrendReport(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const { start, end } = parseTimestampRange(from, to);
+  const useUnbounded = !from && !to;
+
+  const salesWhere: Prisma.Sql[] = [
+    Prisma.sql` s.shop_id = CAST(${shopId} AS uuid)`,
+    Prisma.sql` s.status <> 'VOIDED'`,
+  ];
+  const expenseWhere: Prisma.Sql[] = [
+    Prisma.sql` e.shop_id = CAST(${shopId} AS uuid)`,
+  ];
+
+  if (!useUnbounded) {
+    if (start) {
+      salesWhere.push(Prisma.sql` s.sale_date >= ${start}`);
+      expenseWhere.push(Prisma.sql` e.expense_date >= ${start}`);
+    }
+    if (end) {
+      salesWhere.push(Prisma.sql` s.sale_date <= ${end}`);
+      expenseWhere.push(Prisma.sql` e.expense_date <= ${end}`);
+    }
+  }
+
+  const [salesRows, expenseRows] = await Promise.all([
+    prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+      Prisma.sql`
+        SELECT
+          DATE(s.sale_date AT TIME ZONE 'Asia/Dhaka')::text AS day,
+          SUM(COALESCE(s.total_amount, 0)) AS sum
+        FROM "sales" s
+        WHERE ${Prisma.join(salesWhere, " AND ")}
+        GROUP BY day
+        ORDER BY day
+      `
+    ),
+    prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+      Prisma.sql`
+        SELECT
+          e.expense_date::text AS day,
+          SUM(COALESCE(e.amount, 0)) AS sum
+        FROM "expenses" e
+        WHERE ${Prisma.join(expenseWhere, " AND ")}
+        GROUP BY day
+        ORDER BY day
+      `
+    ),
+  ]);
+
+  const salesByDate = new Map<string, number>();
+  salesRows.forEach((row) => {
+    salesByDate.set(row.day, Number(row.sum ?? 0));
+  });
+
+  const expensesByDate = new Map<string, number>();
+  expenseRows.forEach((row) => {
+    expensesByDate.set(row.day, Number(row.sum ?? 0));
+  });
+
+  const allDates = new Set<string>([
+    ...salesByDate.keys(),
+    ...expensesByDate.keys(),
+  ]);
+
+  return Array.from(allDates)
+    .sort()
+    .map((date) => ({
+      date,
+      sales: salesByDate.get(date) || 0,
+      expense: expensesByDate.get(date) || 0,
+    }));
+}
+
+const getProfitTrendCached = unstable_cache(
+  async (shopId: string, from?: string, to?: string) =>
+    computeProfitTrendReport(shopId, from, to),
+  ["reports-profit-trend"],
+  { revalidate: 60 }
+);
+
+export async function getProfitTrendReport(
+  shopId: string,
+  from?: string,
+  to?: string
+) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
+  return getProfitTrendCached(shopId, from, to);
+}
+
+/* --------------------------------------------------
+   TOP PRODUCTS REPORT
+-------------------------------------------------- */
+async function computeTopProductsReport(shopId: string, limit: number) {
+  const topProducts = await prisma.saleItem.groupBy({
+    by: ["productId"],
+    where: {
+      sale: {
+        shopId,
+        status: { not: "VOIDED" },
+      },
+    },
+    _sum: {
+      quantity: true,
+      lineTotal: true,
+    },
+    orderBy: {
+      _sum: {
+        lineTotal: "desc",
+      },
+    },
+    take: limit,
+  });
+
+  const productIds = topProducts.map((p) => p.productId);
+  const products = await prisma.product.findMany({
+    where: {
+      id: { in: productIds },
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  const productMap = new Map(products.map((p) => [p.id, p.name]));
+
+  return topProducts.map((item) => ({
+    name: productMap.get(item.productId) || "Unknown",
+    qty: Number(item._sum.quantity || 0),
+    revenue: Number(item._sum.lineTotal || 0),
+  }));
+}
+
+const getTopProductsCached = unstable_cache(
+  async (shopId: string, limit: number) =>
+    computeTopProductsReport(shopId, limit),
+  ["reports-top-products"],
+  { revalidate: 60 }
+);
+
+export async function getTopProductsReport(
+  shopId: string,
+  limit?: number | null
+) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
+  const safeLimit = clampReportLimit(limit);
+  return getTopProductsCached(shopId, safeLimit);
+}
+
+/* --------------------------------------------------
+   LOW STOCK REPORT
+-------------------------------------------------- */
+async function computeLowStockReport(shopId: string, limit: number) {
+  const lowStockProducts = await prisma.product.findMany({
+    where: {
+      shopId,
+      isActive: true,
+      trackStock: true,
+      stockQty: {
+        lte: limit,
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      stockQty: true,
+    },
+    orderBy: {
+      stockQty: "asc",
+    },
+    take: limit,
+  });
+
+  return lowStockProducts.map((p) => ({
+    id: p.id,
+    name: p.name,
+    stockQty: Number(p.stockQty),
+  }));
+}
+
+const getLowStockCached = unstable_cache(
+  async (shopId: string, limit: number) => computeLowStockReport(shopId, limit),
+  ["reports-low-stock"],
+  { revalidate: 60 }
+);
+
+export async function getLowStockReport(
+  shopId: string,
+  limit?: number | null
+) {
+  const user = await requireUser();
+  await assertShopAccess(shopId, user);
+  const safeLimit = clampReportLimit(limit);
+  return getLowStockCached(shopId, safeLimit);
+}

@@ -21,8 +21,11 @@ import {
   computePresetRange,
   type RangePreset,
 } from "@/lib/reporting-range";
+import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { scheduleIdle } from "@/lib/schedule-idle";
 import { handlePermissionError } from "@/lib/permission-toast";
+import useInstantReports from "@/hooks/useInstantReports";
+import { reportEvents } from "@/lib/events/reportEvents";
 
 type Summary = {
   sales: { totalAmount: number; completedCount?: number; voidedCount?: number };
@@ -135,10 +138,62 @@ export default function ReportsClient({
 }: Props) {
   const online = useOnlineStatus();
   const queryClient = useQueryClient();
+  
+  // World-Class Instant Reports Integration
+  const instantReports = useInstantReports({
+    shopId,
+    initialData: summary,
+    enableRealTime: true,
+    cacheTimeout: 30000,
+    prefetchRelated: true
+  });
+  
   const [active, setActive] = useState<(typeof NAV)[number]["key"]>("summary");
   const [preset, setPreset] = useState<RangePreset>("today");
   const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
   const [customTo, setCustomTo] = useState<string | undefined>(undefined);
+  const [realTimeIndicator, setRealTimeIndicator] = useState(false);
+  const lastEventAtRef = useRef(0);
+  const POLL_INTERVAL_MS = 10_000;
+  const EVENT_DEBOUNCE_MS = 600;
+  
+  // Auto-sync on real-time events
+  useEffect(() => {
+    const syncListener = reportEvents.addListener(
+      'sync-complete',
+      async (event) => {
+        if (event.shopId === shopId) {
+          // Refresh query data with latest from server
+          queryClient.setQueryData(
+            ["reports", "summary", shopId, "all", "all"],
+            event.data
+          );
+        }
+      },
+      { shopId, priority: 5 }
+    );
+    
+    return () => {
+      reportEvents.removeListener(syncListener);
+    };
+  }, [shopId, queryClient]);
+  
+  // Performance monitoring
+  useEffect(() => {
+    const metricsListener = reportEvents.addListener(
+      'metrics-updated',
+      (event) => {
+        if (event.shopId === shopId) {
+          console.log('Real-time Reports Metrics:', event.data);
+        }
+      },
+      { shopId, priority: 1 }
+    );
+    
+    return () => {
+      reportEvents.removeListener(metricsListener);
+    };
+  }, [shopId]);
   const range = useMemo(
     () => computeRange(preset, customFrom, customTo),
     [preset, customFrom, customTo]
@@ -153,6 +208,9 @@ export default function ReportsClient({
     }
     return range.from ?? range.to ?? null;
   }, [range.from, range.to]);
+
+  const rangeKeyFrom = range.from ?? "all";
+  const rangeKeyTo = range.to ?? "all";
 
   const buildSummaryKey = useCallback(
     (rangeFrom?: string, rangeTo?: string) =>
@@ -180,11 +238,14 @@ export default function ReportsClient({
   );
 
   const fetchSummary = useCallback(
-    async (rangeFrom?: string, rangeTo?: string) => {
+    async (rangeFrom?: string, rangeTo?: string, fresh = false) => {
       const params = new URLSearchParams({ shopId });
       if (rangeFrom) params.append("from", rangeFrom);
       if (rangeTo) params.append("to", rangeTo);
-      const res = await fetch(`/api/reports/summary?${params.toString()}`);
+      if (fresh) params.append("fresh", "1");
+      const res = await fetch(`/api/reports/summary?${params.toString()}`, {
+        cache: "no-store",
+      });
       if (!res.ok) {
         const cached = readCachedSummary(rangeFrom, rangeTo);
         if (cached) return cached;
@@ -221,6 +282,175 @@ export default function ReportsClient({
   const liveSummary = summaryQuery.data ?? summary;
   const summaryLoading = summaryQuery.isFetching && online;
   const summarySnapshot = `${liveSummary.sales.totalAmount.toFixed(1)} ৳ বিক্রি | লাভ ${liveSummary.profit.profit.toFixed(1)} ৳`;
+  
+  // Real-time sync trigger
+  const triggerRealTimeSync = useCallback(() => {
+    instantReports.refresh();
+  }, [instantReports]);
+  
+  // Get real-time metrics for debugging
+  const realTimeMetrics = instantReports.metrics;
+
+  const refreshSummaryFresh = useCallback(async () => {
+    if (!online) return;
+    try {
+      const freshData = await fetchSummary(range.from, range.to, true);
+      if (freshData) {
+        queryClient.setQueryData(summaryQueryKey, freshData);
+      }
+    } catch (err) {
+      handlePermissionError(err);
+    }
+  }, [online, fetchSummary, range.from, range.to, queryClient, summaryQueryKey]);
+
+  const invalidateSales = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: ["reports", "sales", shopId, rangeKeyFrom, rangeKeyTo],
+    });
+  }, [queryClient, shopId, rangeKeyFrom, rangeKeyTo]);
+
+  const invalidateExpenses = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: ["reports", "expenses", shopId, rangeKeyFrom, rangeKeyTo],
+    });
+  }, [queryClient, shopId, rangeKeyFrom, rangeKeyTo]);
+
+  const invalidateCash = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: ["reports", "cash", shopId, rangeKeyFrom, rangeKeyTo],
+    });
+  }, [queryClient, shopId, rangeKeyFrom, rangeKeyTo]);
+
+  const invalidatePayment = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: ["reports", "payment", shopId, rangeKeyFrom, rangeKeyTo],
+    });
+  }, [queryClient, shopId, rangeKeyFrom, rangeKeyTo]);
+
+  const invalidateProfit = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: ["reports", "profit", shopId, rangeKeyFrom, rangeKeyTo],
+    });
+  }, [queryClient, shopId, rangeKeyFrom, rangeKeyTo]);
+
+  const invalidateTopProducts = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: ["reports", "top-products", shopId, REPORT_ROW_LIMIT],
+    });
+  }, [queryClient, shopId]);
+
+  const invalidateLowStock = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: ["reports", "low-stock", shopId, REPORT_ROW_LIMIT],
+    });
+  }, [queryClient, shopId]);
+
+  const invalidateActiveReport = useCallback(() => {
+    switch (active) {
+      case "sales":
+        invalidateSales();
+        break;
+      case "expenses":
+        invalidateExpenses();
+        break;
+      case "cash":
+        invalidateCash();
+        break;
+      case "payment":
+        invalidatePayment();
+        break;
+      case "profit":
+        invalidateProfit();
+        break;
+      case "products":
+        invalidateTopProducts();
+        break;
+      case "stock":
+        invalidateLowStock();
+        break;
+      default:
+        break;
+    }
+  }, [
+    active,
+    invalidateSales,
+    invalidateExpenses,
+    invalidateCash,
+    invalidatePayment,
+    invalidateProfit,
+    invalidateTopProducts,
+    invalidateLowStock,
+  ]);
+
+  // Real-time event listeners
+  useEffect(() => {
+    const handleIndicator = () => {
+      setRealTimeIndicator(true);
+      setTimeout(() => setRealTimeIndicator(false), 1000);
+    };
+
+    const maybeDebounce = () => {
+      const now = Date.now();
+      if (now - lastEventAtRef.current < EVENT_DEBOUNCE_MS) return false;
+      lastEventAtRef.current = now;
+      return true;
+    };
+
+    const saleUpdateListener = reportEvents.addListener(
+      "sale-update",
+      (event) => {
+        if (event.shopId !== shopId) return;
+        handleIndicator();
+        if (!maybeDebounce()) return;
+        refreshSummaryFresh();
+        invalidateSales();
+        invalidateProfit();
+        invalidatePayment();
+        invalidateTopProducts();
+      },
+      { shopId, priority: 10 }
+    );
+
+    const expenseUpdateListener = reportEvents.addListener(
+      "expense-update",
+      (event) => {
+        if (event.shopId !== shopId) return;
+        handleIndicator();
+        if (!maybeDebounce()) return;
+        refreshSummaryFresh();
+        invalidateExpenses();
+        invalidateProfit();
+      },
+      { shopId, priority: 10 }
+    );
+
+    const cashUpdateListener = reportEvents.addListener(
+      "cash-update",
+      (event) => {
+        if (event.shopId !== shopId) return;
+        handleIndicator();
+        if (!maybeDebounce()) return;
+        refreshSummaryFresh();
+        invalidateCash();
+      },
+      { shopId, priority: 10 }
+    );
+
+    return () => {
+      reportEvents.removeListener(saleUpdateListener);
+      reportEvents.removeListener(expenseUpdateListener);
+      reportEvents.removeListener(cashUpdateListener);
+    };
+  }, [
+    shopId,
+    refreshSummaryFresh,
+    invalidateSales,
+    invalidateExpenses,
+    invalidateCash,
+    invalidateProfit,
+    invalidatePayment,
+    invalidateTopProducts,
+  ]);
 
   useEffect(() => {
     if (!online || typeof window === "undefined") return;
@@ -243,6 +473,252 @@ export default function ReportsClient({
     }, 50);
     return () => cancel();
   }, [online, shopId, fetchSummary, queryClient]);
+
+  useEffect(() => {
+    if (!online) return;
+    const intervalId = setInterval(() => {
+      const now = Date.now();
+      if (now - lastEventAtRef.current < POLL_INTERVAL_MS / 2) return;
+      refreshSummaryFresh();
+      invalidateActiveReport();
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [online, refreshSummaryFresh, invalidateActiveReport]);
+
+  useEffect(() => {
+    if (!online) return;
+    const rangeFrom = range.from ?? "all";
+    const rangeTo = range.to ?? "all";
+    const salesKey = [
+      "reports",
+      "sales",
+      shopId,
+      rangeFrom,
+      rangeTo,
+      1,
+      "start",
+      "start",
+    ];
+    const expensesKey = [
+      "reports",
+      "expenses",
+      shopId,
+      rangeFrom,
+      rangeTo,
+      1,
+      "start",
+      "start",
+    ];
+    const cashKey = [
+      "reports",
+      "cash",
+      shopId,
+      rangeFrom,
+      rangeTo,
+      1,
+      "start",
+      "start",
+    ];
+    const paymentKey = ["reports", "payment", shopId, rangeFrom, rangeTo];
+    const profitKey = ["reports", "profit", shopId, rangeFrom, rangeTo];
+    const topProductsKey = ["reports", "top-products", shopId, REPORT_ROW_LIMIT];
+    const lowStockKey = ["reports", "low-stock", shopId, REPORT_ROW_LIMIT];
+
+    const cancel = scheduleIdle(() => {
+      const tasks: Promise<unknown>[] = [];
+
+      if (!queryClient.getQueryData(salesKey)) {
+        tasks.push(
+          queryClient
+            .prefetchQuery({
+              queryKey: salesKey,
+              queryFn: async () => {
+                const params = new URLSearchParams({
+                  shopId,
+                  limit: `${REPORT_ROW_LIMIT}`,
+                });
+                if (range.from) params.append("from", range.from);
+                if (range.to) params.append("to", range.to);
+                const res = await fetch(
+                  `/api/reports/sales?${params.toString()}`
+                );
+                if (!res.ok) throw new Error("Sales prefetch failed");
+                const json = await res.json();
+                const rows = Array.isArray(json?.rows) ? json.rows : [];
+                return {
+                  rows,
+                  hasMore: Boolean(json?.hasMore),
+                  nextCursor: json?.nextCursor ?? null,
+                };
+              },
+            })
+            .catch(() => null)
+        );
+      }
+
+      if (!queryClient.getQueryData(expensesKey)) {
+        tasks.push(
+          queryClient
+            .prefetchQuery({
+              queryKey: expensesKey,
+              queryFn: async () => {
+                const params = new URLSearchParams({
+                  shopId,
+                  limit: `${REPORT_ROW_LIMIT}`,
+                });
+                if (range.from) params.append("from", range.from);
+                if (range.to) params.append("to", range.to);
+                const res = await fetch(
+                  `/api/reports/expenses?${params.toString()}`
+                );
+                if (!res.ok) throw new Error("Expense prefetch failed");
+                const json = await res.json();
+                const rows = Array.isArray(json?.rows) ? json.rows : [];
+                return {
+                  rows,
+                  hasMore: Boolean(json?.hasMore),
+                  nextCursor: json?.nextCursor ?? null,
+                };
+              },
+            })
+            .catch(() => null)
+        );
+      }
+
+      if (!queryClient.getQueryData(cashKey)) {
+        tasks.push(
+          queryClient
+            .prefetchQuery({
+              queryKey: cashKey,
+              queryFn: async () => {
+                const params = new URLSearchParams({
+                  shopId,
+                  limit: `${REPORT_ROW_LIMIT}`,
+                });
+                if (range.from) params.append("from", range.from);
+                if (range.to) params.append("to", range.to);
+                const res = await fetch(
+                  `/api/reports/cash?${params.toString()}`
+                );
+                if (!res.ok) throw new Error("Cash prefetch failed");
+                const json = await res.json();
+                const rows = Array.isArray(json?.rows) ? json.rows : [];
+                return {
+                  rows,
+                  hasMore: Boolean(json?.hasMore),
+                  nextCursor: json?.nextCursor ?? null,
+                };
+              },
+            })
+            .catch(() => null)
+        );
+      }
+
+      if (!queryClient.getQueryData(paymentKey)) {
+        tasks.push(
+          queryClient
+            .prefetchQuery({
+              queryKey: paymentKey,
+              queryFn: async () => {
+                const params = new URLSearchParams({ shopId, fresh: "1" });
+                if (range.from) params.append("from", range.from);
+                if (range.to) params.append("to", range.to);
+                const res = await fetch(
+                  `/api/reports/payment-method?${params.toString()}`,
+                  { cache: "no-store" }
+                );
+                if (!res.ok) throw new Error("Payment prefetch failed");
+                const text = await res.text();
+                if (!text) return [];
+                const json = JSON.parse(text);
+                return Array.isArray(json?.data) ? json.data : [];
+              },
+            })
+            .catch(() => null)
+        );
+      }
+
+      if (!queryClient.getQueryData(profitKey)) {
+        tasks.push(
+          queryClient
+            .prefetchQuery({
+              queryKey: profitKey,
+              queryFn: async () => {
+                const params = new URLSearchParams({ shopId, fresh: "1" });
+                if (range.from) params.append("from", range.from);
+                if (range.to) params.append("to", range.to);
+                const res = await fetch(
+                  `/api/reports/profit-trend?${params.toString()}`,
+                  { cache: "no-store" }
+                );
+                if (!res.ok) throw new Error("Profit prefetch failed");
+                const json = await res.json();
+                return Array.isArray(json?.data) ? json.data : [];
+              },
+            })
+            .catch(() => null)
+        );
+      }
+
+      if (!queryClient.getQueryData(topProductsKey)) {
+        tasks.push(
+          queryClient
+            .prefetchQuery({
+              queryKey: topProductsKey,
+              queryFn: async () => {
+                const params = new URLSearchParams({
+                  shopId,
+                  limit: `${REPORT_ROW_LIMIT}`,
+                  fresh: "1",
+                });
+                const res = await fetch(
+                  `/api/reports/top-products?${params.toString()}`,
+                  { cache: "no-store" }
+                );
+                if (!res.ok) throw new Error("Top products prefetch failed");
+                const text = await res.text();
+                if (!text) return [];
+                const json = JSON.parse(text);
+                return Array.isArray(json?.data) ? json.data : [];
+              },
+            })
+            .catch(() => null)
+        );
+      }
+
+      if (!queryClient.getQueryData(lowStockKey)) {
+        tasks.push(
+          queryClient
+            .prefetchQuery({
+              queryKey: lowStockKey,
+              queryFn: async () => {
+                const params = new URLSearchParams({
+                  shopId,
+                  limit: `${REPORT_ROW_LIMIT}`,
+                  fresh: "1",
+                });
+                const res = await fetch(
+                  `/api/reports/low-stock?${params.toString()}`,
+                  { cache: "no-store" }
+                );
+                if (!res.ok) throw new Error("Low stock prefetch failed");
+                const text = await res.text();
+                if (!text) return [];
+                const json = JSON.parse(text);
+                return Array.isArray(json?.data) ? json.data : [];
+              },
+            })
+            .catch(() => null)
+        );
+      }
+
+      if (tasks.length > 0) {
+        Promise.all(tasks).catch(() => null);
+      }
+    }, 50);
+
+    return () => cancel();
+  }, [online, shopId, range.from, range.to, queryClient]);
 
 
   useEffect(() => {
@@ -367,7 +843,7 @@ export default function ReportsClient({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
+            <span className="inline-flex h-7 items-center rounded-full border px-3">
               {presetLabel}
             </span>
             {rangeLabel ? (
@@ -375,8 +851,25 @@ export default function ReportsClient({
                 {rangeLabel}
               </span>
             ) : null}
-            <span className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-primary">
-              {summarySnapshot}
+            <span className={`inline-flex h-7 items-center rounded-full border px-3 transition-all duration-300 ${
+              instantReports.isLoading 
+                ? "bg-yellow-soft text-yellow border-yellow/30 animate-pulse" 
+                : realTimeIndicator 
+                ? "bg-green-soft text-green border-green/30 animate-pulse" 
+                : "bg-primary-soft text-primary border-primary/30"
+            }`}>
+              {instantReports.data ? (
+                <>
+                  {summarySnapshot}
+                  {realTimeIndicator && (
+                    <span className="ml-1 text-xs">🔄 LIVE</span>
+                  )}
+                </>
+              ) : instantReports.isLoading ? (
+                <span className="text-xs">লোডিং...</span>
+              ) : (
+                <span className="text-xs text-muted-foreground">কোনো ডেটা নেই</span>
+              )}
             </span>
             {summaryLoading ? (
               <span
@@ -393,6 +886,12 @@ export default function ReportsClient({
             >
               {online ? "অনলাইন" : "অফলাইন"}
             </span>
+            {/* Real-time metrics indicator for development */}
+            {process.env.NODE_ENV === 'development' && (
+              <span className="inline-flex h-7 items-center rounded-full border border-blue-30 bg-blue-soft px-3 text-blue text-xs">
+                📊 {instantReports.metrics.updateCount} updates
+              </span>
+            )}
           </div>
         </div>
       </div>

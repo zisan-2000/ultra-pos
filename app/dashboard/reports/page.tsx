@@ -60,7 +60,6 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       getCashSummary(selectedShopId, rangeFrom, rangeTo),
       getProfitSummary(selectedShopId, rangeFrom, rangeTo),
     ]);
-
   return (
     <div className="section-gap">
       <ReportsClient

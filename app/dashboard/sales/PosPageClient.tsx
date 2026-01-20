@@ -128,6 +128,8 @@ export function PosPageClient({
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
   const REFRESH_MIN_INTERVAL_MS = 15_000;
+  const lastEventAtRef = useRef(0);
+  const POLL_INTERVAL_MS = 15_000;
   const isDue = paymentMethod === "due";
   const paymentOptions = useMemo(
     () => [
@@ -214,6 +216,7 @@ export function PosPageClient({
     queryFn: fetchDueCustomers,
     enabled: online && isDue,
     staleTime: 15_000,
+    refetchInterval: online && isDue ? 15_000 : false,
     initialData: () => customers ?? [],
     placeholderData: (prev) => prev ?? [],
   });
@@ -306,6 +309,22 @@ export function PosPageClient({
   }, [online, lastSyncAt, syncing, pendingCount, router]);
 
   useEffect(() => {
+    if (!online) return;
+    const intervalId = setInterval(() => {
+      const now = Date.now();
+      if (now - lastEventAtRef.current < POLL_INTERVAL_MS / 2) return;
+      if (refreshInFlightRef.current) return;
+      if (syncing || pendingCount > 0) return;
+      if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+      refreshInFlightRef.current = true;
+      lastRefreshAtRef.current = now;
+      router.refresh();
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [online, router, syncing, pendingCount]);
+
+  useEffect(() => {
     if (!isDue) return;
     loadCustomersFromDexie();
   }, [isDue, loadCustomersFromDexie]);
@@ -318,6 +337,7 @@ export function PosPageClient({
   useEffect(() => {
     return subscribeDueCustomersEvent((detail) => {
       if (detail.shopId !== shopId) return;
+      lastEventAtRef.current = Date.now();
       loadCustomersFromDexie();
       if (online) {
         queryClient.invalidateQueries({
@@ -331,6 +351,7 @@ export function PosPageClient({
   useEffect(() => {
     return subscribeProductEvent((detail) => {
       if (detail.shopId !== shopId) return;
+      lastEventAtRef.current = Date.now();
       loadProductsFromDexie();
     });
   }, [loadProductsFromDexie, shopId]);

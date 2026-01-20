@@ -3,7 +3,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { handlePermissionError } from "@/lib/permission-toast";
@@ -39,9 +39,14 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
     if (!online) {
       return readCached() ?? [];
     }
-    const res = await fetch(
-      `/api/reports/top-products?shopId=${shopId}&limit=${REPORT_ROW_LIMIT}`
-    );
+    const params = new URLSearchParams({
+      shopId,
+      limit: `${REPORT_ROW_LIMIT}`,
+      fresh: "1",
+    });
+    const res = await fetch(`/api/reports/top-products?${params.toString()}`, {
+      cache: "no-store",
+    });
     if (!res.ok) {
       const cached = readCached();
       if (cached) return cached;
@@ -74,10 +79,13 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
     queryFn: fetchTopProducts,
     enabled: online,
     initialData: () => readCached() ?? [],
-    placeholderData: (prev) => prev ?? [],
+    placeholderData: keepPreviousData,
   });
 
   const data: TopProduct[] = topProductsQuery.data ?? [];
+  const loading = topProductsQuery.isFetching && online;
+  const hasFetched = topProductsQuery.isFetchedAfterMount;
+  const showEmpty = data.length === 0 && (!online || hasFetched) && !loading;
 
   return (
     <div className="space-y-4">
@@ -119,7 +127,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
             {data.length === 0 ? (
               <tr>
                 <td className="p-3 text-center text-muted-foreground" colSpan={3}>
-                  কোনো তথ্য পাওয়া যায়নি
+                  {showEmpty ? "কোনো তথ্য পাওয়া যায়নি" : "লোড হচ্ছে..."}
                 </td>
               </tr>
             ) : (
@@ -143,7 +151,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
       <div className="space-y-3 md:hidden">
         {data.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            কোনো তথ্য পাওয়া যায়নি
+            {showEmpty ? "কোনো তথ্য পাওয়া যায়নি" : "লোড হচ্ছে..."}
           </p>
         ) : (
           data.map((item, idx) => (

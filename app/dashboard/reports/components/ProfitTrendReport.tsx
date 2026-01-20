@@ -3,7 +3,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
 import { scheduleIdle } from "@/lib/schedule-idle";
@@ -49,7 +49,10 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
       if (rangeFrom) params.append("from", rangeFrom);
       if (rangeTo) params.append("to", rangeTo);
 
-      const res = await fetch(`/api/reports/profit-trend?${params.toString()}`);
+      params.append("fresh", "1");
+      const res = await fetch(`/api/reports/profit-trend?${params.toString()}`, {
+        cache: "no-store",
+      });
       if (!res.ok) {
         const cached = readCached(rangeFrom, rangeTo);
         if (cached) return cached;
@@ -83,11 +86,13 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
     queryFn: () => fetchProfit(from, to),
     enabled: online,
     initialData: () => readCached(from, to) ?? [],
-    placeholderData: (prev) => prev ?? [],
+    placeholderData: keepPreviousData,
   });
 
   const data: ProfitRow[] = profitQuery.data ?? [];
   const loading = profitQuery.isFetching && online;
+  const hasFetched = profitQuery.isFetchedAfterMount;
+  const showEmpty = data.length === 0 && (!online || hasFetched) && !loading;
 
   useEffect(() => {
     if (!online || typeof window === "undefined") return;
@@ -162,7 +167,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
             {data.length === 0 ? (
               <tr>
                 <td className="p-3 text-center text-muted-foreground" colSpan={4}>
-                  {loading ? "লোড হচ্ছে..." : "কোনো তথ্য নেই"}
+                  {showEmpty ? "কোনো তথ্য নেই" : "লোড হচ্ছে..."}
                 </td>
               </tr>
             ) : (
@@ -206,7 +211,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
       <div className="space-y-3 md:hidden">
         {data.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {loading ? "লোড হচ্ছে..." : "কোনো তথ্য নেই"}
+            {showEmpty ? "কোনো তথ্য নেই" : "লোড হচ্ছে..."}
           </p>
         ) : (
           <>

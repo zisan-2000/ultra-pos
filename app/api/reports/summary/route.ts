@@ -4,6 +4,10 @@ import {
   getExpenseSummary,
   getProfitSummary,
   getSalesSummary,
+  getCashSummaryFresh,
+  getExpenseSummaryFresh,
+  getProfitSummaryFresh,
+  getSalesSummaryFresh,
 } from "@/app/actions/reports";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
@@ -17,6 +21,7 @@ export async function GET(req: Request) {
       const shopId = searchParams.get("shopId");
       const from = searchParams.get("from") || undefined;
       const to = searchParams.get("to") || undefined;
+      const fresh = searchParams.get("fresh") === "1";
 
       if (!shopId) {
         return NextResponse.json({ error: "shopId missing" }, { status: 400 });
@@ -25,12 +30,21 @@ export async function GET(req: Request) {
       const user = await requireUser();
       await assertShopAccess(shopId, user);
 
-      const [sales, expense, cash, profit] = await Promise.all([
-        getSalesSummary(shopId, from, to),
-        getExpenseSummary(shopId, from, to),
-        getCashSummary(shopId, from, to),
-        getProfitSummary(shopId, from, to),
-      ]);
+      const [sales, expense, cash, profit] = await Promise.all(
+        fresh
+          ? [
+              getSalesSummaryFresh(shopId, from, to),
+              getExpenseSummaryFresh(shopId, from, to),
+              getCashSummaryFresh(shopId, from, to),
+              getProfitSummaryFresh(shopId, from, to),
+            ]
+          : [
+              getSalesSummary(shopId, from, to),
+              getExpenseSummary(shopId, from, to),
+              getCashSummary(shopId, from, to),
+              getProfitSummary(shopId, from, to),
+            ]
+      );
 
       return NextResponse.json({ sales, expense, cash, profit });
     } catch (err) {

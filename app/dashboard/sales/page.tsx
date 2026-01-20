@@ -11,7 +11,7 @@ import {
   voidSale,
   type SaleCursor,
 } from "@/app/actions/sales";
-import { getDhakaRangeFromDays } from "@/lib/dhaka-date";
+import { getDhakaDateString, getDhakaRangeFromDays } from "@/lib/dhaka-date";
 import ShopSelectorClient from "./ShopSelectorClient";
 import SalesListClient from "./components/SalesListClient";
 import DateFilterClient from "./components/DateFilterClient";
@@ -211,7 +211,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
       : cookieSelectedShopId ?? shops[0].id;
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
 
-  const todayStr = formatDateInput(new Date());
+  const todayStr = getDhakaDateString();
   const rawFrom = normalizeDateInput(resolvedSearch?.from);
   const rawTo = normalizeDateInput(resolvedSearch?.to);
   const fromInput = rawFrom ?? rawTo ?? todayStr;

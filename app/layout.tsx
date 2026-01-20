@@ -1,7 +1,7 @@
 // app/layout.tsx
 
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Noto_Sans_Bengali } from "next/font/google";
 import ThemeScript from "@/components/theme-script";
 import QueryProvider from "@/components/providers/QueryProvider";
 import "./globals.css";
@@ -14,6 +14,11 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const notoBengali = Noto_Sans_Bengali({
+  variable: "--font-bengali",
+  subsets: ["bengali"],
 });
 
 export const metadata: Metadata = {
@@ -29,27 +34,10 @@ export default function RootLayout({
   return (
     <html lang="bn" suppressHydrationWarning>
       <head>
-        {/* Preload custom font to prevent FOUT (Flash of Unstyled Text) */}
-        <link
-          rel="preload"
-          href="https://cdn.jsdelivr.net/npm/sutonnytype@1.1.0/fonts/SutonnyMJ.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
-        {/* Preconnect to CDN for faster font delivery */}
-        <link
-          rel="preconnect"
-          href="https://cdn.jsdelivr.net"
-          crossOrigin="anonymous"
-        />
-        {/* DNS prefetch for faster lookups */}
-        <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
         <ThemeScript />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-background text-foreground`}
-        style={{ fontFamily: "'SutonnyMJ', 'Noto Sans Bengali', sans-serif" }}
+        className={`${geistSans.variable} ${geistMono.variable} ${notoBengali.variable} antialiased min-h-screen bg-background text-foreground`}
         suppressHydrationWarning
       >
         <QueryProvider>{children}</QueryProvider>

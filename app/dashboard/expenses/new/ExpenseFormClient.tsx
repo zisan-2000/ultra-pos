@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
+import useRealTimeReports from "@/hooks/useRealTimeReports";
+import { emitExpenseUpdate } from "@/lib/events/reportEvents";
 import Link from "next/link";
 
 type SpeechRecognitionInstance = {
@@ -87,6 +89,9 @@ export default function ExpenseFormClient({
   initialValues,
   submitLabel = "+ দ্রুত খরচ যোগ করুন",
 }: Props) {
+  // World-Class Real-time Reports Integration
+  const realTimeReports = useRealTimeReports(shopId);
+  
   const online = useOnlineStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [listening, setListening] = useState(false);
@@ -241,8 +246,10 @@ export default function ExpenseFormClient({
     form.set("note", (form.get("note") as string) || note);
     form.set("expenseDate", (form.get("expenseDate") as string) || expenseDate);
 
+    const expenseAmount = parseFloat((form.get("amount") as string) || "0");
     const templateCategory = (form.get("category") as string) || "অন্যান্য";
     const templateAmount = (form.get("amount") as string) || "0";
+    
     if (!initialValues) {
       const template: ExpenseTemplate = {
         category: templateCategory,
@@ -254,8 +261,44 @@ export default function ExpenseFormClient({
       persistTemplates(mergeTemplates(templates, template));
     }
 
+    // World-Class Real-time Update: Instant optimistic update
+    const updateId = realTimeReports.updateExpenseReport(
+      expenseAmount,
+      'add',
+      {
+        expenseId: id || crypto.randomUUID(),
+        timestamp: Date.now()
+      }
+    );
+    
+    // Emit real-time event
+    emitExpenseUpdate(shopId, {
+      type: 'expense',
+      operation: 'add',
+      amount: expenseAmount,
+      shopId,
+      metadata: {
+        expenseId: id || crypto.randomUUID(),
+        timestamp: Date.now()
+      }
+    }, {
+      source: 'ui',
+      priority: 'high',
+      correlationId: updateId
+    });
+
     if (online) {
-      await action(form);
+      try {
+        await action(form);
+        // Background sync for consistency
+        setTimeout(() => {
+          realTimeReports.syncWithServer(updateId);
+        }, 500);
+      } catch (error) {
+        // Rollback on error
+        realTimeReports.rollbackLastUpdate();
+        console.error('Expense creation failed:', error);
+      }
       return;
     }
 

@@ -12,21 +12,49 @@ type Props = {
   to: string;
 };
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("bn-BD", {
-    month: "short",
-    day: "numeric",
-  });
+const DHAKA_TIMEZONE = "Asia/Dhaka";
+
+function parseDateParts(value: string) {
+  const [y, m, d] = value.split("-").map((v) => Number(v));
+  if (!y || !m || !d) return null;
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function todayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function formatDate(value: string) {
+  const date = parseDateParts(value);
+  if (!date) return value;
+  return new Intl.DateTimeFormat("bn-BD", {
+    timeZone: DHAKA_TIMEZONE,
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+function getDhakaTodayStr() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: DHAKA_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function addDays(dateStr: string, days: number) {
+  const date = parseDateParts(dateStr);
+  if (!date) return dateStr;
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function getMonthStart(dateStr: string) {
+  const date = parseDateParts(dateStr);
+  if (!date) return dateStr;
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)
+  )
+    .toISOString()
+    .slice(0, 10);
 }
 
 export default function DateFilterClient({ shopId, from, to }: Props) {
@@ -38,16 +66,30 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
   const rangeText = useMemo(() => {
     // Check if this is "all time" range
     if (from === "1970-01-01" && to === "2099-12-31") {
-      return "সব সময়";
+      return "সর্বকাল";
     }
-    return from === to
-      ? `আজ · ${formatDate(from)}`
-      : `${formatDate(from)} – ${formatDate(to)}`;
+    if (from === to) {
+      const today = getDhakaTodayStr();
+      const yesterday = addDays(today, -1);
+      if (from === today) {
+        return `আজ · ${formatDate(from)}`;
+      }
+      if (from === yesterday) {
+        return `গতকাল · ${formatDate(from)}`;
+      }
+      return formatDate(from);
+    }
+    return `${formatDate(from)} - ${formatDate(to)}`;
   }, [from, to]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setCustomFrom(from);
+    setCustomTo(to);
+  }, [from, to]);
 
   const applyRange = (nextFrom: string, nextTo: string) => {
     const params = new URLSearchParams({
@@ -60,41 +102,27 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
   };
 
   const setPreset = (key: "today" | "yesterday" | "7d" | "month" | "all") => {
+    const today = getDhakaTodayStr();
     if (key === "today") {
-      const d = todayStr();
-      applyRange(d, d);
+      applyRange(today, today);
       return;
     }
     if (key === "yesterday") {
-      const d = new Date();
-      d.setDate(d.getDate() - 1);
-      const fromY = `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(
-        2,
-        "0"
-      )}-${`${d.getDate()}`.padStart(2, "0")}`;
+      const fromY = addDays(today, -1);
       applyRange(fromY, fromY);
       return;
     }
     if (key === "7d") {
       // last 7 days
-      const end = todayStr();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 6);
-      const start = `${startDate.getFullYear()}-${`${
-        startDate.getMonth() + 1
-      }`.padStart(2, "0")}-${`${startDate.getDate()}`.padStart(2, "0")}`;
+      const end = today;
+      const start = addDays(today, -6);
       applyRange(start, end);
       return;
     }
     if (key === "month") {
       // this month
-      const today = new Date();
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      const end = todayStr();
-      const startStr = `${start.getFullYear()}-${`${
-        start.getMonth() + 1
-      }`.padStart(2, "0")}-${`${start.getDate()}`.padStart(2, "0")}`;
-      applyRange(startStr, end);
+      const startStr = getMonthStart(today);
+      applyRange(startStr, today);
       return;
     }
     // all time

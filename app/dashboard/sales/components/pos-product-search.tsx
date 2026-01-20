@@ -10,6 +10,8 @@ import {
   useRef,
   useState,
 } from "react";
+import useRealTimeReports from "@/hooks/useRealTimeReports";
+import { emitSaleUpdate } from "@/lib/events/reportEvents";
 import { useCart } from "@/hooks/use-cart";
 import { getStockToneClasses } from "@/lib/stock-level";
 
@@ -173,6 +175,9 @@ export const PosProductSearch = memo(function PosProductSearch({
   products,
   shopId,
 }: PosProductSearchProps) {
+  // World-Class Real-time Reports Integration
+  const realTimeReports = useRealTimeReports(shopId);
+  
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [usage, setUsage] = useState<Record<string, UsageEntry>>({});
@@ -185,7 +190,7 @@ export const PosProductSearch = memo(function PosProductSearch({
     null
   );
 
-  const add = useCart((s) => s.add);
+  const add = useCart((s: any) => s.add);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const quickSlotsRef = useRef<QuickSlot[] | null>(null);
@@ -414,7 +419,7 @@ export const PosProductSearch = memo(function PosProductSearch({
       const stock = toNumber(product.stockQty);
       const cartItems = useCart.getState().items;
       const inCart =
-        cartItems.find((i) => i.productId === product.id)?.qty || 0;
+        cartItems.find((i: any) => i.productId === product.id)?.qty || 0;
       const tracksStock = product.trackStock === true;
 
       if (tracksStock && stock <= inCart) {
@@ -426,19 +431,55 @@ export const PosProductSearch = memo(function PosProductSearch({
         if (!proceed) return;
       }
 
+      const productPrice = Number(product.sellPrice || 0);
+      
+      // World-Class Real-time Update: Instant optimistic update
+      const updateId = realTimeReports.updateSalesReport(
+        productPrice,
+        'add',
+        {
+          productId: product.id,
+          timestamp: Date.now()
+        }
+      );
+      
+      // Emit real-time event
+      emitSaleUpdate(shopId, {
+        type: 'sale',
+        operation: 'add',
+        amount: productPrice,
+        shopId,
+        metadata: {
+          productId: product.id,
+          timestamp: Date.now()
+        }
+      }, {
+        source: 'ui',
+        priority: 'high',
+        correlationId: updateId
+      });
+
+      // Add to cart
       add({
         shopId,
         productId: product.id,
         name: product.name,
-        unitPrice: Number(product.sellPrice || 0),
+        unitPrice: productPrice,
       });
+      
+      // UI feedback
       setCooldownProductId(product.id);
       bumpUsage(product.id);
       setRecentlyAdded(product.id);
       setTimeout(() => setRecentlyAdded(null), 450);
       setTimeout(() => setCooldownProductId(null), 220);
+      
+      // Background sync for data consistency
+      setTimeout(() => {
+        realTimeReports.syncWithServer(updateId);
+      }, 500);
     },
-    [add, bumpUsage, setCooldownProductId, setRecentlyAdded, shopId]
+    [add, setCooldownProductId, setRecentlyAdded, shopId, realTimeReports]
   );
 
   const startVoice = () => {

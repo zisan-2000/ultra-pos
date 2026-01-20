@@ -61,13 +61,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const shopId = searchParams.get("shopId");
     const limit = clampReportLimit(searchParams.get("limit"));
+    const fresh = searchParams.get("fresh") === "1";
 
     if (!shopId) {
       return NextResponse.json({ error: "shopId required" }, { status: 400 });
     }
 
     await assertShopAccess(shopId, user);
-    const data = await getTopProductsCached(shopId, limit);
+    const data = fresh
+      ? await computeTopProductsReport(shopId, limit)
+      : await getTopProductsCached(shopId, limit);
     return NextResponse.json({ data });
   } catch (error: any) {
     console.error("Top products report error:", error);

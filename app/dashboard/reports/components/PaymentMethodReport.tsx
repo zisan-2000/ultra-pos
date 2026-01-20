@@ -3,7 +3,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
 import { scheduleIdle } from "@/lib/schedule-idle";
@@ -48,9 +48,11 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
       const params = new URLSearchParams({ shopId });
       if (rangeFrom) params.append("from", rangeFrom);
       if (rangeTo) params.append("to", rangeTo);
+      params.append("fresh", "1");
 
       const res = await fetch(
-        `/api/reports/payment-method?${params.toString()}`
+        `/api/reports/payment-method?${params.toString()}`,
+        { cache: "no-store" }
       );
 
       if (!res.ok) {
@@ -93,11 +95,13 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
     queryFn: () => fetchPayment(from, to),
     enabled: online,
     initialData: () => readCached(from, to) ?? [],
-    placeholderData: (prev) => prev ?? [],
+    placeholderData: keepPreviousData,
   });
 
   const data: PaymentRow[] = paymentQuery.data ?? [];
   const loading = paymentQuery.isFetching && online;
+  const hasFetched = paymentQuery.isFetchedAfterMount;
+  const showEmpty = data.length === 0 && (!online || hasFetched) && !loading;
 
   useEffect(() => {
     if (!online || typeof window === "undefined") return;
@@ -156,7 +160,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
       <div className="rounded-2xl border border-border/70 bg-card/80 p-2 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
         {data.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {loading ? "লোড হচ্ছে..." : "কোনো পেমেন্ট ডাটা নেই"}
+            {showEmpty ? "কোনো পেমেন্ট ডাটা নেই" : "লোড হচ্ছে..."}
           </p>
         ) : (
           <>

@@ -146,6 +146,8 @@ export default function SalesReport({ shopId, from, to }: Props) {
   const hasMore = salesQuery.data?.hasMore ?? false;
   const nextCursor = salesQuery.data?.nextCursor ?? null;
   const loading = salesQuery.isFetching && online;
+  const hasFetched = salesQuery.isFetchedAfterMount;
+  const showEmpty = items.length === 0 && (!online || hasFetched) && !loading;
 
   useEffect(() => {
     if (!online && page > 1) {
@@ -264,7 +266,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
       <div className="rounded-2xl border border-border/70 bg-card/80 p-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
         {items.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {loading ? "লোড হচ্ছে..." : "কোনো বিক্রি পাওয়া যায়নি"}
+            {showEmpty ? "কোনো বিক্রি পাওয়া যায়নি" : "লোড হচ্ছে..."}
           </p>
         ) : (
           <>
