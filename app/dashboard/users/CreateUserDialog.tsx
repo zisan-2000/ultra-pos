@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { createUserWithRole } from "@/app/actions/user-management";
 import { getShopsByUser } from "@/app/actions/shops";
 import { useOnlineStatus } from "@/lib/sync/net-status";
@@ -35,6 +36,7 @@ export function CreateUserDialog({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [selectedRoleId, setSelectedRoleId] = useState(creatableRoles[0]?.id || "");
   const [shops, setShops] = useState<Shop[]>([]);
   const [selectedShopId, setSelectedShopId] = useState("");
@@ -80,6 +82,12 @@ export function CreateUserDialog({
       mounted = false;
     };
   }, [isOpen, isStaffRole, online]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShowPassword(false);
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,14 +200,25 @@ export function CreateUserDialog({
             <label className="block text-sm font-medium text-foreground mb-1">
               পাসওয়ার্ড *
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="নিরাপদ পাসওয়ার্ড"
-              className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              disabled={loading}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="?????? ??????????"
+                className="w-full px-3 py-2 pr-10 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                disabled={loading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                disabled={loading}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
               কমপক্ষে 8 অক্ষর, একটি বড় অক্ষর এবং একটি সংখ্যা প্রয়োজন
             </p>

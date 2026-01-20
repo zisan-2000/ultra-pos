@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { updateUser } from "@/app/actions/user-management";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdminAction } from "@/lib/sync/queue";
@@ -38,10 +39,15 @@ export function EditUserDialog({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const updatePendingCreate = async (clientId: string, data: Record<string, any>) => {
+  const updatePendingCreate = async (
+    clientId: string,
+    data: Record<string, any>
+  ) => {
     try {
       const items = await db.queue.where("type").equals("admin").toArray();
       const matches = items.filter(
@@ -67,7 +73,6 @@ export function EditUserDialog({
     }
   };
 
-  // Sync local form state whenever dialog opens or target user changes
   useEffect(() => {
     if (isOpen && user) {
       setName(user.name ?? "");
@@ -75,6 +80,8 @@ export function EditUserDialog({
       setError(null);
       setPassword("");
       setConfirmPassword("");
+      setShowPassword(false);
+      setShowConfirmPassword(false);
     }
   }, [isOpen, user]);
 
@@ -88,24 +95,23 @@ export function EditUserDialog({
     const trimmedEmail = email.trim();
 
     if (!trimmedName || !trimmedEmail) {
-      setError("αª╕αª¼ αª½αª┐αª▓αºìαªí αª¬αºéαª░αªú αªòαª░αºüαª¿");
+      setError("সব ফিল্ড পূরণ করুন");
       return;
     }
 
     if (!online && (password.trim() || confirmPassword.trim())) {
-      setError("αªàαª½αª▓αª╛αªçαª¿: αª¬αª╛αª╕αªôαª»αª╝αª╛αª░αºìαªí αª¬αª░αª┐αª¼αª░αºìαªñαª¿ αªòαª░αª╛ αª»αª╛αª¼αºç αª¿αª╛");
+      setError("অফলাইনে পাসওয়ার্ড পরিবর্তন করা যাবে না");
       return;
     }
 
-    // If password fields filled, validate
     if (password || confirmPassword) {
       if (password !== confirmPassword) {
-        setError("Password αªÅαª¼αªé Confirm Password αª«αª┐αª▓αª¢αºç αª¿αª╛");
+        setError("পাসওয়ার্ড ও কনফার্ম পাসওয়ার্ড মিলছে না");
         return;
       }
 
       if (password.length < 8) {
-        setError("Password αªòαª«αª¬αªòαºìαª╖αºç αº« αªàαªòαºìαª╖αª░αºçαª░ αª╣αªñαºç αª╣αª¼αºç");
+        setError("পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে");
         return;
       }
     }
@@ -138,7 +144,7 @@ export function EditUserDialog({
           email: trimmedEmail,
           pending: true,
         });
-        alert("αªàαª½αª▓αª╛αªçαª¿: αªçαªëαª£αª╛αª░ αªåαª¬αªíαºçαªƒ αªòαª┐αªë αª╣αª»αª╝αºçαª¢αºç, αªàαª¿αª▓αª╛αªçαª¿αºç αªùαºçαª▓αºç αª╕αª┐αªÖαºìαªò αª╣αª¼αºçαÑñ");
+        alert("অফলাইন: আপডেট কিউ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
         onClose();
         return;
       }
@@ -151,7 +157,7 @@ export function EditUserDialog({
       onClose();
     } catch (err) {
       handlePermissionError(err);
-      setError(err instanceof Error ? err.message : "αª¼αºìαª»αª¼αª╣αª╛αª░αªòαª╛αª░αºÇ αªåαª¬αªíαºçαªƒ αªòαª░αªñαºç αª¼αºìαª»αª░αºìαªÑ");
+      setError(err instanceof Error ? err.message : "ব্যবহারকারী আপডেট করতে ব্যর্থ");
     } finally {
       setLoading(false);
     }
@@ -160,100 +166,128 @@ export function EditUserDialog({
   if (!isOpen || !user) return null;
 
   return (
-    <div className="fixed inset-0 bg-foreground/40 flex items-center justify-center z-50">
-      <div className="bg-card rounded-lg shadow-xl w-full max-w-md mx-4">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">αª¼αºìαª»αª¼αª╣αª╛αª░αªòαª╛αª░αºÇ αª╕αª«αºìαª¬αª╛αªªαª¿αª╛ αªòαª░αºüαª¿</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40">
+      <div className="w-full max-w-md rounded-lg border border-border bg-card shadow-xl mx-4">
+        <div className="flex items-center justify-between border-b border-border p-6">
+          <h2 className="text-lg font-semibold text-foreground">
+            ব্যবহারকারী সম্পাদনা
+          </h2>
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground text-2xl leading-none"
             disabled={loading}
           >
-            ├ù
+            ×
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="bg-danger-soft border border-danger/30 rounded-lg p-3">
-              <p className="text-danger text-sm">{error}</p>
+            <div className="rounded-lg border border-danger/30 bg-danger-soft p-3">
+              <p className="text-sm text-danger">{error}</p>
             </div>
           )}
 
-          {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
-              αª¿αª╛αª« *
+            <label className="mb-1 block text-sm font-medium text-foreground">
+              নাম *
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="αª¼αºìαª»αª¼αª╣αª╛αª░αªòαª╛αª░αºÇαª░ αª¿αª╛αª«"
-              className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="ব্যবহারকারীর নাম লিখুন"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               disabled={loading}
             />
           </div>
 
-          {/* Password */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
-                αª¿αªñαºüαª¿ αª¬αª╛αª╕αªôαª»αª╝αª╛αª░αºìαªí
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                নতুন পাসওয়ার্ড
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="αª½αª╛αªüαªòαª╛ αª░αª╛αªûαª▓αºç αª¬αª╛αª╕αªôαª»αª╝αª╛αª░αºìαªí αª¬αª░αª┐αª¼αª░αºìαªñαª¿ αª╣αª¼αºç αª¿αª╛"
-                className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                disabled={loading || !online}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                αªòαª«αª¬αªòαºìαª╖αºç αº« αªàαªòαºìαª╖αª░, αªÅαªòαªƒαª┐ αª¼αªíαª╝ αªàαªòαºìαª╖αª░ αªÅαª¼αªé αªÅαªòαªƒαª┐ αª╕αªéαªûαºìαª»αª╛ αª¼αºìαª»αª¼αª╣αª╛αª░ αªòαª░αª╛ αªëαªñαºìαªñαª«
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="ফাঁকা রাখলে পরিবর্তন হবে না"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 pr-10 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  disabled={loading || !online}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "পাসওয়ার্ড লুকান" : "পাসওয়ার্ড দেখুন"}
+                  disabled={loading || !online}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                কমপক্ষে ৮ অক্ষর; একটি বড় হাতের অক্ষর ও একটি সংখ্যা দিলে ভালো।
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
-                αªòαª¿αª½αª╛αª░αºìαª« αª¬αª╛αª╕αªôαª»αª╝αª╛αª░αºìαªí
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                কনফার্ম পাসওয়ার্ড
               </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="αªåαª¼αª╛αª░ αª¬αª╛αª╕αªôαª»αª╝αª╛αª░αºìαªí αª▓αª┐αªûαºüαª¿"
-                className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                disabled={loading || !online}
-              />
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="আবার পাসওয়ার্ড লিখুন"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 pr-10 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  disabled={loading || !online}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={
+                    showConfirmPassword ? "কনফার্ম পাসওয়ার্ড লুকান" : "কনফার্ম পাসওয়ার্ড দেখুন"
+                  }
+                  disabled={loading || !online}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
-              αªçαª«αºçαªçαª▓ *
+            <label className="mb-1 block text-sm font-medium text-foreground">
+              ইমেইল *
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="user@example.com"
-              className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               disabled={loading}
             />
           </div>
 
-          {/* Role Info */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
-              αª¡αºéαª«αª┐αªòαª╛
+            <label className="mb-1 block text-sm font-medium text-foreground">
+              ভূমিকা
             </label>
             <div className="flex flex-wrap gap-1">
               {user.roles.length === 0 ? (
                 <span className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
-                  αªòαºïαª¿αºï αª¡αºéαª«αª┐αªòαª╛ αª¿αºçαªç
+                  কোনো ভূমিকা নেই
                 </span>
               ) : (
                 user.roles.map((role) => (
@@ -266,27 +300,26 @@ export function EditUserDialog({
                 ))
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              αª¡αºéαª«αª┐αªòαª╛ αª¬αª░αª┐αª¼αª░αºìαªñαª¿ αªòαª░αªñαºç RBAC admin panel αª¼αºìαª»αª¼αª╣αª╛αª░ αªòαª░αºüαª¿
+            <p className="mt-2 text-xs text-muted-foreground">
+              ভূমিকা পরিবর্তন করতে RBAC admin panel ব্যবহার করুন।
             </p>
           </div>
 
-          {/* Buttons */}
           <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-border rounded-lg text-foreground font-medium hover:bg-muted disabled:opacity-50"
+              className="flex-1 rounded-lg border border-border px-4 py-2 font-medium text-foreground hover:bg-muted disabled:opacity-50"
               disabled={loading}
             >
-              αª¼αª╛αªñαª┐αª▓
+              বাতিল
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded-lg border border-primary/30 bg-primary-soft px-4 py-2 font-medium text-primary hover:bg-primary/15 hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={loading}
             >
-              {loading ? "αª╕αªéαª░αªòαºìαª╖αªú αª╣αªÜαºìαª¢αºç..." : "αª╕αªéαª░αªòαºìαª╖αªú αªòαª░αºüαª¿"}
+              {loading ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন"}
             </button>
           </div>
         </form>
