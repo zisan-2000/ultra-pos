@@ -382,6 +382,46 @@ export default function ReportsClient({
     invalidateLowStock,
   ]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mutationKey = `reports-last-mutation:${shopId}`;
+    const refreshKey = `reports-last-refresh:${shopId}`;
+    const lastMutation = Number(
+      window.localStorage.getItem(mutationKey) || "0"
+    );
+    if (!lastMutation) return;
+    const lastRefresh = Number(
+      window.localStorage.getItem(refreshKey) || "0"
+    );
+    if (lastMutation <= lastRefresh) return;
+    if (Date.now() - lastMutation > 2 * 60 * 1000) return;
+
+    refreshSummaryFresh();
+    invalidateSales();
+    invalidateExpenses();
+    invalidateCash();
+    invalidatePayment();
+    invalidateProfit();
+    invalidateTopProducts();
+    invalidateLowStock();
+
+    try {
+      window.localStorage.setItem(refreshKey, String(Date.now()));
+    } catch {
+      // ignore storage failures
+    }
+  }, [
+    shopId,
+    refreshSummaryFresh,
+    invalidateSales,
+    invalidateExpenses,
+    invalidateCash,
+    invalidatePayment,
+    invalidateProfit,
+    invalidateTopProducts,
+    invalidateLowStock,
+  ]);
+
   // Real-time event listeners
   useEffect(() => {
     const handleIndicator = () => {

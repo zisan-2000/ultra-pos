@@ -398,12 +398,25 @@ class ReportEventEmitter extends EventTarget {
 // Global singleton instance
 export const reportEvents = new ReportEventEmitter();
 
+const markReportMutation = (shopId: string) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      `reports-last-mutation:${shopId}`,
+      String(Date.now())
+    );
+  } catch {
+    // ignore storage failures
+  }
+};
+
 // Convenience methods for common events
 export const emitSaleUpdate = (
   shopId: string, 
   data: ReportUpdate, 
   metadata?: ReportEventData['metadata']
 ) => {
+  markReportMutation(shopId);
   reportEvents.emit({
     type: 'sale-update',
     shopId,
@@ -422,6 +435,7 @@ export const emitExpenseUpdate = (
   data: ReportUpdate, 
   metadata?: ReportEventData['metadata']
 ) => {
+  markReportMutation(shopId);
   reportEvents.emit({
     type: 'expense-update',
     shopId,
@@ -440,6 +454,7 @@ export const emitCashUpdate = (
   data: ReportUpdate, 
   metadata?: ReportEventData['metadata']
 ) => {
+  markReportMutation(shopId);
   reportEvents.emit({
     type: 'cash-update',
     shopId,
