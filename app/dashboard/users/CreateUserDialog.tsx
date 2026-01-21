@@ -37,7 +37,9 @@ export function CreateUserDialog({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedRoleId, setSelectedRoleId] = useState(creatableRoles[0]?.id || "");
+  const [selectedRoleId, setSelectedRoleId] = useState(
+    creatableRoles[0]?.id || ""
+  );
   const [shops, setShops] = useState<Shop[]>([]);
   const [selectedShopId, setSelectedShopId] = useState("");
   const [shopsLoading, setShopsLoading] = useState(false);
@@ -72,7 +74,7 @@ export function CreateUserDialog({
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : "Shop list load failed");
+        setError(err instanceof Error ? err.message : "শপ তালিকা লোড করা যায়নি");
       })
       .finally(() => {
         if (mounted) setShopsLoading(false);
@@ -103,14 +105,14 @@ export function CreateUserDialog({
     }
 
     if (isStaffRole && !selectedShopId) {
-      setError("Staff user এর জন্য shop নির্বাচন করতে হবে");
+      setError("স্টাফ ইউজারের জন্য শপ নির্বাচন করুন");
       return;
     }
 
     try {
       setLoading(true);
       if (!online) {
-        setError("অফলাইন: নতুন ইউজার তৈরি করতে ইন্টারনেট দরকার");
+        setError("অফলাইন: নতুন ব্যবহারকারী তৈরি করা যাবে না");
         return;
       }
       await createUserWithRole(
@@ -140,9 +142,10 @@ export function CreateUserDialog({
   return (
     <div className="fixed inset-0 bg-foreground/40 flex items-center justify-center z-50">
       <div className="bg-card rounded-lg shadow-xl w-full max-w-md mx-4">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">নতুন ব্যবহারকারী তৈরি করুন</h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            নতুন ব্যবহারকারী তৈরি করুন
+          </h2>
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground text-2xl leading-none"
@@ -152,11 +155,10 @@ export function CreateUserDialog({
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {isOfflineBlocked && (
             <div className="rounded-lg border border-warning/30 bg-warning-soft text-warning text-xs font-semibold px-3 py-2">
-              অফলাইন: নতুন ইউজার তৈরি করতে ইন্টারনেট দরকার।
+              অফলাইন: নতুন ব্যবহারকারী তৈরি করা যাবে না
             </div>
           )}
           {error && (
@@ -165,7 +167,6 @@ export function CreateUserDialog({
             </div>
           )}
 
-          {/* Name */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
               নাম *
@@ -174,13 +175,12 @@ export function CreateUserDialog({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="ব্যবহারকারীর নাম"
+              placeholder="ব্যবহারকারীর নাম লিখুন"
               className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               disabled={loading}
             />
           </div>
 
-          {/* Email */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
               ইমেইল *
@@ -195,7 +195,6 @@ export function CreateUserDialog({
             />
           </div>
 
-          {/* Password */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
               পাসওয়ার্ড *
@@ -205,7 +204,7 @@ export function CreateUserDialog({
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="?????? ??????????"
+                placeholder="একটি শক্তিশালী পাসওয়ার্ড দিন"
                 className="w-full px-3 py-2 pr-10 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 disabled={loading}
               />
@@ -213,18 +212,21 @@ export function CreateUserDialog({
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? "পাসওয়ার্ড লুকান" : "পাসওয়ার্ড দেখুন"}
                 disabled={loading}
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              কমপক্ষে 8 অক্ষর, একটি বড় অক্ষর এবং একটি সংখ্যা প্রয়োজন
+              কমপক্ষে ৮ অক্ষর, একটি বড় হাতের অক্ষর ও একটি সংখ্যা থাকা ভালো।
             </p>
           </div>
 
-          {/* Role */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
               ভূমিকা *
@@ -246,7 +248,7 @@ export function CreateUserDialog({
           {isStaffRole && (
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
-                Shop নির্বাচন করুন *
+                শপ নির্বাচন করুন *
               </label>
               <select
                 value={selectedShopId}
@@ -255,7 +257,7 @@ export function CreateUserDialog({
                 disabled={loading || shopsLoading}
               >
                 {shops.length === 0 ? (
-                  <option value="">কোনো Shop পাওয়া যায়নি</option>
+                  <option value="">কোনো শপ পাওয়া যায়নি</option>
                 ) : (
                   shops.map((shop) => (
                     <option key={shop.id} value={shop.id}>
@@ -265,12 +267,13 @@ export function CreateUserDialog({
                 )}
               </select>
               {shopsLoading ? (
-                <p className="text-xs text-muted-foreground mt-1">Shop লোড হচ্ছে...</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  শপ লোড হচ্ছে...
+                </p>
               ) : null}
             </div>
           )}
 
-          {/* Buttons */}
           <div className="flex gap-3 pt-4">
             <button
               type="button"

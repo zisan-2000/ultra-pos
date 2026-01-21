@@ -252,7 +252,9 @@ export function EditUserDialog({
                   onClick={() => setShowConfirmPassword((prev) => !prev)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   aria-label={
-                    showConfirmPassword ? "কনফার্ম পাসওয়ার্ড লুকান" : "কনফার্ম পাসওয়ার্ড দেখুন"
+                    showConfirmPassword
+                      ? "কনফার্ম পাসওয়ার্ড লুকান"
+                      : "কনফার্ম পাসওয়ার্ড দেখুন"
                   }
                   disabled={loading || !online}
                 >
