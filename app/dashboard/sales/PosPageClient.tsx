@@ -25,6 +25,8 @@ import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { subscribeDueCustomersEvent } from "@/lib/due/customer-events";
 import { subscribeProductEvent } from "@/lib/products/product-events";
+import useRealTimeReports from "@/hooks/useRealTimeReports";
+import { emitSaleUpdate } from "@/lib/events/reportEvents";
 
 type ProductOption = {
   id: string;
@@ -66,6 +68,7 @@ export function PosPageClient({
 }: PosPageClientProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const realTimeReports = useRealTimeReports(shopId);
   const {
     clear,
     setShop,
@@ -403,6 +406,34 @@ export function PosPageClient({
     }
   }, [isDue]);
 
+  const reportSale = useCallback(
+    (amount: number) => {
+      if (!Number.isFinite(amount) || amount <= 0) return null;
+      const updateId = realTimeReports.updateSalesReport(amount, "add", {
+        timestamp: Date.now(),
+      });
+      emitSaleUpdate(
+        shopId,
+        {
+          type: "sale",
+          operation: "add",
+          amount,
+          shopId,
+          metadata: {
+            timestamp: Date.now(),
+          },
+        },
+        {
+          source: "ui",
+          priority: "high",
+          correlationId: updateId,
+        }
+      );
+      return updateId;
+    },
+    [realTimeReports, shopId]
+  );
+
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -442,6 +473,12 @@ export function PosPageClient({
         setNote("");
         setCustomerId("");
         setSuccess({ saleId: res?.saleId });
+        const updateId = reportSale(totalVal);
+        if (updateId) {
+          setTimeout(() => {
+            realTimeReports.syncWithServer(updateId);
+          }, 500);
+        }
         return;
       }
 
@@ -543,6 +580,7 @@ export function PosPageClient({
     await db.sales.put(salePayload);
     await queueAdd("sale", "create", salePayload);
     applyStockDelta(items);
+    reportSale(totalVal);
 
     alert(
       isDue

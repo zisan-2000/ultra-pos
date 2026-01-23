@@ -10,8 +10,6 @@ import {
   useRef,
   useState,
 } from "react";
-import useRealTimeReports from "@/hooks/useRealTimeReports";
-import { emitSaleUpdate } from "@/lib/events/reportEvents";
 import { useCart } from "@/hooks/use-cart";
 import { getStockToneClasses } from "@/lib/stock-level";
 
@@ -175,9 +173,6 @@ export const PosProductSearch = memo(function PosProductSearch({
   products,
   shopId,
 }: PosProductSearchProps) {
-  // World-Class Real-time Reports Integration
-  const realTimeReports = useRealTimeReports(shopId);
-  
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [usage, setUsage] = useState<Record<string, UsageEntry>>({});
@@ -432,34 +427,7 @@ export const PosProductSearch = memo(function PosProductSearch({
       }
 
       const productPrice = Number(product.sellPrice || 0);
-      
-      // World-Class Real-time Update: Instant optimistic update
-      const updateId = realTimeReports.updateSalesReport(
-        productPrice,
-        'add',
-        {
-          productId: product.id,
-          timestamp: Date.now()
-        }
-      );
-      
-      // Emit real-time event
-      emitSaleUpdate(shopId, {
-        type: 'sale',
-        operation: 'add',
-        amount: productPrice,
-        shopId,
-        metadata: {
-          productId: product.id,
-          timestamp: Date.now()
-        }
-      }, {
-        source: 'ui',
-        priority: 'high',
-        correlationId: updateId
-      });
 
-      // Add to cart
       add({
         shopId,
         productId: product.id,
@@ -474,12 +442,8 @@ export const PosProductSearch = memo(function PosProductSearch({
       setTimeout(() => setRecentlyAdded(null), 450);
       setTimeout(() => setCooldownProductId(null), 220);
       
-      // Background sync for data consistency
-      setTimeout(() => {
-        realTimeReports.syncWithServer(updateId);
-      }, 500);
     },
-    [add, setCooldownProductId, setRecentlyAdded, shopId, realTimeReports]
+    [add, setCooldownProductId, setRecentlyAdded, shopId]
   );
 
   const startVoice = () => {
