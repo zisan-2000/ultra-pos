@@ -7,6 +7,9 @@ import { assertShopAccess } from "@/lib/shop-access";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { withTracing } from "@/lib/tracing";
+import { publishRealtimeEvent } from "@/lib/realtime/publisher";
+import { REALTIME_EVENTS } from "@/lib/realtime/events";
+import { revalidateReportsForProduct } from "@/lib/reports/revalidate";
 
 const productCreateSchema = z.object({
   id: z.string().optional(),
@@ -205,6 +208,15 @@ export async function POST(req: Request) {
         await prisma.product.deleteMany({ where: { id: { in: hardDeleteIds } } });
       }
     }
+
+      if (shopIds.size > 0) {
+        for (const shopId of shopIds) {
+          await publishRealtimeEvent(REALTIME_EVENTS.stockUpdated, shopId, {
+            synced: true,
+          });
+        }
+        revalidateReportsForProduct();
+      }
 
       return NextResponse.json({ success: true });
     } catch (e: any) {

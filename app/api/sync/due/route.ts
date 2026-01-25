@@ -7,6 +7,9 @@ import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
+import { publishRealtimeEvent } from "@/lib/realtime/publisher";
+import { REALTIME_EVENTS } from "@/lib/realtime/events";
+import { revalidateReportsForCash } from "@/lib/reports/revalidate";
 
 type IncomingCustomer = {
   id?: string;
@@ -177,6 +180,20 @@ export async function POST(req: Request) {
           },
         });
       });
+    }
+
+    if (shopIds.size > 0) {
+      for (const shopId of shopIds) {
+        await Promise.all([
+          publishRealtimeEvent(REALTIME_EVENTS.ledgerUpdated, shopId, {
+            synced: true,
+          }),
+          publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, shopId, {
+            synced: true,
+          }),
+        ]);
+      }
+      revalidateReportsForCash();
     }
 
     return NextResponse.json({ success: true });

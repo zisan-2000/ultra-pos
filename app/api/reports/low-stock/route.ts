@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { clampReportLimit } from "@/lib/reporting-config";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
+import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
 
 async function computeLowStockReport(shopId: string, limit: number) {
   const lowStockProducts = await prisma.product.findMany({
@@ -38,7 +39,7 @@ async function computeLowStockReport(shopId: string, limit: number) {
 const getLowStockCached = unstable_cache(
   async (shopId: string, limit: number) => computeLowStockReport(shopId, limit),
   ["reports-low-stock"],
-  { revalidate: 60 }
+  { revalidate: 60, tags: [REPORTS_CACHE_TAGS.lowStock] }
 );
 
 export async function GET(request: NextRequest) {

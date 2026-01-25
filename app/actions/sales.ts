@@ -8,6 +8,9 @@ import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
 import { revalidatePath } from "next/cache";
+import { publishRealtimeEvent } from "@/lib/realtime/publisher";
+import { REALTIME_EVENTS } from "@/lib/realtime/events";
+import { revalidateReportsForSale } from "@/lib/reports/revalidate";
 
 type CartItemInput = {
   productId: string;
@@ -203,6 +206,12 @@ export async function createSale(input: CreateSaleInput) {
   const totalNum = Number(totalStr);
   const payNowRaw = Number(input.paidNow || 0);
   const payNow = Math.min(Math.max(payNowRaw, 0), totalNum);
+  const cashCollected =
+    normalizedPaymentMethod === "cash"
+      ? totalNum
+      : normalizedPaymentMethod === "due" && payNow > 0
+      ? payNow
+      : null;
 
   const saleId = await prisma.$transaction(async (tx) => {
     const transactionStart = Date.now();
@@ -341,10 +350,50 @@ export async function createSale(input: CreateSaleInput) {
     revalidatePath("/dashboard/cash"),
     revalidatePath("/dashboard/products"),
   ]).catch(err => console.warn("Revalidation failed:", err));
+  revalidateReportsForSale();
 
   const totalTime = Date.now() - startTime;
   console.log(`🎯 [PERF] TOTAL createSale time: ${totalTime}ms`);
   console.log(`📊 [PERF] Breakdown: Warmup(${warmupTime - startTime}ms) + Auth(${authTime - warmupTime}ms) + DB(${dbTime - authTime}ms) + Transaction (see above)`);
+
+  const publishTasks: Promise<void>[] = [];
+  publishTasks.push(
+    publishRealtimeEvent(REALTIME_EVENTS.saleCommitted, input.shopId, {
+      saleId,
+      totalAmount: totalNum,
+      paymentMethod: normalizedPaymentMethod,
+    })
+  );
+
+  if (cashCollected) {
+    publishTasks.push(
+      publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, input.shopId, {
+        amount: cashCollected,
+        entryType: "IN",
+      })
+    );
+  }
+
+  const uniqueProductIds = Array.from(
+    new Set(input.items.map((item) => item.productId))
+  );
+  if (uniqueProductIds.length > 0) {
+    publishTasks.push(
+      publishRealtimeEvent(REALTIME_EVENTS.stockUpdated, input.shopId, {
+        productIds: uniqueProductIds,
+      })
+    );
+  }
+
+  if (dueCustomer) {
+    publishTasks.push(
+      publishRealtimeEvent(REALTIME_EVENTS.ledgerUpdated, input.shopId, {
+        customerId: dueCustomer.id,
+      })
+    );
+  }
+
+  await Promise.all(publishTasks);
 
   return { success: true, saleId };
 }
@@ -509,6 +558,7 @@ export async function voidSale(saleId: string, reason?: string | null) {
   }
 
   const isCashSale = (sale.paymentMethod || "").toLowerCase() === "cash";
+  let affectedProductIds: string[] = [];
 
   await prisma.$transaction(async (tx) => {
     // Restore stock for tracked products
@@ -518,6 +568,7 @@ export async function voidSale(saleId: string, reason?: string | null) {
         product: true,
       },
     });
+    affectedProductIds = saleItems.map((it: any) => it.productId);
 
     for (const it of saleItems as any[]) {
       const p = it.product;
@@ -556,6 +607,36 @@ export async function voidSale(saleId: string, reason?: string | null) {
       });
     }
   });
+
+  const voidTasks: Promise<void>[] = [];
+  voidTasks.push(
+    publishRealtimeEvent(REALTIME_EVENTS.saleVoided, sale.shopId, {
+      saleId,
+      totalAmount: Number(sale.totalAmount ?? 0),
+      voidReason: reason || null,
+    })
+  );
+
+  if (isCashSale) {
+    voidTasks.push(
+      publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, sale.shopId, {
+        amount: Number(sale.totalAmount ?? 0),
+        entryType: "OUT",
+      })
+    );
+  }
+
+  if (affectedProductIds.length > 0) {
+    voidTasks.push(
+      publishRealtimeEvent(REALTIME_EVENTS.stockUpdated, sale.shopId, {
+        productIds: Array.from(new Set(affectedProductIds)),
+      })
+    );
+  }
+
+  await Promise.all(voidTasks);
+
+  revalidateReportsForSale();
 
   return { success: true };
 }

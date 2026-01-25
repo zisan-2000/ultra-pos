@@ -1,7 +1,6 @@
 // lib/auth-session.ts
 
-import { cookies } from "next/headers";
-import { cache } from "react";
+import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import {
   getUserWithRolesAndPermissionsCached,
@@ -13,12 +12,10 @@ type SessionPayload = {
   user: { id: string; email?: string | null } | null;
 };
 
-const fetchSession = cache(async (): Promise<SessionPayload | null> => {
-  const cookieStore = await cookies();
-  const cookieHeader = cookieStore
-    .getAll()
-    .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
-    .join("; ");
+const fetchSession = async (): Promise<SessionPayload | null> => {
+  const headerStore = await headers();
+  const cookieHeader = headerStore.get("cookie") ?? "";
+  if (!cookieHeader) return null;
 
   try {
     const result: any = await (auth as any).api?.getSession?.({
@@ -39,7 +36,7 @@ const fetchSession = cache(async (): Promise<SessionPayload | null> => {
   } catch {
     return null;
   }
-});
+};
 
 export async function getCurrentUser(): Promise<UserContext | null> {
   const payload = await fetchSession();

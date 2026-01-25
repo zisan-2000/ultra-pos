@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import LogoutButton from "@/components/LogoutButton";
 import { ThemeToggle } from "@/components/theme-toggle";
+import OwnerSummaryVoice from "@/components/voice/OwnerSummaryVoice";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { scheduleIdle } from "@/lib/schedule-idle";
@@ -53,7 +54,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type Shop = { id: string; name: string };
+type Shop = { id: string; name: string; closingTime?: string | null };
 
 type RbacUser = {
   id: string;
@@ -1055,6 +1056,16 @@ export function DashboardShell({
                     />
                     {online ? "অনলাইন" : "অফলাইন"}
                   </span>
+                  <OwnerSummaryVoice
+                    userId={rbacUser?.id ?? null}
+                    roles={rbacUser?.roles ?? []}
+                    shopId={safeShopId}
+                    closingTime={
+                      shops.find((shop) => shop.id === safeShopId)
+                        ?.closingTime ?? null
+                    }
+                    online={online}
+                  />
                   <ThemeToggle />
                 </div>
               </div>

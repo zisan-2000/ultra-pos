@@ -6,6 +6,9 @@ import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
+import { publishRealtimeEvent } from "@/lib/realtime/publisher";
+import { REALTIME_EVENTS } from "@/lib/realtime/events";
+import { revalidateReportsForCash } from "@/lib/reports/revalidate";
 
 type IncomingCash = {
   id?: string;
@@ -128,6 +131,15 @@ export async function POST(req: Request) {
       await prisma.cashEntry.deleteMany({
         where: { id: { in: deletedIds as string[] } },
       });
+    }
+
+    if (shopIds.size > 0) {
+      for (const shopId of shopIds) {
+        await publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, shopId, {
+          synced: true,
+        });
+      }
+      revalidateReportsForCash();
     }
 
     return NextResponse.json({ success: true });

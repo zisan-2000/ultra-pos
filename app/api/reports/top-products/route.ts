@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { clampReportLimit } from "@/lib/reporting-config";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
+import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
 
 async function computeTopProductsReport(shopId: string, limit: number) {
   const topProducts = await prisma.saleItem.groupBy({
@@ -52,7 +53,7 @@ const getTopProductsCached = unstable_cache(
   async (shopId: string, limit: number) =>
     computeTopProductsReport(shopId, limit),
   ["reports-top-products"],
-  { revalidate: 60 }
+  { revalidate: 60, tags: [REPORTS_CACHE_TAGS.topProducts] }
 );
 
 export async function GET(request: NextRequest) {

@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { Toaster } from "react-hot-toast";
 import SyncBootstrap from "@/components/sync-bootstrap";
+import RealtimeBridge from "@/components/realtime/RealtimeBridge";
 import { handlePermissionError } from "@/lib/permission-toast";
 
 export default function DashboardClientShell({
@@ -32,6 +33,7 @@ export default function DashboardClientShell({
   return (
     <>
       <SyncBootstrap />
+      <RealtimeBridge />
       <Toaster
         position="top-center"
         toastOptions={{

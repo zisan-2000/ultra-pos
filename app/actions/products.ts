@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
 import { Prisma } from "@prisma/client";
+import { revalidateReportsForProduct } from "@/lib/reports/revalidate";
 
 import { type CursorToken } from "@/lib/cursor-pagination";
 
@@ -191,6 +192,7 @@ export async function createProduct(input: CreateProductInput) {
 
   const created = await prisma.product.create({ data });
 
+  revalidateReportsForProduct();
   return { success: true, id: created.id };
 }
 
@@ -447,6 +449,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
     data: payload,
   });
 
+  revalidateReportsForProduct();
   return { success: true };
 }
 
@@ -478,6 +481,7 @@ export async function deleteProduct(id: string) {
       },
     });
 
+    revalidateReportsForProduct();
     return {
       success: true,
       deleted: false,
@@ -489,6 +493,7 @@ export async function deleteProduct(id: string) {
 
   await prisma.product.delete({ where: { id } });
 
+  revalidateReportsForProduct();
   return { success: true, deleted: true };
 }
 

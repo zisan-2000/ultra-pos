@@ -5,6 +5,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
+import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
 
 function parseTimestampRange(from?: string, to?: string) {
   const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -65,7 +66,7 @@ const getPaymentMethodCached = unstable_cache(
   async (shopId: string, from?: string, to?: string) =>
     computePaymentMethodReport(shopId, from, to),
   ["reports-payment-method"],
-  { revalidate: 60 }
+  { revalidate: 60, tags: [REPORTS_CACHE_TAGS.paymentMethod] }
 );
 
 export async function GET(request: NextRequest) {

@@ -8,6 +8,7 @@ import { REPORT_ROW_LIMIT, clampReportLimit } from "@/lib/reporting-config";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { unstable_cache } from "next/cache";
+import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
 
 /* --------------------------------------------------
    DATE FILTER HELPER
@@ -471,7 +472,10 @@ const getSalesSummaryCached = unstable_cache(
   async (shopId: string, from?: string, to?: string) =>
     computeSalesSummary(shopId, from, to),
   ["reports-sales-summary"],
-  { revalidate: 30 }
+  {
+    revalidate: 30,
+    tags: [REPORTS_CACHE_TAGS.salesSummary, REPORTS_CACHE_TAGS.summary],
+  }
 );
 
 export async function getSalesSummary(
@@ -581,7 +585,10 @@ const getExpenseSummaryCached = unstable_cache(
   async (shopId: string, from?: string, to?: string) =>
     computeExpenseSummary(shopId, from, to),
   ["reports-expense-summary"],
-  { revalidate: 30 }
+  {
+    revalidate: 30,
+    tags: [REPORTS_CACHE_TAGS.expenseSummary, REPORTS_CACHE_TAGS.summary],
+  }
 );
 
 async function computeCashSummary(
@@ -627,7 +634,10 @@ const getCashSummaryCached = unstable_cache(
   async (shopId: string, from?: string, to?: string) =>
     computeCashSummary(shopId, from, to),
   ["reports-cash-summary"],
-  { revalidate: 30 }
+  {
+    revalidate: 30,
+    tags: [REPORTS_CACHE_TAGS.cashSummary, REPORTS_CACHE_TAGS.summary],
+  }
 );
 
 async function computeProfitSummary(
@@ -669,7 +679,10 @@ const getProfitSummaryCached = unstable_cache(
   async (shopId: string, from?: string, to?: string) =>
     computeProfitSummary(shopId, from, to),
   ["reports-profit-summary"],
-  { revalidate: 30 }
+  {
+    revalidate: 30,
+    tags: [REPORTS_CACHE_TAGS.profitSummary, REPORTS_CACHE_TAGS.summary],
+  }
 );
 
 /* --------------------------------------------------
@@ -714,7 +727,7 @@ const getPaymentMethodCached = unstable_cache(
   async (shopId: string, from?: string, to?: string) =>
     computePaymentMethodReport(shopId, from, to),
   ["reports-payment-method"],
-  { revalidate: 60 }
+  { revalidate: 60, tags: [REPORTS_CACHE_TAGS.paymentMethod] }
 );
 
 export async function getPaymentMethodReport(
@@ -810,7 +823,7 @@ const getProfitTrendCached = unstable_cache(
   async (shopId: string, from?: string, to?: string) =>
     computeProfitTrendReport(shopId, from, to),
   ["reports-profit-trend"],
-  { revalidate: 60 }
+  { revalidate: 60, tags: [REPORTS_CACHE_TAGS.profitTrend] }
 );
 
 export async function getProfitTrendReport(
@@ -871,7 +884,7 @@ const getTopProductsCached = unstable_cache(
   async (shopId: string, limit: number) =>
     computeTopProductsReport(shopId, limit),
   ["reports-top-products"],
-  { revalidate: 60 }
+  { revalidate: 60, tags: [REPORTS_CACHE_TAGS.topProducts] }
 );
 
 export async function getTopProductsReport(
@@ -918,7 +931,7 @@ async function computeLowStockReport(shopId: string, limit: number) {
 const getLowStockCached = unstable_cache(
   async (shopId: string, limit: number) => computeLowStockReport(shopId, limit),
   ["reports-low-stock"],
-  { revalidate: 60 }
+  { revalidate: 60, tags: [REPORTS_CACHE_TAGS.lowStock] }
 );
 
 export async function getLowStockReport(

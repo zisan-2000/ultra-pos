@@ -119,6 +119,7 @@ const shopUpdateSchema = z.object({
   address: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
   businessType: z.string().optional(),
+  closingTime: z.string().optional().nullable(),
 });
 
 const shopDeleteSchema = z.object({

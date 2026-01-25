@@ -6,6 +6,10 @@ import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
+import { publishRealtimeEvent } from "@/lib/realtime/publisher";
+import { REALTIME_EVENTS } from "@/lib/realtime/events";
+import { revalidatePath } from "next/cache";
+import { revalidateReportsForExpense } from "@/lib/reports/revalidate";
 
 type IncomingExpense = {
   id?: string;
@@ -43,6 +47,13 @@ function toDate(value?: number | string | Date) {
   const d = value ? new Date(value) : new Date();
   if (!Number.isFinite(d.getTime())) return new Date();
   return d;
+}
+
+function revalidateExpensePaths() {
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/expenses");
+  revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard/cash");
 }
 
 export async function POST(req: Request) {
@@ -198,6 +209,21 @@ export async function POST(req: Request) {
       await prisma.expense.deleteMany({
         where: { id: { in: deletedIds as string[] } },
       });
+    }
+
+    if (shopIds.size > 0) {
+      for (const shopId of shopIds) {
+        await Promise.all([
+          publishRealtimeEvent(REALTIME_EVENTS.expenseCreated, shopId, {
+            synced: true,
+          }),
+          publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, shopId, {
+            synced: true,
+          }),
+        ]);
+      }
+      revalidateExpensePaths();
+      revalidateReportsForExpense();
     }
 
     return NextResponse.json({ success: true });

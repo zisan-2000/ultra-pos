@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 
-type Shop = { id: string; name: string };
+type Shop = { id: string; name: string; closingTime?: string | null };
 
 type RbacUser = {
   id: string;

@@ -140,6 +140,18 @@ model Verification {
   @@map("verifications")
 }
 
+model Jwks {
+  id         String   @id @default(cuid())
+  publicKey  String   @map("public_key")
+  privateKey String   @map("private_key")
+  alg        String?  @map("alg")
+  crv        String?  @map("crv")
+  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
+
+  @@map("jwks")
+}
+
 model Shop {
   id           String   @id @default(uuid()) @db.Uuid
   ownerId      String   @map("owner_id")
@@ -147,6 +159,7 @@ model Shop {
   address      String?
   phone        String?
   businessType String   @map("business_type") @default("tea_stall")
+  closingTime  String?  @map("closing_time")
   createdAt    DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
 
   owner          User             @relation("OwnerShops", fields: [ownerId], references: [id])

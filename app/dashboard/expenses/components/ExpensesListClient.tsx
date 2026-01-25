@@ -125,9 +125,9 @@ export function ExpensesListClient({
   const serverSnapshotRef = useRef(expenses);
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
-  const REFRESH_MIN_INTERVAL_MS = 15_000;
+  const REFRESH_MIN_INTERVAL_MS = 2_000;
   const lastEventAtRef = useRef(0);
-  const POLL_INTERVAL_MS = 15_000;
+  const POLL_INTERVAL_MS = 10_000;
   const EVENT_DEBOUNCE_MS = 800;
 
   const canApplyCustom = (() => {

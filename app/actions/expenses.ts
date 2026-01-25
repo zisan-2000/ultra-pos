@@ -7,6 +7,10 @@ import { requireUser } from "@/lib/auth-session";
 import { expenseSchema } from "@/lib/validators/expense";
 import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
+import { publishRealtimeEvent } from "@/lib/realtime/publisher";
+import { REALTIME_EVENTS } from "@/lib/realtime/events";
+import { revalidatePath } from "next/cache";
+import { revalidateReportsForExpense } from "@/lib/reports/revalidate";
 
 import { Prisma } from "@prisma/client";
 import { type CursorToken } from "@/lib/cursor-pagination";
@@ -46,6 +50,13 @@ function parseTimestampRange(from?: string, to?: string) {
   };
 
   return { start: parse(from, "start"), end: parse(to, "end") };
+}
+
+function revalidateExpensePaths() {
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/expenses");
+  revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard/cash");
 }
 
 export async function getExpenseSummaryByRange(
@@ -165,6 +176,7 @@ export async function createExpense(input: any) {
   requirePermission(user, "create_expense");
   await assertShopAccess(parsed.shopId, user);
 
+  let createdExpenseId: string | null = null;
   await prisma.$transaction(async (tx) => {
     const expenseDate = normalizeExpenseDate(parsed.expenseDate);
     const created = await tx.expense.create({
@@ -176,6 +188,7 @@ export async function createExpense(input: any) {
         note: parsed.note || "",
       },
     });
+    createdExpenseId = created.id;
 
     await tx.cashEntry.create({
       data: {
@@ -187,6 +200,18 @@ export async function createExpense(input: any) {
       },
     });
   });
+
+  await publishRealtimeEvent(REALTIME_EVENTS.expenseCreated, parsed.shopId, {
+    expenseId: createdExpenseId,
+    amount: Number(parsed.amount),
+    category: parsed.category,
+  });
+  await publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, parsed.shopId, {
+    amount: Number(parsed.amount),
+    entryType: "OUT",
+  });
+  revalidateExpensePaths();
+  revalidateReportsForExpense();
 
   return { success: true };
 }
@@ -235,6 +260,20 @@ export async function updateExpense(id: string, input: any) {
       });
     }
   });
+
+  await publishRealtimeEvent(REALTIME_EVENTS.expenseCreated, parsed.shopId, {
+    expenseId: id,
+    amount: nextAmount,
+    category: parsed.category,
+  });
+  if (delta !== 0) {
+    await publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, parsed.shopId, {
+      amount: Math.abs(delta),
+      entryType: delta > 0 ? "OUT" : "IN",
+    });
+  }
+  revalidateExpensePaths();
+  revalidateReportsForExpense();
 
   return { success: true };
 }
@@ -297,5 +336,17 @@ export async function deleteExpense(id: string) {
     });
     await tx.expense.delete({ where: { id } });
   });
+
+  await publishRealtimeEvent(REALTIME_EVENTS.expenseCreated, expense.shopId, {
+    expenseId: id,
+    amount: Number(expense.amount),
+    category: expense.category,
+  });
+  await publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, expense.shopId, {
+    amount: Number(expense.amount),
+    entryType: "IN",
+  });
+  revalidateExpensePaths();
+  revalidateReportsForExpense();
   return { success: true };
 }

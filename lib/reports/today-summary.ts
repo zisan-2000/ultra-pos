@@ -4,6 +4,7 @@ import { getCogsTotal } from "@/app/actions/reports";
 import { getDhakaDateOnlyRange, getDhakaDayRange } from "@/lib/dhaka-date";
 import { assertShopAccess } from "@/lib/shop-access";
 import type { UserContext } from "@/lib/rbac";
+import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
 
 const SHOP_TYPES_WITH_COGS = new Set([
   "mini_grocery",
@@ -115,7 +116,10 @@ const getTodaySummaryCached = unstable_cache(
   async (shopId: string, businessType?: string | null) =>
     computeTodaySummary(shopId, businessType),
   ["today-summary"],
-  { revalidate: 30 }
+  {
+    revalidate: 30,
+    tags: [REPORTS_CACHE_TAGS.todaySummary, REPORTS_CACHE_TAGS.summary],
+  }
 );
 
 export async function getTodaySummaryForShop(

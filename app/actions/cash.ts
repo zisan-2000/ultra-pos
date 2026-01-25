@@ -7,6 +7,9 @@ import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { cashSchema } from "@/lib/validators/cash";
 import { requirePermission } from "@/lib/rbac";
+import { publishRealtimeEvent } from "@/lib/realtime/publisher";
+import { REALTIME_EVENTS } from "@/lib/realtime/events";
+import { revalidateReportsForCash } from "@/lib/reports/revalidate";
 
 import { Prisma } from "@prisma/client";
 import { unstable_cache, revalidateTag } from "next/cache";
@@ -209,6 +212,11 @@ export async function createCashEntry(input: any) {
   });
 
   revalidateCashSummary();
+  revalidateReportsForCash();
+  await publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, parsed.shopId, {
+    amount: Number(parsed.amount),
+    entryType: parsed.entryType,
+  });
   return { success: true };
 }
 
@@ -240,6 +248,11 @@ export async function updateCashEntry(id: string, input: any) {
   });
 
   revalidateCashSummary();
+  revalidateReportsForCash();
+  await publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, parsed.shopId, {
+    amount: Number(parsed.amount),
+    entryType: parsed.entryType,
+  });
   return { success: true };
 }
 
@@ -292,5 +305,10 @@ export async function deleteCashEntry(id: string) {
 
   await prisma.cashEntry.delete({ where: { id } });
   revalidateCashSummary();
+  revalidateReportsForCash();
+  await publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, entry.shopId, {
+    amount: Number(entry.amount),
+    entryType: entry.entryType,
+  });
   return { success: true };
 }

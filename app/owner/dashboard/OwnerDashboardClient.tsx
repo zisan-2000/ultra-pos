@@ -109,6 +109,7 @@ export default function OwnerDashboardClient({
   const REFRESH_MIN_INTERVAL_MS = 15_000;
 
   const cacheKey = useMemo(() => `owner:dashboard:${userId}`, [userId]);
+  const selectedShopId = data.shopId || data.shops?.[0]?.id || "";
 
   useEffect(() => {
     if (serverSnapshotRef.current !== initialData) {
@@ -155,7 +156,6 @@ export default function OwnerDashboardClient({
     router.refresh();
   }, [online, lastSyncAt, syncing, pendingCount, router]);
 
-  const selectedShopId = data.shopId || data.shops?.[0]?.id || "";
   const salesTotal = Number(getSummaryTotal(data.summary?.sales));
   const expenseTotal = Number(getSummaryTotal(data.summary?.expenses));
   const profitTotal = Number(data.summary?.profit ?? 0);

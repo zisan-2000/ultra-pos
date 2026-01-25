@@ -10,6 +10,9 @@ import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { withTracing } from "@/lib/tracing";
 import { revalidatePath } from "next/cache";
+import { publishRealtimeEvent } from "@/lib/realtime/publisher";
+import { REALTIME_EVENTS } from "@/lib/realtime/events";
+import { revalidateReportsForSale } from "@/lib/reports/revalidate";
 
 type IncomingSaleItem = {
   productId: string;
@@ -310,6 +313,47 @@ export async function POST(req: Request) {
         });
 
         insertedSaleIds.push(inserted);
+        const publishTasks: Promise<void>[] = [];
+        publishTasks.push(
+          publishRealtimeEvent(REALTIME_EVENTS.saleCommitted, shopId, {
+            saleId: inserted,
+            totalAmount: totalNum,
+            paymentMethod,
+          })
+        );
+
+        const cashAmount =
+          paymentMethod === "cash"
+            ? totalNum
+            : isDue && payNow > 0
+            ? payNow
+            : null;
+        if (cashAmount) {
+          publishTasks.push(
+            publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, shopId, {
+              amount: cashAmount,
+              entryType: "IN",
+            })
+          );
+        }
+
+        if (productIds.length > 0) {
+          publishTasks.push(
+            publishRealtimeEvent(REALTIME_EVENTS.stockUpdated, shopId, {
+              productIds,
+            })
+          );
+        }
+
+        if (isDue && customerId) {
+          publishTasks.push(
+            publishRealtimeEvent(REALTIME_EVENTS.ledgerUpdated, shopId, {
+              customerId,
+            })
+          );
+        }
+
+        await Promise.all(publishTasks);
       }
 
       if (insertedSaleIds.length) {
@@ -318,6 +362,7 @@ export async function POST(req: Request) {
         revalidatePath("/dashboard/reports");
         revalidatePath("/dashboard/cash");
         revalidatePath("/dashboard/products");
+        revalidateReportsForSale();
       }
 
       return NextResponse.json({ success: true, saleIds: insertedSaleIds });
