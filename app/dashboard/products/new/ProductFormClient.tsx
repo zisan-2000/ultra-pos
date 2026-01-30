@@ -27,7 +27,7 @@ import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
 import { emitProductEvent } from "@/lib/products/product-events";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { handlePermissionError } from "@/lib/permission-toast";
 
 type Props = {

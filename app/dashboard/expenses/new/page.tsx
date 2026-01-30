@@ -3,7 +3,6 @@
 import ExpenseFormClient from "./ExpenseFormClient";
 import { createExpense } from "@/app/actions/expenses";
 import { getShop } from "@/app/actions/shops";
-import { redirect } from "next/navigation";
 
 type NewExpensePageProps = {
   searchParams?: Promise<{ shopId?: string } | undefined>;
@@ -35,8 +34,6 @@ export default async function NewExpensePage({ searchParams }: NewExpensePagePro
       expenseDate: (formData.get("expenseDate") as string) || new Date().toISOString().slice(0, 10),
       note: (formData.get("note") as string) || "",
     });
-
-    redirect(backHref);
   }
 
   return (

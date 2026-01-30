@@ -12,6 +12,12 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db, type LocalProduct } from "@/lib/dexie/db";
@@ -132,6 +138,10 @@ export default function ProductsListClient({
   const [offlinePage, setOfflinePage] = useState(page);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(serverProducts.length === 0);
   const [templateSelections, setTemplateSelections] = useState<Record<string, boolean>>({});
@@ -622,10 +632,6 @@ export default function ProductsListClient({
     async (id: string) => {
       if (deletingId) return;
       triggerHaptic("medium");
-      const confirmed = confirm(
-        "আপনি কি নিশ্চিত যে এই পণ্যটি মুছে ফেলতে চান?"
-      );
-      if (!confirmed) return;
 
       const persistCache = (next: Product[]) => {
         try {
@@ -1206,7 +1212,7 @@ export default function ProductsListClient({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(product.id);
+                      setConfirmDelete({ id: product.id, name: product.name });
                     }}
                     disabled={deletingId === product.id}
                     className={`flex items-center justify-center gap-2 h-10 rounded-xl border font-semibold text-sm shadow-sm transition ${
@@ -1356,7 +1362,12 @@ export default function ProductsListClient({
                 </Link>
                 <button
                   type="button"
-                  onClick={() => handleDelete(selectedProduct.id)}
+                  onClick={() =>
+                    setConfirmDelete({
+                      id: selectedProduct.id,
+                      name: selectedProduct.name,
+                    })
+                  }
                   disabled={deletingId === selectedProduct.id}
                   className={`flex items-center justify-center gap-2 h-12 rounded-xl font-semibold transition-all ${
                     deletingId === selectedProduct.id
@@ -1374,6 +1385,44 @@ export default function ProductsListClient({
           </div>
         </div>
       )}
+
+      <Dialog
+        open={Boolean(confirmDelete)}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDelete(null);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>পণ্য মুছে ফেলবেন?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {confirmDelete?.name || "এই পণ্যটি"} মুছে দিলে আর ফেরত আনা যাবে না।
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(null)}
+              className="h-10 px-4 rounded-xl border border-border bg-card text-foreground text-sm font-semibold hover:bg-muted"
+            >
+              বাতিল
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(deletingId) || !confirmDelete}
+              onClick={() => {
+                if (!confirmDelete) return;
+                const id = confirmDelete.id;
+                setConfirmDelete(null);
+                handleDelete(id);
+              }}
+              className="h-10 px-4 rounded-xl bg-danger text-primary-foreground text-sm font-semibold hover:bg-danger/90 disabled:opacity-60"
+            >
+              মুছুন
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -7,6 +7,9 @@ import { handlePermissionError } from "@/lib/permission-toast";
 import { useRealtimeStatus } from "@/lib/realtime/status";
 import useRealTimeReports from "@/hooks/useRealTimeReports";
 import { emitExpenseUpdate } from "@/lib/events/reportEvents";
+import { useState } from "react";
+import ConfirmDialog from "@/components/confirm-dialog";
+import { toast } from "sonner";
 
 type Props = {
   id: string;
@@ -28,11 +31,9 @@ export function ExpensesDeleteButton({
   const online = useOnlineStatus();
   const realtime = useRealtimeStatus();
   const realTimeReports = useRealTimeReports(shopId);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handleDelete = async () => {
-    const confirmDelete = confirm("আপনি কি খরচটি মুছে ফেলতে চান?");
-    if (!confirmDelete) return;
-
     onDeleted(id);
 
     let updateId: string | undefined;
@@ -94,24 +95,37 @@ export function ExpensesDeleteButton({
       if (updateId) {
         realTimeReports.rollbackLastUpdate();
       }
-      alert("খরচ মুছে ফেলা যায়নি, আবার চেষ্টা করুন।");
+      toast.error("খরচ মুছে ফেলা যায়নি, আবার চেষ্টা করুন।");
       return;
     }
 
-    alert(
+    toast.warning(
       online
-        ? "খরচটি মুছে ফেলা হয়েছে, সিঙ্ক হবে।"
+        ? "খরচটি মুছে ফেলা হয়েছে"
         : "অফলাইন: খরচটি মুছে ফেলা হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।"
     );
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleDelete}
-      className={`inline-flex items-center justify-center gap-2 w-full px-4 py-2 bg-danger-soft border border-danger/30 text-danger rounded-lg font-semibold hover:border-danger/50 hover:bg-danger-soft/70 transition-colors ${className || ""}`}
-    >
-      🗑️ মুছুন
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => setConfirmOpen(true)}
+        className={`inline-flex items-center justify-center gap-2 w-full px-4 py-2 bg-danger-soft border border-danger/30 text-danger rounded-lg font-semibold hover:border-danger/50 hover:bg-danger-soft/70 transition-colors ${className || ""}`}
+      >
+        🗑️ মুছুন
+      </button>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="খরচ মুছে ফেলবেন?"
+        description="এই খরচটি মুছে দিলে আর ফেরত আনা যাবে না।"
+        confirmLabel="মুছুন"
+        onConfirm={() => {
+          setConfirmOpen(false);
+          handleDelete();
+        }}
+      />
+    </>
   );
 }

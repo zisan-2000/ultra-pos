@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useCart } from "@/hooks/use-cart";
 import { getStockToneClasses } from "@/lib/stock-level";
+import ConfirmDialog from "@/components/confirm-dialog";
 
 type PosProductSearchProps = {
   shopId: string;
@@ -184,6 +185,10 @@ export const PosProductSearch = memo(function PosProductSearch({
   const [cooldownProductId, setCooldownProductId] = useState<string | null>(
     null
   );
+  const [stockConfirm, setStockConfirm] = useState<{
+    product: EnrichedProduct;
+    message: string;
+  } | null>(null);
 
   const add = useCart((s: any) => s.add);
 
@@ -404,27 +409,12 @@ export const PosProductSearch = memo(function PosProductSearch({
     [sortedResults, renderCount]
   );
 
-  const handleAddToCart = useCallback(
+  const addToCart = useCallback(
     (product: EnrichedProduct) => {
       // Prevent double clicks within 300ms (ref-based, not state-based)
       const now = Date.now();
       if (now - lastAddRef.current < 300) return;
       lastAddRef.current = now;
-
-      const stock = toNumber(product.stockQty);
-      const cartItems = useCart.getState().items;
-      const inCart =
-        cartItems.find((i: any) => i.productId === product.id)?.qty || 0;
-      const tracksStock = product.trackStock === true;
-
-      if (tracksStock && stock <= inCart) {
-        const proceed = window.confirm(
-          stock <= 0
-            ? `${product.name} is out of stock. Add anyway?`
-            : `${product.name} has only ${stock} left. Add anyway?`
-        );
-        if (!proceed) return;
-      }
 
       const productPrice = Number(product.sellPrice || 0);
 
@@ -434,16 +424,37 @@ export const PosProductSearch = memo(function PosProductSearch({
         name: product.name,
         unitPrice: productPrice,
       });
-      
+
       // UI feedback
       setCooldownProductId(product.id);
       bumpUsage(product.id);
       setRecentlyAdded(product.id);
       setTimeout(() => setRecentlyAdded(null), 450);
       setTimeout(() => setCooldownProductId(null), 220);
-      
     },
-    [add, setCooldownProductId, setRecentlyAdded, shopId]
+    [add, bumpUsage, setCooldownProductId, setRecentlyAdded, shopId]
+  );
+
+  const handleAddToCart = useCallback(
+    (product: EnrichedProduct) => {
+      const stock = toNumber(product.stockQty);
+      const cartItems = useCart.getState().items;
+      const inCart =
+        cartItems.find((i: any) => i.productId === product.id)?.qty || 0;
+      const tracksStock = product.trackStock === true;
+
+      if (tracksStock && stock <= inCart) {
+        const message =
+          stock <= 0
+            ? `${product.name} এর স্টক নেই। তবুও যোগ করবেন?`
+            : `${product.name} এর মাত্র ${stock}টি আছে। তবুও যোগ করবেন?`;
+        setStockConfirm({ product, message });
+        return;
+      }
+
+      addToCart(product);
+    },
+    [addToCart]
   );
 
   const startVoice = () => {
@@ -672,6 +683,22 @@ export const PosProductSearch = memo(function PosProductSearch({
           </p>
         )}
       </div>
+      <ConfirmDialog
+        open={Boolean(stockConfirm)}
+        title="স্টক নিশ্চিত করুন"
+        description={stockConfirm?.message}
+        confirmLabel="যোগ করুন"
+        cancelLabel="বাতিল"
+        onOpenChange={(open) => {
+          if (!open) setStockConfirm(null);
+        }}
+        onConfirm={() => {
+          if (!stockConfirm) return;
+          const { product } = stockConfirm;
+          setStockConfirm(null);
+          addToCart(product);
+        }}
+      />
     </div>
   );
 });

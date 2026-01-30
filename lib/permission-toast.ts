@@ -1,4 +1,4 @@
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 
 const PERMISSION_PREFIX = "forbidden: missing permission";
 let lastToastAt = 0;

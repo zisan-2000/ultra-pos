@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteShop } from "@/app/actions/shops";
+import ConfirmDialog from "@/components/confirm-dialog";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdminAction, queueRemove } from "@/lib/sync/queue";
@@ -46,6 +47,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
   const [shops, setShops] = useState<Shop[]>(initialShops || []);
   const [supportContact, setSupportContact] = useState<SupportContact>(support);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const cacheKey = useMemo(
     () => `cachedShops:${user?.id || "anon"}`,
@@ -120,8 +122,6 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
   const handleDelete = useCallback(
     async (id: string) => {
       if (deletingId) return;
-      const confirmed = confirm("আপনি কি দোকানটি মুছে ফেলতে চান?");
-      if (!confirmed) return;
 
       const persistCache = (next: Shop[]) => {
         try {
@@ -188,6 +188,10 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
     },
     [online, deletingId, cacheKey, router]
   );
+
+  const confirmShop = confirmDeleteId
+    ? shops.find((shop) => shop.id === confirmDeleteId)
+    : null;
 
   const phoneDisplay = supportContact.supportPhone || "সাপোর্ট ফোন নম্বর নেই";
   const waDisplay = supportContact.supportWhatsapp || "WhatsApp নম্বর নেই";
@@ -379,7 +383,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
 
                 <button
                   type="button"
-                  onClick={() => handleDelete(shop.id)}
+                  onClick={() => setConfirmDeleteId(shop.id)}
                   disabled={deletingId === shop.id}
                   className="
                     w-full
@@ -399,6 +403,26 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
           ))}
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteId)}
+        title="দোকান মুছে ফেলবেন?"
+        description={
+          confirmShop
+            ? `${confirmShop.name} দোকানটি মুছে ফেলতে চান?`
+            : "এই দোকানটি মুছে ফেলতে চান?"
+        }
+        confirmLabel="মুছুন"
+        cancelLabel="বাতিল"
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteId(null);
+        }}
+        onConfirm={() => {
+          if (!confirmDeleteId) return;
+          const id = confirmDeleteId;
+          setConfirmDeleteId(null);
+          handleDelete(id);
+        }}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useRealtimeStatus } from "@/lib/realtime/status";
 import { db } from "@/lib/dexie/db";
@@ -9,6 +10,7 @@ import { queueAdd } from "@/lib/sync/queue";
 import useRealTimeReports from "@/hooks/useRealTimeReports";
 import { emitExpenseUpdate } from "@/lib/events/reportEvents";
 import Link from "next/link";
+import { toast } from "sonner";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -79,6 +81,12 @@ function parseAmount(text: string) {
   return match ? match[1].replace(",", "") : "";
 }
 
+function isRedirectError(err: unknown) {
+  if (!err || typeof err !== "object") return false;
+  const digest = (err as { digest?: string }).digest;
+  return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
+}
+
 export default function ExpenseFormClient({
   shopId,
   backHref,
@@ -95,6 +103,7 @@ export default function ExpenseFormClient({
   
   const online = useOnlineStatus();
   const realtime = useRealtimeStatus();
+  const router = useRouter();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
@@ -345,6 +354,8 @@ export default function ExpenseFormClient({
             correlationId: pendingEvent.correlationId,
           });
         }
+        toast.success(isEdit ? "খরচ আপডেট হয়েছে" : "খরচ যোগ হয়েছে");
+        router.push(backHref);
         // Background sync for consistency
         setTimeout(() => {
           if (updateId) {
@@ -354,11 +365,15 @@ export default function ExpenseFormClient({
           }
         }, 500);
       } catch (error) {
+        if (isRedirectError(error)) {
+          return;
+        }
         // Rollback on error
         if (updateId) {
           realTimeReports.rollbackLastUpdate();
         }
         console.error('Expense creation failed:', error);
+        toast.error("খরচ সংরক্ষণ করা যায়নি");
       }
       return;
     }
@@ -376,7 +391,11 @@ export default function ExpenseFormClient({
 
     await db.expenses.put(payload as any);
     await queueAdd("expense", isEdit ? "update" : "create", payload);
-    alert(isEdit ? "Offline: খরচ আপডেট কিউ হয়েছে, সংযোগ পেলে সিঙ্ক হবে।" : "Offline: খরচ সংরক্ষিত, সংযোগ পেলে সিঙ্ক হবে।");
+    toast.warning(
+      isEdit
+        ? "অফলাইন: খরচ আপডেট কিউ হয়েছে, সংযোগ পেলে সিঙ্ক হবে।"
+        : "অফলাইন: খরচ সংরক্ষিত, সংযোগ পেলে সিঙ্ক হবে।"
+    );
   }
 
   return (

@@ -19,6 +19,7 @@ import { useCart } from "@/hooks/use-cart";
 import { useShallow } from "zustand/react/shallow";
 
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { toast } from "sonner";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
@@ -463,7 +464,7 @@ export function PosPageClient({
     if (items.length === 0) return;
 
     if (paymentMethod === "due" && !customerId) {
-      alert("Select a customer for due sale.");
+      toast.warning("বাকিতে বিক্রির জন্য কাস্টমার নির্বাচন করুন।");
       return;
     }
 
@@ -496,6 +497,7 @@ export function PosPageClient({
         setNote("");
         setCustomerId("");
         setSuccess({ saleId: res?.saleId });
+        toast.success("বিল সম্পন্ন হয়েছে।");
         const updateId = reportSale(totalVal);
         if (updateId) {
           setTimeout(() => {
@@ -605,15 +607,15 @@ export function PosPageClient({
     applyStockDelta(items);
     reportSale(totalVal);
 
-    alert(
+    toast.success(
       isDue
-        ? "Offline: Due sale saved. It will sync when you're online."
-        : "Sale stored offline. It will sync automatically when you're online."
+        ? "অফলাইন: বাকির বিক্রি সেভ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।"
+        : "অফলাইন: বিক্রি সেভ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।"
     );
     clear();
     } catch (error) {
       console.error("Sale submission failed:", error);
-      alert("বিল সম্পন্ন করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+      toast.error("বিল সম্পন্ন করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
     } finally {
       setIsSubmitting(false);
     }

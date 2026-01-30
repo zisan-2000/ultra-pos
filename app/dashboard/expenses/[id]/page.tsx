@@ -2,7 +2,6 @@
 
 import { getExpense, updateExpense } from "@/app/actions/expenses";
 import { getShop } from "@/app/actions/shops";
-import { redirect } from "next/navigation";
 import ExpenseFormClient from "../new/ExpenseFormClient";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -37,8 +36,6 @@ export default async function EditExpensePage({ params }: PageProps) {
       expenseDate: (formData.get("expenseDate") as string) || expenseDateDefault,
       note: (formData.get("note") as string) || "",
     });
-
-    redirect(`/dashboard/expenses?shopId=${expenseShopId}`);
   }
 
   return (

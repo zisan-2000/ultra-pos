@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -124,6 +124,7 @@ export default function OwnerSummaryVoice({
   const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [alertDialogOpen, setAlertDialogOpen] = useState(false);
   const [alertText, setAlertText] = useState("");
+  const [alertSummary, setAlertSummary] = useState<Summary | null>(null);
   const [alertError, setAlertError] = useState<string | null>(null);
   const [notificationSupported, setNotificationSupported] = useState(false);
   const [notificationEnabled, setNotificationEnabled] = useState(false);
@@ -359,6 +360,7 @@ export default function OwnerSummaryVoice({
       const text = buildSummaryText(summaryForAlert);
       if (source === "manual" || isVisible) {
         setAlertText(text);
+        setAlertSummary(summaryForAlert);
         setAlertError(
           fetchFailed ? "সারাংশ আপডেট হয়নি, আগের তথ্য দেখানো হচ্ছে।" : null
         );
@@ -426,7 +428,7 @@ export default function OwnerSummaryVoice({
     const dateLabel = from ?? getDhakaDateString();
     setReportDownloadBusy(true);
     setReportDownloadError(null);
-    const toastId = toast.loading("রিপোর্ট ডাউনলোড হচ্ছে...");
+    const toastId = toast.success("রিপোর্ট ডাউনলোড হচ্ছে...");
 
     const fetchAllRows = async (endpoint: string) => {
       const rows: any[] = [];
@@ -690,6 +692,10 @@ export default function OwnerSummaryVoice({
       : notificationEnabled
         ? "নোটিফাই চালু"
         : "নোটিফাই চালু করুন";
+  const summarySales = Number(getSummaryTotal(alertSummary?.sales));
+  const summaryExpense = Number(getSummaryTotal(alertSummary?.expenses));
+  const summaryProfit = Number(alertSummary?.profit ?? 0);
+  const summaryCash = Number(alertSummary?.cash?.balance ?? alertSummary?.balance ?? 0);
 
   return (
     <div className="flex items-center gap-2">
@@ -714,24 +720,93 @@ export default function OwnerSummaryVoice({
         open={alertDialogOpen}
         onOpenChange={setAlertDialogOpen}
       >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>আজকের সারাংশ</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">{alertText}</p>
-            {alertError ? (
-              <p className="text-sm text-danger">{alertError}</p>
-            ) : null}
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setAlertDialogOpen(false)}
-                className={buttonVariants({ variant: "outline", size: "sm" })}
-              >
-                বন্ধ করুন
-              </button>
+        <DialogContent className="max-w-md p-0 overflow-hidden">
+          <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/60 bg-gradient-to-br from-primary-soft/60 via-card to-warning-soft/40">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <DialogTitle className="text-xl font-bold text-foreground">
+                  আজকের সারাংশ
+                </DialogTitle>
+                <p className="text-xs text-muted-foreground">
+                  আজকের গুরুত্বপূর্ণ বিক্রি ও ব্যয়ের আপডেট
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card px-3 py-1 text-xs font-semibold text-primary shadow-sm">
+                <span className="text-sm">⏱️</span>
+                {getDhakaDateString(new Date())}
+              </div>
             </div>
+          </DialogHeader>
+          <div className="space-y-4 px-5 py-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-border bg-card/80 p-3 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-success-soft text-success">
+                    💸
+                  </span>
+                  <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    বিক্রি
+                  </span>
+                </div>
+                <p className="mt-2 text-lg font-bold text-foreground">
+                  ৳ {formatMoneyBn(summarySales)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-card/80 p-3 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-danger-soft text-danger">
+                    🧾
+                  </span>
+                  <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    খরচ
+                  </span>
+                </div>
+                <p className="mt-2 text-lg font-bold text-foreground">
+                  ৳ {formatMoneyBn(summaryExpense)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-card/80 p-3 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-primary">
+                    💎
+                  </span>
+                  <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    লাভ
+                  </span>
+                </div>
+                <p className="mt-2 text-lg font-bold text-foreground">
+                  ৳ {formatMoneyBn(summaryProfit)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-card/80 p-3 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-warning-soft text-warning">
+                    💰
+                  </span>
+                  <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    ক্যাশ
+                  </span>
+                </div>
+                <p className="mt-2 text-lg font-bold text-foreground">
+                  ৳ {formatMoneyBn(summaryCash)}
+                </p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-muted/40 px-4 py-3 text-sm text-foreground">
+              {alertText}
+            </div>
+            {alertError ? (
+              <div className="rounded-xl border border-danger/40 bg-danger-soft/60 px-3 py-2 text-sm text-danger">
+                {alertError}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setAlertDialogOpen(false)}
+              className="w-full h-11 rounded-xl border border-border bg-card text-foreground text-sm font-semibold hover:bg-muted transition"
+            >
+              বন্ধ করুন
+            </button>
           </div>
         </DialogContent>
       </Dialog>

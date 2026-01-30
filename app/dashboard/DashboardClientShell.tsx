@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { Toaster } from "react-hot-toast";
 import SyncBootstrap from "@/components/sync-bootstrap";
 import RealtimeBridge from "@/components/realtime/RealtimeBridge";
 import { handlePermissionError } from "@/lib/permission-toast";
@@ -34,19 +33,6 @@ export default function DashboardClientShell({
     <>
       <SyncBootstrap />
       <RealtimeBridge />
-      <Toaster
-        position="top-center"
-        toastOptions={{
-          duration: 2500,
-          style: {
-            background: "#111827",
-            color: "#f9fafb",
-            borderRadius: "12px",
-            padding: "12px 14px",
-            fontSize: "14px",
-          },
-        }}
-      />
       {children}
     </>
   );
