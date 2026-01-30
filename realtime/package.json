@@ -1,0 +1,26 @@
+{
+  "name": "@pos/realtime",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx server.ts",
+    "start": "tsx server.ts",
+    "generate": "prisma generate --schema ../prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "better-auth": "^1.4.5",
+    "pg": "^8.16.3",
+    "react": "19.2.1",
+    "redis": "^4.7.1",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "dotenv": "^17.2.3",
+    "prisma": "^6.19.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}

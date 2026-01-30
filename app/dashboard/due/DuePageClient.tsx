@@ -22,6 +22,8 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { useRealtimeStatus } from "@/lib/realtime/status";
+import { usePageVisibility } from "@/lib/use-page-visibility";
 import {
   emitDueCustomersEvent,
   subscribeDueCustomersEvent,
@@ -190,6 +192,8 @@ export default function DuePageClient({
   initialCustomers,
 }: Props) {
   const online = useOnlineStatus();
+  const realtime = useRealtimeStatus();
+  const isVisible = usePageVisibility();
   const queryClient = useQueryClient();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -197,7 +201,8 @@ export default function DuePageClient({
   const lastRefreshAtRef = useRef(0);
   const REFRESH_MIN_INTERVAL_MS = 2_000;
   const lastEventAtRef = useRef(0);
-  const POLL_INTERVAL_MS = 10_000;
+  const wasVisibleRef = useRef(isVisible);
+  const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
   const EVENT_DEBOUNCE_MS = 800;
   const [voiceReady, setVoiceReady] = useState(false);
   const [listeningField, setListeningField] = useState<VoiceField | null>(null);
@@ -293,12 +298,15 @@ export default function DuePageClient({
 
   const fetchCustomers = useCallback(async () => {
     const res = await fetch(`/api/due/customers?shopId=${shopId}`);
+    if (res.status === 304) {
+      return loadCustomersFromDexie();
+    }
     if (!res.ok) {
       throw new Error("Due customers fetch failed");
     }
     const json = await res.json();
     return Array.isArray(json?.data) ? json.data : [];
-  }, [shopId]);
+  }, [shopId, loadCustomersFromDexie]);
 
   const customersQuery = useQuery({
     queryKey: customerQueryKey,
@@ -599,10 +607,10 @@ export default function DuePageClient({
   ]);
 
   useEffect(() => {
-    if (!online) return;
+    if (!online || !isVisible) return;
     const intervalId = setInterval(() => {
       const now = Date.now();
-      if (now - lastEventAtRef.current < POLL_INTERVAL_MS / 2) return;
+      if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
       if (refreshInFlightRef.current) return;
       if (syncing || pendingCount > 0) return;
       if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
@@ -610,17 +618,31 @@ export default function DuePageClient({
       if (selectedCustomerId) {
         refreshStatement(selectedCustomerId);
       }
-    }, POLL_INTERVAL_MS);
+    }, pollIntervalMs);
 
     return () => clearInterval(intervalId);
   }, [
     online,
+    isVisible,
     syncing,
     pendingCount,
     refreshData,
     selectedCustomerId,
     refreshStatement,
+    pollIntervalMs,
   ]);
+
+  useEffect(() => {
+    if (!online) return;
+    if (wasVisibleRef.current === isVisible) return;
+    wasVisibleRef.current = isVisible;
+    if (!isVisible) return;
+    lastEventAtRef.current = Date.now();
+    refreshData({ force: true, source: "refresh" });
+    if (selectedCustomerId) {
+      refreshStatement(selectedCustomerId);
+    }
+  }, [online, isVisible, refreshData, selectedCustomerId, refreshStatement]);
 
   async function handleAddCustomer(e: FormEvent) {
     e.preventDefault();

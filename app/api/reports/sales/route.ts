@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { jsonWithEtag } from "@/lib/http/etag";
 import { getSalesWithFilterPaginated } from "@/app/actions/reports";
 import { clampReportLimit } from "@/lib/reporting-config";
 
@@ -27,5 +27,7 @@ export async function GET(req: Request) {
     cursor,
   });
 
-  return NextResponse.json({ rows, nextCursor, hasMore });
+  return jsonWithEtag(req, { rows, nextCursor, hasMore }, {
+    cacheControl: "private, no-cache",
+  });
 }

@@ -7,15 +7,26 @@ import { clampReportLimit } from "@/lib/reporting-config";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
+import { jsonWithEtag } from "@/lib/http/etag";
 
-async function computeLowStockReport(shopId: string, limit: number) {
+function normalizeThreshold(raw?: string | null) {
+  const value = Number(raw);
+  const allowed = new Set([5, 10, 15, 20]);
+  return allowed.has(value) ? value : 20;
+}
+
+async function computeLowStockReport(
+  shopId: string,
+  threshold: number,
+  limit: number
+) {
   const lowStockProducts = await prisma.product.findMany({
     where: {
       shopId,
       isActive: true,
       trackStock: true,
       stockQty: {
-        lte: limit,
+        lte: threshold,
       },
     },
     select: {
@@ -37,7 +48,8 @@ async function computeLowStockReport(shopId: string, limit: number) {
 }
 
 const getLowStockCached = unstable_cache(
-  async (shopId: string, limit: number) => computeLowStockReport(shopId, limit),
+  async (shopId: string, threshold: number, limit: number) =>
+    computeLowStockReport(shopId, threshold, limit),
   ["reports-low-stock"],
   { revalidate: 60, tags: [REPORTS_CACHE_TAGS.lowStock] }
 );
@@ -48,6 +60,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const shopId = searchParams.get("shopId");
     const limit = clampReportLimit(searchParams.get("limit"));
+    const threshold = normalizeThreshold(searchParams.get("threshold"));
     const fresh = searchParams.get("fresh") === "1";
 
     if (!shopId) {
@@ -56,9 +69,11 @@ export async function GET(request: NextRequest) {
 
     await assertShopAccess(shopId, user);
     const data = fresh
-      ? await computeLowStockReport(shopId, limit)
-      : await getLowStockCached(shopId, limit);
-    return NextResponse.json({ data });
+      ? await computeLowStockReport(shopId, threshold, limit)
+      : await getLowStockCached(shopId, threshold, limit);
+    return jsonWithEtag(request, { data }, {
+      cacheControl: "private, no-cache",
+    });
   } catch (error: any) {
     console.error("Low stock report error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

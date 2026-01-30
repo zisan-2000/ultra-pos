@@ -23,6 +23,8 @@ import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { useRealtimeStatus } from "@/lib/realtime/status";
+import { usePageVisibility } from "@/lib/use-page-visibility";
 import { subscribeDueCustomersEvent } from "@/lib/due/customer-events";
 import { subscribeProductEvent } from "@/lib/products/product-events";
 import useRealTimeReports from "@/hooks/useRealTimeReports";
@@ -112,6 +114,8 @@ export function PosPageClient({
   const [success, setSuccess] = useState<{ saleId?: string } | null>(null);
   const [productsRefreshing, setProductsRefreshing] = useState(false);
   const online = useOnlineStatus();
+  const realtime = useRealtimeStatus();
+  const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const lastSyncLabel = useMemo(() => {
     if (!lastSyncAt) return null;
@@ -132,7 +136,8 @@ export function PosPageClient({
   const lastRefreshAtRef = useRef(0);
   const REFRESH_MIN_INTERVAL_MS = 15_000;
   const lastEventAtRef = useRef(0);
-  const POLL_INTERVAL_MS = 15_000;
+  const wasVisibleRef = useRef(isVisible);
+  const pollIntervalMs = realtime.connected ? 60_000 : 15_000;
   const isDue = paymentMethod === "due";
   const paymentOptions = useMemo(
     () => [
@@ -176,6 +181,9 @@ export function PosPageClient({
   const fetchDueCustomers = useCallback(async () => {
     try {
       const res = await fetch(`/api/due/customers?shopId=${shopId}`);
+      if (res.status === 304) {
+        return loadCustomersFromDexie();
+      }
       if (!res.ok) {
         throw new Error("Load due customers failed");
       }
@@ -219,7 +227,7 @@ export function PosPageClient({
     queryFn: fetchDueCustomers,
     enabled: online && isDue,
     staleTime: 15_000,
-    refetchInterval: online && isDue ? 15_000 : false,
+    refetchInterval: online && isDue && isVisible ? pollIntervalMs : false,
     initialData: () => customers ?? [],
     placeholderData: (prev) => prev ?? [],
   });
@@ -312,20 +320,35 @@ export function PosPageClient({
   }, [online, lastSyncAt, syncing, pendingCount, router]);
 
   useEffect(() => {
-    if (!online) return;
+    if (!online || !isVisible) return;
     const intervalId = setInterval(() => {
       const now = Date.now();
-      if (now - lastEventAtRef.current < POLL_INTERVAL_MS / 2) return;
+      if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
       if (refreshInFlightRef.current) return;
       if (syncing || pendingCount > 0) return;
       if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
       refreshInFlightRef.current = true;
       lastRefreshAtRef.current = now;
       router.refresh();
-    }, POLL_INTERVAL_MS);
+    }, pollIntervalMs);
 
     return () => clearInterval(intervalId);
-  }, [online, router, syncing, pendingCount]);
+  }, [online, isVisible, router, syncing, pendingCount, pollIntervalMs]);
+
+  useEffect(() => {
+    if (!online) return;
+    if (wasVisibleRef.current === isVisible) return;
+    wasVisibleRef.current = isVisible;
+    if (!isVisible) return;
+    const now = Date.now();
+    if (refreshInFlightRef.current) return;
+    if (syncing || pendingCount > 0) return;
+    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+    lastEventAtRef.current = now;
+    lastRefreshAtRef.current = now;
+    refreshInFlightRef.current = true;
+    router.refresh();
+  }, [online, isVisible, router, syncing, pendingCount]);
 
   useEffect(() => {
     if (!isDue) return;

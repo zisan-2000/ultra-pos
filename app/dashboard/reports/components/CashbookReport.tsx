@@ -81,6 +81,13 @@ export default function CashbookReport({ shopId, from, to }: Props) {
       }
 
       const res = await fetch(`/api/reports/cash?${params.toString()}`);
+      if (res.status === 304) {
+        const cached = readCached(rangeFrom, rangeTo);
+        if (cached && !cursor) {
+          return { rows: cached, hasMore: false, nextCursor: null };
+        }
+        throw new Error("Cash report not modified");
+      }
       if (!res.ok) {
         const cached = readCached(rangeFrom, rangeTo);
         if (cached && !cursor) {

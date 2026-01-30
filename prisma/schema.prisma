@@ -165,6 +165,10 @@ model Shop {
   owner          User             @relation("OwnerShops", fields: [ownerId], references: [id])
   products       Product[]
   sales          Sale[]
+  purchases      Purchase[]
+  suppliers      Supplier[]
+  supplierLedger SupplierLedger[]
+  purchasePayments PurchasePayment[]
   expenses       Expense[]
   cashEntries    CashEntry[]
   customers      Customer[]
@@ -348,11 +352,110 @@ model Product {
 
   shop      Shop      @relation(fields: [shopId], references: [id])
   saleItems SaleItem[]
+  purchaseItems PurchaseItem[]
 
   @@index([shopId], map: "idx_products_shop")
   @@index([shopId, isActive], map: "idx_products_active")
   @@index([shopId, isActive, stockQty], map: "idx_products_low_stock")
   @@map("products")
+}
+
+model Purchase {
+  id            String   @id @default(uuid()) @db.Uuid
+  shopId        String   @map("shop_id") @db.Uuid
+  supplierId    String?  @map("supplier_id") @db.Uuid
+  supplierName  String?  @map("supplier_name")
+  purchaseDate  DateTime @map("purchase_date") @db.Date
+  paymentMethod String   @map("payment_method") @default("cash")
+  totalAmount   Decimal  @map("total_amount") @db.Decimal(12, 2)
+  paidAmount    Decimal  @map("paid_amount") @db.Decimal(12, 2)
+  dueAmount     Decimal  @map("due_amount") @db.Decimal(12, 2)
+  note          String?
+  createdAt     DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  shop  Shop           @relation(fields: [shopId], references: [id])
+  supplier Supplier?   @relation(fields: [supplierId], references: [id])
+  items PurchaseItem[]
+  payments PurchasePayment[]
+
+  @@index([shopId, purchaseDate], map: "idx_purchases_shop_date")
+  @@index([supplierId], map: "idx_purchases_supplier")
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  purchaseId  String   @map("purchase_id") @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  quantity    Decimal  @db.Decimal(12, 2)
+  unitCost    Decimal  @map("unit_cost") @db.Decimal(12, 2)
+  lineTotal   Decimal  @map("line_total") @db.Decimal(12, 2)
+  createdAt   DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@index([purchaseId], map: "idx_purchase_items_purchase")
+  @@index([productId], map: "idx_purchase_items_product")
+  @@map("purchase_items")
+}
+
+model PurchasePayment {
+  id         String   @id @default(uuid()) @db.Uuid
+  shopId     String   @map("shop_id") @db.Uuid
+  purchaseId String   @map("purchase_id") @db.Uuid
+  supplierId String   @map("supplier_id") @db.Uuid
+  amount     Decimal  @db.Decimal(12, 2)
+  method     String   @map("payment_method") @default("cash")
+  paidAt     DateTime @map("paid_at") @db.Timestamptz(6)
+  note       String?
+  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  shop      Shop     @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, paidAt], map: "idx_purchase_payments_shop_date")
+  @@index([purchaseId], map: "idx_purchase_payments_purchase")
+  @@index([supplierId], map: "idx_purchase_payments_supplier")
+  @@map("purchase_payments")
+}
+
+model Supplier {
+  id        String   @id @default(uuid()) @db.Uuid
+  shopId    String   @map("shop_id") @db.Uuid
+  name      String
+  phone     String?
+  address   String?
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  shop      Shop             @relation(fields: [shopId], references: [id])
+  purchases Purchase[]
+  ledger    SupplierLedger[]
+  payments  PurchasePayment[]
+
+  @@unique([shopId, name], map: "uq_suppliers_shop_name")
+  @@index([shopId], map: "idx_suppliers_shop")
+  @@map("suppliers")
+}
+
+model SupplierLedger {
+  id         String   @id @default(uuid()) @db.Uuid
+  shopId     String   @map("shop_id") @db.Uuid
+  supplierId String   @map("supplier_id") @db.Uuid
+  entryType  String   @map("entry_type")
+  amount     Decimal  @db.Decimal(12, 2)
+  note       String?
+  entryDate  DateTime @map("entry_date") @db.Timestamptz(6)
+  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  shop     Shop     @relation(fields: [shopId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@index([shopId], map: "idx_supplier_ledger_shop")
+  @@index([supplierId], map: "idx_supplier_ledger_supplier")
+  @@index([entryDate], map: "idx_supplier_ledger_entry_date")
+  @@map("supplier_ledger")
 }
 
 model Sale {
@@ -388,6 +491,7 @@ model SaleItem {
   productId String   @map("product_id") @db.Uuid
   quantity  Decimal  @db.Decimal(12, 2)
   unitPrice Decimal  @map("unit_price") @db.Decimal(12, 2)
+  costAtSale Decimal? @map("cost_at_sale") @db.Decimal(12, 2)
   // Prisma doesn't have a first-class generated column annotation; we'll add
   // the `generated always as (quantity * unit_price) stored` via SQL migration.
 // FIXED: Removed dbgenerated default (Neon/Postgres does not allow column refs in DEFAULT)

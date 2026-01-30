@@ -2,14 +2,17 @@
   "name": "pos-app",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "realtime"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx --tsconfig tsconfig.seed.json prisma/seed.ts",
-    "realtime:dev": "tsx realtime/server.ts",
-    "realtime:start": "tsx realtime/server.ts",
+    "realtime:dev": "npm run -w realtime dev",
+    "realtime:start": "npm run -w realtime start",
     "ci:health": "bash scripts/ci-healthcheck.sh",
     "release:check-sw": "bash scripts/check-sw-cache-name.sh"
   },

@@ -1,12 +1,13 @@
 // app/service-worker.js
 // Enhanced offline support + intelligent caching for POS app.
-// Strategies: Precache, Network-First for assets, Stale-While-Revalidate for APIs
+// Strategies: Precache, cache-first for static assets, stale-while-revalidate for APIs.
+// _next assets are bypassed to avoid stale layout/js/css mismatches.
 
 const CACHE_PREFIX = "pos-cache-";
 // Bump this when deploying so clients drop old Next.js bundles & action IDs.
-const CACHE_NAME = `${CACHE_PREFIX}v5`;
-const API_CACHE_NAME = `${CACHE_PREFIX}api-v5`;
-const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v5`;
+const CACHE_NAME = `${CACHE_PREFIX}v7`;
+const API_CACHE_NAME = `${CACHE_PREFIX}api-v7`;
+const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v7`;
 
 const PRECACHE_URLS = [
   "/offline",
@@ -38,7 +39,6 @@ const STATIC_EXTENSIONS = [
 const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 minutes
 
 self.addEventListener("install", (event) => {
-  self.skipWaiting();
   event.waitUntil(
     Promise.all([
       caches.open(CACHE_NAME).then((cache) => {
@@ -48,6 +48,12 @@ self.addEventListener("install", (event) => {
       caches.open(API_CACHE_NAME),
     ])
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event?.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event) => {
@@ -76,6 +82,15 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
+  // Never cache the service worker script itself.
+  if (
+    url.pathname === "/service-worker" ||
+    url.pathname === "/service-worker.js"
+  ) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   // Navigation requests: go to network; if offline, fall back to offline page.
   if (request.mode === "navigate") {
     event.respondWith(handleNavigation(request));
@@ -88,9 +103,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Next.js build assets: always prefer network so we don't serve stale bundles or action manifests.
+  // Never intercept Next.js build assets. Their paths are not always hashed
+  // (e.g., app/layout.js, app/layout.css), so SW caching can serve stale code/CSS.
   if (url.pathname.startsWith("/_next/")) {
-    event.respondWith(networkFirstStatic(request, url, STATIC_CACHE_NAME));
     return;
   }
 
@@ -124,23 +139,6 @@ async function handleNavigation(request) {
   }
 }
 
-async function cacheFirst(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const cachedResponse = await cache.match(request);
-  if (cachedResponse) return cachedResponse;
-
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse && networkResponse.ok) {
-      cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    // If network fails and nothing cached, propagate the failure.
-    return cachedResponse || Response.error();
-  }
-}
-
 async function cacheFirstStatic(request, url, cacheName) {
   const cache = await caches.open(cacheName);
   const cleanUrl = url.origin + url.pathname; // strip query params for stable keys
@@ -168,32 +166,6 @@ async function cacheFirstStatic(request, url, cacheName) {
     return networkResponse;
   } catch (error) {
     return cached || Response.error();
-  }
-}
-
-async function networkFirstStatic(request, url, cacheName) {
-  const cache = await caches.open(cacheName);
-  const cleanUrl = url.origin + url.pathname;
-  const cacheKey = new Request(cleanUrl, {
-    method: "GET",
-    headers: request.headers,
-    credentials: request.credentials,
-    mode: "same-origin",
-  });
-
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse && networkResponse.ok) {
-      cache.put(cacheKey, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    const cached =
-      (await cache.match(cleanUrl)) ||
-      (await cache.match(cacheKey)) ||
-      (await cache.match(request));
-    if (cached) return cached;
-    throw error;
   }
 }
 

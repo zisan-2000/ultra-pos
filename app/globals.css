@@ -9,6 +9,7 @@
   :root {
     /* Core palette aligned with POS UI rules */
     --radius: 0.625rem;
+    --css-loaded: 1;
 
     /* Surface and text */
     --background: #f6f9f8;
@@ -291,8 +292,8 @@ body {
   will-change: transform, box-shadow;
 }
 .card-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.14);
 }
 
 .fab-tap {
@@ -362,7 +363,7 @@ button {
 
 /* Card Styles */
 .card {
-  @apply bg-card rounded-lg border border-border p-6 shadow-sm;
+  @apply bg-card/95 rounded-2xl border border-border/70 p-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur;
 }
 
 @layer base {

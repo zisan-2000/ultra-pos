@@ -32,7 +32,14 @@ export async function middleware(req: NextRequest) {
   const roleMatch = pathname.match(/^\/([A-Za-z0-9_-]+)(\/.*)?$/);
   const roleSlug = roleMatch?.[1] ?? null;
   const remainder = roleMatch?.[2] ?? "";
-  const reserved = new Set(["dashboard", "login", "register", "api", "_next"]);
+  const reserved = new Set([
+    "dashboard",
+    "login",
+    "register",
+    "api",
+    "_next",
+    "service-worker",
+  ]);
   const looksRolePrefixed = Boolean(roleSlug && !reserved.has(roleSlug));
   const isDashboardPath =
     pathname === "/dashboard" || pathname.startsWith("/dashboard/");
@@ -89,6 +96,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api/|_next/static|_next/image|favicon\\.ico|service-worker\\.js|.*\\..*).*)",
+    "/((?!api/|_next/static|_next/image|favicon\\.ico|service-worker\\.js|service-worker|.*\\..*).*)",
   ],
 };

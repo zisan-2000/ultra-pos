@@ -97,11 +97,20 @@ export async function POST(req: Request) {
       deleteTargets.forEach((e) => shopIds.add(e.shopId));
     }
 
-    if ((newItems.length || updatedItems.length || deleteIds.length) && shopIds.size === 0) {
+    const hasCreateOrUpdate = newItems.length > 0 || updatedItems.length > 0;
+    const hasDeletes = deleteIds.length > 0;
+    const hasShopScope = shopIds.size > 0;
+
+    if (hasCreateOrUpdate && !hasShopScope) {
       return NextResponse.json(
         { success: false, error: "shopId required to sync expenses" },
         { status: 400 },
       );
+    }
+
+    // If we only received deleteIds that don't exist on server, treat as no-op.
+    if (!hasCreateOrUpdate && hasDeletes && deleteTargets.length === 0) {
+      return NextResponse.json({ success: true, skippedDeletes: deleteIds.length });
     }
 
     for (const shopId of shopIds) {

@@ -16,6 +16,25 @@ type TemplateInput = {
   isActive?: boolean;
 };
 
+export type BusinessProductTemplateImportItem = {
+  businessType?: string | null;
+  name?: string | null;
+  category?: string | null;
+  defaultSellPrice?: string | number | null;
+  isActive?: boolean | null;
+};
+
+export type BusinessProductTemplateImportInput = {
+  items: BusinessProductTemplateImportItem[];
+  defaultBusinessType?: string | null;
+};
+
+export type BusinessProductTemplateImportResult = {
+  createdCount: number;
+  skippedCount: number;
+  invalidCount: number;
+};
+
 type TemplateListRow = {
   id: string;
   businessType: string;
@@ -194,6 +213,97 @@ export async function deleteBusinessProductTemplate(id: string) {
   }
   await prisma.businessProductTemplate.delete({ where: { id } });
   return { success: true };
+}
+
+// ------------------------------
+// ADMIN: IMPORT TEMPLATES (JSON)
+// ------------------------------
+export async function importBusinessProductTemplates(
+  input: BusinessProductTemplateImportInput,
+): Promise<BusinessProductTemplateImportResult> {
+  const user = await requireUser();
+  assertSuperAdmin(user);
+
+  const items = Array.isArray(input.items) ? input.items : [];
+  if (items.length === 0) {
+    return { createdCount: 0, skippedCount: 0, invalidCount: 0 };
+  }
+
+  const defaultBusinessType = normalizeOptionalText(input.defaultBusinessType) ?? null;
+  const normalized: Array<{
+    businessType: string;
+    name: string;
+    category: string | null;
+    defaultSellPrice: string | null;
+    isActive: boolean;
+  }> = [];
+
+  let invalidCount = 0;
+  let firstError: string | null = null;
+
+  items.forEach((item, index) => {
+    try {
+      const businessTypeValue = item.businessType ?? defaultBusinessType ?? "";
+      const businessType = normalizeRequiredText(
+        String(businessTypeValue),
+        "Business type",
+      );
+      const name = normalizeRequiredText(String(item.name ?? ""), "Name");
+      const category = normalizeOptionalText(item.category);
+      const defaultSellPrice = normalizeOptionalMoney(item.defaultSellPrice);
+      const isActive = item.isActive ?? true;
+
+      normalized.push({
+        businessType,
+        name,
+        category: category ?? null,
+        defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        isActive: Boolean(isActive),
+      });
+    } catch (err) {
+      invalidCount += 1;
+      if (!firstError) {
+        const message = err instanceof Error ? err.message : "Invalid row";
+        firstError = `Row ${index + 1}: ${message}`;
+      }
+    }
+  });
+
+  if (invalidCount > 0) {
+    const suffix = firstError ? ` ${firstError}` : "";
+    throw new Error(
+      `Import failed: ${invalidCount} invalid row${invalidCount > 1 ? "s" : ""}.${suffix}`,
+    );
+  }
+
+  if (normalized.length === 0) {
+    return { createdCount: 0, skippedCount: 0, invalidCount: 0 };
+  }
+
+  const seen = new Set<string>();
+  const deduped = normalized.filter((item) => {
+    const key = `${item.businessType.toLowerCase()}|${item.name.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const result = await prisma.businessProductTemplate.createMany({
+    data: deduped.map((item) => ({
+      businessType: item.businessType,
+      name: item.name,
+      category: item.category,
+      defaultSellPrice: item.defaultSellPrice,
+      isActive: item.isActive,
+    })),
+    skipDuplicates: true,
+  });
+
+  return {
+    createdCount: result.count,
+    skippedCount: deduped.length - result.count,
+    invalidCount: 0,
+  };
 }
 
 // ------------------------------

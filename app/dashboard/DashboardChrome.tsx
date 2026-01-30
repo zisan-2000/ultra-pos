@@ -36,6 +36,7 @@ import {
   Menu,
   NotebookText,
   Package,
+  PackagePlus,
   Plus,
   Receipt,
   Settings,
@@ -96,13 +97,15 @@ const navItems: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/dashboard", label: "ড্যাশবোর্ড", Icon: LayoutDashboard },
   { href: "/dashboard/shops", label: "দোকান", Icon: Store },
   { href: "/dashboard/products", label: "পণ্য", Icon: Package },
+  { href: "/dashboard/purchases", label: "পণ্য ক্রয়", Icon: PackagePlus },
+  { href: "/dashboard/suppliers", label: "সরবরাহকারী", Icon: Users },
   { href: "/dashboard/sales", label: "বিক্রি", Icon: ShoppingCart },
   { href: "/dashboard/expenses", label: "খরচ", Icon: Receipt },
   { href: "/dashboard/due", label: "ধার / পাওনা", Icon: HandCoins },
   { href: "/dashboard/cash", label: "নগদ খাতা", Icon: NotebookText },
   { href: "/dashboard/reports", label: "রিপোর্ট", Icon: BarChart3 },
-  { href: "/dashboard/profile", label: "আমার প্রোফাইল", Icon: User },
-  { href: "/dashboard/users", label: "ব্যবহারকারী ব্যবস্থাপনা", Icon: Users },
+  { href: "/dashboard/profile", label: "প্রোফাইল", Icon: User },
+  { href: "/dashboard/users", label: "স্টাফ", Icon: Users },
 ];
 
 // ✅ mobile bottom nav: 6 -> 5 (profile removed)
@@ -164,6 +167,10 @@ const fabByRoute: Record<string, { href: string; label: string } | null> = {
   "/dashboard/products": {
     href: "/dashboard/products/new",
     label: "নতুন পণ্য যোগ করুন",
+  },
+  "/dashboard/purchases": {
+    href: "/dashboard/purchases/new",
+    label: "নতুন ক্রয় যোগ করুন",
   },
   "/dashboard/expenses": {
     href: "/dashboard/expenses/new",
@@ -392,6 +399,8 @@ export function DashboardShell({
     "/dashboard": "view_dashboard_summary",
     "/dashboard/shops": "view_shops",
     "/dashboard/products": "view_products",
+    "/dashboard/purchases": "view_purchases",
+    "/dashboard/suppliers": "view_suppliers",
     "/dashboard/sales": "view_sales",
     "/dashboard/expenses": "view_expenses",
     "/dashboard/due": "view_due_summary",
@@ -406,6 +415,74 @@ export function DashboardShell({
     if (href === "/dashboard") return pathname === "/dashboard";
     return pathname.startsWith(href);
   };
+
+  const navGroupClass = sidebarCollapsed
+    ? "flex flex-col gap-1"
+    : "grid grid-cols-2 gap-2";
+
+  const navItemClass = (active: boolean) => {
+    if (sidebarCollapsed) {
+      return `group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+        active
+          ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
+          : "text-sidebar-foreground hover:bg-sidebar-accent"
+      } lg:justify-center`;
+    }
+
+    return `group relative flex flex-col items-start gap-2 rounded-2xl border border-sidebar-border/60 bg-gradient-to-br from-sidebar/80 via-sidebar to-sidebar-accent/40 px-3.5 py-3.5 text-[13px] font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar shadow-[0_8px_18px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] card-lift ${
+      active
+        ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring shadow-[0_12px_26px_rgba(15,23,42,0.16)]"
+        : "text-sidebar-foreground hover:bg-sidebar-accent/80 hover:border-sidebar-border"
+    }`;
+  };
+
+  const navIconTone: Record<
+    string,
+    { accent: string; ring: string; icon: string }
+  > = {
+    "/dashboard": { accent: "bg-sky-500/15", ring: "ring-sky-300/70", icon: "text-sky-800" },
+    "/dashboard/shops": { accent: "bg-emerald-500/15", ring: "ring-emerald-300/70", icon: "text-emerald-800" },
+    "/dashboard/products": { accent: "bg-indigo-500/15", ring: "ring-indigo-300/60", icon: "text-indigo-700" },
+    "/dashboard/purchases": { accent: "bg-violet-500/15", ring: "ring-violet-300/60", icon: "text-violet-700" },
+    "/dashboard/suppliers": { accent: "bg-cyan-500/15", ring: "ring-cyan-300/60", icon: "text-cyan-700" },
+    "/dashboard/sales": { accent: "bg-amber-500/15", ring: "ring-amber-300/60", icon: "text-amber-700" },
+    "/dashboard/expenses": { accent: "bg-rose-500/15", ring: "ring-rose-300/60", icon: "text-rose-700" },
+    "/dashboard/due": { accent: "bg-orange-500/15", ring: "ring-orange-300/60", icon: "text-orange-700" },
+    "/dashboard/cash": { accent: "bg-teal-500/15", ring: "ring-teal-300/60", icon: "text-teal-700" },
+    "/dashboard/reports": { accent: "bg-lime-500/15", ring: "ring-lime-300/60", icon: "text-lime-700" },
+    "/dashboard/profile": { accent: "bg-slate-500/15", ring: "ring-slate-300/60", icon: "text-slate-700" },
+    "/dashboard/users": { accent: "bg-fuchsia-500/15", ring: "ring-fuchsia-300/60", icon: "text-fuchsia-700" },
+  };
+
+  const navIconWrapClass = (href: string, active: boolean) => {
+    const tone = navIconTone[href] ?? {
+      accent: "bg-sidebar-accent/80",
+      ring: "ring-sidebar-border",
+      icon: "text-sidebar-accent-foreground",
+    };
+    if (sidebarCollapsed) {
+      return `inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+        active
+          ? "bg-sidebar-primary/20"
+          : `${tone.accent} group-hover:bg-sidebar-accent`
+      }`;
+    }
+    return `inline-flex h-10 w-10 items-center justify-center rounded-full ring-1 ${
+      active
+        ? "bg-sidebar-primary/15 ring-sidebar-ring"
+        : `${tone.accent} ${tone.ring} group-hover:bg-sidebar-accent`
+    }`;
+  };
+
+  const navIconClass = (href: string, active: boolean) => {
+    if (active) return "text-sidebar-primary-foreground";
+    const tone = navIconTone[href];
+    return tone?.icon ?? "text-sidebar-accent-foreground";
+  };
+
+  const navLabelClass = sidebarCollapsed
+    ? "lg:hidden truncate"
+    : "truncate text-[13px] leading-snug";
 
   const handleShopChange = (id: string) => {
     if (!id || id === safeShopId) return;
@@ -552,7 +629,7 @@ export function DashboardShell({
                 প্রধান মেনু
               </div>
 
-              <div className="flex flex-col gap-1">
+              <div className={navGroupClass}>
                 {navItems
                   .filter((item) =>
                     hasPermission(routePermissionMap[item.href])
@@ -579,33 +656,17 @@ export function DashboardShell({
                         }}
                         onMouseEnter={() => handleNavPrefetch(scopedHref)}
                         onTouchStart={() => handleNavPrefetch(scopedHref)}
-                        className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
-                          active
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent"
-                        } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                        className={navItemClass(active)}
                       >
-                        <span
-                          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
-                            active
-                              ? "bg-sidebar-primary/20"
-                              : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
-                          }`}
-                        >
-                          <Icon
-                            className={`h-4 w-4 ${
-                              active
-                                ? "text-sidebar-primary-foreground"
-                                : "text-sidebar-accent-foreground"
-                            }`}
-                          />
-                        </span>
+                    <span
+                      className={navIconWrapClass(item.href, active)}
+                    >
+                      <Icon
+                        className={`h-4 w-4 ${navIconClass(item.href, active)}`}
+                      />
+                    </span>
 
-                        <span
-                          className={
-                            sidebarCollapsed ? "lg:hidden truncate" : "truncate"
-                          }
-                        >
+                        <span className={navLabelClass}>
                           {item.label}
                         </span>
                       </Link>
@@ -623,7 +684,7 @@ export function DashboardShell({
                     অ্যাডমিন
                   </div>
 
-                  <div className="flex flex-col gap-1">
+                  <div className={navGroupClass}>
                     {canViewUserCreationLog && (
                       <Link
                         href={buildShopHref(userCreationLogHref)}
@@ -638,33 +699,23 @@ export function DashboardShell({
                         onTouchStart={() =>
                           handleNavPrefetch(userCreationLogHref)
                         }
-                        className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
-                          isActive(userCreationLogHref)
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent"
-                        } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                        className={navItemClass(isActive(userCreationLogHref))}
                       >
                         <span
-                          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                          className={navIconWrapClass(
+                            userCreationLogHref,
                             isActive(userCreationLogHref)
-                              ? "bg-sidebar-primary/20"
-                              : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
-                          }`}
+                          )}
                         >
                           <Users
-                            className={`h-4 w-4 ${
+                            className={`h-4 w-4 ${navIconClass(
+                              userCreationLogHref,
                               isActive(userCreationLogHref)
-                                ? "text-sidebar-primary-foreground"
-                                : "text-sidebar-accent-foreground"
-                            }`}
+                            )}`}
                           />
                         </span>
 
-                        <span
-                          className={
-                            sidebarCollapsed ? "lg:hidden truncate" : "truncate"
-                          }
-                        >
+                        <span className={navLabelClass}>
                           ব্যবহারকারী তৈরি লগ
                         </span>
                       </Link>
@@ -684,33 +735,25 @@ export function DashboardShell({
                         onTouchStart={() =>
                           handleNavPrefetch("/dashboard/admin/rbac")
                         }
-                        className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                        className={navItemClass(
                           isActive("/dashboard/admin/rbac")
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent"
-                        } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                        )}
                       >
                         <span
-                          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                          className={navIconWrapClass(
+                            "/dashboard/admin/rbac",
                             isActive("/dashboard/admin/rbac")
-                              ? "bg-sidebar-primary/20"
-                              : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
-                          }`}
+                          )}
                         >
                           <Settings
-                            className={`h-4 w-4 ${
+                            className={`h-4 w-4 ${navIconClass(
+                              "/dashboard/admin/rbac",
                               isActive("/dashboard/admin/rbac")
-                                ? "text-sidebar-primary-foreground"
-                                : "text-sidebar-accent-foreground"
-                            }`}
+                            )}`}
                           />
                         </span>
 
-                        <span
-                          className={
-                            sidebarCollapsed ? "lg:hidden truncate" : "truncate"
-                          }
-                        >
+                        <span className={navLabelClass}>
                           RBAC ব্যবস্থাপনা
                         </span>
                       </Link>
@@ -729,7 +772,7 @@ export function DashboardShell({
                     Settings
                   </div>
 
-                  <div className="flex flex-col gap-1">
+                  <div className={navGroupClass}>
                     <Link
                       href={buildShopHref("/dashboard/admin/business-types")}
                       prefetch
@@ -746,33 +789,25 @@ export function DashboardShell({
                       onTouchStart={() =>
                         handleNavPrefetch("/dashboard/admin/business-types")
                       }
-                      className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                      className={navItemClass(
                         isActive("/dashboard/admin/business-types")
-                          ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent"
-                      } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                      )}
                     >
                       <span
-                        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                        className={navIconWrapClass(
+                          "/dashboard/admin/business-types",
                           isActive("/dashboard/admin/business-types")
-                            ? "bg-sidebar-primary/20"
-                            : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
-                        }`}
+                        )}
                       >
                         <Settings
-                          className={`h-4 w-4 ${
+                          className={`h-4 w-4 ${navIconClass(
+                            "/dashboard/admin/business-types",
                             isActive("/dashboard/admin/business-types")
-                              ? "text-sidebar-primary-foreground"
-                              : "text-sidebar-accent-foreground"
-                          }`}
+                          )}`}
                         />
                       </span>
 
-                      <span
-                        className={
-                          sidebarCollapsed ? "lg:hidden truncate" : "truncate"
-                        }
-                      >
+                      <span className={navLabelClass}>
                         Business Types
                       </span>
                     </Link>
@@ -799,35 +834,25 @@ export function DashboardShell({
                           "/dashboard/admin/business-product-library"
                         )
                       }
-                      className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                      className={navItemClass(
                         isActive("/dashboard/admin/business-product-library")
-                          ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent"
-                      } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                      )}
                     >
                       <span
-                        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                        className={navIconWrapClass(
+                          "/dashboard/admin/business-product-library",
                           isActive("/dashboard/admin/business-product-library")
-                            ? "bg-sidebar-primary/20"
-                            : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
-                        }`}
+                        )}
                       >
                         <Package
-                          className={`h-4 w-4 ${
-                            isActive(
-                              "/dashboard/admin/business-product-library"
-                            )
-                              ? "text-sidebar-primary-foreground"
-                              : "text-sidebar-accent-foreground"
-                          }`}
+                          className={`h-4 w-4 ${navIconClass(
+                            "/dashboard/admin/business-product-library",
+                            isActive("/dashboard/admin/business-product-library")
+                          )}`}
                         />
                       </span>
 
-                      <span
-                        className={
-                          sidebarCollapsed ? "lg:hidden truncate" : "truncate"
-                        }
-                      >
+                      <span className={navLabelClass}>
                         Product Library
                       </span>
                     </Link>
@@ -845,33 +870,25 @@ export function DashboardShell({
                       onTouchStart={() =>
                         handleNavPrefetch("/dashboard/admin/billing")
                       }
-                      className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                      className={navItemClass(
                         isActive("/dashboard/admin/billing")
-                          ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent"
-                      } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                      )}
                     >
                       <span
-                        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                        className={navIconWrapClass(
+                          "/dashboard/admin/billing",
                           isActive("/dashboard/admin/billing")
-                            ? "bg-sidebar-primary/20"
-                            : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
-                        }`}
+                        )}
                       >
                         <CreditCard
-                          className={`h-4 w-4 ${
+                          className={`h-4 w-4 ${navIconClass(
+                            "/dashboard/admin/billing",
                             isActive("/dashboard/admin/billing")
-                              ? "text-sidebar-primary-foreground"
-                              : "text-sidebar-accent-foreground"
-                          }`}
+                          )}`}
                         />
                       </span>
 
-                      <span
-                        className={
-                          sidebarCollapsed ? "lg:hidden truncate" : "truncate"
-                        }
-                      >
+                      <span className={navLabelClass}>
                         Billing
                       </span>
                     </Link>
@@ -885,33 +902,25 @@ export function DashboardShell({
                       }}
                       onMouseEnter={() => handleNavPrefetch(systemSettingsHref)}
                       onTouchStart={() => handleNavPrefetch(systemSettingsHref)}
-                      className={`group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                      className={navItemClass(
                         pathname === systemSettingsHref
-                          ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent"
-                      } ${sidebarCollapsed ? "lg:justify-center" : ""}`}
+                      )}
                     >
                       <span
-                        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${
+                        className={navIconWrapClass(
+                          systemSettingsHref,
                           pathname === systemSettingsHref
-                            ? "bg-sidebar-primary/20"
-                            : "bg-sidebar-accent group-hover:bg-sidebar-accent/80"
-                        }`}
+                        )}
                       >
                         <Settings
-                          className={`h-4 w-4 ${
+                          className={`h-4 w-4 ${navIconClass(
+                            systemSettingsHref,
                             pathname === systemSettingsHref
-                              ? "text-sidebar-primary-foreground"
-                              : "text-sidebar-accent-foreground"
-                          }`}
+                          )}`}
                         />
                       </span>
 
-                      <span
-                        className={
-                          sidebarCollapsed ? "lg:hidden truncate" : "truncate"
-                        }
-                      >
+                      <span className={navLabelClass}>
                         System Settings
                       </span>
                     </Link>

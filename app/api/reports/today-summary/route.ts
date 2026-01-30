@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-session";
 import { withTracing } from "@/lib/tracing";
 import { getTodaySummaryForShop } from "@/lib/reports/today-summary";
+import { jsonWithEtag } from "@/lib/http/etag";
 
 export async function GET(req: Request) {
   return withTracing(req, "/api/reports/today-summary", async () => {
@@ -15,7 +16,9 @@ export async function GET(req: Request) {
 
       const user = await requireUser();
       const summary = await getTodaySummaryForShop(shopId, user);
-      return NextResponse.json(summary);
+      return jsonWithEtag(req, summary, {
+        cacheControl: "private, no-store",
+      });
     } catch (error) {
       console.error("today-summary error", error);
       return NextResponse.json(

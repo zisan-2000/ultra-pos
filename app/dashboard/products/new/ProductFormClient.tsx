@@ -144,10 +144,14 @@ const BUSINESS_ASSISTS: Record<
 function parseProductText(input: string) {
   const cleaned = input.replace(/টাকা|tk|taka|price/gi, " ").replace(/:/g, " ");
   const priceMatch = cleaned.match(/(\d+(?:[.,]\d+)?)/);
-  const price = priceMatch ? priceMatch[1].replace(",", "") : null;
-  const name = priceMatch
-    ? cleaned.replace(priceMatch[0], " ").replace(/\s+/g, " ").trim()
-    : cleaned.trim();
+  if (!priceMatch) {
+    return { name: input, price: undefined };
+  }
+  const price = priceMatch[1].replace(",", "");
+  const name = cleaned
+    .replace(priceMatch[0], " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return { name, price: price || undefined };
 }
 
@@ -487,6 +491,7 @@ function ProductForm({ shop, businessConfig }: Props) {
   function setNameWithSmartDefaults(raw: string) {
     const parsed = parseProductText(raw);
     const finalName = parsed.name || raw;
+    const nameForInference = finalName.replace(/\s+/g, " ").trim();
 
     if (isFieldVisible("name")) {
       setName(finalName);
@@ -499,14 +504,14 @@ function ProductForm({ shop, businessConfig }: Props) {
     }
 
     if (isFieldVisible("unit")) {
-      const suggested = suggestUnit(finalName, unitOptions);
+      const suggested = suggestUnit(nameForInference, unitOptions);
       if (suggested) {
         setUnitOptions((prev) => (prev.includes(suggested) ? prev : [...prev, suggested]));
         setSelectedUnit(suggested);
       }
     }
 
-    const byCategory = suggestCategoryByName(finalName, businessAssist?.defaultCategory);
+    const byCategory = suggestCategoryByName(nameForInference, businessAssist?.defaultCategory);
     if (byCategory) {
       setCategoryOptions((prev) => (prev.includes(byCategory) ? prev : [...prev, byCategory]));
       setSelectedCategory(byCategory);

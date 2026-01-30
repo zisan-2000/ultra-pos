@@ -43,6 +43,11 @@ const presetDefinitions = [
     permissionNames: [
       "view_dashboard_summary",
       "view_products",
+      "view_purchases",
+      "create_purchase",
+      "view_suppliers",
+      "create_supplier",
+      "create_purchase_payment",
       "view_sales",
       "view_sale_details",
       "create_sale",
@@ -64,6 +69,11 @@ const presetDefinitions = [
     permissionNames: [
       "view_dashboard_summary",
       "view_products",
+      "view_purchases",
+      "create_purchase",
+      "view_suppliers",
+      "create_supplier",
+      "create_purchase_payment",
       "view_sales",
       "view_sale_details",
       "create_sale",

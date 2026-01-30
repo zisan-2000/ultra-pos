@@ -26,6 +26,8 @@ import { scheduleIdle } from "@/lib/schedule-idle";
 import { handlePermissionError } from "@/lib/permission-toast";
 import useInstantReports from "@/hooks/useInstantReports";
 import { reportEvents } from "@/lib/events/reportEvents";
+import { useRealtimeStatus } from "@/lib/realtime/status";
+import { usePageVisibility } from "@/lib/use-page-visibility";
 
 type Summary = {
   sales: { totalAmount: number; completedCount?: number; voidedCount?: number };
@@ -137,6 +139,8 @@ export default function ReportsClient({
   summary,
 }: Props) {
   const online = useOnlineStatus();
+  const realtime = useRealtimeStatus();
+  const isVisible = usePageVisibility();
   const queryClient = useQueryClient();
   
   // World-Class Instant Reports Integration
@@ -154,7 +158,8 @@ export default function ReportsClient({
   const [customTo, setCustomTo] = useState<string | undefined>(undefined);
   const [realTimeIndicator, setRealTimeIndicator] = useState(false);
   const lastEventAtRef = useRef(0);
-  const POLL_INTERVAL_MS = 10_000;
+  const wasVisibleRef = useRef(isVisible);
+  const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
   const EVENT_DEBOUNCE_MS = 600;
   
   // Auto-sync on real-time events
@@ -341,7 +346,7 @@ export default function ReportsClient({
 
   const invalidateLowStock = useCallback(() => {
     queryClient.invalidateQueries({
-      queryKey: ["reports", "low-stock", shopId, REPORT_ROW_LIMIT],
+      queryKey: ["reports", "low-stock", shopId],
     });
   }, [queryClient, shopId]);
 
@@ -515,20 +520,37 @@ export default function ReportsClient({
   }, [online, shopId, fetchSummary, queryClient]);
 
   useEffect(() => {
-    if (!online) return;
+    if (!online || !isVisible) return;
     const intervalId = setInterval(() => {
       const now = Date.now();
-      if (now - lastEventAtRef.current < POLL_INTERVAL_MS / 2) return;
+      if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
       refreshSummaryFresh();
       invalidateActiveReport();
-    }, POLL_INTERVAL_MS);
+    }, pollIntervalMs);
     return () => clearInterval(intervalId);
-  }, [online, refreshSummaryFresh, invalidateActiveReport]);
+  }, [
+    online,
+    isVisible,
+    refreshSummaryFresh,
+    invalidateActiveReport,
+    pollIntervalMs,
+  ]);
+
+  useEffect(() => {
+    if (!online) return;
+    if (wasVisibleRef.current === isVisible) return;
+    wasVisibleRef.current = isVisible;
+    if (!isVisible) return;
+    lastEventAtRef.current = Date.now();
+    refreshSummaryFresh();
+    invalidateActiveReport();
+  }, [online, isVisible, refreshSummaryFresh, invalidateActiveReport]);
 
   useEffect(() => {
     if (!online) return;
     const rangeFrom = range.from ?? "all";
     const rangeTo = range.to ?? "all";
+    const lowStockThreshold = 20;
     const salesKey = [
       "reports",
       "sales",
@@ -562,7 +584,7 @@ export default function ReportsClient({
     const paymentKey = ["reports", "payment", shopId, rangeFrom, rangeTo];
     const profitKey = ["reports", "profit", shopId, rangeFrom, rangeTo];
     const topProductsKey = ["reports", "top-products", shopId, REPORT_ROW_LIMIT];
-    const lowStockKey = ["reports", "low-stock", shopId, REPORT_ROW_LIMIT];
+    const lowStockKey = ["reports", "low-stock", shopId, lowStockThreshold, REPORT_ROW_LIMIT];
 
     const cancel = scheduleIdle(() => {
       const tasks: Promise<unknown>[] = [];
@@ -665,7 +687,7 @@ export default function ReportsClient({
                 if (range.to) params.append("to", range.to);
                 const res = await fetch(
                   `/api/reports/payment-method?${params.toString()}`,
-                  { cache: "no-store" }
+                  { cache: "no-cache" }
                 );
                 if (!res.ok) throw new Error("Payment prefetch failed");
                 const text = await res.text();
@@ -689,7 +711,7 @@ export default function ReportsClient({
                 if (range.to) params.append("to", range.to);
                 const res = await fetch(
                   `/api/reports/profit-trend?${params.toString()}`,
-                  { cache: "no-store" }
+                  { cache: "no-cache" }
                 );
                 if (!res.ok) throw new Error("Profit prefetch failed");
                 const json = await res.json();
@@ -713,7 +735,7 @@ export default function ReportsClient({
                 });
                 const res = await fetch(
                   `/api/reports/top-products?${params.toString()}`,
-                  { cache: "no-store" }
+                  { cache: "no-cache" }
                 );
                 if (!res.ok) throw new Error("Top products prefetch failed");
                 const text = await res.text();
@@ -735,11 +757,12 @@ export default function ReportsClient({
                 const params = new URLSearchParams({
                   shopId,
                   limit: `${REPORT_ROW_LIMIT}`,
+                  threshold: `${lowStockThreshold}`,
                   fresh: "1",
                 });
                 const res = await fetch(
                   `/api/reports/low-stock?${params.toString()}`,
-                  { cache: "no-store" }
+                  { cache: "no-cache" }
                 );
                 if (!res.ok) throw new Error("Low stock prefetch failed");
                 const text = await res.text();

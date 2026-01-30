@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { withTracing } from "@/lib/tracing";
 import { getDhakaDateOnlyRange, getDhakaDayRange } from "@/lib/dhaka-date";
+import { jsonWithEtag } from "@/lib/http/etag";
 
 export async function GET(req: Request) {
   return withTracing(req, "/api/reports/today-mini", async () => {
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
         .filter((c) => c.entryType === "OUT")
         .reduce((sum, c) => sum + Number(c.amount || 0), 0);
 
-      return NextResponse.json({
+      return jsonWithEtag(req, {
         sales: {
           count: salesRows.length,
           totalAmount: Number(salesTotal.toFixed(2)),
@@ -61,6 +62,8 @@ export async function GET(req: Request) {
           balance: Number((cashIn - cashOut).toFixed(2)),
           count: cashRows.length,
         },
+      }, {
+        cacheControl: "private, no-store",
       });
     } catch (error) {
       console.error("today-mini error", error);

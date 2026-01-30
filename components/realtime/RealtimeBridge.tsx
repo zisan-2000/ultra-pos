@@ -16,6 +16,7 @@ import {
   REALTIME_EVENTS,
   type RealtimeEventPayload,
 } from "@/lib/realtime/events";
+import { setRealtimeStatus } from "@/lib/realtime/status";
 
 const TOKEN_REFRESH_MS = 10 * 60_000;
 
@@ -69,6 +70,12 @@ export default function RealtimeBridge() {
   }, [online]);
 
   useEffect(() => {
+    if (!online) {
+      setRealtimeStatus(false);
+    }
+  }, [online]);
+
+  useEffect(() => {
     if (!online || !realtimeUrl) return;
 
     let socket = socketRef.current;
@@ -96,6 +103,7 @@ export default function RealtimeBridge() {
 
     return () => {
       socket?.disconnect();
+      setRealtimeStatus(false);
     };
   }, [online, token, realtimeUrl]);
 
@@ -104,6 +112,7 @@ export default function RealtimeBridge() {
     if (!socket) return;
 
     const handleConnect = () => {
+      setRealtimeStatus(true);
       if (shopId) {
         socket.emit("shop:join", { shopId }, (res?: { ok: boolean }) => {
           if (!res?.ok) {
@@ -116,14 +125,21 @@ export default function RealtimeBridge() {
 
     const handleConnectError = (error: Error) => {
       console.warn("Realtime connection error", error.message);
+      setRealtimeStatus(false);
+    };
+
+    const handleDisconnect = () => {
+      setRealtimeStatus(false);
     };
 
     socket.on("connect", handleConnect);
     socket.on("connect_error", handleConnectError);
+    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
       socket.off("connect_error", handleConnectError);
+      socket.off("disconnect", handleDisconnect);
     };
   }, [shopId]);
 

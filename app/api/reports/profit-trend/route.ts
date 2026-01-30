@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
+import { shopNeedsCogs } from "@/lib/accounting/cogs";
+import { jsonWithEtag } from "@/lib/http/etag";
 
 function parseTimestampRange(from?: string, to?: string) {
   const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -57,6 +59,7 @@ async function computeProfitTrend(
   const { start, end } = parseTimestampRange(from, to);
   const { start: expenseStart, end: expenseEnd } = parseDateOnlyRange(from, to);
   const useUnbounded = !from && !to;
+  const needsCogs = await shopNeedsCogs(shopId);
 
   const salesWhere: Prisma.Sql[] = [
     Prisma.sql` s.shop_id = CAST(${shopId} AS uuid)`,
@@ -81,7 +84,7 @@ async function computeProfitTrend(
     }
   }
 
-  const [salesRows, expenseRows] = await Promise.all([
+  const [salesRows, expenseRows, cogsRows] = await Promise.all([
     prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
       Prisma.sql`
         SELECT
@@ -104,6 +107,21 @@ async function computeProfitTrend(
         ORDER BY day
       `
     ),
+    needsCogs
+      ? prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+          Prisma.sql`
+            SELECT
+              DATE(s.sale_date AT TIME ZONE 'Asia/Dhaka')::text AS day,
+              SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS sum
+            FROM "sale_items" si
+            JOIN "sales" s ON s.id = si.sale_id
+            LEFT JOIN "products" p ON p.id = si.product_id
+            WHERE ${Prisma.join(salesWhere, " AND ")}
+            GROUP BY day
+            ORDER BY day
+          `
+        )
+      : Promise.resolve([]),
   ]);
 
   const salesByDate = new Map<string, number>();
@@ -116,9 +134,15 @@ async function computeProfitTrend(
     expensesByDate.set(row.day, Number(row.sum ?? 0));
   });
 
+  const cogsByDate = new Map<string, number>();
+  cogsRows.forEach((row) => {
+    cogsByDate.set(row.day, Number(row.sum ?? 0));
+  });
+
   const allDates = new Set<string>([
     ...salesByDate.keys(),
     ...expensesByDate.keys(),
+    ...cogsByDate.keys(),
   ]);
 
   return Array.from(allDates)
@@ -126,7 +150,7 @@ async function computeProfitTrend(
     .map((date) => ({
       date,
       sales: salesByDate.get(date) || 0,
-      expense: expensesByDate.get(date) || 0,
+      expense: (expensesByDate.get(date) || 0) + (cogsByDate.get(date) || 0),
     }));
 }
 
@@ -154,7 +178,9 @@ export async function GET(request: NextRequest) {
     const data = fresh
       ? await computeProfitTrend(shopId, from, to)
       : await getProfitTrendCached(shopId, from, to);
-    return NextResponse.json({ data });
+    return jsonWithEtag(request, { data }, {
+      cacheControl: "private, no-cache",
+    });
   } catch (error: any) {
     console.error("Profit trend report error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

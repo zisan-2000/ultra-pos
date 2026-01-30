@@ -52,9 +52,12 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
 
       const res = await fetch(
         `/api/reports/payment-method?${params.toString()}`,
-        { cache: "no-store" }
+        { cache: "no-cache" }
       );
 
+      if (res.status === 304) {
+        return readCached(rangeFrom, rangeTo) ?? [];
+      }
       if (!res.ok) {
         const cached = readCached(rangeFrom, rangeTo);
         if (cached) return cached;

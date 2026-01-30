@@ -5,14 +5,7 @@ import { getDhakaDateOnlyRange, getDhakaDayRange } from "@/lib/dhaka-date";
 import { assertShopAccess } from "@/lib/shop-access";
 import type { UserContext } from "@/lib/rbac";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
-
-const SHOP_TYPES_WITH_COGS = new Set([
-  "mini_grocery",
-  "pharmacy",
-  "clothing",
-  "cosmetics_gift",
-  "mini_wholesale",
-]);
+import { SHOP_TYPES_WITH_COGS } from "@/lib/accounting/cogs";
 
 export type TodaySummary = {
   sales: { total: number; count: number };
@@ -89,7 +82,7 @@ async function computeTodaySummary(
     ? await getCogsTotal(shopId, todayStart, todayEnd)
     : 0;
 
-  const totalExpense = expenseTotalRaw + cogsTotal;
+  const totalExpense = expenseTotalRaw;
   const balance = cashTotals.in - cashTotals.out;
 
   return {
@@ -102,7 +95,7 @@ async function computeTodaySummary(
       count: expenseCount,
       cogs: Number(cogsTotal.toFixed(2)) || 0,
     },
-    profit: Number((salesTotal - totalExpense).toFixed(2)) || 0,
+    profit: Number((salesTotal - totalExpense - cogsTotal).toFixed(2)) || 0,
     cash: {
       in: Number(cashTotals.in.toFixed(2)) || 0,
       out: Number(cashTotals.out.toFixed(2)) || 0,

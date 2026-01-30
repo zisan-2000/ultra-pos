@@ -3,8 +3,13 @@
 import {
   createBusinessProductTemplate,
   deleteBusinessProductTemplate,
+  importBusinessProductTemplates,
   listBusinessProductTemplatesAdmin,
   updateBusinessProductTemplate,
+} from "@/app/actions/business-product-templates";
+import type {
+  BusinessProductTemplateImportInput,
+  BusinessProductTemplateImportResult,
 } from "@/app/actions/business-product-templates";
 import { listBusinessTypes } from "@/app/actions/business-types";
 import { revalidatePath } from "next/cache";
@@ -54,6 +59,15 @@ async function handleDeleteTemplate(formData: FormData) {
   revalidatePath("/dashboard/admin/business-product-library");
 }
 
+async function handleImportTemplates(
+  input: BusinessProductTemplateImportInput,
+): Promise<BusinessProductTemplateImportResult> {
+  "use server";
+  const result = await importBusinessProductTemplates(input);
+  revalidatePath("/dashboard/admin/business-product-library");
+  return result;
+}
+
 export default async function BusinessProductLibraryPage() {
   let templates: Awaited<ReturnType<typeof listBusinessProductTemplatesAdmin>> = [];
   let error: string | null = null;
@@ -79,6 +93,7 @@ export default async function BusinessProductLibraryPage() {
       onCreateTemplate={handleCreateTemplate}
       onUpdateTemplate={handleUpdateTemplate}
       onDeleteTemplate={handleDeleteTemplate}
+      onImportTemplates={handleImportTemplates}
     />
   );
 }

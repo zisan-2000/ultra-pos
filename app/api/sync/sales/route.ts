@@ -13,6 +13,7 @@ import { revalidatePath } from "next/cache";
 import { publishRealtimeEvent } from "@/lib/realtime/publisher";
 import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidateReportsForSale } from "@/lib/reports/revalidate";
+import { shopNeedsCogs } from "@/lib/accounting/cogs";
 
 type IncomingSaleItem = {
   productId: string;
@@ -157,6 +158,21 @@ export async function POST(req: Request) {
           }
         }
 
+        const needsCogs = await shopNeedsCogs(shopId);
+        if (needsCogs) {
+          const missing = dbProducts.filter((p) => p.buyPrice == null);
+          if (missing.length > 0) {
+            const names = missing.map((p) => p.name).slice(0, 5).join(", ");
+            throw new Error(
+              `Purchase price missing for: ${names}${
+                missing.length > 5 ? "..." : ""
+              }. Set buy price to ensure accurate profit.`
+            );
+          }
+        }
+
+        const productMap = new Map(dbProducts.map((p) => [p.id, p]));
+
         // Compute totals from items to avoid trusting client totals.
         let computedTotal = 0;
         for (const item of items) {
@@ -241,11 +257,14 @@ export async function POST(req: Request) {
               Number(item.qty) * Number(item.unitPrice),
               "lineTotal"
             );
+            const product = productMap.get(item.productId);
+            const costAtSale = product?.buyPrice ?? null;
             return {
               saleId: sale.id,
               productId: item.productId,
               quantity: qtyStr,
               unitPrice: unitPriceStr,
+              costAtSale,
               lineTotal,
             };
           });

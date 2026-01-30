@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
+import { jsonWithEtag } from "@/lib/http/etag";
 
 function parseTimestampRange(from?: string, to?: string) {
   const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -88,7 +89,9 @@ export async function GET(request: NextRequest) {
       ? await computePaymentMethodReport(shopId, from, to)
       : await getPaymentMethodCached(shopId, from, to);
 
-    return NextResponse.json({ data });
+    return jsonWithEtag(request, { data }, {
+      cacheControl: "private, no-cache",
+    });
   } catch (error: any) {
     console.error("Payment method report error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

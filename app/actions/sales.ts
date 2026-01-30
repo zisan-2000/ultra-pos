@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 import { publishRealtimeEvent } from "@/lib/realtime/publisher";
 import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidateReportsForSale } from "@/lib/reports/revalidate";
+import { shopNeedsCogs } from "@/lib/accounting/cogs";
 
 type CartItemInput = {
   productId: string;
@@ -140,6 +141,7 @@ export async function createSale(input: CreateSaleInput) {
   const user = await requireUser();
   requirePermission(user, "create_sale");
   await assertShopAccess(input.shopId, user);
+  const needsCogs = await shopNeedsCogs(input.shopId);
 
   const authTime = Date.now();
   console.log(`🔐 [PERF] Auth checks took: ${authTime - warmupTime}ms`);
@@ -182,11 +184,13 @@ export async function createSale(input: CreateSaleInput) {
     throw new Error("Some products not found");
   }
 
+  const productMap = new Map(dbProducts.map((p) => [p.id, p]));
+
   // Validate each item
   let computedTotal = 0;
 
   for (const item of input.items) {
-    const p = dbProducts.find((dp) => dp.id === item.productId);
+    const p = productMap.get(item.productId);
 
     if (!p) throw new Error("Product not found");
 
@@ -199,6 +203,18 @@ export async function createSale(input: CreateSaleInput) {
     }
 
     computedTotal += item.unitPrice * item.qty;
+  }
+
+  if (needsCogs) {
+    const missing = dbProducts.filter((p) => p.buyPrice == null);
+    if (missing.length > 0) {
+      const names = missing.map((p) => p.name).slice(0, 5).join(", ");
+      throw new Error(
+        `Purchase price missing for: ${names}${
+          missing.length > 5 ? "..." : ""
+        }. Set buy price to ensure accurate profit.`
+      );
+    }
   }
 
   const totalStr = computedTotal.toFixed(2); // numeric as string
@@ -244,13 +260,18 @@ export async function createSale(input: CreateSaleInput) {
         : null;
 
     // Create sale items
-    const saleItemRows = input.items.map((item) => ({
-      saleId: inserted.id,
-      productId: item.productId,
-      quantity: item.qty.toString(),
-      unitPrice: item.unitPrice.toFixed(2),
-      lineTotal: (item.qty * item.unitPrice).toFixed(2),
-    }));
+    const saleItemRows = input.items.map((item) => {
+      const product = productMap.get(item.productId);
+      const costAtSale = product?.buyPrice ?? null;
+      return {
+        saleId: inserted.id,
+        productId: item.productId,
+        quantity: item.qty.toString(),
+        unitPrice: item.unitPrice.toFixed(2),
+        costAtSale,
+        lineTotal: (item.qty * item.unitPrice).toFixed(2),
+      };
+    });
     await tx.saleItem.createMany({ data: saleItemRows });
 
     // Create cash entry if needed

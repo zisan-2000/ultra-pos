@@ -20,6 +20,8 @@ export type ModuleKey =
   | "dashboard"
   | "shops"
   | "products"
+  | "purchases"
+  | "suppliers"
   | "sales"
   | "customers"
   | "expenses"
@@ -35,6 +37,8 @@ export const moduleLabels: Record<ModuleKey, string> = {
   dashboard: "ড্যাশবোর্ড",
   shops: "দোকান",
   products: "পণ্য",
+  purchases: "পণ্য ক্রয়",
+  suppliers: "সরবরাহকারী",
   sales: "বিক্রি",
   customers: "কাস্টমার / বকেয়া",
   expenses: "খরচ",
@@ -72,6 +76,11 @@ export const permissionMeta: Record<string, PermissionMeta> = {
   update_product_price: { label: "মূল্য আপডেট", module: "products" },
   manage_product_status: { label: "পণ্যের স্ট্যাটাস টগল", module: "products" },
   import_products: { label: "পণ্য ইম্পোর্ট", module: "products" },
+  view_purchases: { label: "ক্রয় দেখা", module: "purchases" },
+  create_purchase: { label: "নতুন ক্রয় যোগ", module: "purchases" },
+  view_suppliers: { label: "সরবরাহকারী দেখা", module: "suppliers" },
+  create_supplier: { label: "সরবরাহকারী যোগ", module: "suppliers" },
+  create_purchase_payment: { label: "ক্রয় পরিশোধ", module: "suppliers" },
   view_sales: { label: "বিক্রি দেখা", module: "sales" },
   view_sale_details: { label: "বিক্রি ডিটেইলস", module: "sales" },
   create_sale: { label: "নতুন বিক্রি", module: "sales" },

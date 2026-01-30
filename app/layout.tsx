@@ -6,6 +6,7 @@ import ThemeScript from "@/components/theme-script";
 import QueryProvider from "@/components/providers/QueryProvider";
 import ServiceWorkerRegister from "@/components/service-worker-register";
 import PWAInstallPrompt from "@/components/pwa-install-prompt";
+import CssHealthGuard from "@/components/css-health-guard";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -45,6 +46,7 @@ export default function RootLayout({
       >
         <QueryProvider>
           <ServiceWorkerRegister />
+          <CssHealthGuard />
           <PWAInstallPrompt />
           {children}
         </QueryProvider>

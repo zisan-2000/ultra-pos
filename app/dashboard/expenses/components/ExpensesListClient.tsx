@@ -11,6 +11,8 @@ import { db } from "@/lib/dexie/db";
 import { ExpensesDeleteButton } from "./ExpensesDeleteButton";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
+import { useRealtimeStatus } from "@/lib/realtime/status";
+import { usePageVisibility } from "@/lib/use-page-visibility";
 
 type Expense = {
   id: string;
@@ -18,6 +20,8 @@ type Expense = {
   category: string;
   note?: string | null;
   expenseDate?: string | Date | null;
+  createdAt?: string | number | Date | null;
+  syncStatus?: "new" | "updated" | "deleted" | "synced";
 };
 
 type Props = {
@@ -57,6 +61,16 @@ function formatDate(d: Date) {
   const m = `${d.getMonth() + 1}`.padStart(2, "0");
   const day = `${d.getDate()}`.padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function formatTime(input?: string | number | Date | null) {
+  if (!input) return "";
+  const date = new Date(input as any);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("bn-BD", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function computeRange(preset: RangePreset, customFrom?: string, customTo?: string) {
@@ -117,6 +131,8 @@ export function ExpensesListClient({
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
+  const realtime = useRealtimeStatus();
+  const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<Expense[]>(expenses);
   const [preset, setPreset] = useState<RangePreset>("today");
@@ -127,7 +143,8 @@ export function ExpensesListClient({
   const lastRefreshAtRef = useRef(0);
   const REFRESH_MIN_INTERVAL_MS = 2_000;
   const lastEventAtRef = useRef(0);
-  const POLL_INTERVAL_MS = 10_000;
+  const wasVisibleRef = useRef(isVisible);
+  const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
   const EVENT_DEBOUNCE_MS = 800;
 
   const canApplyCustom = (() => {
@@ -174,6 +191,7 @@ export function ExpensesListClient({
 
     const handleExpenseUpdate = (event: ReportEventData) => {
       if (event.shopId !== shopId) return;
+      if (event.metadata?.source === "ui" && realtime.connected) return;
       const now = event.timestamp ?? Date.now();
       if (now - lastEventAtRef.current < EVENT_DEBOUNCE_MS) return;
       if (refreshInFlightRef.current) return;
@@ -193,23 +211,38 @@ export function ExpensesListClient({
     return () => {
       reportEvents.removeListener(listenerId);
     };
-  }, [online, router, shopId]);
+  }, [online, realtime.connected, router, shopId]);
 
   useEffect(() => {
-    if (!online) return;
+    if (!online || !isVisible) return;
     const intervalId = setInterval(() => {
       const now = Date.now();
-      if (now - lastEventAtRef.current < POLL_INTERVAL_MS / 2) return;
+      if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
       if (refreshInFlightRef.current) return;
       if (syncing || pendingCount > 0) return;
       if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
       lastRefreshAtRef.current = now;
       refreshInFlightRef.current = true;
       router.refresh();
-    }, POLL_INTERVAL_MS);
+    }, pollIntervalMs);
 
     return () => clearInterval(intervalId);
-  }, [online, router, syncing, pendingCount]);
+  }, [online, isVisible, router, syncing, pendingCount, pollIntervalMs]);
+
+  useEffect(() => {
+    if (!online) return;
+    if (wasVisibleRef.current === isVisible) return;
+    wasVisibleRef.current = isVisible;
+    if (!isVisible) return;
+    const now = Date.now();
+    if (refreshInFlightRef.current) return;
+    if (syncing || pendingCount > 0) return;
+    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+    lastEventAtRef.current = now;
+    lastRefreshAtRef.current = now;
+    refreshInFlightRef.current = true;
+    router.refresh();
+  }, [online, isVisible, router, syncing, pendingCount]);
 
   // Keep Dexie/cache synced for offline use
   useEffect(() => {
@@ -235,6 +268,8 @@ export function ExpensesListClient({
             category: r.category,
             note: r.note,
             expenseDate: r.expenseDate,
+            createdAt: r.createdAt,
+            syncStatus: r.syncStatus,
           }))
         );
       } catch (err) {
@@ -251,7 +286,12 @@ export function ExpensesListClient({
         };
       }
 
-      setItems(expenses);
+      setItems(
+        expenses.map((e) => ({
+          ...e,
+          syncStatus: "synced",
+        }))
+      );
       const rows = expenses.map((e) => ({
         id: e.id,
         shopId,
@@ -262,7 +302,12 @@ export function ExpensesListClient({
         expenseDate: e.expenseDate
           ? new Date(e.expenseDate as any).toISOString().slice(0, 10)
           : new Date().toISOString().slice(0, 10),
-        createdAt: Date.now(),
+        createdAt: (() => {
+          const raw = (e as any).createdAt;
+          if (!raw) return Date.now();
+          const ts = new Date(raw as any).getTime();
+          return Number.isFinite(ts) ? ts : Date.now();
+        })(),
         syncStatus: "synced" as const,
       }));
       db.expenses
@@ -526,12 +571,33 @@ export function ExpensesListClient({
             const expenseDateStr = e.expenseDate
               ? new Date(e.expenseDate as any).toISOString().slice(0, 10)
               : "-";
+            const timeStr =
+              formatTime(e.createdAt) ||
+              (typeof e.expenseDate === "string" && e.expenseDate.includes("T")
+                ? formatTime(e.expenseDate)
+                : "");
 
             return (
               <div
                 key={e.id}
-                className="bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all"
+                className="relative bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all"
               >
+                <div className="absolute right-3 top-3 sm:hidden">
+                  {timeStr ? (
+                    <span className="inline-flex flex-col items-start justify-center rounded-2xl bg-card px-3 py-1 font-semibold text-muted-foreground border border-border leading-tight shadow-sm">
+                      <span className="inline-flex items-center gap-1 text-[11px]">
+                        🕒 {timeStr}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[11px]">
+                        📅 {expenseDateStr}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex h-7 items-center rounded-full bg-card px-3 font-semibold text-muted-foreground border border-border shadow-sm">
+                      📅 {expenseDateStr}
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-2">
                     <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
@@ -544,9 +610,6 @@ export function ExpensesListClient({
                       <span className="inline-flex h-7 items-center rounded-full bg-primary-soft/70 px-3 font-semibold text-primary border border-primary/30">
                         {e.category}
                       </span>
-                      <span className="inline-flex h-7 items-center rounded-full bg-card px-3 font-semibold text-muted-foreground border border-border">
-                        📅 {expenseDateStr}
-                      </span>
                     </div>
                     {e.note ? (
                       <p className="text-xs text-muted-foreground leading-snug">
@@ -554,23 +617,45 @@ export function ExpensesListClient({
                       </p>
                     ) : null}
                   </div>
-                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[140px] sm:items-end">
-                    {online ? (
-                      <Link
-                        href={`/dashboard/expenses/${e.id}`}
-                        className="inline-flex h-10 items-center justify-center rounded-xl bg-primary-soft text-primary text-sm font-semibold border border-primary/30 shadow-sm hover:bg-primary/15 hover:border-primary/40"
-                      >
-                        দেখুন
-                      </Link>
-                    ) : (
-                      <span className="inline-flex h-10 items-center justify-center rounded-xl bg-warning-soft text-warning text-xs font-semibold border border-warning/30">
-                        Offline মোড
-                      </span>
-                    )}
-                    <ExpensesDeleteButton
-                      id={e.id}
-                      onDeleted={handleOptimisticDelete}
-                    />
+                  <div className="w-full sm:w-auto sm:min-w-[220px] sm:items-end">
+                    <div className="hidden sm:flex justify-start sm:justify-end">
+                      {timeStr ? (
+                        <span className="inline-flex flex-col items-start justify-center rounded-2xl bg-card px-3 py-1 font-semibold text-muted-foreground border border-border leading-tight shadow-sm">
+                          <span className="inline-flex items-center gap-1 text-[11px]">
+                            🕒 {timeStr}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[11px]">
+                            📅 {expenseDateStr}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex h-7 items-center rounded-full bg-card px-3 font-semibold text-muted-foreground border border-border shadow-sm">
+                          📅 {expenseDateStr}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 grid w-full grid-cols-2 gap-2 sm:justify-end">
+                      {online ? (
+                        <Link
+                          href={`/dashboard/expenses/${e.id}`}
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary text-sm font-semibold border border-primary/30 shadow-sm hover:bg-primary/15 hover:border-primary/40 w-full"
+                        >
+                          👁️ দেখুন
+                        </Link>
+                      ) : (
+                        <span className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-warning-soft text-warning text-xs font-semibold border border-warning/30 w-full">
+                          📡 Offline
+                        </span>
+                      )}
+                      <ExpensesDeleteButton
+                        id={e.id}
+                        shopId={shopId}
+                        amount={amountNum}
+                        syncStatus={e.syncStatus}
+                        onDeleted={handleOptimisticDelete}
+                        className="h-10 rounded-xl text-sm"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

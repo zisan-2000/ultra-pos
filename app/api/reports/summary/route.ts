@@ -13,6 +13,7 @@ import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { reportError } from "@/lib/monitoring";
 import { withTracing } from "@/lib/tracing";
+import { jsonWithEtag } from "@/lib/http/etag";
 
 export async function GET(req: Request) {
   return withTracing(req, "/api/reports/summary", async () => {
@@ -46,7 +47,9 @@ export async function GET(req: Request) {
             ]
       );
 
-      return NextResponse.json({ sales, expense, cash, profit });
+      return jsonWithEtag(req, { sales, expense, cash, profit }, {
+        cacheControl: "private, no-store",
+      });
     } catch (err) {
       console.error("summary report error", err);
       await reportError(err, { route: "/api/reports/summary" });

@@ -10,8 +10,9 @@ export function GET() {
   return new NextResponse(swSource, {
     headers: {
       "Content-Type": "application/javascript",
-      // Aggressive caching is safe; SW versioning is controlled via CACHE_NAME bump.
-      "Cache-Control": "public, max-age=31536000, immutable",
+      // Ensure the browser checks for SW updates on each navigation.
+      "Cache-Control": "no-cache, max-age=0, must-revalidate",
+      "Service-Worker-Allowed": "/",
     },
   });
 }

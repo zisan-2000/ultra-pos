@@ -30,6 +30,7 @@ export interface ReportUpdate {
     cashEntryId?: string;
     previousAmount?: number;
     timestamp?: number;
+    skipCount?: boolean;
   };
 }
 
@@ -178,8 +179,16 @@ export const useRealTimeReports = (shopId: string) => {
       (old: Summary): Summary => {
         if (!old) return old;
         
-        const expenseTotalChange = operation === 'add' ? amount : -amount;
-        const countChange = operation === 'add' ? 1 : operation === 'subtract' ? -1 : 0;
+        const expenseTotalChange =
+          operation === 'add' ? amount : operation === 'subtract' ? -amount : 0;
+        const shouldSkipCount = metadata?.skipCount === true;
+        const countChange = shouldSkipCount
+          ? 0
+          : operation === 'add'
+          ? 1
+          : operation === 'subtract'
+          ? -1
+          : 0;
         
         return {
           ...old,

@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { useRealtimeStatus } from "@/lib/realtime/status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
 import useRealTimeReports from "@/hooks/useRealTimeReports";
@@ -93,6 +94,7 @@ export default function ExpenseFormClient({
   const realTimeReports = useRealTimeReports(shopId);
   
   const online = useOnlineStatus();
+  const realtime = useRealtimeStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
@@ -261,49 +263,106 @@ export default function ExpenseFormClient({
       persistTemplates(mergeTemplates(templates, template));
     }
 
-    // World-Class Real-time Update: Instant optimistic update
-    const updateId = realTimeReports.updateExpenseReport(
-      expenseAmount,
-      'add',
-      {
-        expenseId: id || crypto.randomUUID(),
-        timestamp: Date.now()
+    const isEdit = Boolean(id);
+    const expenseId = id || crypto.randomUUID();
+    const previousAmountRaw = initialValues?.amount;
+    const previousAmount = previousAmountRaw ? Number(previousAmountRaw) : NaN;
+    const shouldOptimisticallyUpdate = !online || !realtime.connected;
+    let updateId: string | undefined;
+    let pendingEvent: {
+      payload: {
+        type: "expense";
+        operation: "add" | "subtract";
+        amount: number;
+        shopId: string;
+        metadata?: {
+          expenseId?: string;
+          previousAmount?: number;
+          timestamp?: number;
+          skipCount?: boolean;
+        };
+      };
+      correlationId?: string;
+    } | null = null;
+
+    if (shouldOptimisticallyUpdate && Number.isFinite(expenseAmount)) {
+      let op: "add" | "subtract" | null = null;
+      let deltaAmount = 0;
+      let skipCount = false;
+
+      if (isEdit && Number.isFinite(previousAmount)) {
+        const delta = Number((expenseAmount - previousAmount).toFixed(2));
+        if (delta !== 0) {
+          op = delta > 0 ? "add" : "subtract";
+          deltaAmount = Math.abs(delta);
+          skipCount = true;
+        }
+      } else {
+        op = "add";
+        deltaAmount = expenseAmount;
       }
-    );
-    
-    // Emit real-time event
-    emitExpenseUpdate(shopId, {
-      type: 'expense',
-      operation: 'add',
-      amount: expenseAmount,
-      shopId,
-      metadata: {
-        expenseId: id || crypto.randomUUID(),
-        timestamp: Date.now()
+
+      if (op && deltaAmount > 0) {
+        updateId = realTimeReports.updateExpenseReport(deltaAmount, op, {
+          expenseId,
+          previousAmount: Number.isFinite(previousAmount) ? previousAmount : undefined,
+          timestamp: Date.now(),
+          skipCount,
+        });
+
+        const eventPayload = {
+          type: "expense" as const,
+          operation: op,
+          amount: deltaAmount,
+          shopId,
+          metadata: {
+            expenseId,
+            previousAmount: Number.isFinite(previousAmount) ? previousAmount : undefined,
+            timestamp: Date.now(),
+            skipCount,
+          },
+        };
+
+        if (online) {
+          pendingEvent = { payload: eventPayload, correlationId: updateId };
+        } else {
+          emitExpenseUpdate(shopId, eventPayload, {
+            source: "ui",
+            priority: "high",
+            correlationId: updateId,
+          });
+        }
       }
-    }, {
-      source: 'ui',
-      priority: 'high',
-      correlationId: updateId
-    });
+    }
 
     if (online) {
       try {
         await action(form);
+        if (pendingEvent) {
+          emitExpenseUpdate(shopId, pendingEvent.payload, {
+            source: "ui",
+            priority: "high",
+            correlationId: pendingEvent.correlationId,
+          });
+        }
         // Background sync for consistency
         setTimeout(() => {
-          realTimeReports.syncWithServer(updateId);
+          if (updateId) {
+            realTimeReports.syncWithServer(updateId);
+          } else {
+            realTimeReports.syncWithServer();
+          }
         }, 500);
       } catch (error) {
         // Rollback on error
-        realTimeReports.rollbackLastUpdate();
+        if (updateId) {
+          realTimeReports.rollbackLastUpdate();
+        }
         console.error('Expense creation failed:', error);
       }
       return;
     }
 
-    const isEdit = Boolean(id);
-    const expenseId = id || crypto.randomUUID();
     const payload = {
       id: expenseId,
       shopId,

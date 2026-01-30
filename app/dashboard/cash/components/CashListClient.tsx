@@ -11,6 +11,8 @@ import { db } from "@/lib/dexie/db";
 import { CashDeleteButton } from "./CashDeleteButton";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
+import { useRealtimeStatus } from "@/lib/realtime/status";
+import { usePageVisibility } from "@/lib/use-page-visibility";
 
 type CashEntry = {
   id: string;
@@ -137,6 +139,8 @@ export function CashListClient({
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
+  const realtime = useRealtimeStatus();
+  const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<CashEntry[]>(rows);
   const [preset, setPreset] = useState<RangePreset>("today");
@@ -147,7 +151,8 @@ export function CashListClient({
   const lastRefreshAtRef = useRef(0);
   const REFRESH_MIN_INTERVAL_MS = 2_000;
   const lastEventAtRef = useRef(0);
-  const POLL_INTERVAL_MS = 10_000;
+  const wasVisibleRef = useRef(isVisible);
+  const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
   const EVENT_DEBOUNCE_MS = 800;
 
   const canApplyCustom = (() => {
@@ -229,20 +234,35 @@ export function CashListClient({
   }, [online, router, shopId]);
 
   useEffect(() => {
-    if (!online) return;
+    if (!online || !isVisible) return;
     const intervalId = setInterval(() => {
       const now = Date.now();
-      if (now - lastEventAtRef.current < POLL_INTERVAL_MS / 2) return;
+      if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
       if (refreshInFlightRef.current) return;
       if (syncing || pendingCount > 0) return;
       if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
       lastRefreshAtRef.current = now;
       refreshInFlightRef.current = true;
       router.refresh();
-    }, POLL_INTERVAL_MS);
+    }, pollIntervalMs);
 
     return () => clearInterval(intervalId);
-  }, [online, router, syncing, pendingCount]);
+  }, [online, isVisible, router, syncing, pendingCount, pollIntervalMs]);
+
+  useEffect(() => {
+    if (!online) return;
+    if (wasVisibleRef.current === isVisible) return;
+    wasVisibleRef.current = isVisible;
+    if (!isVisible) return;
+    const now = Date.now();
+    if (refreshInFlightRef.current) return;
+    if (syncing || pendingCount > 0) return;
+    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+    lastEventAtRef.current = now;
+    lastRefreshAtRef.current = now;
+    refreshInFlightRef.current = true;
+    router.refresh();
+  }, [online, isVisible, router, syncing, pendingCount]);
 
   useEffect(() => {
     let cancelled = false;

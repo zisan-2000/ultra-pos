@@ -8,6 +8,8 @@ import { requireUser } from "@/lib/auth-session";
 import { resolveBillingStatus } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
 import { getTodaySummaryForShop } from "@/lib/reports/today-summary";
+import { shopNeedsCogs } from "@/lib/accounting/cogs";
+import { getPayablesSummary } from "@/app/actions/purchases";
 import OwnerDashboardClient from "./OwnerDashboardClient";
 
 type DashboardPageProps = {
@@ -45,39 +47,48 @@ export default async function OwnerDashboardPage({
 
   const shopSnapshot = shops.map((shop) => ({ id: shop.id, name: shop.name }));
 
-  const [summary, supportContact, subscription, invoice] = await Promise.all([
-    getTodaySummaryForShop(selectedShopId, user),
-    getSupportContact(),
-    prisma.shopSubscription.findUnique({
-      where: { shopId: selectedShopId },
-      select: {
-        status: true,
-        currentPeriodEnd: true,
-        trialEndsAt: true,
-        graceEndsAt: true,
-      },
-    }),
-    prisma.invoice.findFirst({
-      where: { shopId: selectedShopId },
-      select: {
-        id: true,
-        status: true,
-        dueDate: true,
-        periodEnd: true,
-        paidAt: true,
-        amount: true,
-        paymentRequests: {
-          where: {
-            ownerId: user.id,
-            status: "pending",
-          },
-          select: { id: true },
-          take: 1,
+  let payables = { totalDue: 0, dueCount: 0, supplierCount: 0 };
+  try {
+    payables = await getPayablesSummary(selectedShopId);
+  } catch {
+    // If permission missing, silently skip payables
+  }
+
+  const [summary, supportContact, subscription, invoice, needsCogs] =
+    await Promise.all([
+      getTodaySummaryForShop(selectedShopId, user),
+      getSupportContact(),
+      prisma.shopSubscription.findUnique({
+        where: { shopId: selectedShopId },
+        select: {
+          status: true,
+          currentPeriodEnd: true,
+          trialEndsAt: true,
+          graceEndsAt: true,
         },
-      },
-      orderBy: { periodEnd: "desc" },
-    }),
-  ]);
+      }),
+      prisma.invoice.findFirst({
+        where: { shopId: selectedShopId },
+        select: {
+          id: true,
+          status: true,
+          dueDate: true,
+          periodEnd: true,
+          paidAt: true,
+          amount: true,
+          paymentRequests: {
+            where: {
+              ownerId: user.id,
+              status: "pending",
+            },
+            select: { id: true },
+            take: 1,
+          },
+        },
+        orderBy: { periodEnd: "desc" },
+      }),
+      shopNeedsCogs(selectedShopId),
+    ]);
 
   const paymentRequest = invoice?.paymentRequests?.[0] ?? null;
 
@@ -107,6 +118,8 @@ export default async function OwnerDashboardPage({
         shopId: selectedShopId,
         shops: shopSnapshot,
         summary,
+        needsCogs,
+        payables,
         billing: {
           status: billingStatus,
           invoiceId: invoice?.id ?? null,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCustomerStatement } from "@/app/actions/customers";
+import { jsonWithEtag } from "@/lib/http/etag";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -14,5 +15,7 @@ export async function GET(req: Request) {
   }
 
   const data = await getCustomerStatement(shopId, customerId);
-  return NextResponse.json({ data });
+  return jsonWithEtag(req, { data }, {
+    cacheControl: "private, no-cache",
+  });
 }

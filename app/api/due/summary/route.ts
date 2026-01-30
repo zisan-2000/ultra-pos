@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDueSummary } from "@/app/actions/customers";
+import { jsonWithEtag } from "@/lib/http/etag";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -10,5 +11,7 @@ export async function GET(req: Request) {
   }
 
   const summary = await getDueSummary(shopId);
-  return NextResponse.json(summary);
+  return jsonWithEtag(req, summary, {
+    cacheControl: "private, no-store",
+  });
 }

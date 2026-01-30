@@ -17,7 +17,7 @@ import { useSyncStatus } from "@/lib/sync/sync-status";
 
 type Summary = {
   sales?: { total?: number } | number;
-  expenses?: { total?: number } | number;
+  expenses?: { total?: number; cogs?: number } | number;
   profit?: number;
   cash?: { balance?: number } | null;
   balance?: number;
@@ -46,6 +46,8 @@ type OwnerDashboardData = {
   shopId: string;
   shops: Shop[];
   summary: Summary;
+  needsCogs?: boolean;
+  payables?: { totalDue: number; dueCount: number; supplierCount: number };
   billing?: BillingInfo;
   supportContact?: SupportContact;
 };
@@ -158,7 +160,14 @@ export default function OwnerDashboardClient({
 
   const salesTotal = Number(getSummaryTotal(data.summary?.sales));
   const expenseTotal = Number(getSummaryTotal(data.summary?.expenses));
+  const cogsTotal =
+    typeof data.summary?.expenses === "object"
+      ? Number(data.summary?.expenses?.cogs ?? 0)
+      : 0;
   const profitTotal = Number(data.summary?.profit ?? 0);
+  const payableTotal = Number(data.payables?.totalDue ?? 0);
+  const payableCount = Number(data.payables?.dueCount ?? 0);
+  const payableSuppliers = Number(data.payables?.supplierCount ?? 0);
   const cashBalance = Number(
     data.summary?.cash?.balance ?? data.summary?.balance ?? 0
   );
@@ -423,6 +432,15 @@ export default function OwnerDashboardClient({
             icon="💸"
           />
 
+          {data.needsCogs ? (
+            <Card
+              title="আজকের COGS"
+              value={`${cogsTotal.toFixed(2)} ৳`}
+              color="warning"
+              icon="📦"
+            />
+          ) : null}
+
           <Card
             title="আজকের লাভ"
             value={`${profitTotal.toFixed(2)} ৳`}
@@ -437,6 +455,21 @@ export default function OwnerDashboardClient({
             icon="🏦"
           />
         </div>
+
+        <div className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">সরবরাহকারী বাকি</p>
+              <p className="text-lg font-bold text-foreground">
+                ৳ {payableTotal.toFixed(2)}
+              </p>
+            </div>
+            <div className="text-right text-xs text-muted-foreground">
+              <div>বাকি ইনভয়েস: {payableCount}</div>
+              <div>সরবরাহকারী: {payableSuppliers}</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
@@ -447,13 +480,13 @@ export default function OwnerDashboardClient({
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <Link
             href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-            className="group relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary-soft/60 via-card to-card p-3 text-left shadow-sm transition hover:shadow-md pressable"
+            className="group relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary-soft/60 via-card to-card p-3.5 text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] pressable min-h-[120px]"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 text-primary text-lg">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary text-lg ring-1 ring-primary/20">
               ⚡
             </span>
             <div className="mt-2 space-y-1">
-              <p className="text-sm font-semibold text-foreground">
+              <p className="text-sm font-bold text-foreground">
                 নতুন বিক্রি
               </p>
               <p className="text-xs text-muted-foreground">POS শুরু করুন</p>
@@ -462,65 +495,65 @@ export default function OwnerDashboardClient({
 
           <Link
             href={`/dashboard/due?shopId=${selectedShopId}`}
-            className="group relative overflow-hidden rounded-2xl border border-warning/30 bg-gradient-to-br from-warning-soft/70 via-card to-card p-3 text-left shadow-sm transition hover:shadow-md pressable"
+            className="group relative overflow-hidden rounded-2xl border border-warning/20 bg-gradient-to-br from-warning-soft/70 via-card to-card p-3.5 text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] pressable min-h-[120px]"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-warning/15 text-warning text-lg">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-warning/15 text-warning text-lg ring-1 ring-warning/20">
               🧾
             </span>
             <div className="mt-2 space-y-1">
-              <p className="text-sm font-semibold text-foreground">ধার বাকি</p>
+              <p className="text-sm font-bold text-foreground">ধার বাকি</p>
               <p className="text-xs text-muted-foreground">বাকি লিখে রাখুন</p>
             </div>
           </Link>
 
           <Link
             href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
-            className="group relative overflow-hidden rounded-2xl border border-danger/30 bg-gradient-to-br from-danger-soft/60 via-card to-card p-3 text-left shadow-sm transition hover:shadow-md pressable"
+            className="group relative overflow-hidden rounded-2xl border border-danger/20 bg-gradient-to-br from-danger-soft/60 via-card to-card p-3.5 text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] pressable min-h-[120px]"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-danger/15 text-danger text-lg">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-danger/15 text-danger text-lg ring-1 ring-danger/20">
               💸
             </span>
             <div className="mt-2 space-y-1">
-              <p className="text-sm font-semibold text-foreground">খরচ যোগ</p>
+              <p className="text-sm font-bold text-foreground">খরচ যোগ</p>
               <p className="text-xs text-muted-foreground">দ্রুত খরচ লিখুন</p>
             </div>
           </Link>
 
           <Link
             href={`/dashboard/cash?shopId=${selectedShopId}`}
-            className="group relative overflow-hidden rounded-2xl border border-success/30 bg-gradient-to-br from-success-soft/60 via-card to-card p-3 text-left shadow-sm transition hover:shadow-md pressable"
+            className="group relative overflow-hidden rounded-2xl border border-success/20 bg-gradient-to-br from-success-soft/60 via-card to-card p-3.5 text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] pressable min-h-[120px]"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-success/15 text-success text-lg">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-success/15 text-success text-lg ring-1 ring-success/20">
               💵
             </span>
             <div className="mt-2 space-y-1">
-              <p className="text-sm font-semibold text-foreground">ক্যাশবুক</p>
+              <p className="text-sm font-bold text-foreground">ক্যাশবুক</p>
               <p className="text-xs text-muted-foreground">লেনদেন দেখুন</p>
             </div>
           </Link>
 
           <Link
             href={`/dashboard/products/new?shopId=${selectedShopId}`}
-            className="group relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 p-3 text-left shadow-sm transition hover:shadow-md pressable"
+            className="group relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-muted/30 p-3.5 text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] pressable min-h-[120px]"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground text-lg">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground text-lg ring-1 ring-border">
               🧺
             </span>
             <div className="mt-2 space-y-1">
-              <p className="text-sm font-semibold text-foreground">পণ্য যোগ</p>
+              <p className="text-sm font-bold text-foreground">পণ্য যোগ</p>
               <p className="text-xs text-muted-foreground">নতুন পণ্য বানান</p>
             </div>
           </Link>
 
           <Link
             href={`/dashboard/reports?shopId=${selectedShopId}`}
-            className="group relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 p-3 text-left shadow-sm transition hover:shadow-md pressable"
+            className="group relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-muted/30 p-3.5 text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] pressable min-h-[120px]"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground text-lg">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground text-lg ring-1 ring-border">
               📊
             </span>
             <div className="mt-2 space-y-1">
-              <p className="text-sm font-semibold text-foreground">রিপোর্ট</p>
+              <p className="text-sm font-bold text-foreground">রিপোর্ট</p>
               <p className="text-xs text-muted-foreground">ইনসাইট দেখুন</p>
             </div>
           </Link>

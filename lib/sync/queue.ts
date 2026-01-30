@@ -61,3 +61,16 @@ export async function queueIncrementRetry(id: number) {
 export async function queueClear() {
   await db.queue.clear();
 }
+
+// ---------------------------------------------
+// REMOVE EXPENSE QUEUE ITEMS BY EXPENSE ID
+// (used when a local-only expense is deleted before sync)
+// ---------------------------------------------
+export async function queueRemoveExpenseById(expenseId: string) {
+  if (!expenseId) return;
+  const items = await db.queue.where("type").equals("expense").toArray();
+  const matches = items.filter((item) => item.payload?.id === expenseId);
+  await Promise.all(
+    matches.map((item) => (item.id !== undefined ? db.queue.delete(item.id) : Promise.resolve()))
+  );
+}

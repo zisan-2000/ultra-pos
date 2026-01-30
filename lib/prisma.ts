@@ -1,15 +1,22 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 // Reuse a single Prisma instance in dev to avoid exhausting connections.
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
+const devLogLevels: Prisma.LogLevel[] = [
+  ...(process.env.PRISMA_LOG_QUERIES === "1"
+    ? (["query"] as Prisma.LogLevel[])
+    : []),
+  "error",
+  "warn",
+];
+
+const prodLogLevels: Prisma.LogLevel[] = ["error", "warn"];
+
 const prismaClient =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log:
-      process.env.NODE_ENV === "development"
-        ? ["query", "error", "warn"]
-        : ["error", "warn"],
+    log: process.env.NODE_ENV === "development" ? devLogLevels : prodLogLevels,
   });
 
 // Simple slow-query logger; guard for Accelerate/Data Proxy where $use is unavailable.

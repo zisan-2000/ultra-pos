@@ -45,8 +45,11 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
       fresh: "1",
     });
     const res = await fetch(`/api/reports/top-products?${params.toString()}`, {
-      cache: "no-store",
+      cache: "no-cache",
     });
+    if (res.status === 304) {
+      return readCached() ?? [];
+    }
     if (!res.ok) {
       const cached = readCached();
       if (cached) return cached;

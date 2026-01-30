@@ -51,8 +51,11 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
 
       params.append("fresh", "1");
       const res = await fetch(`/api/reports/profit-trend?${params.toString()}`, {
-        cache: "no-store",
+        cache: "no-cache",
       });
+      if (res.status === 304) {
+        return readCached(rangeFrom, rangeTo) ?? [];
+      }
       if (!res.ok) {
         const cached = readCached(rangeFrom, rangeTo);
         if (cached) return cached;
@@ -139,7 +142,9 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
               </span>
               <div>
                 <h2 className="text-lg font-bold text-foreground">লাভের প্রবণতা</h2>
-                <p className="text-xs text-muted-foreground">দিনওয়ারি লাভ/খরচ</p>
+                <p className="text-xs text-muted-foreground">
+                  দিনওয়ারি লাভ/খরচ (COGS সহ)
+                </p>
               </div>
             </div>
           </div>
@@ -158,7 +163,9 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
             <tr>
               <th className="p-3 text-left text-foreground">তারিখ</th>
               <th className="p-3 text-right text-foreground">বিক্রি (৳)</th>
-              <th className="p-3 text-right text-foreground">খরচ (৳)</th>
+              <th className="p-3 text-right text-foreground">
+                খরচ + COGS (৳)
+              </th>
               <th className="p-3 text-right text-foreground">লাভ (৳)</th>
             </tr>
           </thead>
@@ -260,7 +267,9 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
                         </p>
                       </div>
                       <div className="bg-muted/60 rounded-xl p-3">
-                        <p className="text-xs text-muted-foreground">খরচ</p>
+                        <p className="text-xs text-muted-foreground">
+                          খরচ + COGS
+                        </p>
                         <p className="text-base font-semibold text-foreground">
                           {Number(row.expense || 0).toFixed(2)} ৳
                         </p>

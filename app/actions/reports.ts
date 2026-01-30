@@ -9,6 +9,7 @@ import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { unstable_cache } from "next/cache";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
+import { shopNeedsCogs } from "@/lib/accounting/cogs";
 
 /* --------------------------------------------------
    DATE FILTER HELPER
@@ -64,20 +65,6 @@ function clampRange(start?: Date | null, end?: Date | null, maxDays = 90) {
   return bounded;
 }
 
-const SHOP_TYPES_WITH_COGS = new Set([
-  "mini_grocery",
-  "pharmacy",
-  "clothing",
-  "cosmetics_gift",
-  "mini_wholesale",
-]);
-
-async function shopNeedsCogs(shopId: string) {
-  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
-  if (!shop) return false;
-  return SHOP_TYPES_WITH_COGS.has((shop as any).businessType);
-}
-
 function sumCogs(rows: { qty: any; buyPrice: any }[]) {
   return rows.reduce((sum, r) => {
     const qty = Number(r.qty ?? 0);
@@ -98,7 +85,7 @@ export async function getCogsTotal(
     { sum: Prisma.Decimal | number | null }[]
   >(Prisma.sql`
     SELECT
-      SUM(CAST(si.quantity AS numeric) * COALESCE(p.buy_price, 0)) AS sum
+      SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS sum
     FROM "sale_items" si
     JOIN "sales" s ON s.id = si.sale_id
     JOIN "products" p ON p.id = si.product_id
@@ -124,7 +111,7 @@ export async function getCogsByDay(
   >(Prisma.sql`
     SELECT
       DATE(s.sale_date) AS day,
-      SUM(CAST(si.quantity AS numeric) * COALESCE(p.buy_price, 0)) AS sum
+      SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS sum
     FROM "sale_items" si
     JOIN "sales" s ON s.id = si.sale_id
     JOIN "products" p ON p.id = si.product_id
@@ -750,6 +737,7 @@ async function computeProfitTrendReport(
 ) {
   const { start, end } = parseTimestampRange(from, to);
   const useUnbounded = !from && !to;
+  const needsCogs = await shopNeedsCogs(shopId);
 
   const salesWhere: Prisma.Sql[] = [
     Prisma.sql` s.shop_id = CAST(${shopId} AS uuid)`,
@@ -770,7 +758,7 @@ async function computeProfitTrendReport(
     }
   }
 
-  const [salesRows, expenseRows] = await Promise.all([
+  const [salesRows, expenseRows, cogsRows] = await Promise.all([
     prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
       Prisma.sql`
         SELECT
@@ -793,6 +781,21 @@ async function computeProfitTrendReport(
         ORDER BY day
       `
     ),
+    needsCogs
+      ? prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+          Prisma.sql`
+            SELECT
+              DATE(s.sale_date AT TIME ZONE 'Asia/Dhaka')::text AS day,
+              SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS sum
+            FROM "sale_items" si
+            JOIN "sales" s ON s.id = si.sale_id
+            LEFT JOIN "products" p ON p.id = si.product_id
+            WHERE ${Prisma.join(salesWhere, " AND ")}
+            GROUP BY day
+            ORDER BY day
+          `
+        )
+      : Promise.resolve([]),
   ]);
 
   const salesByDate = new Map<string, number>();
@@ -805,9 +808,15 @@ async function computeProfitTrendReport(
     expensesByDate.set(row.day, Number(row.sum ?? 0));
   });
 
+  const cogsByDate = new Map<string, number>();
+  cogsRows.forEach((row) => {
+    cogsByDate.set(row.day, Number(row.sum ?? 0));
+  });
+
   const allDates = new Set<string>([
     ...salesByDate.keys(),
     ...expensesByDate.keys(),
+    ...cogsByDate.keys(),
   ]);
 
   return Array.from(allDates)
@@ -815,7 +824,7 @@ async function computeProfitTrendReport(
     .map((date) => ({
       date,
       sales: salesByDate.get(date) || 0,
-      expense: expensesByDate.get(date) || 0,
+      expense: (expensesByDate.get(date) || 0) + (cogsByDate.get(date) || 0),
     }));
 }
 

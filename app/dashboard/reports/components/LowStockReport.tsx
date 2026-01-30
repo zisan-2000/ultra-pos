@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
@@ -13,10 +13,11 @@ type StockRow = { id?: string; name: string; stockQty: number };
 
 export default function LowStockReport({ shopId }: { shopId: string }) {
   const online = useOnlineStatus();
+  const [threshold, setThreshold] = useState(20);
 
   const buildCacheKey = useCallback(
-    () => `reports:low-stock:${shopId}:${REPORT_ROW_LIMIT}`,
-    [shopId]
+    () => `reports:low-stock:${shopId}:${threshold}:${REPORT_ROW_LIMIT}`,
+    [shopId, threshold]
   );
 
   const readCached = useCallback(() => {
@@ -42,11 +43,15 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
     const params = new URLSearchParams({
       shopId,
       limit: `${REPORT_ROW_LIMIT}`,
+      threshold: `${threshold}`,
       fresh: "1",
     });
     const res = await fetch(`/api/reports/low-stock?${params.toString()}`, {
-      cache: "no-store",
+      cache: "no-cache",
     });
+    if (res.status === 304) {
+      return readCached() ?? [];
+    }
     if (!res.ok) {
       const cached = readCached();
       if (cached) return cached;
@@ -67,11 +72,11 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
       }
     }
     return rows;
-  }, [online, shopId, buildCacheKey, readCached]);
+  }, [online, shopId, threshold, buildCacheKey, readCached]);
 
   const queryKey = useMemo(
-    () => ["reports", "low-stock", shopId, REPORT_ROW_LIMIT],
-    [shopId]
+    () => ["reports", "low-stock", shopId, threshold, REPORT_ROW_LIMIT],
+    [shopId, threshold]
   );
 
   const lowStockQuery = useQuery({
@@ -106,9 +111,30 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
                 </p>
               </div>
             </div>
-            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-xs font-semibold text-muted-foreground">
-              Limit {REPORT_ROW_LIMIT}
-            </span>
+            <div className="flex flex-wrap items-center justify-end gap-1 text-right">
+              <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                Limit {REPORT_ROW_LIMIT}
+              </span>
+              <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                Filter {threshold}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            {[5, 10, 15, 20].map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setThreshold(value)}
+                className={`h-7 rounded-full border px-3 transition-colors ${
+                  threshold === value
+                    ? "bg-primary-soft text-primary border-primary/30"
+                    : "border-border bg-card/80 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {value} এর নিচে
+              </button>
+            ))}
           </div>
         </div>
       </div>

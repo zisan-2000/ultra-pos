@@ -7,6 +7,7 @@ import { clampReportLimit } from "@/lib/reporting-config";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
+import { jsonWithEtag } from "@/lib/http/etag";
 
 async function computeTopProductsReport(shopId: string, limit: number) {
   const topProducts = await prisma.saleItem.groupBy({
@@ -72,7 +73,9 @@ export async function GET(request: NextRequest) {
     const data = fresh
       ? await computeTopProductsReport(shopId, limit)
       : await getTopProductsCached(shopId, limit);
-    return NextResponse.json({ data });
+    return jsonWithEtag(request, { data }, {
+      cacheControl: "private, no-cache",
+    });
   } catch (error: any) {
     console.error("Top products report error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
