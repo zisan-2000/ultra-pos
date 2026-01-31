@@ -139,6 +139,7 @@ export function PosPageClient({
   const lastEventAtRef = useRef(0);
   const wasVisibleRef = useRef(isVisible);
   const pollIntervalMs = realtime.connected ? 60_000 : 15_000;
+  const pollingEnabled = !realtime.connected;
   const isDue = paymentMethod === "due";
   const paymentOptions = useMemo(
     () => [
@@ -228,7 +229,8 @@ export function PosPageClient({
     queryFn: fetchDueCustomers,
     enabled: online && isDue,
     staleTime: 15_000,
-    refetchInterval: online && isDue && isVisible ? pollIntervalMs : false,
+    refetchInterval:
+      online && isDue && isVisible && pollingEnabled ? pollIntervalMs : false,
     initialData: () => customers ?? [],
     placeholderData: (prev) => prev ?? [],
   });
@@ -321,7 +323,7 @@ export function PosPageClient({
   }, [online, lastSyncAt, syncing, pendingCount, router]);
 
   useEffect(() => {
-    if (!online || !isVisible) return;
+    if (!online || !isVisible || !pollingEnabled) return;
     const intervalId = setInterval(() => {
       const now = Date.now();
       if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
@@ -334,7 +336,15 @@ export function PosPageClient({
     }, pollIntervalMs);
 
     return () => clearInterval(intervalId);
-  }, [online, isVisible, router, syncing, pendingCount, pollIntervalMs]);
+  }, [
+    online,
+    isVisible,
+    pollingEnabled,
+    router,
+    syncing,
+    pendingCount,
+    pollIntervalMs,
+  ]);
 
   useEffect(() => {
     if (!online) return;
@@ -378,10 +388,18 @@ export function PosPageClient({
   useEffect(() => {
     return subscribeProductEvent((detail) => {
       if (detail.shopId !== shopId) return;
-      lastEventAtRef.current = Date.now();
+      const now = detail.at ?? Date.now();
+      lastEventAtRef.current = now;
       loadProductsFromDexie();
+      if (!online) return;
+      if (syncing || pendingCount > 0) return;
+      if (refreshInFlightRef.current) return;
+      if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+      refreshInFlightRef.current = true;
+      lastRefreshAtRef.current = now;
+      router.refresh();
     });
-  }, [loadProductsFromDexie, shopId]);
+  }, [loadProductsFromDexie, shopId, online, router, syncing, pendingCount]);
 
   // Keep Dexie seeded when online; load from Dexie when offline.
   useEffect(() => {

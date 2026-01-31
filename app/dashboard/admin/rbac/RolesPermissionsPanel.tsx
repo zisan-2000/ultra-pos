@@ -6,6 +6,7 @@ import { updateRolePermissions } from "@/app/actions/rbac-admin";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdminAction } from "@/lib/sync/queue";
 import { STAFF_BASELINE_PERMISSIONS } from "@/lib/staff-baseline-permissions";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type RoleWithPermissions = Role & {
   rolePermissions: { permissionId: string }[];
@@ -286,7 +287,7 @@ export function RolesPermissionsPanel({
           permissionIds: ids,
         });
         try {
-          const raw = localStorage.getItem("admin:rbac");
+          const raw = safeLocalStorageGet("admin:rbac");
           if (raw) {
             const parsed = JSON.parse(raw) as {
               roles?: RoleWithPermissions[];
@@ -303,7 +304,7 @@ export function RolesPermissionsPanel({
                     }
                   : role,
               );
-              localStorage.setItem("admin:rbac", JSON.stringify(parsed));
+              safeLocalStorageSet("admin:rbac", JSON.stringify(parsed));
             }
           }
         } catch {

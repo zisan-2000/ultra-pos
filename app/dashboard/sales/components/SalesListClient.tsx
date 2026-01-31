@@ -13,6 +13,7 @@ import { handlePermissionError } from "@/lib/permission-toast";
 import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
 import { useRealtimeStatus } from "@/lib/realtime/status";
 import { usePageVisibility } from "@/lib/use-page-visibility";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type SaleSummary = {
   id: string;
@@ -86,6 +87,7 @@ export default function SalesListClient({
   const lastEventAtRef = useRef(0);
   const wasVisibleRef = useRef(isVisible);
   const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
+  const pollingEnabled = !realtime.connected;
   const EVENT_DEBOUNCE_MS = 800;
 
   useEffect(() => {
@@ -110,6 +112,7 @@ export default function SalesListClient({
 
     const handleSaleUpdate = (event: ReportEventData) => {
       if (event.shopId !== shopId) return;
+      if (event.metadata?.source === "ui") return;
       const now = event.timestamp ?? Date.now();
       if (now - lastEventAtRef.current < EVENT_DEBOUNCE_MS) return;
       if (refreshInFlightRef.current) return;
@@ -132,7 +135,7 @@ export default function SalesListClient({
   }, [online, router, shopId]);
 
   useEffect(() => {
-    if (!online || !isVisible) return;
+    if (!online || !isVisible || !pollingEnabled) return;
     const intervalId = setInterval(() => {
       const now = Date.now();
       if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
@@ -145,7 +148,15 @@ export default function SalesListClient({
     }, pollIntervalMs);
 
     return () => clearInterval(intervalId);
-  }, [online, isVisible, router, syncing, pendingCount, pollIntervalMs]);
+  }, [
+    online,
+    isVisible,
+    pollingEnabled,
+    router,
+    syncing,
+    pendingCount,
+    pollIntervalMs,
+  ]);
 
   useEffect(() => {
     if (!online) return;
@@ -173,7 +184,7 @@ export default function SalesListClient({
         if (!rows || rows.length === 0) {
           // Fallback to cached server copy
           try {
-            const cached = localStorage.getItem(`cachedSales:${shopId}`);
+            const cached = safeLocalStorageGet(`cachedSales:${shopId}`);
             if (cached) {
               const parsed = JSON.parse(cached) as SaleSummary[];
               setItems(parsed || []);
@@ -263,7 +274,7 @@ export default function SalesListClient({
         console.error("Seed Dexie sales failed", err);
       });
       try {
-        localStorage.setItem(`cachedSales:${shopId}`, JSON.stringify(sales));
+        safeLocalStorageSet(`cachedSales:${shopId}`, JSON.stringify(sales));
       } catch (err) {
         handlePermissionError(err);
         console.warn("Persist cached sales failed", err);

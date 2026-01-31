@@ -6,6 +6,7 @@ import { MetricCard } from "@/components/metric-card";
 import { buttonVariants } from "@/components/ui/button";
 import OwnerStaffDrilldownClient from "@/components/owner-staff-drilldown-client";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 const basePath = "/agent";
 
@@ -66,7 +67,7 @@ export default function AgentDashboardClient({ userId, initialData }: Props) {
       setData(initialData);
       setCacheMissing(false);
       try {
-        localStorage.setItem(cacheKey, JSON.stringify(initialData));
+        safeLocalStorageSet(cacheKey, JSON.stringify(initialData));
       } catch {
         // ignore cache errors
       }
@@ -74,7 +75,7 @@ export default function AgentDashboardClient({ userId, initialData }: Props) {
     }
 
     try {
-      const raw = localStorage.getItem(cacheKey);
+      const raw = safeLocalStorageGet(cacheKey);
       if (!raw) {
         setCacheMissing(true);
         return;

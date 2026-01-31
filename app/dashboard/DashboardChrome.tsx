@@ -25,7 +25,9 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import OwnerSummaryVoice from "@/components/voice/OwnerSummaryVoice";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useCurrentShop } from "@/hooks/use-current-shop";
+import { SHOP_TYPES_WITH_COGS } from "@/lib/accounting/cogs-types";
 import { scheduleIdle } from "@/lib/schedule-idle";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import {
   BarChart3,
   ChevronDown,
@@ -55,7 +57,12 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type Shop = { id: string; name: string; closingTime?: string | null };
+type Shop = {
+  id: string;
+  name: string;
+  closingTime?: string | null;
+  businessType?: string | null;
+};
 
 type RbacUser = {
   id: string;
@@ -220,6 +227,15 @@ export function DashboardShell({
     );
   }, [safeShopId, shops]);
 
+  const currentBusinessType = useMemo(() => {
+    if (!safeShopId) return null;
+    return shops.find((s) => s.id === safeShopId)?.businessType ?? null;
+  }, [safeShopId, shops]);
+
+  const hasInventory = Boolean(
+    currentBusinessType && SHOP_TYPES_WITH_COGS.has(currentBusinessType)
+  );
+
   // Sync URL ?shopId with global shop store & cookie
   useEffect(() => {
     if (!shops || shops.length === 0) return;
@@ -316,7 +332,7 @@ export function DashboardShell({
   useEffect(() => {
     if (!mounted) return;
     try {
-      const raw = window.localStorage.getItem("dashboard.sidebarCollapsed");
+      const raw = safeLocalStorageGet("dashboard.sidebarCollapsed");
       if (raw === "1") setSidebarCollapsed(true);
       if (raw === "0") setSidebarCollapsed(false);
     } catch {
@@ -328,10 +344,7 @@ export function DashboardShell({
     setSidebarCollapsed((prev) => {
       const next = !prev;
       try {
-        window.localStorage.setItem(
-          "dashboard.sidebarCollapsed",
-          next ? "1" : "0"
-        );
+        safeLocalStorageSet("dashboard.sidebarCollapsed", next ? "1" : "0");
       } catch {
         // ignore
       }
@@ -415,6 +428,16 @@ export function DashboardShell({
     if (href === "/dashboard") return pathname === "/dashboard";
     return pathname.startsWith(href);
   };
+
+  const visibleNavItems = useMemo(
+    () =>
+      navItems.filter((item) => {
+        if (item.href === "/dashboard/purchases") return hasInventory;
+        if (item.href === "/dashboard/suppliers") return hasInventory;
+        return true;
+      }),
+    [hasInventory]
+  );
 
   const navGroupClass = sidebarCollapsed
     ? "flex flex-col gap-1"
@@ -528,9 +551,11 @@ export function DashboardShell({
     fabByRoute[
       bottomNav.find((item) => pathname.startsWith(item.href))?.href || pathname
     ] || null;
-  const fabConfig = pathname.startsWith("/dashboard/sales/new")
-    ? null
-    : baseFabConfig;
+  const fabConfig =
+    pathname.startsWith("/dashboard/sales/new") ||
+    (!hasInventory && baseFabConfig?.href.startsWith("/dashboard/purchases"))
+      ? null
+      : baseFabConfig;
 
   const mobileNavItems = bottomNav.filter((item) =>
     hasPermission(routePermissionMap[item.href])
@@ -630,7 +655,7 @@ export function DashboardShell({
               </div>
 
               <div className={navGroupClass}>
-                {navItems
+                {visibleNavItems
                   .filter((item) =>
                     hasPermission(routePermissionMap[item.href])
                   )

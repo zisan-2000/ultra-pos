@@ -5,6 +5,7 @@ import type { Role } from "@prisma/client";
 import { assignRoleToUser, revokeRoleFromUser } from "@/app/actions/rbac-admin";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdminAction } from "@/lib/sync/queue";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 interface UserRow {
   id: string;
@@ -88,7 +89,7 @@ export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
             ),
           ]);
           try {
-            const raw = localStorage.getItem("admin:rbac");
+            const raw = safeLocalStorageGet("admin:rbac");
             if (raw) {
               const parsed = JSON.parse(raw) as {
                 users?: UserRow[];
@@ -106,7 +107,7 @@ export function UsersRolesPanel({ users, roles }: UsersRolesPanelProps) {
                   }));
                   return { ...user, roles: nextRoles };
                 });
-                localStorage.setItem("admin:rbac", JSON.stringify(parsed));
+                safeLocalStorageSet("admin:rbac", JSON.stringify(parsed));
               }
             }
           } catch {

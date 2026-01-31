@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type ActivityEntry = {
   createdAt: string;
@@ -51,7 +52,7 @@ export function UserCreationLogClient() {
   const readCache = useCallback((): CachePayload | null => {
     if (typeof window === "undefined") return null;
     try {
-      const raw = localStorage.getItem(cacheKey);
+      const raw = safeLocalStorageGet(cacheKey);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as CachePayload;
       const cachedEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
@@ -123,7 +124,7 @@ export function UserCreationLogClient() {
     };
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(cacheKey, JSON.stringify(nextPayload));
+        safeLocalStorageSet(cacheKey, JSON.stringify(nextPayload));
       } catch {
         // ignore cache errors
       }

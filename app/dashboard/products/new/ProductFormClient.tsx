@@ -29,6 +29,7 @@ import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/p
 import { emitProductEvent } from "@/lib/products/product-events";
 import { toast } from "sonner";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Props = {
   shop: { id: string; name: string; businessType?: string | null };
@@ -368,7 +369,7 @@ function ProductForm({ shop, businessConfig }: Props) {
   // Load recent/frequent templates
   useEffect(() => {
     if (!templateStorageKey) return;
-    const stored = localStorage.getItem(templateStorageKey);
+    const stored = safeLocalStorageGet(templateStorageKey);
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as TemplateItem[];
@@ -382,7 +383,7 @@ function ProductForm({ shop, businessConfig }: Props) {
   useEffect(() => {
     if (!ensuredShopId) return;
     try {
-      const stored = localStorage.getItem(`customCategories:${ensuredShopId}`);
+      const stored = safeLocalStorageGet(`customCategories:${ensuredShopId}`);
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
       const custom = Array.isArray(parsed) ? parsed : [];
       const merged = Array.from(new Set([...baseCategories, ...custom]));
@@ -411,7 +412,7 @@ function ProductForm({ shop, businessConfig }: Props) {
   useEffect(() => {
     if (!ensuredShopId) return;
     try {
-      const stored = localStorage.getItem(`customUnits:${ensuredShopId}`);
+      const stored = safeLocalStorageGet(`customUnits:${ensuredShopId}`);
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
       const custom = Array.isArray(parsed) ? parsed : [];
       const merged = Array.from(new Set([...configUnits, ...custom]));
@@ -445,7 +446,10 @@ function ProductForm({ shop, businessConfig }: Props) {
     setSelectedCategory(value);
 
     const customOnly = merged.filter((c) => !baseCategories.includes(c));
-    localStorage.setItem(`customCategories:${ensuredShopId}`, JSON.stringify(customOnly));
+    safeLocalStorageSet(
+      `customCategories:${ensuredShopId}`,
+      JSON.stringify(customOnly)
+    );
   }
 
   function handleAddCustomUnit() {
@@ -459,13 +463,16 @@ function ProductForm({ shop, businessConfig }: Props) {
     setSelectedUnit(value);
 
     const customOnly = merged.filter((u) => !configUnits.includes(u));
-    localStorage.setItem(`customUnits:${ensuredShopId}`, JSON.stringify(customOnly));
+    safeLocalStorageSet(
+      `customUnits:${ensuredShopId}`,
+      JSON.stringify(customOnly)
+    );
   }
 
   function persistTemplates(updater: (prev: TemplateItem[]) => TemplateItem[]) {
     setTemplates((prev) => {
       const next = updater(prev);
-      localStorage.setItem(templateStorageKey, JSON.stringify(next));
+      safeLocalStorageSet(templateStorageKey, JSON.stringify(next));
       return next;
     });
   }

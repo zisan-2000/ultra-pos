@@ -29,6 +29,7 @@ import { addBusinessProductTemplatesToShop } from "@/app/actions/business-produc
 import { deleteProduct } from "@/app/actions/products";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { subscribeProductEvent } from "@/lib/products/product-events";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Shop = { id: string; name: string };
 type Product = {
@@ -263,7 +264,7 @@ export default function ProductsListClient({
       }
 
       try {
-        const cached = localStorage.getItem(`cachedProducts:${activeShopId}`);
+        const cached = safeLocalStorageGet(`cachedProducts:${activeShopId}`);
         if (!cached || cancelled) return;
         const parsed = JSON.parse(cached) as Product[];
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -301,7 +302,7 @@ export default function ProductsListClient({
         console.error("Seed Dexie products failed", err);
       });
       try {
-        localStorage.setItem(
+        safeLocalStorageSet(
           `cachedProducts:${activeShopId}`,
           JSON.stringify(serverProducts)
         );
@@ -325,7 +326,7 @@ export default function ProductsListClient({
     if (products.length > 0) return;
 
     try {
-      const cached = localStorage.getItem(`cachedProducts:${activeShopId}`);
+      const cached = safeLocalStorageGet(`cachedProducts:${activeShopId}`);
       if (!cached) return;
       const parsed = JSON.parse(cached) as Product[];
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -635,7 +636,7 @@ export default function ProductsListClient({
 
       const persistCache = (next: Product[]) => {
         try {
-          localStorage.setItem(
+          safeLocalStorageSet(
             `cachedProducts:${activeShopId}`,
             JSON.stringify(next)
           );

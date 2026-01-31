@@ -16,6 +16,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdminAction } from "@/lib/sync/queue";
 import { businessOptions } from "@/lib/productFormConfig";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type BusinessTypeRow = { key: string; label: string };
 
@@ -214,7 +215,7 @@ export default function BusinessProductLibraryClient({
       setTemplates((prev) => {
         const next = updater(prev);
         try {
-          localStorage.setItem(templatesKey, JSON.stringify(next));
+          safeLocalStorageSet(templatesKey, JSON.stringify(next));
         } catch {
           // ignore cache errors
         }
@@ -444,13 +445,13 @@ export default function BusinessProductLibraryClient({
       if (Array.isArray(initialTemplates) && initialTemplates.length > 0) {
         setTemplates(initialTemplates);
         try {
-          localStorage.setItem(templatesKey, JSON.stringify(initialTemplates));
+          safeLocalStorageSet(templatesKey, JSON.stringify(initialTemplates));
         } catch {
           // ignore cache errors
         }
       } else if (error) {
         try {
-          const raw = localStorage.getItem(templatesKey);
+          const raw = safeLocalStorageGet(templatesKey);
           if (raw) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
@@ -465,7 +466,7 @@ export default function BusinessProductLibraryClient({
       if (Array.isArray(initialBusinessTypes) && initialBusinessTypes.length > 0) {
         setBusinessTypes(initialBusinessTypes);
         try {
-          localStorage.setItem(typesKey, JSON.stringify(initialBusinessTypes));
+          safeLocalStorageSet(typesKey, JSON.stringify(initialBusinessTypes));
         } catch {
           // ignore cache errors
         }
@@ -474,7 +475,7 @@ export default function BusinessProductLibraryClient({
     }
 
     try {
-      const raw = localStorage.getItem(templatesKey);
+      const raw = safeLocalStorageGet(templatesKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
@@ -486,7 +487,7 @@ export default function BusinessProductLibraryClient({
     }
 
     try {
-      const raw = localStorage.getItem(typesKey);
+      const raw = safeLocalStorageGet(typesKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {

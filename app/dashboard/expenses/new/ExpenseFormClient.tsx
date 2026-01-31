@@ -9,6 +9,7 @@ import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
 import useRealTimeReports from "@/hooks/useRealTimeReports";
 import { emitExpenseUpdate } from "@/lib/events/reportEvents";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -130,7 +131,7 @@ export default function ExpenseFormClient({
 
   useEffect(() => {
     if (!storageKey) return;
-    const stored = localStorage.getItem(storageKey);
+    const stored = safeLocalStorageGet(storageKey);
     if (stored) {
       try {
         setTemplates(JSON.parse(stored) as ExpenseTemplate[]);
@@ -186,7 +187,7 @@ export default function ExpenseFormClient({
 
   function persistTemplates(next: ExpenseTemplate[]) {
     setTemplates(next);
-    localStorage.setItem(storageKey, JSON.stringify(next));
+    safeLocalStorageSet(storageKey, JSON.stringify(next));
   }
 
   function applyTemplate(t: ExpenseTemplate) {

@@ -14,6 +14,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { BillingStatus } from "@/lib/billing";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Summary = {
   sales?: { total?: number } | number;
@@ -123,7 +124,7 @@ export default function OwnerDashboardClient({
       setData(initialData);
       setCacheMissing(false);
       try {
-        localStorage.setItem(cacheKey, JSON.stringify(initialData));
+        safeLocalStorageSet(cacheKey, JSON.stringify(initialData));
       } catch {
         // ignore cache errors
       }
@@ -131,7 +132,7 @@ export default function OwnerDashboardClient({
     }
 
     try {
-      const raw = localStorage.getItem(cacheKey);
+      const raw = safeLocalStorageGet(cacheKey);
       if (!raw) {
         setCacheMissing(true);
         return;
@@ -456,20 +457,22 @@ export default function OwnerDashboardClient({
           />
         </div>
 
-        <div className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground">সরবরাহকারী বাকি</p>
-              <p className="text-lg font-bold text-foreground">
-                ৳ {payableTotal.toFixed(2)}
-              </p>
-            </div>
-            <div className="text-right text-xs text-muted-foreground">
-              <div>বাকি ইনভয়েস: {payableCount}</div>
-              <div>সরবরাহকারী: {payableSuppliers}</div>
+        {data.needsCogs ? (
+          <div className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">সরবরাহকারী বাকি</p>
+                <p className="text-lg font-bold text-foreground">
+                  ৳ {payableTotal.toFixed(2)}
+                </p>
+              </div>
+              <div className="text-right text-xs text-muted-foreground">
+                <div>বাকি ইনভয়েস: {payableCount}</div>
+                <div>সরবরাহকারী: {payableSuppliers}</div>
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">

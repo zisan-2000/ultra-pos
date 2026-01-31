@@ -13,6 +13,7 @@ import { handlePermissionError } from "@/lib/permission-toast";
 import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
 import { useRealtimeStatus } from "@/lib/realtime/status";
 import { usePageVisibility } from "@/lib/use-page-visibility";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Expense = {
   id: string;
@@ -145,6 +146,7 @@ export function ExpensesListClient({
   const lastEventAtRef = useRef(0);
   const wasVisibleRef = useRef(isVisible);
   const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
+  const pollingEnabled = !realtime.connected;
   const EVENT_DEBOUNCE_MS = 800;
 
   const canApplyCustom = (() => {
@@ -156,10 +158,7 @@ export function ExpensesListClient({
       setItems((prev) => {
         const next = prev.filter((item) => item.id !== id);
         try {
-          localStorage.setItem(
-            `cachedExpenses:${shopId}`,
-            JSON.stringify(next)
-          );
+          safeLocalStorageSet(`cachedExpenses:${shopId}`, JSON.stringify(next));
         } catch {
           // ignore cache errors
         }
@@ -214,7 +213,7 @@ export function ExpensesListClient({
   }, [online, realtime.connected, router, shopId]);
 
   useEffect(() => {
-    if (!online || !isVisible) return;
+    if (!online || !isVisible || !pollingEnabled) return;
     const intervalId = setInterval(() => {
       const now = Date.now();
       if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
@@ -227,7 +226,15 @@ export function ExpensesListClient({
     }, pollIntervalMs);
 
     return () => clearInterval(intervalId);
-  }, [online, isVisible, router, syncing, pendingCount, pollIntervalMs]);
+  }, [
+    online,
+    isVisible,
+    pollingEnabled,
+    router,
+    syncing,
+    pendingCount,
+    pollIntervalMs,
+  ]);
 
   useEffect(() => {
     if (!online) return;
@@ -254,7 +261,7 @@ export function ExpensesListClient({
         if (cancelled) return;
         if (!rows || rows.length === 0) {
           try {
-            const cached = localStorage.getItem(`cachedExpenses:${shopId}`);
+            const cached = safeLocalStorageGet(`cachedExpenses:${shopId}`);
             if (cached) setItems(JSON.parse(cached) as Expense[]);
           } catch {
             // ignore
@@ -314,10 +321,7 @@ export function ExpensesListClient({
         .bulkPut(rows)
         .catch((err) => console.error("Seed Dexie expenses failed", err));
       try {
-        localStorage.setItem(
-          `cachedExpenses:${shopId}`,
-          JSON.stringify(expenses)
-        );
+        safeLocalStorageSet(`cachedExpenses:${shopId}`, JSON.stringify(expenses));
       } catch {
         // ignore
       }

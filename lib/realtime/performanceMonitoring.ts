@@ -6,6 +6,12 @@
 
 import { reportEvents } from "@/lib/events/reportEvents";
 
+const logPerf = (...args: unknown[]) => {
+  if (process.env.NODE_ENV !== "production") {
+    console.log(...args);
+  }
+};
+
 export interface PerformanceMetric {
   name: string;
   value: number;
@@ -91,7 +97,7 @@ export class RealTimePerformanceMonitor {
     if (this.isMonitoring) return;
     
     this.isMonitoring = true;
-    console.log(`🚀 Performance monitoring started for shop: ${shopId}`);
+    logPerf(`🚀 Performance monitoring started for shop: ${shopId}`);
     
     // Start collecting metrics
     this.startMetricCollection(shopId);
@@ -105,7 +111,7 @@ export class RealTimePerformanceMonitor {
    */
   stopMonitoring(shopId: string): void {
     this.isMonitoring = false;
-    console.log(`⏹️ Performance monitoring stopped for shop: ${shopId}`);
+    logPerf(`⏹️ Performance monitoring stopped for shop: ${shopId}`);
     
     // Cleanup observers
     this.observers.forEach(observer => observer.disconnect());
@@ -347,7 +353,7 @@ export class RealTimePerformanceMonitor {
       
       // Emit performance report
       reportEvents.emit({
-        type: 'sync-complete',
+        type: 'performance-report',
         shopId,
         timestamp: Date.now(),
         data: { score, report },

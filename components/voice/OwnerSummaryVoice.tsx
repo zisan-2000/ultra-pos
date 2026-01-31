@@ -14,6 +14,7 @@ import { generateCSV } from "@/lib/utils/csv";
 import { downloadFile } from "@/lib/utils/download";
 import { computePresetRange, getDhakaDateString } from "@/lib/reporting-range";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Summary = {
   sales?: { total?: number } | number;
@@ -190,13 +191,13 @@ export default function OwnerSummaryVoice({
   useEffect(() => {
     if (!isEnabledUser) return;
     try {
-      const stored = localStorage.getItem(alertStorageKey);
+      const stored = safeLocalStorageGet(alertStorageKey);
       if (stored === "1") setAlertsEnabled(true);
-      const storedInterval = localStorage.getItem(intervalStorageKey);
+      const storedInterval = safeLocalStorageGet(intervalStorageKey);
       if (storedInterval) {
         setIntervalMinutes(normalizeIntervalMinutes(Number(storedInterval)));
       }
-      const storedReportEnabled = localStorage.getItem(reportReminderEnabledKey);
+      const storedReportEnabled = safeLocalStorageGet(reportReminderEnabledKey);
       if (storedReportEnabled === "0") {
         setReportReminderEnabled(false);
       }
@@ -219,7 +220,7 @@ export default function OwnerSummaryVoice({
     setNotificationSupported(true);
     setNotificationPermission(Notification.permission);
     try {
-      const stored = localStorage.getItem(notificationStorageKey);
+      const stored = safeLocalStorageGet(notificationStorageKey);
       if (stored === "1" && Notification.permission === "granted") {
         setNotificationEnabled(true);
       }
@@ -269,7 +270,7 @@ export default function OwnerSummaryVoice({
       if (permission === "granted") {
         setNotificationEnabled(true);
         try {
-          localStorage.setItem(notificationStorageKey, "1");
+          safeLocalStorageSet(notificationStorageKey, "1");
         } catch {
           // ignore storage errors
         }
@@ -277,7 +278,7 @@ export default function OwnerSummaryVoice({
       } else {
         setNotificationEnabled(false);
         try {
-          localStorage.setItem(notificationStorageKey, "0");
+          safeLocalStorageSet(notificationStorageKey, "0");
         } catch {
           // ignore storage errors
         }
@@ -299,7 +300,7 @@ export default function OwnerSummaryVoice({
     if (notificationEnabled) {
       setNotificationEnabled(false);
       try {
-        localStorage.setItem(notificationStorageKey, "0");
+        safeLocalStorageSet(notificationStorageKey, "0");
       } catch {
         // ignore storage errors
       }
@@ -308,7 +309,7 @@ export default function OwnerSummaryVoice({
     if (notificationPermission === "granted") {
       setNotificationEnabled(true);
       try {
-        localStorage.setItem(notificationStorageKey, "1");
+        safeLocalStorageSet(notificationStorageKey, "1");
       } catch {
         // ignore storage errors
       }
@@ -408,7 +409,7 @@ export default function OwnerSummaryVoice({
     const next = !alertsEnabled;
     setAlertsEnabled(next);
     try {
-      localStorage.setItem(alertStorageKey, next ? "1" : "0");
+      safeLocalStorageSet(alertStorageKey, next ? "1" : "0");
     } catch {
       // ignore storage errors
     }
@@ -594,7 +595,7 @@ export default function OwnerSummaryVoice({
       const todayKey = getDhakaDateString();
       const lastReminder = (() => {
         try {
-          return localStorage.getItem(reminderStorageKey);
+          return safeLocalStorageGet(reminderStorageKey);
         } catch {
           return null;
         }
@@ -608,7 +609,7 @@ export default function OwnerSummaryVoice({
           document.visibilityState === "visible";
         triggerReportReminder(isVisible);
         try {
-          localStorage.setItem(reminderStorageKey, todayKey);
+          safeLocalStorageSet(reminderStorageKey, todayKey);
         } catch {
           // ignore storage errors
         }
@@ -640,7 +641,7 @@ export default function OwnerSummaryVoice({
       setPendingInterval(String(normalized));
       setIntervalError(null);
       try {
-        localStorage.setItem(intervalStorageKey, String(normalized));
+        safeLocalStorageSet(intervalStorageKey, String(normalized));
       } catch {
         // ignore storage errors
       }
@@ -678,7 +679,7 @@ export default function OwnerSummaryVoice({
     const next = !reportReminderEnabled;
     setReportReminderEnabled(next);
     try {
-      localStorage.setItem(reportReminderEnabledKey, next ? "1" : "0");
+      safeLocalStorageSet(reportReminderEnabledKey, next ? "1" : "0");
     } catch {
       // ignore storage errors
     }

@@ -13,6 +13,12 @@ import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidateReportsForSale } from "@/lib/reports/revalidate";
 import { shopNeedsCogs } from "@/lib/accounting/cogs";
 
+const logPerf = (...args: unknown[]) => {
+  if (process.env.NODE_ENV !== "production") {
+    console.log(...args);
+  }
+};
+
 type CartItemInput = {
   productId: string;
   name: string;
@@ -122,7 +128,7 @@ async function attachSaleSummaries(
 // ------------------------------
 export async function createSale(input: CreateSaleInput) {
   const startTime = Date.now();
-  console.log("🚀 [PERF] createSale started at:", new Date().toISOString());
+  logPerf("🚀 [PERF] createSale started at:", new Date().toISOString());
 
   // Add connection warmup for Neon (reduce cold start)
   // Multiple warmups for Vercel serverless environment
@@ -136,7 +142,7 @@ export async function createSale(input: CreateSaleInput) {
     // Ignore warmup errors
   }
   const warmupTime = Date.now();
-  console.log(`🔥 [PERF] DB warmup took: ${warmupTime - startTime}ms`);
+  logPerf(`🔥 [PERF] DB warmup took: ${warmupTime - startTime}ms`);
 
   const user = await requireUser();
   requirePermission(user, "create_sale");
@@ -144,7 +150,7 @@ export async function createSale(input: CreateSaleInput) {
   const needsCogs = await shopNeedsCogs(input.shopId);
 
   const authTime = Date.now();
-  console.log(`🔐 [PERF] Auth checks took: ${authTime - warmupTime}ms`);
+  logPerf(`🔐 [PERF] Auth checks took: ${authTime - warmupTime}ms`);
 
   if (!input.items || input.items.length === 0) {
     throw new Error("Cart is empty");
@@ -171,14 +177,18 @@ export async function createSale(input: CreateSaleInput) {
 
   // Product IDs
   const productIds = input.items.map((i) => i.productId);
-  console.log(`📦 [DEBUG] Processing ${input.items.length} items, ${productIds.length} products`);
+  logPerf(
+    `📦 [DEBUG] Processing ${input.items.length} items, ${productIds.length} products`
+  );
 
   const dbProducts = await prisma.product.findMany({
     where: { id: { in: productIds } },
   });
 
   const dbTime = Date.now();
-  console.log(`💾 [PERF] DB product fetch took: ${dbTime - authTime}ms for ${dbProducts.length} products`);
+  logPerf(
+    `💾 [PERF] DB product fetch took: ${dbTime - authTime}ms for ${dbProducts.length} products`
+  );
 
   if (dbProducts.length !== productIds.length) {
     throw new Error("Some products not found");
@@ -231,7 +241,7 @@ export async function createSale(input: CreateSaleInput) {
 
   const saleId = await prisma.$transaction(async (tx) => {
     const transactionStart = Date.now();
-    console.log(`🔄 [PERF] Transaction started at: ${new Date().toISOString()}`);
+    logPerf(`🔄 [PERF] Transaction started at: ${new Date().toISOString()}`);
 
     // Pre-calculate stock changes for O(1) lookup
     const stockMap = new Map<string, number>();
@@ -290,7 +300,7 @@ export async function createSale(input: CreateSaleInput) {
     }
 
     // Update stock - SEQUENTIAL but optimized
-    console.log(`📊 [DEBUG] Starting stock updates for ${dbProducts.length} products`);
+    logPerf(`📊 [DEBUG] Starting stock updates for ${dbProducts.length} products`);
     let stockUpdateCount = 0;
     
     for (const p of dbProducts) {
@@ -307,11 +317,13 @@ export async function createSale(input: CreateSaleInput) {
         const singleUpdateEnd = Date.now();
         
         stockUpdateCount++;
-        console.log(`🔄 [DEBUG] Stock update ${stockUpdateCount}/${dbProducts.length}: ${singleUpdateEnd - singleUpdateStart}ms for product ${p.id}`);
+        logPerf(
+          `🔄 [DEBUG] Stock update ${stockUpdateCount}/${dbProducts.length}: ${singleUpdateEnd - singleUpdateStart}ms for product ${p.id}`
+        );
       }
     }
     
-    console.log(`📈 [DEBUG] Total stock updates: ${stockUpdateCount} products updated`);
+    logPerf(`📈 [DEBUG] Total stock updates: ${stockUpdateCount} products updated`);
 
     // Handle due customer
     if (dueCustomer) {
@@ -357,7 +369,9 @@ export async function createSale(input: CreateSaleInput) {
     }
 
     const transactionEnd = Date.now();
-    console.log(`⏱️ [PERF] Transaction completed in: ${transactionEnd - transactionStart}ms`);
+    logPerf(
+      `⏱️ [PERF] Transaction completed in: ${transactionEnd - transactionStart}ms`
+    );
 
     return inserted.id;
   });
@@ -374,8 +388,10 @@ export async function createSale(input: CreateSaleInput) {
   revalidateReportsForSale();
 
   const totalTime = Date.now() - startTime;
-  console.log(`🎯 [PERF] TOTAL createSale time: ${totalTime}ms`);
-  console.log(`📊 [PERF] Breakdown: Warmup(${warmupTime - startTime}ms) + Auth(${authTime - warmupTime}ms) + DB(${dbTime - authTime}ms) + Transaction (see above)`);
+  logPerf(`🎯 [PERF] TOTAL createSale time: ${totalTime}ms`);
+  logPerf(
+    `📊 [PERF] Breakdown: Warmup(${warmupTime - startTime}ms) + Auth(${authTime - warmupTime}ms) + DB(${dbTime - authTime}ms) + Transaction (see above)`
+  );
 
   const publishTasks: Promise<void>[] = [];
   publishTasks.push(

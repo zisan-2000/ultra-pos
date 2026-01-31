@@ -10,6 +10,7 @@ import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
 import { scheduleIdle } from "@/lib/schedule-idle";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Props = { shopId: string; from?: string; to?: string };
 
@@ -47,7 +48,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
     (rangeFrom?: string, rangeTo?: string) => {
       if (typeof window === "undefined") return null;
       try {
-        const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
+        const raw = safeLocalStorageGet(buildCacheKey(rangeFrom, rangeTo));
         if (!raw) {
           return null;
         }
@@ -99,7 +100,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
       const rows = data.rows || [];
       if (shouldCache && !cursor && typeof window !== "undefined") {
         try {
-          localStorage.setItem(
+          safeLocalStorageSet(
             buildCacheKey(rangeFrom, rangeTo),
             JSON.stringify(rows)
           );

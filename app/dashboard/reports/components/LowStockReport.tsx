@@ -8,12 +8,32 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { getStockToneClasses } from "@/lib/stock-level";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type StockRow = { id?: string; name: string; stockQty: number };
 
-export default function LowStockReport({ shopId }: { shopId: string }) {
+type Props = {
+  shopId: string;
+  threshold?: number;
+  onThresholdChange?: (value: number) => void;
+};
+
+export default function LowStockReport({
+  shopId,
+  threshold: thresholdProp,
+  onThresholdChange,
+}: Props) {
   const online = useOnlineStatus();
-  const [threshold, setThreshold] = useState(20);
+  const [thresholdState, setThresholdState] = useState(20);
+  const threshold =
+    typeof thresholdProp === "number" ? thresholdProp : thresholdState;
+  const setThreshold = (value: number) => {
+    if (onThresholdChange) {
+      onThresholdChange(value);
+    } else {
+      setThresholdState(value);
+    }
+  };
 
   const buildCacheKey = useCallback(
     () => `reports:low-stock:${shopId}:${threshold}:${REPORT_ROW_LIMIT}`,
@@ -23,7 +43,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
   const readCached = useCallback(() => {
     if (typeof window === "undefined") return null;
     try {
-      const raw = localStorage.getItem(buildCacheKey());
+      const raw = safeLocalStorageGet(buildCacheKey());
       if (!raw) {
         return null;
       }
@@ -65,7 +85,7 @@ export default function LowStockReport({ shopId }: { shopId: string }) {
     const rows = Array.isArray(json?.data) ? json.data : [];
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(buildCacheKey(), JSON.stringify(rows));
+        safeLocalStorageSet(buildCacheKey(), JSON.stringify(rows));
       } catch (err) {
         handlePermissionError(err);
         console.warn("Low stock cache write failed", err);

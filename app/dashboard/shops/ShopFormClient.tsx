@@ -6,6 +6,7 @@ import { businessOptions } from "@/lib/productFormConfig";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { queueAdminAction } from "@/lib/sync/queue";
 import { db } from "@/lib/dexie/db";
 import { handlePermissionError } from "@/lib/permission-toast";
@@ -121,7 +122,8 @@ export default function ShopFormClient({
   );
 
   useEffect(() => {
-    const stored = typeof window !== "undefined" ? localStorage.getItem(SHOP_TEMPLATE_KEY) : null;
+    const stored =
+      typeof window !== "undefined" ? safeLocalStorageGet(SHOP_TEMPLATE_KEY) : null;
     if (stored) {
       try {
         setTemplates(JSON.parse(stored) as ShopTemplate[]);
@@ -204,7 +206,7 @@ export default function ShopFormClient({
 
   function persistTemplates(next: ShopTemplate[]) {
     setTemplates(next);
-    localStorage.setItem(SHOP_TEMPLATE_KEY, JSON.stringify(next));
+    safeLocalStorageSet(SHOP_TEMPLATE_KEY, JSON.stringify(next));
   }
 
   function updateCachedShops(
@@ -212,11 +214,11 @@ export default function ShopFormClient({
   ) {
     if (typeof window === "undefined") return;
     try {
-      const raw = localStorage.getItem(cacheKey);
+      const raw = safeLocalStorageGet(cacheKey);
       const parsed = raw ? JSON.parse(raw) : [];
       const base = Array.isArray(parsed) ? parsed : [];
       const next = updater(base);
-      localStorage.setItem(cacheKey, JSON.stringify(next));
+      safeLocalStorageSet(cacheKey, JSON.stringify(next));
     } catch {
       // ignore cache errors
     }

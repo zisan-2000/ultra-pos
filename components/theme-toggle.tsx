@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Theme = "light" | "dark";
 
@@ -28,7 +29,7 @@ export function ThemeToggle({
 
   useEffect(() => {
     setMounted(true);
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = safeLocalStorageGet(STORAGE_KEY);
     const initial = stored === "light" || stored === "dark" ? stored : "light";
     setTheme(initial);
     applyTheme(initial);
@@ -41,7 +42,7 @@ export function ThemeToggle({
   const handleToggle = () => {
     const next = isDark ? "light" : "dark";
     setTheme(next);
-    localStorage.setItem(STORAGE_KEY, next);
+    safeLocalStorageSet(STORAGE_KEY, next);
     applyTheme(next);
 
     const root = document.documentElement;

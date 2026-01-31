@@ -12,6 +12,7 @@ import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdminAction, queueRemove } from "@/lib/sync/queue";
 import { db } from "@/lib/dexie/db";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Shop = {
   id: string;
@@ -63,12 +64,12 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
       setShops(initialShops || []);
       setSupportContact(support);
       try {
-        localStorage.setItem(cacheKey, JSON.stringify(initialShops || []));
+        safeLocalStorageSet(cacheKey, JSON.stringify(initialShops || []));
       } catch {
         // ignore cache errors
       }
       try {
-        localStorage.setItem(supportKey, JSON.stringify(support || {}));
+        safeLocalStorageSet(supportKey, JSON.stringify(support || {}));
       } catch {
         // ignore cache errors
       }
@@ -76,7 +77,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
     }
 
     try {
-      const raw = localStorage.getItem(cacheKey);
+      const raw = safeLocalStorageGet(cacheKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
@@ -88,7 +89,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
     }
 
     try {
-      const raw = localStorage.getItem(supportKey);
+      const raw = safeLocalStorageGet(supportKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         setSupportContact(parsed || {});
@@ -125,7 +126,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
 
       const persistCache = (next: Shop[]) => {
         try {
-          localStorage.setItem(cacheKey, JSON.stringify(next));
+          safeLocalStorageSet(cacheKey, JSON.stringify(next));
         } catch {
           // ignore cache errors
         }

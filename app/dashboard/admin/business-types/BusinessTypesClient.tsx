@@ -13,6 +13,7 @@ import {
   type BusinessType,
   type Field,
 } from "@/lib/productFormConfig";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type BusinessTypeRow = {
   id: string;
@@ -72,7 +73,7 @@ export default function BusinessTypesClient({
       setTypes((prev) => {
         const next = updater(prev);
         try {
-          localStorage.setItem(cacheKey, JSON.stringify(next));
+          safeLocalStorageSet(cacheKey, JSON.stringify(next));
         } catch {
           // ignore cache errors
         }
@@ -87,7 +88,7 @@ export default function BusinessTypesClient({
       setUsage((prev) => {
         const next = updater(prev);
         try {
-          localStorage.setItem(usageKey, JSON.stringify(next));
+          safeLocalStorageSet(usageKey, JSON.stringify(next));
         } catch {
           // ignore cache errors
         }
@@ -161,13 +162,13 @@ export default function BusinessTypesClient({
       if (Array.isArray(initialTypes) && initialTypes.length > 0) {
         setTypes(initialTypes);
         try {
-          localStorage.setItem(cacheKey, JSON.stringify(initialTypes));
+          safeLocalStorageSet(cacheKey, JSON.stringify(initialTypes));
         } catch {
           // ignore cache errors
         }
       } else if (error) {
         try {
-          const raw = localStorage.getItem(cacheKey);
+          const raw = safeLocalStorageGet(cacheKey);
           if (raw) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
@@ -182,7 +183,7 @@ export default function BusinessTypesClient({
       if (initialUsage && Object.keys(initialUsage).length > 0) {
         setUsage(initialUsage);
         try {
-          localStorage.setItem(usageKey, JSON.stringify(initialUsage));
+          safeLocalStorageSet(usageKey, JSON.stringify(initialUsage));
         } catch {
           // ignore cache errors
         }
@@ -191,7 +192,7 @@ export default function BusinessTypesClient({
     }
 
     try {
-      const raw = localStorage.getItem(cacheKey);
+      const raw = safeLocalStorageGet(cacheKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
@@ -203,7 +204,7 @@ export default function BusinessTypesClient({
     }
 
     try {
-      const raw = localStorage.getItem(usageKey);
+      const raw = safeLocalStorageGet(usageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === "object") {

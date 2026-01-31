@@ -4,6 +4,12 @@ import { queueGetPending, queueRemove, queueIncrementRetry } from "./queue";
 import { db } from "@/lib/dexie/db";
 import { SYNC_EVENT_NAME, type SyncEventDetail } from "./sync-events";
 
+const logSync = (...args: unknown[]) => {
+  if (process.env.NODE_ENV !== "production") {
+    console.log(...args);
+  }
+};
+
 // -----------------------------
 // NETWORK STATUS CHECK
 // -----------------------------
@@ -148,7 +154,7 @@ export async function runSyncEngine() {
 
   syncInFlight = true;
   emitSyncEvent({ status: "start", at: Date.now() });
-  console.log("Sync started. Pending:", pending.length);
+  logSync("Sync started. Pending:", pending.length);
 
   // Batch group
   const productCreate: any[] = [];
@@ -452,7 +458,7 @@ export async function runSyncEngine() {
       await queueRemove(item.id!);
     }
 
-    console.log("Sync completed successfully.");
+    logSync("Sync completed successfully.");
     emitSyncEvent({ status: "success", at: Date.now() });
   } catch (err) {
     console.error("Sync failed:", err);
@@ -471,8 +477,12 @@ export async function runSyncEngine() {
 // AUTO START (Runs when online)
 // -----------------------------
 if (typeof window !== "undefined") {
-  window.addEventListener("online", () => {
-    console.log("Back online -> starting sync.");
-    runSyncEngine();
-  });
+  const g = window as Window & { __posSyncOnlineListener?: boolean };
+  if (!g.__posSyncOnlineListener) {
+    g.__posSyncOnlineListener = true;
+    window.addEventListener("online", () => {
+      logSync("Back online -> starting sync.");
+      runSyncEngine();
+    });
+  }
 }

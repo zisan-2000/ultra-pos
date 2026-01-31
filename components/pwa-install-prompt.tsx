@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
@@ -32,14 +33,14 @@ export default function PWAInstallPrompt() {
   const autoPromptedRef = useRef(false);
 
   const getSuppressionState = () => {
-    const dismissed = localStorage.getItem("pwa-install-dismissed");
+    const dismissed = safeLocalStorageGet("pwa-install-dismissed");
     if (dismissed) {
       const dismissedTime = parseInt(dismissed, 10);
       const weekInMs = 7 * 24 * 60 * 60 * 1000;
       if (Date.now() - dismissedTime < weekInMs) return true;
     }
 
-    const later = localStorage.getItem("pwa-install-later");
+    const later = safeLocalStorageGet("pwa-install-later");
     if (later) {
       const laterTime = parseInt(later, 10);
       const dayInMs = 24 * 60 * 60 * 1000;
@@ -163,14 +164,14 @@ export default function PWAInstallPrompt() {
   const handleDismiss = () => {
     setShowInstallPrompt(false);
     // Don't show again for 7 days
-    localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+    safeLocalStorageSet("pwa-install-dismissed", Date.now().toString());
     setIsSuppressed(true);
   };
 
   const handleInstallLater = () => {
     setShowInstallPrompt(false);
     // Show again after 1 day
-    localStorage.setItem('pwa-install-later', Date.now().toString());
+    safeLocalStorageSet("pwa-install-later", Date.now().toString());
     setIsSuppressed(true);
   };
 

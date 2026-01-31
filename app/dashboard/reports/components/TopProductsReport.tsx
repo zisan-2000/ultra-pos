@@ -7,6 +7,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type TopProduct = { name: string; qty: number; revenue: number };
 
@@ -22,7 +23,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
   const readCached = useCallback(() => {
     if (typeof window === "undefined") return null;
     try {
-      const raw = localStorage.getItem(buildCacheKey());
+      const raw = safeLocalStorageGet(buildCacheKey());
       if (!raw) {
         return null;
       }
@@ -63,7 +64,7 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
     const rows = Array.isArray(json?.data) ? json.data : [];
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(buildCacheKey(), JSON.stringify(rows));
+        safeLocalStorageSet(buildCacheKey(), JSON.stringify(rows));
       } catch (err) {
         handlePermissionError(err);
         console.warn("Top products cache write failed", err);

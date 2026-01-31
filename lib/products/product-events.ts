@@ -1,5 +1,7 @@
 // lib/products/product-events.ts
 
+import { safeLocalStorageSet } from "@/lib/storage";
+
 export const PRODUCT_EVENT_NAME = "pos:products";
 
 export type ProductEventDetail = {
@@ -29,7 +31,7 @@ export function emitProductEvent(detail: ProductEventDetail) {
         ...detail,
         nonce: Math.random().toString(36).slice(2),
       });
-      localStorage.setItem(PRODUCT_EVENT_NAME, payload);
+      safeLocalStorageSet(PRODUCT_EVENT_NAME, payload);
     } catch (err) {
       console.warn("Product storage event failed", err);
     }

@@ -15,6 +15,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type User = {
   id: string;
@@ -61,7 +62,7 @@ export default function UserManagementPage({
       setUsers((prev) => {
         const next = updater(prev);
         try {
-          localStorage.setItem(usersCacheKey, JSON.stringify(next));
+          safeLocalStorageSet(usersCacheKey, JSON.stringify(next));
         } catch (err) {
           handlePermissionError(err);
           console.warn("User cache write failed", err);
@@ -75,7 +76,7 @@ export default function UserManagementPage({
   const loadFromCache = useCallback(() => {
     let loaded = false;
     try {
-      const rawUsers = localStorage.getItem(usersCacheKey);
+      const rawUsers = safeLocalStorageGet(usersCacheKey);
       if (rawUsers) {
         const parsed = JSON.parse(rawUsers) as User[];
         if (Array.isArray(parsed)) {
@@ -89,7 +90,7 @@ export default function UserManagementPage({
     }
 
     try {
-      const rawRoles = localStorage.getItem(rolesCacheKey);
+      const rawRoles = safeLocalStorageGet(rolesCacheKey);
       if (rawRoles) {
         const parsed = JSON.parse(rawRoles) as Role[];
         if (Array.isArray(parsed)) {
@@ -125,8 +126,8 @@ export default function UserManagementPage({
       setUsers(usersData);
       setCreatableRoles(rolesData);
       try {
-        localStorage.setItem(usersCacheKey, JSON.stringify(usersData));
-        localStorage.setItem(rolesCacheKey, JSON.stringify(rolesData));
+        safeLocalStorageSet(usersCacheKey, JSON.stringify(usersData));
+        safeLocalStorageSet(rolesCacheKey, JSON.stringify(rolesData));
       } catch (err) {
         handlePermissionError(err);
         console.warn("User cache write failed", err);

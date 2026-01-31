@@ -13,6 +13,7 @@ import {
 import { useCart } from "@/hooks/use-cart";
 import { getStockToneClasses } from "@/lib/stock-level";
 import ConfirmDialog from "@/components/confirm-dialog";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type PosProductSearchProps = {
   shopId: string;
@@ -195,6 +196,10 @@ export const PosProductSearch = memo(function PosProductSearch({
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const quickSlotsRef = useRef<QuickSlot[] | null>(null);
   const lastAddRef = useRef(0);
+  const recentlyAddedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const cooldownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storageKey = useMemo(() => `pos-usage-${shopId}`, [shopId]);
   const [renderCount, setRenderCount] = useState(INITIAL_RENDER);
 
@@ -203,7 +208,7 @@ export const PosProductSearch = memo(function PosProductSearch({
 
   useEffect(() => {
     const stored =
-      typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+      typeof window !== "undefined" ? safeLocalStorageGet(storageKey) : null;
     let parsed: Record<string, UsageEntry> = {};
     if (stored) {
       try {
@@ -235,7 +240,7 @@ export const PosProductSearch = memo(function PosProductSearch({
     if (typeof window === "undefined") return;
     const cancel = scheduleIdle(() => {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(usage));
+        safeLocalStorageSet(storageKey, JSON.stringify(usage));
       } catch {
         // ignore quota / serialization errors in production UI
       }
@@ -254,6 +259,17 @@ export const PosProductSearch = memo(function PosProductSearch({
 
     return () => {
       recognitionRef.current?.stop?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (recentlyAddedTimeoutRef.current) {
+        clearTimeout(recentlyAddedTimeoutRef.current);
+      }
+      if (cooldownTimeoutRef.current) {
+        clearTimeout(cooldownTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -429,8 +445,20 @@ export const PosProductSearch = memo(function PosProductSearch({
       setCooldownProductId(product.id);
       bumpUsage(product.id);
       setRecentlyAdded(product.id);
-      setTimeout(() => setRecentlyAdded(null), 450);
-      setTimeout(() => setCooldownProductId(null), 220);
+      if (recentlyAddedTimeoutRef.current) {
+        clearTimeout(recentlyAddedTimeoutRef.current);
+      }
+      if (cooldownTimeoutRef.current) {
+        clearTimeout(cooldownTimeoutRef.current);
+      }
+      recentlyAddedTimeoutRef.current = setTimeout(
+        () => setRecentlyAdded(null),
+        450
+      );
+      cooldownTimeoutRef.current = setTimeout(
+        () => setCooldownProductId(null),
+        220
+      );
     },
     [add, bumpUsage, setCooldownProductId, setRecentlyAdded, shopId]
   );

@@ -13,6 +13,7 @@ import { handlePermissionError } from "@/lib/permission-toast";
 import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
 import { useRealtimeStatus } from "@/lib/realtime/status";
 import { usePageVisibility } from "@/lib/use-page-visibility";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type CashEntry = {
   id: string;
@@ -153,6 +154,7 @@ export function CashListClient({
   const lastEventAtRef = useRef(0);
   const wasVisibleRef = useRef(isVisible);
   const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
+  const pollingEnabled = !realtime.connected;
   const EVENT_DEBOUNCE_MS = 800;
 
   const canApplyCustom = (() => {
@@ -180,7 +182,7 @@ export function CashListClient({
       setItems((prev) => {
         const next = prev.filter((item) => item.id !== id);
         try {
-          localStorage.setItem(`cachedCash:${shopId}`, JSON.stringify(next));
+          safeLocalStorageSet(`cachedCash:${shopId}`, JSON.stringify(next));
         } catch {
           // ignore cache errors
         }
@@ -212,6 +214,7 @@ export function CashListClient({
 
     const handleCashUpdate = (event: ReportEventData) => {
       if (event.shopId !== shopId) return;
+      if (event.metadata?.source === "ui") return;
       const now = event.timestamp ?? Date.now();
       if (now - lastEventAtRef.current < EVENT_DEBOUNCE_MS) return;
       if (refreshInFlightRef.current) return;
@@ -234,7 +237,7 @@ export function CashListClient({
   }, [online, router, shopId]);
 
   useEffect(() => {
-    if (!online || !isVisible) return;
+    if (!online || !isVisible || !pollingEnabled) return;
     const intervalId = setInterval(() => {
       const now = Date.now();
       if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
@@ -247,7 +250,15 @@ export function CashListClient({
     }, pollIntervalMs);
 
     return () => clearInterval(intervalId);
-  }, [online, isVisible, router, syncing, pendingCount, pollIntervalMs]);
+  }, [
+    online,
+    isVisible,
+    pollingEnabled,
+    router,
+    syncing,
+    pendingCount,
+    pollIntervalMs,
+  ]);
 
   useEffect(() => {
     if (!online) return;
@@ -273,7 +284,7 @@ export function CashListClient({
         if (cancelled) return;
         if (!entries || entries.length === 0) {
           try {
-            const cached = localStorage.getItem(`cachedCash:${shopId}`);
+            const cached = safeLocalStorageGet(`cachedCash:${shopId}`);
             if (cached) setItems(JSON.parse(cached) as CashEntry[]);
           } catch {
             // ignore
@@ -319,7 +330,7 @@ export function CashListClient({
         .bulkPut(mapped as any)
         .catch((err) => console.error("Seed Dexie cash failed", err));
       try {
-        localStorage.setItem(`cachedCash:${shopId}`, JSON.stringify(rows));
+        safeLocalStorageSet(`cachedCash:${shopId}`, JSON.stringify(rows));
       } catch {
         // ignore
       }

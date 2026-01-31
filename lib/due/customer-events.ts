@@ -1,5 +1,7 @@
 // lib/due/customer-events.ts
 
+import { safeLocalStorageSet } from "@/lib/storage";
+
 export const DUE_CUSTOMERS_EVENT_NAME = "pos:dueCustomers";
 
 export type DueCustomersEventDetail = {
@@ -31,7 +33,7 @@ export function emitDueCustomersEvent(detail: DueCustomersEventDetail) {
         ...detail,
         nonce: Math.random().toString(36).slice(2),
       });
-      localStorage.setItem(DUE_CUSTOMERS_EVENT_NAME, payload);
+      safeLocalStorageSet(DUE_CUSTOMERS_EVENT_NAME, payload);
     } catch (err) {
       console.warn("Due customer storage event failed", err);
     }

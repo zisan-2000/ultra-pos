@@ -7,6 +7,7 @@ import { UsersRolesPanel } from "./UsersRolesPanel";
 import { RolesPermissionsPanel } from "./RolesPermissionsPanel";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type RoleWithPermissions = Role & { rolePermissions: { permissionId: string }[] };
 type UserRow = {
@@ -55,7 +56,7 @@ export default function RbacAdminClient({ users, roleOptions, roles, permissions
       setCachedRoles(roles);
       setCachedPermissions(permissions);
       try {
-        localStorage.setItem(
+        safeLocalStorageSet(
           cacheKey,
           JSON.stringify({ users, roleOptions, roles, permissions })
         );
@@ -66,7 +67,7 @@ export default function RbacAdminClient({ users, roleOptions, roles, permissions
     }
 
     try {
-      const raw = localStorage.getItem(cacheKey);
+      const raw = safeLocalStorageGet(cacheKey);
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<Props>;
       if (Array.isArray(parsed.users)) setCachedUsers(parsed.users as UserRow[]);

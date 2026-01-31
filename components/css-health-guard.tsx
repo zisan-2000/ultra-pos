@@ -5,12 +5,25 @@ import { usePathname } from "next/navigation";
 
 const RECOVERY_FLAG = "pos.css.recovery.attempted";
 const CHECK_DELAY_MS = 1200;
+const RECOVERY_PARAM = "cssRecovery";
 
 async function recoverStyles() {
   if ((window as Window & { __posCssRecovery?: boolean }).__posCssRecovery) {
     return;
   }
   (window as Window & { __posCssRecovery?: boolean }).__posCssRecovery = true;
+
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has(RECOVERY_PARAM)) {
+      return;
+    }
+    url.searchParams.set(RECOVERY_PARAM, "1");
+    window.location.replace(url.toString());
+    return;
+  } catch {
+    // Ignore URL parsing errors; continue with storage-based guard.
+  }
 
   try {
     if (sessionStorage.getItem(RECOVERY_FLAG)) return;

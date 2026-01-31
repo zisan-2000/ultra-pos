@@ -14,6 +14,14 @@ import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ShopSelectorClient from "../ShopSelectorClient";
 import { StatCard } from "./StatCard";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import {
   PREFETCH_PRESETS,
@@ -24,16 +32,28 @@ import {
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { scheduleIdle } from "@/lib/schedule-idle";
 import { handlePermissionError } from "@/lib/permission-toast";
-import useInstantReports from "@/hooks/useInstantReports";
 import { reportEvents } from "@/lib/events/reportEvents";
 import { useRealtimeStatus } from "@/lib/realtime/status";
 import { usePageVisibility } from "@/lib/use-page-visibility";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import { generateCSV } from "@/lib/utils/csv";
+import { downloadFile } from "@/lib/utils/download";
 
 type Summary = {
-  sales: { totalAmount: number; completedCount?: number; voidedCount?: number };
+  sales: {
+    totalAmount: number;
+    completedCount?: number;
+    voidedCount?: number;
+    count?: number;
+  };
   expense: { totalAmount: number; count?: number };
   cash: { balance: number; totalIn: number; totalOut: number };
-  profit: { profit: number; salesTotal: number; expenseTotal: number };
+  profit: {
+    profit: number;
+    salesTotal: number;
+    expenseTotal: number;
+    cogs?: number;
+  };
 };
 
 type Props = {
@@ -112,6 +132,51 @@ const LowStockReport = dynamic(() => import("./LowStockReport"), {
   loading: () => <ReportSkeleton />,
 });
 
+type ReportKey = (typeof NAV)[number]["key"];
+
+const prefetchReportModule = (key: ReportKey) => {
+  switch (key) {
+    case "sales":
+      return import("./SalesReport");
+    case "expenses":
+      return import("./ExpenseReport");
+    case "cash":
+      return import("./CashbookReport");
+    case "payment":
+      return import("./PaymentMethodReport");
+    case "profit":
+      return import("./ProfitTrendReport");
+    case "products":
+      return import("./TopProductsReport");
+    case "stock":
+      return import("./LowStockReport");
+    default:
+      return Promise.resolve();
+  }
+};
+
+const PREFETCH_REPORTS_BY_TAB: Record<ReportKey, ReportKey[]> = {
+  summary: ["sales", "expenses"],
+  sales: ["expenses", "cash"],
+  expenses: ["sales", "cash"],
+  cash: ["payment", "profit"],
+  payment: ["profit"],
+  profit: ["payment", "products"],
+  products: ["stock"],
+  stock: [],
+};
+
+const PREFETCH_REPORT_DATA_BY_TAB: Record<ReportKey, ReportKey[]> = {
+  summary: ["sales", "expenses", "cash"],
+  sales: ["expenses", "cash"],
+  expenses: ["sales", "cash"],
+  cash: ["payment", "profit"],
+  payment: ["profit"],
+  profit: ["payment"],
+  products: ["stock"],
+  stock: ["products"],
+};
+
 const NAV = [
   { key: "summary", label: "সারাংশ" },
   { key: "sales", label: "বিক্রি" },
@@ -132,6 +197,49 @@ const PRESETS: { key: RangePreset; label: string }[] = [
   { key: "custom", label: "কাস্টম" },
 ];
 
+const EXPORT_PAGE_LIMIT = REPORT_ROW_LIMIT;
+const EXPORT_MAX_PAGES = 250;
+const EXPORT_MAX_ROWS = 5000;
+const EXPORT_LOW_STOCK_THRESHOLD = 20;
+
+type ExportCursor = { at: string; id: string };
+
+type ExportTarget =
+  | "summary"
+  | "sales"
+  | "expenses"
+  | "cash"
+  | "payment"
+  | "profit"
+  | "products"
+  | "stock";
+
+type ExportKey = ExportTarget | "active" | "all";
+
+function buildExportSuffix(rangeFrom?: string, rangeTo?: string) {
+  if (rangeFrom && rangeTo) {
+    return rangeFrom === rangeTo
+      ? rangeFrom
+      : `${rangeFrom}_to_${rangeTo}`;
+  }
+  return rangeFrom ?? rangeTo ?? "all";
+}
+
+function isSummaryPayload(value: unknown): value is Summary {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Summary;
+  return (
+    typeof payload.sales?.totalAmount === "number" &&
+    typeof payload.expense?.totalAmount === "number" &&
+    typeof payload.cash?.balance === "number" &&
+    typeof payload.cash?.totalIn === "number" &&
+    typeof payload.cash?.totalOut === "number" &&
+    typeof payload.profit?.profit === "number" &&
+    typeof payload.profit?.salesTotal === "number" &&
+    typeof payload.profit?.expenseTotal === "number"
+  );
+}
+
 export default function ReportsClient({
   shopId,
   shopName,
@@ -142,24 +250,23 @@ export default function ReportsClient({
   const realtime = useRealtimeStatus();
   const isVisible = usePageVisibility();
   const queryClient = useQueryClient();
-  
-  // World-Class Instant Reports Integration
-  const instantReports = useInstantReports({
-    shopId,
-    initialData: summary,
-    enableRealTime: true,
-    cacheTimeout: 30000,
-    prefetchRelated: true
-  });
-  
+
   const [active, setActive] = useState<(typeof NAV)[number]["key"]>("summary");
   const [preset, setPreset] = useState<RangePreset>("today");
   const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
   const [customTo, setCustomTo] = useState<string | undefined>(undefined);
   const [realTimeIndicator, setRealTimeIndicator] = useState(false);
+  const [lowStockThreshold, setLowStockThreshold] = useState(
+    EXPORT_LOW_STOCK_THRESHOLD
+  );
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportingKey, setExportingKey] = useState<ExportKey | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const lastEventAtRef = useRef(0);
   const wasVisibleRef = useRef(isVisible);
+  const indicatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
+  const pollingEnabled = !realtime.connected;
   const EVENT_DEBOUNCE_MS = 600;
   
   // Auto-sync on real-time events
@@ -168,6 +275,7 @@ export default function ReportsClient({
       'sync-complete',
       async (event) => {
         if (event.shopId === shopId) {
+          if (!isSummaryPayload(event.data)) return;
           // Refresh query data with latest from server
           queryClient.setQueryData(
             ["reports", "summary", shopId, "all", "all"],
@@ -189,7 +297,9 @@ export default function ReportsClient({
       'metrics-updated',
       (event) => {
         if (event.shopId === shopId) {
-          console.log('Real-time Reports Metrics:', event.data);
+          if (process.env.NODE_ENV !== "production") {
+            console.debug('Real-time Reports Metrics:', event.data);
+          }
         }
       },
       { shopId, priority: 1 }
@@ -206,6 +316,10 @@ export default function ReportsClient({
   const presetLabel = useMemo(
     () => PRESETS.find((item) => item.key === preset)?.label ?? "",
     [preset]
+  );
+  const exportSuffix = useMemo(
+    () => buildExportSuffix(range.from, range.to),
+    [range.from, range.to]
   );
   const rangeLabel = useMemo(() => {
     if (range.from && range.to) {
@@ -229,7 +343,7 @@ export default function ReportsClient({
       if (typeof window === "undefined") return null;
       const key = buildSummaryKey(rangeFrom, rangeTo);
       try {
-        const raw = localStorage.getItem(key);
+        const raw = safeLocalStorageGet(key);
         if (!raw) return null;
         const parsed = JSON.parse(raw) as Summary;
         return parsed && parsed.sales ? parsed : null;
@@ -260,7 +374,7 @@ export default function ReportsClient({
       if (typeof window !== "undefined") {
         const key = buildSummaryKey(rangeFrom, rangeTo);
         try {
-          localStorage.setItem(key, JSON.stringify(json));
+          safeLocalStorageSet(key, JSON.stringify(json));
         } catch (err) {
           handlePermissionError(err);
           console.warn("Summary cache write failed", err);
@@ -287,14 +401,6 @@ export default function ReportsClient({
   const liveSummary = summaryQuery.data ?? summary;
   const summaryLoading = summaryQuery.isFetching && online;
   const summarySnapshot = `${liveSummary.sales.totalAmount.toFixed(1)} ৳ বিক্রি | লাভ ${liveSummary.profit.profit.toFixed(1)} ৳`;
-  
-  // Real-time sync trigger
-  const triggerRealTimeSync = useCallback(() => {
-    instantReports.refresh();
-  }, [instantReports]);
-  
-  // Get real-time metrics for debugging
-  const realTimeMetrics = instantReports.metrics;
 
   const refreshSummaryFresh = useCallback(async () => {
     if (!online) return;
@@ -392,11 +498,11 @@ export default function ReportsClient({
     const mutationKey = `reports-last-mutation:${shopId}`;
     const refreshKey = `reports-last-refresh:${shopId}`;
     const lastMutation = Number(
-      window.localStorage.getItem(mutationKey) || "0"
+      safeLocalStorageGet(mutationKey) || "0"
     );
     if (!lastMutation) return;
     const lastRefresh = Number(
-      window.localStorage.getItem(refreshKey) || "0"
+      safeLocalStorageGet(refreshKey) || "0"
     );
     if (lastMutation <= lastRefresh) return;
     if (Date.now() - lastMutation > 2 * 60 * 1000) return;
@@ -411,7 +517,7 @@ export default function ReportsClient({
     invalidateLowStock();
 
     try {
-      window.localStorage.setItem(refreshKey, String(Date.now()));
+      safeLocalStorageSet(refreshKey, String(Date.now()));
     } catch {
       // ignore storage failures
     }
@@ -431,7 +537,12 @@ export default function ReportsClient({
   useEffect(() => {
     const handleIndicator = () => {
       setRealTimeIndicator(true);
-      setTimeout(() => setRealTimeIndicator(false), 1000);
+      if (indicatorTimeoutRef.current) {
+        clearTimeout(indicatorTimeoutRef.current);
+      }
+      indicatorTimeoutRef.current = setTimeout(() => {
+        setRealTimeIndicator(false);
+      }, 1000);
     };
 
     const maybeDebounce = () => {
@@ -485,6 +596,10 @@ export default function ReportsClient({
       reportEvents.removeListener(saleUpdateListener);
       reportEvents.removeListener(expenseUpdateListener);
       reportEvents.removeListener(cashUpdateListener);
+      if (indicatorTimeoutRef.current) {
+        clearTimeout(indicatorTimeoutRef.current);
+        indicatorTimeoutRef.current = null;
+      }
     };
   }, [
     shopId,
@@ -520,7 +635,7 @@ export default function ReportsClient({
   }, [online, shopId, fetchSummary, queryClient]);
 
   useEffect(() => {
-    if (!online || !isVisible) return;
+    if (!online || !isVisible || !pollingEnabled) return;
     const intervalId = setInterval(() => {
       const now = Date.now();
       if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
@@ -531,6 +646,7 @@ export default function ReportsClient({
   }, [
     online,
     isVisible,
+    pollingEnabled,
     refreshSummaryFresh,
     invalidateActiveReport,
     pollIntervalMs,
@@ -548,9 +664,15 @@ export default function ReportsClient({
 
   useEffect(() => {
     if (!online) return;
+    const connection = (navigator as any)?.connection;
+    if (connection?.saveData) return;
+    if (["slow-2g", "2g"].includes(connection?.effectiveType)) return;
+
+    const dataTargets = PREFETCH_REPORT_DATA_BY_TAB[active] ?? [];
+    if (dataTargets.length === 0) return;
+
     const rangeFrom = range.from ?? "all";
     const rangeTo = range.to ?? "all";
-    const lowStockThreshold = 20;
     const salesKey = [
       "reports",
       "sales",
@@ -584,12 +706,18 @@ export default function ReportsClient({
     const paymentKey = ["reports", "payment", shopId, rangeFrom, rangeTo];
     const profitKey = ["reports", "profit", shopId, rangeFrom, rangeTo];
     const topProductsKey = ["reports", "top-products", shopId, REPORT_ROW_LIMIT];
-    const lowStockKey = ["reports", "low-stock", shopId, lowStockThreshold, REPORT_ROW_LIMIT];
+    const lowStockKey = [
+      "reports",
+      "low-stock",
+      shopId,
+      lowStockThreshold,
+      REPORT_ROW_LIMIT,
+    ];
 
     const cancel = scheduleIdle(() => {
       const tasks: Promise<unknown>[] = [];
 
-      if (!queryClient.getQueryData(salesKey)) {
+      if (dataTargets.includes("sales") && !queryClient.getQueryData(salesKey)) {
         tasks.push(
           queryClient
             .prefetchQuery({
@@ -618,7 +746,10 @@ export default function ReportsClient({
         );
       }
 
-      if (!queryClient.getQueryData(expensesKey)) {
+      if (
+        dataTargets.includes("expenses") &&
+        !queryClient.getQueryData(expensesKey)
+      ) {
         tasks.push(
           queryClient
             .prefetchQuery({
@@ -647,7 +778,7 @@ export default function ReportsClient({
         );
       }
 
-      if (!queryClient.getQueryData(cashKey)) {
+      if (dataTargets.includes("cash") && !queryClient.getQueryData(cashKey)) {
         tasks.push(
           queryClient
             .prefetchQuery({
@@ -676,7 +807,10 @@ export default function ReportsClient({
         );
       }
 
-      if (!queryClient.getQueryData(paymentKey)) {
+      if (
+        dataTargets.includes("payment") &&
+        !queryClient.getQueryData(paymentKey)
+      ) {
         tasks.push(
           queryClient
             .prefetchQuery({
@@ -700,7 +834,10 @@ export default function ReportsClient({
         );
       }
 
-      if (!queryClient.getQueryData(profitKey)) {
+      if (
+        dataTargets.includes("profit") &&
+        !queryClient.getQueryData(profitKey)
+      ) {
         tasks.push(
           queryClient
             .prefetchQuery({
@@ -722,7 +859,10 @@ export default function ReportsClient({
         );
       }
 
-      if (!queryClient.getQueryData(topProductsKey)) {
+      if (
+        dataTargets.includes("products") &&
+        !queryClient.getQueryData(topProductsKey)
+      ) {
         tasks.push(
           queryClient
             .prefetchQuery({
@@ -748,7 +888,10 @@ export default function ReportsClient({
         );
       }
 
-      if (!queryClient.getQueryData(lowStockKey)) {
+      if (
+        dataTargets.includes("stock") &&
+        !queryClient.getQueryData(lowStockKey)
+      ) {
         tasks.push(
           queryClient
             .prefetchQuery({
@@ -778,35 +921,290 @@ export default function ReportsClient({
       if (tasks.length > 0) {
         Promise.all(tasks).catch(() => null);
       }
-    }, 50);
+    }, 150);
 
     return () => cancel();
-  }, [online, shopId, range.from, range.to, queryClient]);
+  }, [active, online, shopId, range.from, range.to, queryClient, lowStockThreshold]);
 
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const id = setTimeout(() => {
-      Promise.all([
-        import("./SalesReport"),
-        import("./ExpenseReport"),
-        import("./CashbookReport"),
-        import("./PaymentMethodReport"),
-        import("./ProfitTrendReport"),
-        import("./TopProductsReport"),
-        import("./LowStockReport"),
-      ]).catch(() => {
-        // ignore prefetch errors
-      });
-    }, 0);
-    return () => clearTimeout(id);
-  }, []);
+    if (!online) return;
+    const connection = (navigator as any)?.connection;
+    if (connection?.saveData) return;
+    if (["slow-2g", "2g"].includes(connection?.effectiveType)) return;
+
+    const targets = PREFETCH_REPORTS_BY_TAB[active] ?? [];
+    if (targets.length === 0) return;
+
+    const cancel = scheduleIdle(() => {
+      Promise.all(targets.map((key) => prefetchReportModule(key))).catch(
+        () => null
+      );
+    }, 250);
+
+    return () => cancel();
+  }, [active, online]);
 
   useEffect(() => {
     if (preset === "custom" && customFrom && customTo && customFrom > customTo) {
       alert("শুরুর তারিখ শেষের তারিখের আগে হতে হবে");
     }
   }, [preset, customFrom, customTo]);
+
+  const fetchAllRows = useCallback(
+    async (endpoint: string, rangeFrom?: string, rangeTo?: string) => {
+      const rows: any[] = [];
+      let cursor: ExportCursor | null = null;
+      let pages = 0;
+
+      while (true) {
+        const params = new URLSearchParams({
+          shopId,
+          limit: String(EXPORT_PAGE_LIMIT),
+        });
+        if (rangeFrom) params.append("from", rangeFrom);
+        if (rangeTo) params.append("to", rangeTo);
+        if (cursor) {
+          params.append("cursorAt", cursor.at);
+          params.append("cursorId", cursor.id);
+        }
+
+        const res = await fetch(`${endpoint}?${params.toString()}`);
+        if (!res.ok) {
+          throw new Error("Report fetch failed");
+        }
+        const data = await res.json();
+        const nextRows = Array.isArray(data?.rows) ? data.rows : [];
+        rows.push(...nextRows);
+
+        if (rows.length > EXPORT_MAX_ROWS) {
+          throw new Error("Too many rows to export");
+        }
+
+        if (!data?.hasMore || !data?.nextCursor) break;
+        cursor = data.nextCursor;
+        pages += 1;
+        if (pages >= EXPORT_MAX_PAGES) {
+          throw new Error("Export limit reached");
+        }
+      }
+
+      return rows;
+    },
+    [shopId]
+  );
+
+  const fetchReportData = useCallback(
+    async (endpoint: string, params: URLSearchParams) => {
+      const res = await fetch(`${endpoint}?${params.toString()}`, {
+        cache: "no-cache",
+      });
+      if (!res.ok) throw new Error("Report fetch failed");
+      const text = await res.text();
+      if (!text) return [];
+      const json = JSON.parse(text);
+      return Array.isArray(json?.data) ? json.data : json;
+    },
+    []
+  );
+
+  const exportSingle = useCallback(
+    async (target: ExportTarget) => {
+      switch (target) {
+        case "summary": {
+          const summaryData = await fetchSummary(range.from, range.to, true);
+          const salesCount =
+            summaryData.sales.count ?? summaryData.sales.completedCount ?? 0;
+          const summaryCsv = generateCSV(
+            [
+              "range_from",
+              "range_to",
+              "sales_total",
+              "sales_count",
+              "sales_voided",
+              "expense_total",
+              "expense_count",
+              "cash_in",
+              "cash_out",
+              "cash_balance",
+              "profit",
+              "cogs",
+            ],
+            [
+              {
+                range_from: range.from ?? "all",
+                range_to: range.to ?? "all",
+                sales_total: summaryData.sales.totalAmount ?? 0,
+                sales_count: salesCount,
+                sales_voided: summaryData.sales.voidedCount ?? 0,
+                expense_total: summaryData.expense.totalAmount ?? 0,
+                expense_count: summaryData.expense.count ?? 0,
+                cash_in: summaryData.cash.totalIn ?? 0,
+                cash_out: summaryData.cash.totalOut ?? 0,
+                cash_balance: summaryData.cash.balance ?? 0,
+                profit: summaryData.profit.profit ?? 0,
+                cogs: summaryData.profit.cogs ?? 0,
+              },
+            ]
+          );
+          downloadFile(`summary-${exportSuffix}.csv`, summaryCsv);
+          return;
+        }
+        case "sales": {
+          const rows = await fetchAllRows(
+            "/api/reports/sales",
+            range.from,
+            range.to
+          );
+          const csv = generateCSV(
+            ["id", "saleDate", "totalAmount", "paymentMethod", "note"],
+            rows
+          );
+          downloadFile(`sales-${exportSuffix}.csv`, csv);
+          return;
+        }
+        case "expenses": {
+          const rows = await fetchAllRows(
+            "/api/reports/expenses",
+            range.from,
+            range.to
+          );
+          const csv = generateCSV(
+            ["id", "expenseDate", "amount", "category"],
+            rows
+          );
+          downloadFile(`expenses-${exportSuffix}.csv`, csv);
+          return;
+        }
+        case "cash": {
+          const rows = await fetchAllRows(
+            "/api/reports/cash",
+            range.from,
+            range.to
+          );
+          const csv = generateCSV(
+            ["id", "createdAt", "entryType", "amount", "reason"],
+            rows
+          );
+          downloadFile(`cashbook-${exportSuffix}.csv`, csv);
+          return;
+        }
+        case "payment": {
+          const params = new URLSearchParams({ shopId, fresh: "1" });
+          if (range.from) params.append("from", range.from);
+          if (range.to) params.append("to", range.to);
+          const rows = await fetchReportData(
+            "/api/reports/payment-method",
+            params
+          );
+          const csv = generateCSV(["name", "value", "count"], rows);
+          downloadFile(`payment-method-${exportSuffix}.csv`, csv);
+          return;
+        }
+        case "profit": {
+          const params = new URLSearchParams({ shopId, fresh: "1" });
+          if (range.from) params.append("from", range.from);
+          if (range.to) params.append("to", range.to);
+          const rows = await fetchReportData("/api/reports/profit-trend", params);
+          const normalized = Array.isArray(rows)
+            ? rows.map((row: any) => ({
+                date: row.date,
+                sales: row.sales ?? 0,
+                expense: row.expense ?? 0,
+                profit: Number(row.sales ?? 0) - Number(row.expense ?? 0),
+              }))
+            : [];
+          const csv = generateCSV(["date", "sales", "expense", "profit"], normalized);
+          downloadFile(`profit-trend-${exportSuffix}.csv`, csv);
+          return;
+        }
+        case "products": {
+          const params = new URLSearchParams({
+            shopId,
+            limit: String(REPORT_ROW_LIMIT),
+            fresh: "1",
+          });
+          const rows = await fetchReportData("/api/reports/top-products", params);
+          const csv = generateCSV(["name", "qty", "revenue"], rows);
+          downloadFile("top-products-all.csv", csv);
+          return;
+        }
+        case "stock": {
+          const params = new URLSearchParams({
+            shopId,
+            limit: String(REPORT_ROW_LIMIT),
+            threshold: String(lowStockThreshold),
+            fresh: "1",
+          });
+          const rows = await fetchReportData("/api/reports/low-stock", params);
+          const csv = generateCSV(["id", "name", "stockQty"], rows);
+          downloadFile("low-stock-all.csv", csv);
+          return;
+        }
+        default:
+          return;
+      }
+    },
+    [
+      exportSuffix,
+      fetchAllRows,
+      fetchReportData,
+      fetchSummary,
+      lowStockThreshold,
+      range.from,
+      range.to,
+      shopId,
+    ]
+  );
+
+  const handleExport = useCallback(
+    async (key: ExportKey) => {
+      if (!online) {
+        toast.error("অফলাইনে রিপোর্ট ডাউনলোড করা যাবে না");
+        return;
+      }
+      setExportingKey(key);
+      setExportError(null);
+      const toastId = toast.success("রিপোর্ট ডাউনলোড হচ্ছে...");
+
+      try {
+        if (key === "all") {
+          const targets: ExportTarget[] = [
+            "summary",
+            "sales",
+            "expenses",
+            "cash",
+            "payment",
+            "profit",
+            "products",
+            "stock",
+          ];
+          for (const target of targets) {
+            await exportSingle(target);
+          }
+        } else if (key === "active") {
+          const target =
+            active === "summary"
+              ? "summary"
+              : (active as Exclude<ReportKey, "summary">);
+          await exportSingle(target);
+        } else {
+          await exportSingle(key);
+        }
+
+        toast.success("CSV ডাউনলোড হয়েছে", { id: toastId });
+        setExportOpen(false);
+      } catch (err) {
+        handlePermissionError(err);
+        setExportError("CSV ডাউনলোড করা যায়নি");
+        toast.error("CSV ডাউনলোড করা যায়নি", { id: toastId });
+      } finally {
+        setExportingKey(null);
+      }
+    },
+    [active, exportSingle, online]
+  );
 
   const renderReport = () => {
     switch (active) {
@@ -870,7 +1268,13 @@ export default function ReportsClient({
       case "products":
         return <TopProductsReport shopId={shopId} />;
       case "stock":
-        return <LowStockReport shopId={shopId} />;
+        return (
+          <LowStockReport
+            shopId={shopId}
+            threshold={lowStockThreshold}
+            onThresholdChange={setLowStockThreshold}
+          />
+        );
       default:
         return null;
     }
@@ -901,7 +1305,98 @@ export default function ReportsClient({
             </div>
 
             <div className="w-full md:w-auto">
-              <ShopSelectorClient shops={shops} selectedShopId={shopId} />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <ShopSelectorClient shops={shops} selectedShopId={shopId} />
+                <Dialog
+                  open={exportOpen}
+                  onOpenChange={(open) => {
+                    setExportOpen(open);
+                    if (!open) setExportError(null);
+                  }}
+                >
+                  <div className="inline-flex items-center gap-2">
+                    <DialogTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={!online || exportingKey !== null}
+                        className="inline-flex h-10 items-center justify-center rounded-xl border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary shadow-sm transition hover:bg-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {exportingKey ? "এক্সপোর্ট হচ্ছে..." : "CSV এক্সপোর্ট"}
+                      </button>
+                    </DialogTrigger>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        toast.message("সব রিপোর্ট মানে একাধিক CSV ফাইল ডাউনলোড হবে")
+                      }
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-xs text-muted-foreground hover:bg-muted transition"
+                      title="সব রিপোর্ট মানে একাধিক CSV ফাইল ডাউনলোড হবে"
+                      aria-label="এক্সপোর্ট তথ্য"
+                    >
+                      ℹ️
+                    </button>
+                  </div>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>CSV এক্সপোর্ট</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-xs text-muted-foreground space-y-1">
+                        <p>রেঞ্জ: {rangeLabel ?? "সব সময়"}</p>
+                        <p>
+                          বর্তমান ট্যাব:{" "}
+                          {NAV.find((item) => item.key === active)?.label ??
+                            "সারাংশ"}
+                        </p>
+                        <p>টপ পণ্য ও লো স্টক সবসময় সামগ্রিক ডেটা দেখায়।</p>
+                        <p>বড় রিপোর্টে কিছু সময় লাগতে পারে।</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        {[
+                          { key: "active", label: "বর্তমান ট্যাব" },
+                          { key: "summary", label: "সারাংশ" },
+                          { key: "sales", label: "বিক্রি" },
+                          { key: "expenses", label: "খরচ" },
+                          { key: "cash", label: "ক্যাশ" },
+                          { key: "payment", label: "পেমেন্ট" },
+                          { key: "profit", label: "লাভ" },
+                          { key: "products", label: "টপ পণ্য" },
+                          { key: "stock", label: "লো স্টক" },
+                          { key: "all", label: "সব রিপোর্ট" },
+                        ].map((option) => (
+                          <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => handleExport(option.key as ExportKey)}
+                            disabled={exportingKey !== null}
+                            className="w-full flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted transition disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            <span>{option.label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {exportingKey === option.key
+                                ? "ডাউনলোড হচ্ছে..."
+                                : "ডাউনলোড"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {exportError ? (
+                        <div className="rounded-lg border border-danger/40 bg-danger-soft/60 px-3 py-2 text-xs text-danger">
+                          {exportError}
+                        </div>
+                      ) : null}
+
+                      {!online ? (
+                        <div className="rounded-lg border border-warning/40 bg-warning-soft/60 px-3 py-2 text-xs text-warning">
+                          অফলাইনে CSV এক্সপোর্ট করা যাবে না।
+                        </div>
+                      ) : null}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
           </div>
 
@@ -914,25 +1409,21 @@ export default function ReportsClient({
                 {rangeLabel}
               </span>
             ) : null}
-            <span className={`inline-flex h-7 items-center rounded-full border px-3 transition-all duration-300 ${
-              instantReports.isLoading 
-                ? "bg-yellow-soft text-yellow border-yellow/30 animate-pulse" 
-                : realTimeIndicator 
-                ? "bg-green-soft text-green border-green/30 animate-pulse" 
-                : "bg-primary-soft text-primary border-primary/30"
-            }`}>
-              {instantReports.data ? (
-                <>
-                  {summarySnapshot}
-                  {realTimeIndicator && (
-                    <span className="ml-1 text-xs">🔄 LIVE</span>
-                  )}
-                </>
-              ) : instantReports.isLoading ? (
-                <span className="text-xs">লোডিং...</span>
-              ) : (
-                <span className="text-xs text-muted-foreground">কোনো ডেটা নেই</span>
-              )}
+            <span
+              className={`inline-flex h-7 items-center rounded-full border px-3 transition-all duration-300 ${
+                summaryLoading
+                  ? "bg-yellow-soft text-yellow border-yellow/30 animate-pulse"
+                  : realTimeIndicator
+                  ? "bg-green-soft text-green border-green/30 animate-pulse"
+                  : "bg-primary-soft text-primary border-primary/30"
+              }`}
+            >
+              <>
+                {summarySnapshot}
+                {realTimeIndicator && (
+                  <span className="ml-1 text-xs">🔄 LIVE</span>
+                )}
+              </>
             </span>
             {summaryLoading ? (
               <span
@@ -949,12 +1440,6 @@ export default function ReportsClient({
             >
               {online ? "অনলাইন" : "অফলাইন"}
             </span>
-            {/* Real-time metrics indicator for development */}
-            {process.env.NODE_ENV === 'development' && (
-              <span className="inline-flex h-7 items-center rounded-full border border-blue-30 bg-blue-soft px-3 text-blue text-xs">
-                📊 {instantReports.metrics.updateCount} updates
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -1197,7 +1682,11 @@ export default function ReportsClient({
 
           <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <LazyReport fallback={<ReportSkeleton />}>
-              <LowStockReport shopId={shopId} />
+              <LowStockReport
+                shopId={shopId}
+                threshold={lowStockThreshold}
+                onThresholdChange={setLowStockThreshold}
+              />
             </LazyReport>
           </div>
         </div>

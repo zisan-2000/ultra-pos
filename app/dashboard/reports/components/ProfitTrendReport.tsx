@@ -8,6 +8,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
 import { scheduleIdle } from "@/lib/schedule-idle";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type ProfitRow = { date: string; sales: number; expense: number };
 type Props = { shopId: string; from?: string; to?: string };
@@ -28,7 +29,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
     (rangeFrom?: string, rangeTo?: string) => {
       if (typeof window === "undefined") return null;
       try {
-        const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
+        const raw = safeLocalStorageGet(buildCacheKey(rangeFrom, rangeTo));
         if (!raw) {
           return null;
         }
@@ -65,7 +66,7 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
       const rows = Array.isArray(json?.data) ? json.data : [];
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem(
+          safeLocalStorageSet(
             buildCacheKey(rangeFrom, rangeTo),
             JSON.stringify(rows)
           );

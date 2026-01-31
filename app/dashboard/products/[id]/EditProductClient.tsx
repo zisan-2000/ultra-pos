@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Props = {
   product: any;
@@ -303,7 +304,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   // Load templates
   useEffect(() => {
     if (!templateStorageKey) return;
-    const stored = localStorage.getItem(templateStorageKey);
+    const stored = safeLocalStorageGet(templateStorageKey);
     if (stored) {
       try {
         setTemplates(JSON.parse(stored) as TemplateItem[]);
@@ -316,7 +317,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   // Load categories
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(`customCategories:${shopId}`);
+      const stored = safeLocalStorageGet(`customCategories:${shopId}`);
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
       const custom = Array.isArray(parsed) ? parsed : [];
       const merged = Array.from(new Set([...baseCategories, ...custom, product.category]));
@@ -343,7 +344,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   // Load units (guard against infinite re-renders)
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(`customUnits:${shopId}`);
+      const stored = safeLocalStorageGet(`customUnits:${shopId}`);
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
       const custom = Array.isArray(parsed) ? parsed : [];
 
@@ -381,7 +382,10 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     setSelectedCategory(value);
 
     const customOnly = merged.filter((c) => !baseCategories.includes(c));
-    localStorage.setItem(`customCategories:${shopId}`, JSON.stringify(customOnly));
+    safeLocalStorageSet(
+      `customCategories:${shopId}`,
+      JSON.stringify(customOnly)
+    );
   }
 
   function handleAddCustomUnit() {
@@ -395,7 +399,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     setSelectedUnit(value);
 
     const customOnly = merged.filter((u) => !configUnits.includes(u));
-    localStorage.setItem(`customUnits:${shopId}`, JSON.stringify(customOnly));
+    safeLocalStorageSet(`customUnits:${shopId}`, JSON.stringify(customOnly));
   }
 
   function setNameWithSmartDefaults(raw: string) {
@@ -577,7 +581,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     };
     setTemplates((prev) => {
       const merged = mergeTemplates(prev, template);
-      localStorage.setItem(templateStorageKey, JSON.stringify(merged));
+      safeLocalStorageSet(templateStorageKey, JSON.stringify(merged));
       return merged;
     });
 

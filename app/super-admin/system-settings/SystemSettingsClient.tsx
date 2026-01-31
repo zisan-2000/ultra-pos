@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdminAction } from "@/lib/sync/queue";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type SupportContact = {
   supportPhone?: string | null;
@@ -43,7 +44,7 @@ export default function SystemSettingsClient({
       setCacheMissing(false);
       setQueued(false);
       try {
-        localStorage.setItem(cacheKey, JSON.stringify(initialSupport));
+        safeLocalStorageSet(cacheKey, JSON.stringify(initialSupport));
       } catch {
         // ignore cache errors
       }
@@ -51,7 +52,7 @@ export default function SystemSettingsClient({
     }
 
     try {
-      const raw = localStorage.getItem(cacheKey);
+      const raw = safeLocalStorageGet(cacheKey);
       if (!raw) {
         setCacheMissing(true);
         return;
@@ -96,7 +97,7 @@ export default function SystemSettingsClient({
     const payload = { supportPhone, supportWhatsapp };
     setSupport(payload);
     try {
-      localStorage.setItem(cacheKey, JSON.stringify(payload));
+      safeLocalStorageSet(cacheKey, JSON.stringify(payload));
     } catch {
       // ignore cache errors
     }

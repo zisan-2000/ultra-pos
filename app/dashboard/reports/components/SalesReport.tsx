@@ -5,13 +5,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { generateCSV } from "@/lib/utils/csv";
-import { downloadFile } from "@/lib/utils/download";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
 import { scheduleIdle } from "@/lib/schedule-idle";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Props = { shopId: string; from?: string; to?: string };
 
@@ -48,7 +47,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
     (rangeFrom?: string, rangeTo?: string) => {
       if (typeof window === "undefined") return null;
       try {
-        const raw = localStorage.getItem(buildCacheKey(rangeFrom, rangeTo));
+        const raw = safeLocalStorageGet(buildCacheKey(rangeFrom, rangeTo));
         if (!raw) {
           return null;
         }
@@ -100,7 +99,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
       const rows = data.rows || [];
       if (shouldCache && !cursor && typeof window !== "undefined") {
         try {
-          localStorage.setItem(
+          safeLocalStorageSet(
             buildCacheKey(rangeFrom, rangeTo),
             JSON.stringify(rows)
           );
@@ -252,19 +251,6 @@ export default function SalesReport({ shopId, from, to }: Props) {
             <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
               এই তালিকায় মোট: {shownTotal.toFixed(2)} ৳
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                const csv = generateCSV(
-                  ["id", "saleDate", "totalAmount", "paymentMethod", "note"],
-                  items
-                );
-                downloadFile("sales-report.csv", csv);
-              }}
-              className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-xs font-semibold text-foreground hover:bg-muted transition-colors"
-            >
-              CSV (সর্বশেষ)
-            </button>
           </div>
         </div>
       </div>

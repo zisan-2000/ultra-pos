@@ -28,6 +28,7 @@ import {
   emitDueCustomersEvent,
   subscribeDueCustomersEvent,
 } from "@/lib/due/customer-events";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import {
   db,
   type LocalDueCustomer,
@@ -203,6 +204,7 @@ export default function DuePageClient({
   const lastEventAtRef = useRef(0);
   const wasVisibleRef = useRef(isVisible);
   const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
+  const pollingEnabled = !realtime.connected;
   const EVENT_DEBOUNCE_MS = 800;
   const [voiceReady, setVoiceReady] = useState(false);
   const [listeningField, setListeningField] = useState<VoiceField | null>(null);
@@ -406,7 +408,7 @@ export default function DuePageClient({
   }, []);
 
   useEffect(() => {
-    const storedCustomers = localStorage.getItem(customerTemplateKey);
+    const storedCustomers = safeLocalStorageGet(customerTemplateKey);
     if (storedCustomers) {
       try {
         setCustomerTemplates(JSON.parse(storedCustomers) as CustomerTemplate[]);
@@ -414,7 +416,7 @@ export default function DuePageClient({
         setCustomerTemplates([]);
       }
     }
-    const storedPayments = localStorage.getItem(paymentTemplateKey);
+    const storedPayments = safeLocalStorageGet(paymentTemplateKey);
     if (storedPayments) {
       try {
         setPaymentTemplates(JSON.parse(storedPayments) as PaymentTemplate[]);
@@ -607,7 +609,7 @@ export default function DuePageClient({
   ]);
 
   useEffect(() => {
-    if (!online || !isVisible) return;
+    if (!online || !isVisible || !pollingEnabled) return;
     const intervalId = setInterval(() => {
       const now = Date.now();
       if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
@@ -624,6 +626,7 @@ export default function DuePageClient({
   }, [
     online,
     isVisible,
+    pollingEnabled,
     syncing,
     pendingCount,
     refreshData,
@@ -671,7 +674,7 @@ export default function DuePageClient({
       };
       const merged = mergeCustomerTemplates(customerTemplates, template);
       setCustomerTemplates(merged);
-      localStorage.setItem(customerTemplateKey, JSON.stringify(merged));
+      safeLocalStorageSet(customerTemplateKey, JSON.stringify(merged));
       setNewCustomer({ name: "", phone: "", address: "" });
       await loadCustomersFromDexie();
       emitDueCustomersEvent({ shopId, at: Date.now(), source: "local" });
@@ -698,7 +701,7 @@ export default function DuePageClient({
     };
     const merged = mergeCustomerTemplates(customerTemplates, template);
     setCustomerTemplates(merged);
-    localStorage.setItem(customerTemplateKey, JSON.stringify(merged));
+    safeLocalStorageSet(customerTemplateKey, JSON.stringify(merged));
 
     setNewCustomer({ name: "", phone: "", address: "" });
     await refreshData({ force: true, source: "create" });
@@ -718,7 +721,7 @@ export default function DuePageClient({
     };
     const merged = mergePaymentTemplates(paymentTemplates, template);
     setPaymentTemplates(merged);
-    localStorage.setItem(paymentTemplateKey, JSON.stringify(merged));
+    safeLocalStorageSet(paymentTemplateKey, JSON.stringify(merged));
   }
 
 

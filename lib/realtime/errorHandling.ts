@@ -84,7 +84,7 @@ export class RealTimeErrorHandler {
       
       // Emit recovery event
       reportEvents.emit({
-        type: result.success ? 'sync-complete' : 'error-occurred',
+        type: result.success ? 'recovery-complete' : 'error-occurred',
         shopId: context.shopId,
         timestamp: Date.now(),
         data: {
@@ -382,8 +382,13 @@ export class RealTimeErrorHandler {
   /**
    * Categorize error for intelligent handling
    */
-  private categorizeError(error: Error): string {
-    const message = error.message.toLowerCase();
+  private categorizeError(error: unknown): string {
+    const message =
+      typeof error === "string"
+        ? error.toLowerCase()
+        : error instanceof Error
+          ? error.message.toLowerCase()
+          : String(error ?? "").toLowerCase();
     
     if (message.includes('network') || message.includes('fetch') || message.includes('timeout')) {
       return 'network';
@@ -479,7 +484,7 @@ export class RealTimeErrorHandler {
     if (shopId) {
       const shopErrors = this.errorHistory.get(shopId) || [];
       shopErrors.forEach(error => {
-        const category = this.categorizeError(error.errorData as Error);
+        const category = this.categorizeError(error.errorData ?? error);
         stats.errorsByCategory[category] = (stats.errorsByCategory[category] || 0) + 1;
       });
     }

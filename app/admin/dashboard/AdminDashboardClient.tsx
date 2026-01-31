@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import AgentHierarchyDrilldownClient from "@/components/agent-hierarchy-drilldown-client";
 import { buttonVariants } from "@/components/ui/button";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type StaffEntry = {
   id: string;
@@ -154,7 +155,7 @@ export default function AdminDashboardClient({ userId, initialData }: Props) {
       setData(initialData);
       setCacheMissing(false);
       try {
-        localStorage.setItem(cacheKey, JSON.stringify(initialData));
+        safeLocalStorageSet(cacheKey, JSON.stringify(initialData));
       } catch {
         // ignore cache errors
       }
@@ -162,7 +163,7 @@ export default function AdminDashboardClient({ userId, initialData }: Props) {
     }
 
     try {
-      const raw = localStorage.getItem(cacheKey);
+      const raw = safeLocalStorageGet(cacheKey);
       if (!raw) {
         setCacheMissing(true);
         return;

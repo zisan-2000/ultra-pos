@@ -7,6 +7,7 @@ import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
 import useRealTimeReports from "@/hooks/useRealTimeReports";
 import { emitCashUpdate } from "@/lib/events/reportEvents";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import Link from "next/link";
 
 type SpeechRecognitionInstance = {
@@ -116,7 +117,7 @@ export default function CashFormClient({
 
   useEffect(() => {
     if (!storageKey) return;
-    const stored = localStorage.getItem(storageKey);
+    const stored = safeLocalStorageGet(storageKey);
     if (stored) {
       try {
         setTemplates(JSON.parse(stored) as CashTemplate[]);
@@ -178,7 +179,7 @@ export default function CashFormClient({
 
   function persistTemplates(next: CashTemplate[]) {
     setTemplates(next);
-    localStorage.setItem(storageKey, JSON.stringify(next));
+    safeLocalStorageSet(storageKey, JSON.stringify(next));
   }
 
   function applyTemplate(t: CashTemplate) {

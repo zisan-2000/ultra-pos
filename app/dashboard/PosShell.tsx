@@ -78,7 +78,6 @@ export default function PosShell({
     params.set("shopId", id);
     const next = `${pathname}?${params.toString()}`;
     router.replace(next);
-    router.refresh();
   };
 
   return (

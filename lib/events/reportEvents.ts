@@ -5,6 +5,7 @@
 "use client";
 
 import type { ReportUpdate, Summary } from "@/hooks/useRealTimeReports";
+import { safeLocalStorageSet } from "@/lib/storage";
 
 // Enhanced event types for comprehensive reporting
 export type ReportEventType = 
@@ -16,6 +17,8 @@ export type ReportEventType =
   | 'discount-applied'
   | 'batch-update'
   | 'sync-complete'
+  | 'recovery-complete'
+  | 'performance-report'
   | 'error-occurred'
   | 'metrics-updated';
 
@@ -98,6 +101,8 @@ class ReportEventEmitter extends EventTarget {
       'discount-applied',
       'batch-update',
       'sync-complete',
+      'recovery-complete',
+      'performance-report',
       'error-occurred',
       'metrics-updated'
     ];
@@ -401,10 +406,7 @@ export const reportEvents = new ReportEventEmitter();
 const markReportMutation = (shopId: string) => {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(
-      `reports-last-mutation:${shopId}`,
-      String(Date.now())
-    );
+    safeLocalStorageSet(`reports-last-mutation:${shopId}`, String(Date.now()));
   } catch {
     // ignore storage failures
   }
