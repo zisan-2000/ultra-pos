@@ -24,6 +24,7 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
       .join("; ");
 
     const baseURL =
+      (host ? `${proto}://${host}` : undefined) ||
       process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
       ctx.baseURL?.replace(/\/$/, "") ||
       "http://localhost:3000";
