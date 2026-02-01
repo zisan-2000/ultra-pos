@@ -14,6 +14,44 @@ const appendCookies = (res: NextResponse, cookies: string[]) => {
   return res;
 };
 
+const withNoStore = (res: NextResponse) => {
+  res.headers.set("Cache-Control", "no-store");
+  return res;
+};
+
+const clearAuthCookies = (res: NextResponse, req: NextRequest) => {
+  req.cookies
+    .getAll()
+    .filter((c) => c.name.includes("better-auth"))
+    .forEach((c) => {
+      res.cookies.set({
+        name: c.name,
+        value: "",
+        path: "/",
+        maxAge: 0,
+      });
+    });
+  return res;
+};
+
+const fetchSession = async (req: NextRequest) => {
+  const cookieHeader = req.headers.get("cookie");
+  if (!cookieHeader) return null;
+
+  try {
+    const url = new URL("/api/auth/session-rbac", req.nextUrl.origin);
+    const res = await fetch(url, {
+      headers: { cookie: cookieHeader },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.session?.userId ? data : null;
+  } catch {
+    return null;
+  }
+};
+
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   if (pathname.startsWith("/api/")) {
@@ -49,36 +87,35 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const session = hasBetterAuthCookie(req);
+  const hasSessionCookie = hasBetterAuthCookie(req);
+  const session = hasSessionCookie ? await fetchSession(req) : null;
   const cookiesToSet: string[] = [];
 
   if (!session && isProtectedRoute && !isAuthPage) {
-    return appendCookies(
-      NextResponse.redirect(new URL("/login", req.url)),
-      cookiesToSet
-    );
+    const res = NextResponse.redirect(new URL("/login", req.url));
+    return appendCookies(withNoStore(clearAuthCookies(res, req)), cookiesToSet);
   }
 
   if (session && isAuthPage) {
     return appendCookies(
-      NextResponse.redirect(new URL("/dashboard", req.url)),
+      withNoStore(NextResponse.redirect(new URL("/dashboard", req.url))),
       cookiesToSet
     );
   }
 
   if (!isProtectedRoute) {
-    return appendCookies(NextResponse.next(), cookiesToSet);
+    return appendCookies(withNoStore(NextResponse.next()), cookiesToSet);
   }
 
   const { search } = req.nextUrl;
 
   if (isDashboardPath) {
-    return appendCookies(NextResponse.next(), cookiesToSet);
+    return appendCookies(withNoStore(NextResponse.next()), cookiesToSet);
   }
 
   // Allow super-admin system settings to resolve directly
   if (pathname.startsWith("/super-admin/system-settings")) {
-    return appendCookies(NextResponse.next(), cookiesToSet);
+    return appendCookies(withNoStore(NextResponse.next()), cookiesToSet);
   }
 
   if (looksRolePrefixed) {
@@ -86,12 +123,12 @@ export async function middleware(req: NextRequest) {
     const rewriteTarget =
       normalized === "/dashboard" ? "/dashboard" : "/dashboard" + normalized;
     return appendCookies(
-      NextResponse.redirect(new URL(rewriteTarget + search, req.url)),
+      withNoStore(NextResponse.redirect(new URL(rewriteTarget + search, req.url))),
       cookiesToSet
     );
   }
 
-  return appendCookies(NextResponse.next(), cookiesToSet);
+  return appendCookies(withNoStore(NextResponse.next()), cookiesToSet);
 }
 
 export const config = {

@@ -14,6 +14,7 @@ import { revalidateReportsForExpense } from "@/lib/reports/revalidate";
 
 import { Prisma } from "@prisma/client";
 import { type CursorToken } from "@/lib/cursor-pagination";
+import { parseUtcDateRange } from "@/lib/date-range";
 
 function normalizeExpenseDate(raw?: string | null) {
   const trimmed = raw?.trim();
@@ -28,29 +29,6 @@ function normalizeExpenseDate(raw?: string | null) {
   return date;
 }
 
-function parseTimestampRange(from?: string, to?: string) {
-  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
-
-  const parse = (value?: string, mode?: "start" | "end") => {
-    if (!value) return undefined;
-    if (isDateOnly(value)) {
-      const iso =
-        mode === "end"
-          ? `${value}T23:59:59.999Z`
-          : `${value}T00:00:00.000Z`;
-      const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? undefined : d;
-    }
-
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return undefined;
-    if (mode === "start") d.setUTCHours(0, 0, 0, 0);
-    if (mode === "end") d.setUTCHours(23, 59, 59, 999);
-    return d;
-  };
-
-  return { start: parse(from, "start"), end: parse(to, "end") };
-}
 
 function revalidateExpensePaths() {
   revalidatePath("/dashboard");
@@ -68,7 +46,7 @@ export async function getExpenseSummaryByRange(
   requirePermission(user, "view_expenses");
   await assertShopAccess(shopId, user);
 
-  const { start, end } = parseTimestampRange(from, to);
+  const { start, end } = parseUtcDateRange(from, to, true);
   const useUnbounded = !from && !to;
 
   const agg = await prisma.expense.aggregate({
@@ -114,7 +92,7 @@ export async function getExpensesByShopCursorPaginated({
 
   const safeLimit = Math.max(1, Math.min(Math.floor(limit), 100));
 
-  const { start, end } = parseTimestampRange(from, to);
+  const { start, end } = parseUtcDateRange(from, to, true);
   const useUnbounded = !from && !to;
 
   const where: Prisma.ExpenseWhereInput = {

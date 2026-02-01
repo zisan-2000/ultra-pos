@@ -10,36 +10,9 @@ import { assertShopAccess } from "@/lib/shop-access";
 import { unstable_cache } from "next/cache";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
 import { shopNeedsCogs } from "@/lib/accounting/cogs";
-
-/* --------------------------------------------------
-   DATE FILTER HELPER
--------------------------------------------------- */
-function parseTimestampRange(from?: string, to?: string) {
-  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
-
-  const parse = (value?: string, mode?: "start" | "end") => {
-    if (!value) return undefined;
-    // If UI passes YYYY-MM-DD, interpret as Asia/Dhaka local day.
-    if (isDateOnly(value)) {
-      const tzOffset = "+06:00";
-      const iso =
-        mode === "end"
-          ? `${value}T23:59:59.999${tzOffset}`
-          : `${value}T00:00:00.000${tzOffset}`;
-      const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? undefined : d;
-    }
-
-    // Otherwise assume ISO timestamp and keep the provided time boundaries.
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return undefined;
-    return d;
-  };
-
-  const start = parse(from, "start");
-  const end = parse(to, "end");
-  return { start, end };
-}
+import { getCogsTotalRaw } from "@/lib/reports/cogs";
+import { parseDhakaDateRange, parseUtcDateRange } from "@/lib/date-range";
+import { hasPermission, type UserContext } from "@/lib/rbac";
 
 function ensureBoundedRange(
   start?: Date | null,
@@ -74,29 +47,22 @@ function sumCogs(rows: { qty: any; buyPrice: any }[]) {
   }, 0);
 }
 
+function ensureReportPermission(user: UserContext, permission: string) {
+  if (hasPermission(user, permission) || hasPermission(user, "view_reports")) {
+    return;
+  }
+  throw new Error("Forbidden: missing permission " + permission);
+}
+
 export async function getCogsTotal(
   shopId: string,
   from?: Date | null,
   to?: Date | null
 ) {
-  const { start, end } = ensureBoundedRange(from, to);
-
-  const rows = await prisma.$queryRaw<
-    { sum: Prisma.Decimal | number | null }[]
-  >(Prisma.sql`
-    SELECT
-      SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS sum
-    FROM "sale_items" si
-    JOIN "sales" s ON s.id = si.sale_id
-    JOIN "products" p ON p.id = si.product_id
-    WHERE s.shop_id = CAST(${shopId} AS uuid)
-      AND s.status <> 'VOIDED'
-      AND s.sale_date >= ${start}
-      AND s.sale_date <= ${end}
-  `);
-
-  const raw = rows[0]?.sum ?? 0;
-  return Number(raw);
+  const user = await requireUser();
+  ensureReportPermission(user, "view_profit_report");
+  await assertShopAccess(shopId, user);
+  return getCogsTotalRaw(shopId, from, to);
 }
 
 export async function getCogsByDay(
@@ -104,6 +70,10 @@ export async function getCogsByDay(
   from?: Date | null,
   to?: Date | null
 ) {
+  const user = await requireUser();
+  ensureReportPermission(user, "view_profit_report");
+  await assertShopAccess(shopId, user);
+
   const { start, end } = ensureBoundedRange(from, to);
 
   const rows = await prisma.$queryRaw<
@@ -131,28 +101,11 @@ export async function getCogsByDay(
   return byDay;
 }
 
-function parseDateRange(from?: string, to?: string) {
-  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+const parseTimestampRange = (from?: string, to?: string) =>
+  parseDhakaDateRange(from, to, false);
 
-  const parse = (value?: string, mode?: "start" | "end") => {
-    if (!value) return undefined;
-    if (isDateOnly(value)) {
-      const iso =
-        mode === "end"
-          ? `${value}T23:59:59.999Z`
-          : `${value}T00:00:00.000Z`;
-      const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? undefined : d;
-    }
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return undefined;
-    if (mode === "start") d.setUTCHours(0, 0, 0, 0);
-    if (mode === "end") d.setUTCHours(23, 59, 59, 999);
-    return d;
-  };
-
-  return { start: parse(from, "start"), end: parse(to, "end") };
-}
+const parseDateRange = (from?: string, to?: string) =>
+  parseUtcDateRange(from, to, true);
 
 function normalizeLimit(
   limit?: number | null,
@@ -187,6 +140,7 @@ export async function getSalesWithFilterPaginated({
   cursor,
 }: ReportPaginationInput) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_sales_report");
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
   const parsed = parseTimestampRange(from, to);
@@ -263,6 +217,7 @@ export async function getExpensesWithFilterPaginated({
   cursor,
 }: ReportPaginationInput) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_expense_report");
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
   const parsed = parseDateRange(from, to);
@@ -339,6 +294,7 @@ export async function getCashWithFilterPaginated({
   cursor,
 }: ReportPaginationInput) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_cashbook_report");
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
   const parsed = parseTimestampRange(from, to);
@@ -471,6 +427,7 @@ export async function getSalesSummary(
   to?: string
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_sales_report");
   await assertShopAccess(shopId, user);
   return getSalesSummaryCached(shopId, from, to);
 }
@@ -480,6 +437,7 @@ export async function getSalesSummaryFresh(
   to?: string
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_sales_report");
   await assertShopAccess(shopId, user);
   return computeSalesSummary(shopId, from, to);
 }
@@ -489,6 +447,7 @@ export async function getExpenseSummary(
   to?: string
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_expense_report");
   await assertShopAccess(shopId, user);
   return getExpenseSummaryCached(shopId, from, to);
 }
@@ -498,6 +457,7 @@ export async function getExpenseSummaryFresh(
   to?: string
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_expense_report");
   await assertShopAccess(shopId, user);
   return computeExpenseSummary(shopId, from, to);
 }
@@ -507,6 +467,7 @@ export async function getCashSummary(
   to?: string
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_cashbook_report");
   await assertShopAccess(shopId, user);
   return getCashSummaryCached(shopId, from, to);
 }
@@ -516,6 +477,7 @@ export async function getCashSummaryFresh(
   to?: string
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_cashbook_report");
   await assertShopAccess(shopId, user);
   return computeCashSummary(shopId, from, to);
 }
@@ -525,6 +487,7 @@ export async function getProfitSummary(
   to?: string
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_profit_report");
   await assertShopAccess(shopId, user);
   return getProfitSummaryCached(shopId, from, to);
 }
@@ -534,6 +497,7 @@ export async function getProfitSummaryFresh(
   to?: string
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_profit_report");
   await assertShopAccess(shopId, user);
   return computeProfitSummary(shopId, from, to);
 }
@@ -648,7 +612,7 @@ async function computeProfitSummary(
 
   // Only fetch COGS if needed
   const cogs = needsCogs
-    ? await getCogsTotal(shopId, bounded.start, bounded.end)
+    ? await getCogsTotalRaw(shopId, bounded.start, bounded.end)
     : 0;
 
   const totalExpense = expenseData.totalAmount + cogs;
@@ -723,6 +687,7 @@ export async function getPaymentMethodReport(
   to?: string
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_payment_method_report");
   await assertShopAccess(shopId, user);
   return getPaymentMethodCached(shopId, from, to);
 }
@@ -841,6 +806,7 @@ export async function getProfitTrendReport(
   to?: string
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_profit_report");
   await assertShopAccess(shopId, user);
   return getProfitTrendCached(shopId, from, to);
 }
@@ -901,6 +867,7 @@ export async function getTopProductsReport(
   limit?: number | null
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_top_products_report");
   await assertShopAccess(shopId, user);
   const safeLimit = clampReportLimit(limit);
   return getTopProductsCached(shopId, safeLimit);
@@ -948,6 +915,7 @@ export async function getLowStockReport(
   limit?: number | null
 ) {
   const user = await requireUser();
+  ensureReportPermission(user, "view_low_stock_report");
   await assertShopAccess(shopId, user);
   const safeLimit = clampReportLimit(limit);
   return getLowStockCached(shopId, safeLimit);

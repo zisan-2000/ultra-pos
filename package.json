@@ -14,7 +14,8 @@
     "realtime:dev": "npm run -w realtime dev",
     "realtime:start": "npm run -w realtime start",
     "ci:health": "bash scripts/ci-healthcheck.sh",
-    "release:check-sw": "bash scripts/check-sw-cache-name.sh"
+    "release:check-sw": "bash scripts/check-sw-cache-name.sh",
+    "test:e2e": "playwright test"
   },
   "prisma": {
     "seed": "tsx --tsconfig tsconfig.seed.json prisma/seed.ts"
@@ -48,6 +49,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

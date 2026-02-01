@@ -1,3 +1,5 @@
+import { parseUtcDateRange } from "@/lib/date-range";
+
 const DHAKA_TZ_OFFSET = "+06:00";
 const DHAKA_TIMEZONE = "Asia/Dhaka";
 
@@ -28,7 +30,6 @@ export function getDhakaDateString(date: Date = new Date()) {
 
 export function getDhakaDateOnlyRange(date: Date = new Date()) {
   const day = getDhakaDateString(date);
-  const start = new Date(`${day}T00:00:00.000Z`);
-  const end = new Date(`${day}T23:59:59.999Z`);
+  const { start, end } = parseUtcDateRange(day, day, true);
   return { start, end };
 }

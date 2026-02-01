@@ -16,7 +16,7 @@ async function loadSupportContact() {
 const getSupportContactCached = unstable_cache(
   async () => loadSupportContact(),
   [SUPPORT_CONTACT_TAG],
-  { revalidate: 60 }
+  { revalidate: 60, tags: [SUPPORT_CONTACT_TAG] }
 );
 
 export async function getSupportContactCachedData() {

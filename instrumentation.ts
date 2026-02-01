@@ -1,17 +1,9 @@
 import { reportError } from "@/lib/monitoring";
 
+export const runtime = "nodejs";
+
 export async function register() {
-  // Guard: process.on is not available in edge runtimes.
-  const proc: any = globalThis.process as any;
-  if (!proc || typeof proc.on !== "function") {
-    return;
-  }
-
-  proc.on("unhandledRejection", (reason: unknown) => {
-    void reportError(reason, { type: "unhandledRejection" });
-  });
-
-  proc.on("uncaughtException", (err: unknown) => {
-    void reportError(err, { type: "uncaughtException" });
-  });
+  // Edge runtime loads this file too; avoid Node-only APIs here.
+  // If you need process-level hooks, move them to a custom Node server.
+  return;
 }

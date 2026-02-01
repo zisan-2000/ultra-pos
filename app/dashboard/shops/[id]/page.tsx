@@ -12,7 +12,16 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function EditShop({ params }: PageProps) {
   const { id } = await params;
   const user = await getCurrentUser();
-  const shop = await getShop(id);
+  let shop: Awaited<ReturnType<typeof getShop>> | null = null;
+  try {
+    shop = await getShop(id);
+  } catch (err) {
+    if (err instanceof Error && /not found/i.test(err.message)) {
+      shop = null;
+    } else {
+      throw err;
+    }
+  }
   if (!shop) {
     return <div className="p-6 text-center text-danger">Shop not found</div>;
   }

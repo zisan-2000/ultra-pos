@@ -18,6 +18,7 @@ function SubmitButton({ variant }: { variant?: "default" | "menu" }) {
     <button
       type="submit"
       disabled={pending}
+      data-testid="logout-button"
       className={className}
     >
       {pending ? "লগ আউট হচ্ছে..." : "লগ আউট"}

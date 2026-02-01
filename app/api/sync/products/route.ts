@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
+import { hasPermission } from "@/lib/rbac";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { withTracing } from "@/lib/tracing";
@@ -125,6 +126,31 @@ export async function POST(req: Request) {
 
       // ---------- AuthZ guard ----------
       const user = await requireUser();
+      if (!hasPermission(user, "sync_offline_data")) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden" },
+          { status: 403 },
+        );
+      }
+
+      if (newItems.length && !hasPermission(user, "create_product")) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      if (updatedItems.length && !hasPermission(user, "update_product")) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      if (deletedIds.length && !hasPermission(user, "delete_product")) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden" },
+          { status: 403 },
+        );
+      }
 
       const shopIds = new Set<string>();
       (Array.isArray(newItems) ? newItems : []).forEach((p) => {

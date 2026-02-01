@@ -14,31 +14,7 @@ import { revalidateReportsForCash } from "@/lib/reports/revalidate";
 import { Prisma } from "@prisma/client";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { type CursorToken } from "@/lib/cursor-pagination";
-
-function parseTimestampRange(from?: string, to?: string) {
-  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
-
-  const parse = (value?: string, mode?: "start" | "end") => {
-    if (!value) return undefined;
-    if (isDateOnly(value)) {
-      const tzOffset = "+06:00";
-      const iso =
-        mode === "end"
-          ? `${value}T23:59:59.999${tzOffset}`
-          : `${value}T00:00:00.000${tzOffset}`;
-      const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? undefined : d;
-    }
-
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return undefined;
-    if (mode === "start") d.setUTCHours(0, 0, 0, 0);
-    if (mode === "end") d.setUTCHours(23, 59, 59, 999);
-    return d;
-  };
-
-  return { start: parse(from, "start"), end: parse(to, "end") };
-}
+import { parseDhakaDateRange } from "@/lib/date-range";
 
 const CASH_SUMMARY_TAG = "cash-summary";
 
@@ -47,7 +23,7 @@ async function computeCashSummaryByRange(
   from?: string,
   to?: string
 ) {
-  const { start, end } = parseTimestampRange(from, to);
+  const { start, end } = parseDhakaDateRange(from, to, true);
   const useUnbounded = !from && !to;
 
   const where: Prisma.CashEntryWhereInput = {
@@ -135,7 +111,7 @@ export async function getCashByShopCursorPaginated({
 
   const safeLimit = Math.max(1, Math.min(Math.floor(limit), 100));
 
-  const { start, end } = parseTimestampRange(from, to);
+  const { start, end } = parseDhakaDateRange(from, to, true);
   const useUnbounded = !from && !to;
 
   const where: Prisma.CashEntryWhereInput = {

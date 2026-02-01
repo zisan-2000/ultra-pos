@@ -15,7 +15,7 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
   try {
     const cookieHeader = cookieStore
       .getAll()
-      .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+      .map((c) => `${c.name}=${c.value}`)
       .join("; ");
 
     const baseURL =
@@ -37,10 +37,39 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
   }
 
   // Ensure auth cookies are cleared on the response we send back to the browser.
+  const authCookies = ctx.authCookies;
+  const cookieDefs = [
+    authCookies?.sessionToken,
+    authCookies?.sessionData,
+    authCookies?.accountData,
+    authCookies?.dontRememberToken,
+  ].filter(Boolean);
+
+  for (const def of cookieDefs) {
+    const options = def!.options ?? {};
+    const { sameSite: rawSameSite, prefix: _prefix, ...rest } =
+      options as Record<string, unknown>;
+    let normalizedSameSite: "lax" | "strict" | "none" | undefined;
+    if (typeof rawSameSite === "string") {
+      const lowered = rawSameSite.toLowerCase();
+      if (lowered === "lax" || lowered === "strict" || lowered === "none") {
+        normalizedSameSite = lowered;
+      }
+    } else if (rawSameSite === true) {
+      normalizedSameSite = "lax";
+    }
+    cookieStore.set(def!.name, "", {
+      ...(rest as Record<string, unknown>),
+      ...(normalizedSameSite ? { sameSite: normalizedSameSite } : {}),
+      maxAge: 0,
+    });
+  }
+
+  // Fallback cleanup for any leftover better-auth cookies.
   cookieStore
     .getAll()
     .filter((cookie) => cookie.name.includes("better-auth"))
-    .forEach((cookie) => cookieStore.delete(cookie.name));
+    .forEach((cookie) => cookieStore.set({ name: cookie.name, value: "", maxAge: 0 }));
 
   redirect("/login");
 }

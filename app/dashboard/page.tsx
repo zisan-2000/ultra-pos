@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth-session";
 import { hasRole, isSuperAdmin } from "@/lib/rbac";
+import AdminDashboardPage from "../admin/dashboard/page";
 import AgentDashboardPage from "../agent/dashboard/page";
 import OwnerDashboardPage from "../owner/dashboard/page";
 import SuperAdminDashboardPage from "../super-admin/dashboard/page";
@@ -13,6 +14,10 @@ export default async function DashboardPage(props: DashboardPageProps) {
 
   if (isSuperAdmin(user)) {
     return <SuperAdminDashboardPage />;
+  }
+
+  if (hasRole(user, "admin")) {
+    return <AdminDashboardPage />;
   }
 
   if (hasRole(user, "agent")) {

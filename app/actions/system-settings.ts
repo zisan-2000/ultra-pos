@@ -30,7 +30,6 @@ async function ensureSettingsRow() {
 }
 
 export async function getSupportContact() {
-  await ensureSettingsRow();
   return getSupportContactCachedData();
 }
 

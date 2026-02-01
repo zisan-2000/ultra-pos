@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
+import { requirePermission } from "@/lib/rbac";
 
 type CreateCustomerInput = {
   shopId: string;
@@ -45,6 +46,7 @@ async function assertCustomerInShop(customerId: string, shopId: string) {
 -------------------------------------------------- */
 export async function createCustomer(input: CreateCustomerInput) {
   const user = await getCurrentUser();
+  requirePermission(user, "create_customer");
   await assertShopAccess(input.shopId, user);
 
   const name = input.name?.trim();
@@ -68,6 +70,7 @@ export async function createCustomer(input: CreateCustomerInput) {
 -------------------------------------------------- */
 export async function getCustomersByShop(shopId: string) {
   const user = await getCurrentUser();
+  requirePermission(user, "view_customers");
   await assertShopAccess(shopId, user);
 
   const rows = await prisma.customer.findMany({
@@ -103,6 +106,7 @@ export async function addDueSaleEntry(input: {
   description?: string | null;
 }) {
   const user = await getCurrentUser();
+  requirePermission(user, "create_due_entry");
   await assertShopAccess(input.shopId, user);
   const customer = await assertCustomerInShop(input.customerId, input.shopId);
 
@@ -143,6 +147,7 @@ export async function addDueSaleEntry(input: {
 -------------------------------------------------- */
 export async function recordCustomerPayment(input: PaymentInput) {
   const user = await getCurrentUser();
+  requirePermission(user, "take_due_payment");
   await assertShopAccess(input.shopId, user);
   const customer = await assertCustomerInShop(input.customerId, input.shopId);
 
@@ -194,6 +199,7 @@ export async function recordCustomerPayment(input: PaymentInput) {
 -------------------------------------------------- */
 export async function getCustomerStatement(shopId: string, customerId: string) {
   const user = await getCurrentUser();
+  requirePermission(user, "view_customer_due");
   await assertShopAccess(shopId, user);
   await assertCustomerInShop(customerId, shopId);
 
@@ -208,6 +214,7 @@ export async function getCustomerStatement(shopId: string, customerId: string) {
 -------------------------------------------------- */
 export async function getDueSummary(shopId: string) {
   const user = await getCurrentUser();
+  requirePermission(user, "view_due_summary");
   await assertShopAccess(shopId, user);
 
   const rows = await prisma.customer.findMany({

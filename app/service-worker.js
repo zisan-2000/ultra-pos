@@ -88,8 +88,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests: go to network; if offline, fall back to offline page.
+  // Navigation requests: avoid caching protected routes to prevent stale auth.
   if (request.mode === "navigate") {
+    const protectedPrefixes = [
+      "/dashboard",
+      "/admin",
+      "/owner",
+      "/agent",
+      "/super-admin",
+    ];
+    if (protectedPrefixes.some((prefix) => url.pathname.startsWith(prefix))) {
+      event.respondWith(fetch(request));
+      return;
+    }
     event.respondWith(handleNavigation(request));
     return;
   }

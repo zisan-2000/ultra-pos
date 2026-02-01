@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getCogsTotal } from "@/app/actions/reports";
+import { getCogsTotalRaw } from "@/lib/reports/cogs";
 import { getDhakaDateOnlyRange, getDhakaDayRange } from "@/lib/dhaka-date";
 import { assertShopAccess } from "@/lib/shop-access";
 import type { UserContext } from "@/lib/rbac";
@@ -79,7 +79,7 @@ async function computeTodaySummary(
   );
 
   const cogsTotal = needsCogs
-    ? await getCogsTotal(shopId, todayStart, todayEnd)
+    ? await getCogsTotalRaw(shopId, todayStart, todayEnd)
     : 0;
 
   const totalExpense = expenseTotalRaw;

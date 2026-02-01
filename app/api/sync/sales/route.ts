@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
+import { hasPermission } from "@/lib/rbac";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { withTracing } from "@/lib/tracing";
@@ -97,6 +98,30 @@ export async function POST(req: Request) {
         user = await requireUser();
       } catch {
         return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      }
+
+      if (!hasPermission(user, "sync_offline_data")) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden" },
+          { status: 403 },
+        );
+      }
+
+      if (!hasPermission(user, "create_sale")) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden" },
+          { status: 403 },
+        );
+      }
+
+      const needsDuePermission = newItems.some(
+        (sale) => (sale?.paymentMethod || "cash").toString().toLowerCase() === "due",
+      );
+      if (needsDuePermission && !hasPermission(user, "create_due_sale")) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden" },
+          { status: 403 },
+        );
       }
 
       if (!Array.isArray(newItems) || newItems.length === 0) {

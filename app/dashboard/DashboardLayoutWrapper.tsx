@@ -1,6 +1,7 @@
 // app/dashboard/DashboardLayoutWrapper.tsx
 
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getCurrentUser } from "@/lib/auth-session";
 import DashboardClientShell from "./DashboardClientShell";
@@ -11,8 +12,11 @@ export async function DashboardLayoutWrapper({
 }: {
   children: ReactNode;
 }) {
-  const shops = await getShopsByUser();
   const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+  const shops = await getShopsByUser();
   return (
     <DashboardClientShell>
       <DashboardShell shops={shops || []} initialUser={user}>

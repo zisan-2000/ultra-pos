@@ -9,7 +9,16 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function EditCashPage({ params }: PageProps) {
   const { id } = await params;
-  const entry = await getCashEntry(id);
+  let entry: Awaited<ReturnType<typeof getCashEntry>> | null = null;
+  try {
+    entry = await getCashEntry(id);
+  } catch (err) {
+    if (err instanceof Error && /not found/i.test(err.message)) {
+      entry = null;
+    } else {
+      throw err;
+    }
+  }
 
   if (!entry) {
     return (

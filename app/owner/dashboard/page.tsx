@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { getTodaySummaryForShop } from "@/lib/reports/today-summary";
 import { shopNeedsCogs } from "@/lib/accounting/cogs";
 import { getPayablesSummary } from "@/app/actions/purchases";
+import { hasRole } from "@/lib/rbac";
 import OwnerDashboardClient from "./OwnerDashboardClient";
 
 type DashboardPageProps = {
@@ -20,6 +21,7 @@ export default async function OwnerDashboardPage({
   searchParams,
 }: DashboardPageProps) {
   const user = await requireUser();
+  const isOwner = hasRole(user, "owner");
   const shops = await getShopsByUser();
 
   if (!shops || shops.length === 0) {
@@ -58,58 +60,64 @@ export default async function OwnerDashboardPage({
     await Promise.all([
       getTodaySummaryForShop(selectedShopId, user),
       getSupportContact(),
-      prisma.shopSubscription.findUnique({
-        where: { shopId: selectedShopId },
-        select: {
-          status: true,
-          currentPeriodEnd: true,
-          trialEndsAt: true,
-          graceEndsAt: true,
-        },
-      }),
-      prisma.invoice.findFirst({
-        where: { shopId: selectedShopId },
-        select: {
-          id: true,
-          status: true,
-          dueDate: true,
-          periodEnd: true,
-          paidAt: true,
-          amount: true,
-          paymentRequests: {
-            where: {
-              ownerId: user.id,
-              status: "pending",
+      isOwner
+        ? prisma.shopSubscription.findUnique({
+            where: { shopId: selectedShopId },
+            select: {
+              status: true,
+              currentPeriodEnd: true,
+              trialEndsAt: true,
+              graceEndsAt: true,
             },
-            select: { id: true },
-            take: 1,
-          },
-        },
-        orderBy: { periodEnd: "desc" },
-      }),
+          })
+        : Promise.resolve(null),
+      isOwner
+        ? prisma.invoice.findFirst({
+            where: { shopId: selectedShopId },
+            select: {
+              id: true,
+              status: true,
+              dueDate: true,
+              periodEnd: true,
+              paidAt: true,
+              amount: true,
+              paymentRequests: {
+                where: {
+                  ownerId: user.id,
+                  status: "pending",
+                },
+                select: { id: true },
+                take: 1,
+              },
+            },
+            orderBy: { periodEnd: "desc" },
+          })
+        : Promise.resolve(null),
       shopNeedsCogs(selectedShopId),
     ]);
 
   const paymentRequest = invoice?.paymentRequests?.[0] ?? null;
 
-  const billingStatus = resolveBillingStatus(
-    subscription
-      ? {
-          status: subscription.status,
-          currentPeriodEnd: subscription.currentPeriodEnd,
-          trialEndsAt: subscription.trialEndsAt,
-          graceEndsAt: subscription.graceEndsAt,
-        }
-      : null,
-    invoice
-      ? {
-          status: invoice.status,
-          dueDate: invoice.dueDate,
-          periodEnd: invoice.periodEnd,
-          paidAt: invoice.paidAt,
-        }
-      : null,
-  );
+  const billingStatus = isOwner
+    ? resolveBillingStatus(
+        subscription
+          ? {
+              status: subscription.status,
+              currentPeriodEnd: subscription.currentPeriodEnd,
+              trialEndsAt: subscription.trialEndsAt,
+              graceEndsAt: subscription.graceEndsAt,
+            }
+          : null,
+        invoice
+          ? {
+              status: invoice.status,
+              dueDate: invoice.dueDate,
+              periodEnd: invoice.periodEnd,
+              paidAt: invoice.paidAt,
+            }
+          : null,
+      )
+    : "untracked";
 
   return (
     <OwnerDashboardClient
@@ -120,14 +128,16 @@ export default async function OwnerDashboardPage({
         summary,
         needsCogs,
         payables,
-        billing: {
-          status: billingStatus,
-          invoiceId: invoice?.id ?? null,
-          amount: invoice?.amount?.toString() ?? null,
-          dueDate: invoice?.dueDate?.toISOString() ?? null,
-          periodEnd: invoice?.periodEnd?.toISOString() ?? null,
-          paymentRequestStatus: paymentRequest ? "pending" : "none",
-        },
+        billing: isOwner
+          ? {
+              status: billingStatus,
+              invoiceId: invoice?.id ?? null,
+              amount: invoice?.amount?.toString() ?? null,
+              dueDate: invoice?.dueDate?.toISOString() ?? null,
+              periodEnd: invoice?.periodEnd?.toISOString() ?? null,
+              paymentRequestStatus: paymentRequest ? "pending" : "none",
+            }
+          : undefined,
         supportContact,
       }}
       onPaymentRequest={submitPaymentRequest}

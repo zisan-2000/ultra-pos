@@ -7,10 +7,30 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function EditProductPage({ params }: PageProps) {
   const { id } = await params;
-  const product = await getProduct(id);
-  const shop = await getShop(product.shopId);
+  let product: Awaited<ReturnType<typeof getProduct>> | null = null;
+  try {
+    product = await getProduct(id);
+  } catch (err) {
+    if (err instanceof Error && /not found/i.test(err.message)) {
+      product = null;
+    } else {
+      throw err;
+    }
+  }
 
   if (!product) return <div>Product not found.</div>;
+
+  let shop: Awaited<ReturnType<typeof getShop>> | null = null;
+  try {
+    shop = await getShop(product.shopId);
+  } catch (err) {
+    if (err instanceof Error && /not found/i.test(err.message)) {
+      shop = null;
+    } else {
+      throw err;
+    }
+  }
+
   if (!shop) return <div>Shop not found.</div>;
 
   const businessConfig = await getBusinessTypeConfig(shop.businessType ?? null);

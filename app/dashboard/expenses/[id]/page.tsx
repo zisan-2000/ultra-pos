@@ -8,7 +8,16 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function EditExpensePage({ params }: PageProps) {
   const { id } = await params;
-  const expense = await getExpense(id);
+  let expense: Awaited<ReturnType<typeof getExpense>> | null = null;
+  try {
+    expense = await getExpense(id);
+  } catch (err) {
+    if (err instanceof Error && /not found/i.test(err.message)) {
+      expense = null;
+    } else {
+      throw err;
+    }
+  }
 
   if (!expense) {
     return (
