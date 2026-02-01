@@ -3,7 +3,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { auth } from "@/lib/auth";
 
 type LogoutState = { error?: string };
@@ -11,6 +11,11 @@ type LogoutState = { error?: string };
 export async function logout(_: LogoutState): Promise<LogoutState> {
   const ctx = await auth.$context;
   const cookieStore = await cookies();
+  const headerStore = await headers();
+  const host = headerStore.get("host") || "";
+  const proto =
+    headerStore.get("x-forwarded-proto") ||
+    (ctx.baseURL?.startsWith("https://") ? "https" : "http");
 
   try {
     const cookieHeader = cookieStore
@@ -45,31 +50,63 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
     authCookies?.dontRememberToken,
   ].filter(Boolean);
 
+  const normalizeSameSite = (
+    raw: unknown
+  ): "lax" | "strict" | "none" | undefined => {
+    if (typeof raw === "string") {
+      const lowered = raw.toLowerCase();
+      if (lowered === "lax" || lowered === "strict" || lowered === "none") {
+        return lowered;
+      }
+      return undefined;
+    }
+    if (raw === true) return "lax";
+    return undefined;
+  };
+
+  const domainVariants: (string | undefined)[] = [undefined];
+  if (host && !host.includes("localhost") && host.includes(".")) {
+    const baseDomain = host.split(":")[0];
+    domainVariants.push(baseDomain);
+    domainVariants.push(`.${baseDomain}`);
+  }
+
   for (const def of cookieDefs) {
     const options = def!.options ?? {};
     const { sameSite: rawSameSite, prefix: _prefix, ...rest } =
       options as Record<string, unknown>;
-    let normalizedSameSite: "lax" | "strict" | "none" | undefined;
-    if (typeof rawSameSite === "string") {
-      const lowered = rawSameSite.toLowerCase();
-      if (lowered === "lax" || lowered === "strict" || lowered === "none") {
-        normalizedSameSite = lowered;
-      }
-    } else if (rawSameSite === true) {
-      normalizedSameSite = "lax";
+    const normalizedSameSite = normalizeSameSite(rawSameSite);
+    const secure =
+      typeof options.secure === "boolean"
+        ? options.secure
+        : proto === "https" || def!.name.startsWith("__Secure-");
+
+    for (const domain of domainVariants) {
+      cookieStore.set(def!.name, "", {
+        ...(rest as Record<string, unknown>),
+        ...(normalizedSameSite ? { sameSite: normalizedSameSite } : {}),
+        ...(domain ? { domain } : {}),
+        secure,
+        path: "/",
+        maxAge: 0,
+      });
     }
-    cookieStore.set(def!.name, "", {
-      ...(rest as Record<string, unknown>),
-      ...(normalizedSameSite ? { sameSite: normalizedSameSite } : {}),
-      maxAge: 0,
-    });
   }
 
   // Fallback cleanup for any leftover better-auth cookies.
   cookieStore
     .getAll()
     .filter((cookie) => cookie.name.includes("better-auth"))
-    .forEach((cookie) => cookieStore.set({ name: cookie.name, value: "", maxAge: 0 }));
+    .forEach((cookie) => {
+      for (const domain of domainVariants) {
+        cookieStore.set(cookie.name, "", {
+          ...(domain ? { domain } : {}),
+          secure: proto === "https" || cookie.name.startsWith("__Secure-"),
+          path: "/",
+          maxAge: 0,
+        });
+      }
+    });
 
   redirect("/login");
 }
