@@ -104,7 +104,7 @@ function sanitizeUpdate(item: IncomingProduct) {
 export async function POST(req: Request) {
   return withTracing(req, "sync-products", async () => {
     try {
-      const rl = rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-products" });
+      const rl = await rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-products" });
       if (rl.limited) {
         return NextResponse.json(
           { success: false, error: "Too many requests" },

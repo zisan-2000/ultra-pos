@@ -98,7 +98,7 @@ const getCashSummaryCached = unstable_cache(
 );
 
 function revalidateCashSummary() {
-  revalidateTag(CASH_SUMMARY_TAG);
+  revalidateTag(CASH_SUMMARY_TAG, "default");
 }
 
 export async function getCashSummaryByRange(

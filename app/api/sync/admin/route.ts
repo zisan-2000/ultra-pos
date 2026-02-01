@@ -149,7 +149,7 @@ const userDeleteSchema = z.object({
 export async function POST(req: Request) {
   return withTracing(req, "sync-admin", async () => {
     try {
-      const rl = rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-admin" });
+      const rl = await rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-admin" });
       if (rl.limited) {
         return NextResponse.json(
           { success: false, error: "Too many requests" },

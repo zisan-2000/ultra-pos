@@ -22,8 +22,8 @@ export async function middleware(req: NextRequest) {
     if (!req.headers.get("x-request-id")) {
       res.headers.set("x-request-id", crypto.randomUUID());
     }
-    // Cache API responses for 60 seconds to improve performance
-    res.headers.set("Cache-Control", "private, max-age=60");
+    // Avoid caching API responses by default to protect sensitive data.
+    res.headers.set("Cache-Control", "no-store");
     return res;
   }
 

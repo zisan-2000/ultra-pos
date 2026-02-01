@@ -2,7 +2,7 @@ import { revalidateTag } from "next/cache";
 import { REPORTS_TAG_GROUPS } from "./cache-tags";
 
 function revalidateTags(tags: readonly string[]) {
-  tags.forEach((tag) => revalidateTag(tag));
+  tags.forEach((tag) => revalidateTag(tag, "default"));
 }
 
 export function revalidateReportsForSale() {

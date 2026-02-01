@@ -48,7 +48,7 @@ function toDate(value?: number | string | Date) {
 
 export async function POST(req: Request) {
   try {
-    const rl = rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-cash" });
+    const rl = await rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-cash" });
     if (rl.limited) {
       return NextResponse.json(
         { success: false, error: "Too many requests" },

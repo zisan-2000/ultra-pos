@@ -58,7 +58,7 @@ function revalidateExpensePaths() {
 
 export async function POST(req: Request) {
   try {
-    const rl = rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-expenses" });
+    const rl = await rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-expenses" });
     if (rl.limited) {
       return NextResponse.json(
         { success: false, error: "Too many requests" },

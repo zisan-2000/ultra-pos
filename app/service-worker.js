@@ -1,12 +1,12 @@
 // app/service-worker.js
 // Enhanced offline support + intelligent caching for POS app.
-// Strategies: Precache, cache-first for static assets, stale-while-revalidate for APIs.
+// Strategies: Precache, cache-first for static assets. Avoid caching API responses
+// to prevent cross-user data leakage on shared devices.
 // _next assets are bypassed to avoid stale layout/js/css mismatches.
 
 const CACHE_PREFIX = "pos-cache-";
 // Bump this when deploying so clients drop old Next.js bundles & action IDs.
 const CACHE_NAME = `${CACHE_PREFIX}v7`;
-const API_CACHE_NAME = `${CACHE_PREFIX}api-v7`;
 const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v7`;
 
 const PRECACHE_URLS = [
@@ -36,8 +36,6 @@ const STATIC_EXTENSIONS = [
   ".webmanifest",
 ];
 
-const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 minutes
-
 self.addEventListener("install", (event) => {
   event.waitUntil(
     Promise.all([
@@ -45,7 +43,6 @@ self.addEventListener("install", (event) => {
         return cache.addAll(PRECACHE_URLS);
       }),
       caches.open(STATIC_CACHE_NAME),
-      caches.open(API_CACHE_NAME),
     ])
   );
 });
@@ -66,7 +63,7 @@ self.addEventListener("activate", (event) => {
             .filter(
               (key) =>
                 key.startsWith(CACHE_PREFIX) &&
-                ![CACHE_NAME, API_CACHE_NAME, STATIC_CACHE_NAME].includes(key)
+                ![CACHE_NAME, STATIC_CACHE_NAME].includes(key)
             )
             .map((key) => caches.delete(key))
         )
@@ -97,9 +94,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // API calls: Stale-While-Revalidate for better perceived performance
+  // API calls: never cache to avoid serving user-specific data across sessions.
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(staleWhileRevalidate(request, API_CACHE_NAME));
+    event.respondWith(fetch(request));
     return;
   }
 
@@ -169,47 +166,3 @@ async function cacheFirstStatic(request, url, cacheName) {
   }
 }
 
-async function staleWhileRevalidate(request, cacheName) {
-  const cache = await caches.open(cacheName);
-  const url = new URL(request.url);
-  const cacheKey = new Request(url.origin + url.pathname, {
-    method: "GET",
-    headers: request.headers,
-    credentials: request.credentials,
-    mode: "same-origin",
-  });
-
-  try {
-    // Try network first
-    const networkResponse = await fetchWithTimeout(request, 5000);
-    if (networkResponse && networkResponse.ok) {
-      // Update cache with fresh response
-      const responseToCache = networkResponse.clone();
-      responseToCache.headers.set("x-cache-time", Date.now().toString());
-      cache.put(cacheKey, responseToCache);
-    }
-    return networkResponse;
-  } catch (error) {
-    // Fall back to cache on network error
-    const cachedResponse = await cache.match(cacheKey);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    // If nothing cached and network failed, try again with longer timeout
-    try {
-      return await fetchWithTimeout(request, 10000);
-    } catch {
-      return Response.error();
-    }
-  }
-}
-
-// Helper: fetch with timeout
-function fetchWithTimeout(request, timeout = 5000) {
-  return Promise.race([
-    fetch(request),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("fetch timeout")), timeout)
-    ),
-  ]);
-}

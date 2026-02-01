@@ -72,7 +72,7 @@ function toDateOrUndefined(value?: number | string) {
 export async function POST(req: Request) {
   return withTracing(req, "sync-sales", async () => {
     try {
-      const rl = rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-sales" });
+      const rl = await rateLimit(req, { windowMs: 60_000, max: 120, keyPrefix: "sync-sales" });
       if (rl.limited) {
         return NextResponse.json(
           { success: false, error: "Too many requests" },

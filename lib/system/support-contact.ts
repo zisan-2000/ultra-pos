@@ -24,5 +24,5 @@ export async function getSupportContactCachedData() {
 }
 
 export function revalidateSupportContact() {
-  revalidateTag(SUPPORT_CONTACT_TAG);
+  revalidateTag(SUPPORT_CONTACT_TAG, "default");
 }
