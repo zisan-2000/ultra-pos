@@ -50,6 +50,13 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
     authCookies?.dontRememberToken,
   ].filter(Boolean);
 
+  const expandCookieNames = (name: string) => {
+    if (name.startsWith("__Secure-")) {
+      return [name, name.replace(/^__Secure-/, "")];
+    }
+    return [name, `__Secure-${name}`];
+  };
+
   const normalizeSameSite = (
     raw: unknown
   ): "lax" | "strict" | "none" | undefined => {
@@ -81,15 +88,18 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
         ? options.secure
         : proto === "https" || def!.name.startsWith("__Secure-");
 
-    for (const domain of domainVariants) {
-      cookieStore.set(def!.name, "", {
-        ...(rest as Record<string, unknown>),
-        ...(normalizedSameSite ? { sameSite: normalizedSameSite } : {}),
-        ...(domain ? { domain } : {}),
-        secure,
-        path: "/",
-        maxAge: 0,
-      });
+    const names = expandCookieNames(def!.name);
+    for (const name of names) {
+      for (const domain of domainVariants) {
+        cookieStore.set(name, "", {
+          ...(rest as Record<string, unknown>),
+          ...(normalizedSameSite ? { sameSite: normalizedSameSite } : {}),
+          ...(domain ? { domain } : {}),
+          secure: secure || name.startsWith("__Secure-"),
+          path: "/",
+          maxAge: 0,
+        });
+      }
     }
   }
 
@@ -98,13 +108,16 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
     .getAll()
     .filter((cookie) => cookie.name.includes("better-auth"))
     .forEach((cookie) => {
-      for (const domain of domainVariants) {
-        cookieStore.set(cookie.name, "", {
-          ...(domain ? { domain } : {}),
-          secure: proto === "https" || cookie.name.startsWith("__Secure-"),
-          path: "/",
-          maxAge: 0,
-        });
+      const names = expandCookieNames(cookie.name);
+      for (const name of names) {
+        for (const domain of domainVariants) {
+          cookieStore.set(name, "", {
+            ...(domain ? { domain } : {}),
+            secure: proto === "https" || name.startsWith("__Secure-"),
+            path: "/",
+            maxAge: 0,
+          });
+        }
       }
     });
 
