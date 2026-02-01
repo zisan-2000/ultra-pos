@@ -2,13 +2,18 @@
 
 "use client";
 
-import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
-import { logout } from "@/app/actions/auth";
+import { useState } from "react";
+import { authClient } from "@/lib/auth-client";
 
-function SubmitButton({ variant }: { variant?: "default" | "menu" }) {
-  const { pending } = useFormStatus();
-
+function SubmitButton({
+  variant,
+  pending,
+  onClick,
+}: {
+  variant?: "default" | "menu";
+  pending: boolean;
+  onClick: () => void;
+}) {
   const className =
     variant === "menu"
       ? "w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground font-semibold text-sm hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -16,10 +21,11 @@ function SubmitButton({ variant }: { variant?: "default" | "menu" }) {
 
   return (
     <button
-      type="submit"
+      type="button"
       disabled={pending}
       data-testid="logout-button"
       className={className}
+      onClick={onClick}
     >
       {pending ? "লগ আউট হচ্ছে..." : "লগ আউট"}
     </button>
@@ -31,14 +37,32 @@ export default function LogoutButton({
 }: {
   variant?: "default" | "menu";
 }) {
-  const [state, formAction] = useActionState(logout, { error: undefined });
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleLogout = async () => {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      await authClient.signOut({
+        fetchOptions: { credentials: "include" },
+      } as any);
+    } catch (err) {
+      setError("লগ আউট হয়নি, আবার চেষ্টা করুন");
+    } finally {
+      window.location.assign("/login");
+    }
+  };
 
   return (
-    <form action={formAction} className="flex items-center gap-2">
-      <SubmitButton variant={variant} />
-      {state?.error ? (
-        <span className="text-xs text-danger">{state.error}</span>
-      ) : null}
-    </form>
+    <div className="flex items-center gap-2">
+      <SubmitButton
+        variant={variant}
+        pending={pending}
+        onClick={handleLogout}
+      />
+      {error ? <span className="text-xs text-danger">{error}</span> : null}
+    </div>
   );
 }
