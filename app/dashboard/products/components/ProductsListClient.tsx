@@ -41,6 +41,7 @@ type Product = {
   stockQty: string;
   isActive: boolean;
   createdAt?: string;
+  updatedAt?: string;
 };
 
 type TemplateProduct = {
@@ -243,9 +244,12 @@ export default function ProductsListClient({
           .equals(activeShopId)
           .toArray();
         if (cancelled) return;
-        if (rows.length > 0) {
+        const visible = rows.filter(
+          (p) => p.syncStatus !== "deleted" && p.syncStatus !== "conflict"
+        );
+        if (visible.length > 0) {
           setProducts(
-            rows.map((p) => ({
+            visible.map((p) => ({
               id: p.id,
               name: p.name,
               category: p.category,
@@ -295,10 +299,23 @@ export default function ProductsListClient({
         stockQty: (p.stockQty ?? "0").toString(),
         isActive: p.isActive,
         trackStock: (p as any).trackStock ?? false,
-        updatedAt: Date.now(),
+        updatedAt: (() => {
+          const raw = (p as any).updatedAt;
+          if (!raw) return Date.now();
+          const ts = new Date(raw as any).getTime();
+          return Number.isFinite(ts) ? ts : Date.now();
+        })(),
         syncStatus: "synced" as const,
       }));
-      db.products.bulkPut(rows).catch((err) => {
+      db.transaction("rw", db.products, async () => {
+        for (const row of rows) {
+          const existing = await db.products.get(row.id);
+          if (existing && existing.syncStatus !== "synced") {
+            continue;
+          }
+          await db.products.put(row);
+        }
+      }).catch((err) => {
         console.error("Seed Dexie products failed", err);
       });
       try {
@@ -590,10 +607,12 @@ export default function ProductsListClient({
         return;
       }
 
-      await db.products.bulkPut(localProducts);
-      await Promise.all(
-        localProducts.map((item) => queueAdd("product", "create", item))
-      );
+      await db.transaction("rw", db.products, db.queue, async () => {
+        await db.products.bulkPut(localProducts);
+        await Promise.all(
+          localProducts.map((item) => queueAdd("product", "create", item))
+        );
+      });
 
       setProducts((prev) => [
         ...localProducts.map((item) => ({
@@ -670,8 +689,24 @@ export default function ProductsListClient({
         if (!online) {
           removeFromState();
           setSelectedProduct(null);
-          await db.products.delete(id);
-          await queueAdd("product", "delete", { id });
+          await db.transaction("rw", db.products, db.queue, async () => {
+            const existing = await db.products.get(id);
+            if (existing) {
+              const now = Date.now();
+              await db.products.update(id, {
+                syncStatus: "deleted",
+                deletedAt: now,
+                updatedAt: now,
+                conflictAction: undefined,
+              });
+              await queueAdd("product", "delete", {
+                id,
+                updatedAt: existing?.updatedAt,
+              });
+            } else {
+              await queueAdd("product", "delete", { id });
+            }
+          });
           alert("অফলাইন: পণ্যটি মুছে ফেলা হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
           return;
         }

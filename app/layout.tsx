@@ -8,6 +8,8 @@ import ServiceWorkerRegister from "@/components/service-worker-register";
 import PWAInstallPrompt from "@/components/pwa-install-prompt";
 import CssHealthGuard from "@/components/css-health-guard";
 import SonnerToaster from "@/components/sonner-toaster";
+import OfflineSessionGuard from "@/components/offline-session-guard";
+import OfflineCapabilityGuard from "@/components/offline-capability-guard";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -46,6 +48,8 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <QueryProvider>
+          <OfflineSessionGuard />
+          <OfflineCapabilityGuard />
           <ServiceWorkerRegister />
           <CssHealthGuard />
           <PWAInstallPrompt />

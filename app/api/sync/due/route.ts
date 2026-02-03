@@ -27,6 +27,7 @@ type IncomingPayment = {
   amount: string | number;
   description?: string | null;
   createdAt?: number | string | Date;
+  localId?: string;
 };
 
 const customerSchema = z.object({
@@ -44,6 +45,7 @@ const paymentSchema = z.object({
   amount: z.union([z.string(), z.number()]),
   description: z.string().nullable().optional(),
   createdAt: z.union([z.string(), z.number(), z.date()]).optional(),
+  localId: z.string().optional(),
 });
 
 const bodySchema = z.object({
@@ -142,6 +144,19 @@ export async function POST(req: Request) {
     }
 
     for (const p of payments) {
+      if (p.localId) {
+        const existingLedger = await prisma.customerLedger.findUnique({
+          where: { id: p.localId },
+          select: { id: true, shopId: true },
+        });
+        if (existingLedger) {
+          if (existingLedger.shopId !== p.shopId) {
+            throw new Error("Payment id conflict");
+          }
+          continue;
+        }
+      }
+
       const amountStr = money(p.amount);
       const createdAt = toDate(p.createdAt);
 
@@ -165,6 +180,7 @@ export async function POST(req: Request) {
       await prisma.$transaction(async (tx) => {
         await tx.customerLedger.create({
           data: {
+            id: p.localId ?? undefined,
             shopId: p.shopId,
             customerId: p.customerId,
             entryType: "PAYMENT",

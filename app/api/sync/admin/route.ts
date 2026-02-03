@@ -5,6 +5,8 @@ import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { withTracing } from "@/lib/tracing";
 import { requireUser } from "@/lib/auth-session";
+import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   deleteBusinessType,
   setBusinessTypeActive,
@@ -38,6 +40,7 @@ const actionSchema = z.object({
   id: z.number().optional(),
   action: z.string(),
   payload: z.any().optional(),
+  clientActionId: z.string().optional(),
 });
 
 const bodySchema = z.object({
@@ -157,7 +160,7 @@ export async function POST(req: Request) {
         );
       }
 
-      await requireUser();
+      const user = await requireUser();
 
       const raw = await req.json();
       const parsed = bodySchema.safeParse(raw);
@@ -173,6 +176,29 @@ export async function POST(req: Request) {
       for (const item of parsed.data.actions) {
         const payload = item.payload ?? {};
         try {
+          const clientActionId =
+            payload?.clientActionId ?? item.clientActionId ?? undefined;
+          if (clientActionId) {
+            try {
+              await prisma.adminSyncAction.create({
+                data: {
+                  id: clientActionId,
+                  userId: user.id,
+                  action: item.action,
+                },
+              });
+            } catch (err) {
+              if (
+                err instanceof Prisma.PrismaClientKnownRequestError &&
+                err.code === "P2002"
+              ) {
+                results.push({ id: item.id, ok: true });
+                continue;
+              }
+              throw err;
+            }
+          }
+
           switch (item.action) {
             case "business_type_sync_defaults": {
               await syncDefaultBusinessTypes();

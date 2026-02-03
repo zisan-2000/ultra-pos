@@ -589,8 +589,10 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       await updateProduct(product.id, payload);
       alert("পণ্য সফলভাবে আপডেট হয়েছে");
     } else {
-      await db.products.put(payload);
-      await queueAdd("product", "update", payload);
+      await db.transaction("rw", db.products, db.queue, async () => {
+        await db.products.put(payload);
+        await queueAdd("product", "update", payload);
+      });
       alert("পণ্য অফলাইনে আপডেট; অনলাইনে হলে সিঙ্ক হবে");
     }
 

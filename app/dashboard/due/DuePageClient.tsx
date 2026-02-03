@@ -663,8 +663,10 @@ export default function DuePageClient({
         updatedAt: now,
         syncStatus: "new" as const,
       };
-      await db.dueCustomers.put(payload);
-      await queueAdd("due_customer", "create", payload);
+      await db.transaction("rw", db.dueCustomers, db.queue, async () => {
+        await db.dueCustomers.put(payload);
+        await queueAdd("due_customer", "create", payload);
+      });
       const template: CustomerTemplate = {
         name: newCustomer.name.trim(),
         phone: newCustomer.phone.trim() || undefined,
@@ -781,7 +783,12 @@ export default function DuePageClient({
           syncStatus: "new",
         };
 
-        await db.transaction("rw", db.dueCustomers, db.dueLedger, async () => {
+        await db.transaction(
+          "rw",
+          db.dueCustomers,
+          db.dueLedger,
+          db.queue,
+          async () => {
           await db.dueLedger.put(ledgerEntry);
           const existing = await db.dueCustomers.get(paymentForm.customerId);
           if (existing) {
@@ -807,15 +814,14 @@ export default function DuePageClient({
               syncStatus: "synced",
             });
           }
-        });
-
-        await queueAdd("due_payment", "payment", {
-          shopId,
-          customerId: paymentForm.customerId,
-          amount: amountValue,
-          description: description || null,
-          createdAt: nowIso,
-          localId: entryId,
+          await queueAdd("due_payment", "payment", {
+            shopId,
+            customerId: paymentForm.customerId,
+            amount: amountValue,
+            description: description || null,
+            createdAt: nowIso,
+            localId: entryId,
+          });
         });
 
         persistPaymentTemplate(

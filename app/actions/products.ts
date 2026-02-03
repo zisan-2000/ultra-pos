@@ -51,6 +51,7 @@ type ProductListRow = {
   stockQty: string;
   isActive: boolean;
   createdAt: string;
+  updatedAt: string;
 };
 
 type ProductStatusFilter = "all" | "active" | "inactive";
@@ -216,6 +217,7 @@ export async function getProductsByShop(shopId: string) {
       isActive: true,
       trackStock: true,
       createdAt: true,
+      updatedAt: true,
     },
   });
 }
@@ -268,6 +270,7 @@ export async function getProductsByShopPaginated({
       stockQty: true,
       isActive: true,
       createdAt: true,
+      updatedAt: true,
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     skip,
@@ -284,6 +287,7 @@ export async function getProductsByShopPaginated({
     stockQty: product.stockQty.toString(),
     isActive: product.isActive,
     createdAt: product.createdAt.toISOString(),
+    updatedAt: product.updatedAt.toISOString(),
   }));
 
   return {
@@ -358,6 +362,7 @@ export async function getProductsByShopCursorPaginated({
         stockQty: true,
         isActive: true,
         createdAt: true,
+        updatedAt: true,
       },
     }),
     prisma.product.count({ where: baseWhere }),
@@ -375,6 +380,7 @@ export async function getProductsByShopCursorPaginated({
     stockQty: p.stockQty?.toString?.() ?? (p as any).stockQty ?? "0",
     isActive: p.isActive,
     createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
   }));
 
   const last = pageRows[pageRows.length - 1];

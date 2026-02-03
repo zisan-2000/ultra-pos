@@ -143,6 +143,7 @@ export async function getCashByShopCursorPaginated({
       amount: true,
       reason: true,
       createdAt: true,
+      updatedAt: true,
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: safeLimit + 1,
@@ -163,6 +164,7 @@ export async function getCashByShopCursorPaginated({
     amount: e.amount?.toString?.() ?? (e as any).amount ?? "0",
     reason: e.reason,
     createdAt: e.createdAt?.toISOString?.() ?? e.createdAt,
+    updatedAt: e.updatedAt?.toISOString?.() ?? e.updatedAt,
   }));
 
   return { items, nextCursor, hasMore };

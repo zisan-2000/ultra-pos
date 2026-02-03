@@ -4,6 +4,8 @@ import { useEffect, type ReactNode } from "react";
 import SyncBootstrap from "@/components/sync-bootstrap";
 import RealtimeBridge from "@/components/realtime/RealtimeBridge";
 import { handlePermissionError } from "@/lib/permission-toast";
+import OfflineConflictBanner from "@/components/offline-conflict-banner";
+import SyncHealthBanner from "@/components/sync-health-banner";
 
 export default function DashboardClientShell({
   children,
@@ -33,6 +35,10 @@ export default function DashboardClientShell({
     <>
       <SyncBootstrap />
       <RealtimeBridge />
+      <div className="px-4 pt-3">
+        <SyncHealthBanner />
+        <OfflineConflictBanner />
+      </div>
       {children}
     </>
   );

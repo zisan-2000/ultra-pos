@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { clearOfflineData } from "@/lib/offline/cleanup";
 
 function SubmitButton({
   variant,
@@ -51,6 +52,7 @@ export default function LogoutButton({
     } catch (err) {
       setError("লগ আউট হয়নি, আবার চেষ্টা করুন");
     } finally {
+      await clearOfflineData();
       window.location.assign("/login");
     }
   };

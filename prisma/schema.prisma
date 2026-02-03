@@ -67,6 +67,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   verifications Verification[]
+  adminSyncActions AdminSyncAction[]
 
   roles         Role[]    @relation("UserRoles")
   permissionOverrides UserPermissionOverride[]
@@ -349,6 +350,7 @@ model Product {
   trackStock Boolean  @map("track_stock") @default(false)
   isActive   Boolean  @map("is_active") @default(true)
   createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
 
   shop      Shop      @relation(fields: [shopId], references: [id])
   saleItems SaleItem[]
@@ -513,6 +515,7 @@ model Expense {
   expenseDate DateTime  @map("expense_date") @default(now()) @db.Date
   note        String?
   createdAt   DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
 
   shop Shop @relation(fields: [shopId], references: [id])
 
@@ -527,6 +530,7 @@ model CashEntry {
   amount    Decimal  @db.Decimal(12, 2)
   reason    String?
   createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
 
   shop Shop @relation(fields: [shopId], references: [id])
 
@@ -582,4 +586,16 @@ model SystemSetting {
   updatedAt       DateTime @map("updated_at") @updatedAt @default(now()) @db.Timestamptz(6)
 
   @@map("system_settings")
+}
+
+model AdminSyncAction {
+  id        String   @id @db.Uuid
+  userId    String   @map("user_id")
+  action    String
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "idx_admin_sync_actions_user")
+  @@map("admin_sync_actions")
 }

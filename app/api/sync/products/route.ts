@@ -22,19 +22,40 @@ const productCreateSchema = z.object({
   stockQty: z.union([z.string(), z.number()]).optional(),
   trackStock: z.boolean().optional(),
   isActive: z.boolean().optional(),
+  updatedAt: z.union([z.string(), z.number(), z.date()]).optional(),
 });
 
 const productUpdateSchema = productCreateSchema.extend({
   id: z.string(),
+  force: z.boolean().optional(),
 });
 
 const syncBodySchema = z.object({
   newItems: z.array(productCreateSchema).optional().default([]),
   updatedItems: z.array(productUpdateSchema).optional().default([]),
-  deletedIds: z.array(z.string()).optional().default([]),
+  deletedIds: z
+    .array(
+      z.union([
+        z.string(),
+        z.object({
+          id: z.string(),
+          updatedAt: z.union([z.string(), z.number(), z.date()]).optional(),
+          force: z.boolean().optional(),
+        }),
+      ])
+    )
+    .optional()
+    .default([]),
 });
 
 type IncomingProduct = Record<string, any>;
+
+type SyncUpdatedRow = {
+  id: string;
+  updatedAt: string;
+  isActive: boolean;
+  trackStock: boolean;
+};
 
 function toMoneyString(
   value: string | number | null | undefined,
@@ -102,6 +123,13 @@ function sanitizeUpdate(item: IncomingProduct) {
   return { id, data: payload };
 }
 
+function toDateOrUndefined(value?: string | number | Date | null) {
+  if (value === null || value === undefined) return undefined;
+  const d = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(d.getTime())) return undefined;
+  return d;
+}
+
 export async function POST(req: Request) {
   return withTracing(req, "sync-products", async () => {
     try {
@@ -123,6 +151,9 @@ export async function POST(req: Request) {
       }
 
       const { newItems, updatedItems, deletedIds } = parsed.data;
+      const updatedRows: SyncUpdatedRow[] = [];
+      const deletedRows: string[] = [];
+      const archivedRows: string[] = [];
 
       // ---------- AuthZ guard ----------
       const user = await requireUser();
@@ -161,23 +192,30 @@ export async function POST(req: Request) {
         .map((p) => p?.id)
         .filter(Boolean) as string[];
 
-      const deleteIds = Array.isArray(deletedIds) ? (deletedIds as string[]) : [];
+      const deleteItems = Array.isArray(deletedIds)
+        ? deletedIds.map((item) =>
+            typeof item === "string" ? { id: item } : item
+          )
+        : [];
+      const deleteIds = deleteItems.map((item) => item.id);
 
-      if (updateIds.length) {
-        const existing = await prisma.product.findMany({
-          where: { id: { in: updateIds } },
-          select: { id: true, shopId: true },
-        });
-        existing.forEach((p) => shopIds.add(p.shopId));
-      }
+      const existingUpdates = updateIds.length
+        ? await prisma.product.findMany({
+            where: { id: { in: updateIds } },
+            select: { id: true, shopId: true, updatedAt: true },
+          })
+        : [];
+      existingUpdates.forEach((p) => shopIds.add(p.shopId));
+      const existingById = new Map(existingUpdates.map((p) => [p.id, p]));
 
-      if (deleteIds.length) {
-        const existing = await prisma.product.findMany({
-          where: { id: { in: deleteIds } },
-          select: { id: true, shopId: true },
-        });
-        existing.forEach((p) => shopIds.add(p.shopId));
-      }
+      const existingDeletes = deleteIds.length
+        ? await prisma.product.findMany({
+            where: { id: { in: deleteIds } },
+            select: { id: true, shopId: true, updatedAt: true },
+          })
+        : [];
+      existingDeletes.forEach((p) => shopIds.add(p.shopId));
+      const deleteExistingById = new Map(existingDeletes.map((p) => [p.id, p]));
 
       // Require at least one shopId to authorize against when there is work to do
       if ((newItems.length || updatedItems.length || deleteIds.length) && shopIds.size === 0) {
@@ -195,45 +233,122 @@ export async function POST(req: Request) {
       if (Array.isArray(newItems) && newItems.length > 0) {
         const sanitized = newItems.map(sanitizeCreate);
         await prisma.product.createMany({ data: sanitized as any, skipDuplicates: true });
+        const newIds = sanitized.map((item) => item.id).filter(Boolean) as string[];
+        if (newIds.length > 0) {
+          const rows = await prisma.product.findMany({
+            where: { id: { in: newIds } },
+            select: { id: true, updatedAt: true, isActive: true, trackStock: true },
+          });
+          rows.forEach((row) => {
+            updatedRows.push({
+              id: row.id,
+              updatedAt: row.updatedAt.toISOString(),
+              isActive: row.isActive,
+              trackStock: row.trackStock,
+            });
+          });
+        }
       }
+
+      const conflicts: Array<{
+        id: string;
+        action: "update" | "delete";
+        reason: "stale_update" | "stale_delete";
+        serverUpdatedAt?: string;
+      }> = [];
 
       // Update existing
       if (Array.isArray(updatedItems) && updatedItems.length > 0) {
         for (const item of updatedItems) {
+          const existing = item?.id ? existingById.get(item.id) : undefined;
+          if (existing) {
+            const clientUpdatedAt = toDateOrUndefined(item.updatedAt);
+            if (!item.force && clientUpdatedAt && existing.updatedAt > clientUpdatedAt) {
+              conflicts.push({
+                id: existing.id,
+                action: "update",
+                reason: "stale_update",
+                serverUpdatedAt: existing.updatedAt.toISOString(),
+              });
+              continue;
+            }
+          }
           const { id, data } = sanitizeUpdate(item);
-          await prisma.product.update({
+          const updated = await prisma.product.update({
             where: { id },
             data,
+            select: { id: true, updatedAt: true, isActive: true, trackStock: true },
+          });
+          updatedRows.push({
+            id: updated.id,
+            updatedAt: updated.updatedAt.toISOString(),
+            isActive: updated.isActive,
+            trackStock: updated.trackStock,
           });
         }
       }
 
       // Delete
-    if (Array.isArray(deletedIds) && deletedIds.length > 0) {
-      const deleteTargets = deletedIds as string[];
-      const referenced = await prisma.saleItem.findMany({
-        where: { productId: { in: deleteTargets } },
-        select: { productId: true },
-        distinct: ["productId"],
-      });
-      const archiveIds = referenced.map((row) => row.productId);
-      const archiveSet = new Set(archiveIds);
-      const hardDeleteIds = deleteTargets.filter((id) => !archiveSet.has(id));
+      if (deleteItems.length > 0) {
+        const allowedDeleteIds: string[] = [];
+        for (const item of deleteItems) {
+          const existing = deleteExistingById.get(item.id);
+          if (!existing) {
+            allowedDeleteIds.push(item.id);
+            continue;
+          }
+          const clientUpdatedAt = toDateOrUndefined(item.updatedAt);
+          if (!item.force && clientUpdatedAt && existing.updatedAt > clientUpdatedAt) {
+            conflicts.push({
+              id: existing.id,
+              action: "delete",
+              reason: "stale_delete",
+              serverUpdatedAt: existing.updatedAt.toISOString(),
+            });
+            continue;
+          }
+          allowedDeleteIds.push(item.id);
+        }
 
-      if (archiveIds.length > 0) {
-        await prisma.product.updateMany({
-          where: { id: { in: archiveIds } },
-          data: {
-            isActive: false,
-            trackStock: false,
-          },
-        });
-      }
+        if (allowedDeleteIds.length > 0) {
+          const referenced = await prisma.saleItem.findMany({
+            where: { productId: { in: allowedDeleteIds } },
+            select: { productId: true },
+            distinct: ["productId"],
+          });
+          const archiveIds = referenced.map((row) => row.productId);
+          const archiveSet = new Set(archiveIds);
+          const hardDeleteIds = allowedDeleteIds.filter((id) => !archiveSet.has(id));
 
-      if (hardDeleteIds.length > 0) {
-        await prisma.product.deleteMany({ where: { id: { in: hardDeleteIds } } });
+          if (archiveIds.length > 0) {
+            await prisma.product.updateMany({
+              where: { id: { in: archiveIds } },
+              data: {
+                isActive: false,
+                trackStock: false,
+              },
+            });
+            const archived = await prisma.product.findMany({
+              where: { id: { in: archiveIds } },
+              select: { id: true, updatedAt: true, isActive: true, trackStock: true },
+            });
+            archived.forEach((row) => {
+              updatedRows.push({
+                id: row.id,
+                updatedAt: row.updatedAt.toISOString(),
+                isActive: row.isActive,
+                trackStock: row.trackStock,
+              });
+              archivedRows.push(row.id);
+            });
+          }
+
+          if (hardDeleteIds.length > 0) {
+            await prisma.product.deleteMany({ where: { id: { in: hardDeleteIds } } });
+            deletedRows.push(...hardDeleteIds);
+          }
+        }
       }
-    }
 
       if (shopIds.size > 0) {
         for (const shopId of shopIds) {
@@ -244,7 +359,13 @@ export async function POST(req: Request) {
         revalidateReportsForProduct();
       }
 
-      return NextResponse.json({ success: true });
+      return NextResponse.json({
+        success: true,
+        conflicts,
+        updated: updatedRows,
+        deleted: deletedRows,
+        archived: archivedRows,
+      });
     } catch (e: any) {
       console.error("Product sync failed", e);
       return NextResponse.json(

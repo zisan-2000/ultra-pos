@@ -312,11 +312,14 @@ export default function CashFormClient({
       amount: form.get("amount") as string,
       reason: (form.get("reason") as string) || "",
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       syncStatus: isEdit ? "updated" as const : "new" as const,
     };
 
-    await db.cash.put(payload as any);
-    await queueAdd("cash", isEdit ? "update" : "create", payload);
+    await db.transaction("rw", db.cash, db.queue, async () => {
+      await db.cash.put(payload as any);
+      await queueAdd("cash", isEdit ? "update" : "create", payload);
+    });
     alert(
       isEdit
         ? "Offline: ক্যাশ এন্ট্রি আপডেট কিউ হয়েছে, সংযোগ পেলে সিঙ্ক হবে।"

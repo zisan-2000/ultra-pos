@@ -22,8 +22,19 @@ export function CashDeleteButton({ id, onDeleted, className }: Props) {
     onDeleted(id);
 
     try {
-      await db.cash.delete(id);
-      await queueAdd("cash", "delete", { id });
+      await db.transaction("rw", db.cash, db.queue, async () => {
+        const existing = await db.cash.get(id);
+        const now = Date.now();
+        if (existing) {
+          await db.cash.update(id, {
+            syncStatus: "deleted",
+            deletedAt: now,
+            updatedAt: now,
+            conflictAction: undefined,
+          });
+        }
+        await queueAdd("cash", "delete", { id, updatedAt: existing?.updatedAt });
+      });
     } catch (err) {
       handlePermissionError(err);
       console.error("Cash delete failed", err);

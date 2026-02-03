@@ -18,6 +18,12 @@ type IncomingCash = {
   amount: string | number;
   reason?: string | null;
   createdAt?: number | string | Date;
+  updatedAt?: number | string | Date;
+};
+
+type SyncUpdatedRow = {
+  id: string;
+  updatedAt: string;
 };
 
 const cashSchema = z.object({
@@ -27,12 +33,26 @@ const cashSchema = z.object({
   amount: z.union([z.string(), z.number()]),
   reason: z.string().nullable().optional(),
   createdAt: z.union([z.string(), z.number(), z.date()]).optional(),
+  updatedAt: z.union([z.string(), z.number(), z.date()]).optional(),
+  force: z.boolean().optional(),
 });
 
 const bodySchema = z.object({
   newItems: z.array(cashSchema).optional().default([]),
   updatedItems: z.array(cashSchema.extend({ id: z.string() })).optional().default([]),
-  deletedIds: z.array(z.string()).optional().default([]),
+  deletedIds: z
+    .array(
+      z.union([
+        z.string(),
+        z.object({
+          id: z.string(),
+          updatedAt: z.union([z.string(), z.number(), z.date()]).optional(),
+          force: z.boolean().optional(),
+        }),
+      ])
+    )
+    .optional()
+    .default([]),
 });
 
 function toMoney(value: string | number) {
@@ -44,6 +64,13 @@ function toMoney(value: string | number) {
 function toDate(value?: number | string | Date) {
   const d = value ? new Date(value) : new Date();
   if (!Number.isFinite(d.getTime())) return new Date();
+  return d;
+}
+
+function toDateOrUndefined(value?: number | string | Date) {
+  if (!value) return undefined;
+  const d = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(d.getTime())) return undefined;
   return d;
 }
 
@@ -67,6 +94,8 @@ export async function POST(req: Request) {
     }
 
     const { newItems, updatedItems, deletedIds } = parsed.data;
+    const updatedRows: SyncUpdatedRow[] = [];
+    const deletedRows: string[] = [];
 
     const user = await requireUser();
     if (!hasPermission(user, "sync_offline_data")) {
@@ -103,13 +132,18 @@ export async function POST(req: Request) {
       if (c?.shopId) shopIds.add(c.shopId);
     });
 
-    const deleteIds = Array.isArray(deletedIds) ? (deletedIds as string[]) : [];
+    const deleteItems = Array.isArray(deletedIds)
+      ? deletedIds.map((item) => (typeof item === "string" ? { id: item } : item))
+      : [];
+    const deleteIds = deleteItems.map((item) => item.id);
+    const existingById = new Map<string, { id: string; shopId: string; updatedAt: Date }>();
     if (deleteIds.length) {
       const existing = await prisma.cashEntry.findMany({
         where: { id: { in: deleteIds } },
-        select: { id: true, shopId: true },
+        select: { id: true, shopId: true, updatedAt: true },
       });
       existing.forEach((c) => shopIds.add(c.shopId));
+      existing.forEach((c) => existingById.set(c.id, c));
     }
 
     if ((newItems.length || updatedItems.length || deleteIds.length) && shopIds.size === 0) {
@@ -137,26 +171,91 @@ export async function POST(req: Request) {
         data,
         skipDuplicates: true,
       });
+
+      const newIds = newItems.map((item) => item.id).filter(Boolean) as string[];
+      if (newIds.length > 0) {
+        const rows = await prisma.cashEntry.findMany({
+          where: { id: { in: newIds } },
+          select: { id: true, updatedAt: true },
+        });
+        rows.forEach((row) => {
+          updatedRows.push({
+            id: row.id,
+            updatedAt: row.updatedAt.toISOString(),
+          });
+        });
+      }
     }
+
+    const conflicts: Array<{
+      id: string;
+      action: "update" | "delete";
+      reason: "stale_update" | "stale_delete";
+      serverUpdatedAt?: string;
+    }> = [];
 
     if (Array.isArray(updatedItems) && updatedItems.length > 0) {
       for (const item of updatedItems as IncomingCash[]) {
         if (!item.id) continue;
-        await prisma.cashEntry.update({
+        const existing = await prisma.cashEntry.findUnique({
+          where: { id: item.id },
+          select: { id: true, updatedAt: true, shopId: true },
+        });
+        if (existing) {
+          const clientUpdatedAt = toDateOrUndefined(item.updatedAt);
+          if (!item.force && clientUpdatedAt && existing.updatedAt > clientUpdatedAt) {
+            conflicts.push({
+              id: existing.id,
+              action: "update",
+              reason: "stale_update",
+              serverUpdatedAt: existing.updatedAt.toISOString(),
+            });
+            continue;
+          }
+        }
+        const updated = await prisma.cashEntry.update({
           where: { id: item.id },
           data: {
             entryType: item.entryType || "IN",
             amount: toMoney(item.amount),
             reason: item.reason || "",
           },
+          select: { id: true, updatedAt: true },
+        });
+        updatedRows.push({
+          id: updated.id,
+          updatedAt: updated.updatedAt.toISOString(),
         });
       }
     }
 
-    if (Array.isArray(deletedIds) && deletedIds.length > 0) {
-      await prisma.cashEntry.deleteMany({
-        where: { id: { in: deletedIds as string[] } },
-      });
+    if (deleteItems.length > 0) {
+      const allowedDeleteIds: string[] = [];
+      for (const item of deleteItems) {
+        const existing = existingById.get(item.id);
+        if (!existing) {
+          allowedDeleteIds.push(item.id);
+          continue;
+        }
+        const clientUpdatedAt = toDateOrUndefined(item.updatedAt);
+        if (!item.force && clientUpdatedAt && existing.updatedAt > clientUpdatedAt) {
+          conflicts.push({
+            id: existing.id,
+            action: "delete",
+            reason: "stale_delete",
+            serverUpdatedAt: existing.updatedAt.toISOString(),
+          });
+          continue;
+        }
+        allowedDeleteIds.push(item.id);
+      }
+
+      if (allowedDeleteIds.length > 0) {
+        await prisma.cashEntry.deleteMany({
+          where: { id: { in: allowedDeleteIds } },
+        });
+        deletedRows.push(...allowedDeleteIds);
+      }
     }
 
     if (shopIds.size > 0) {
@@ -168,7 +267,12 @@ export async function POST(req: Request) {
       revalidateReportsForCash();
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      conflicts,
+      updated: updatedRows,
+      deleted: deletedRows,
+    });
   } catch (e: any) {
     console.error("Cash sync failed", e);
     return NextResponse.json(

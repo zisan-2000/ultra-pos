@@ -6,8 +6,8 @@
 
 const CACHE_PREFIX = "pos-cache-";
 // Bump this when deploying so clients drop old Next.js bundles & action IDs.
-const CACHE_NAME = `${CACHE_PREFIX}v7`;
-const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v7`;
+const CACHE_NAME = `${CACHE_PREFIX}v9`;
+const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v9`;
 
 const PRECACHE_URLS = [
   "/offline",
@@ -36,6 +36,14 @@ const STATIC_EXTENSIONS = [
   ".webmanifest",
 ];
 
+const NAVIGATION_CACHE_ALLOWLIST = ["/", "/offline", "/login"];
+
+function shouldCacheNavigation(url) {
+  return NAVIGATION_CACHE_ALLOWLIST.some(
+    (path) => url.pathname === path || url.pathname.startsWith(`${path}/`)
+  );
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     Promise.all([
@@ -51,6 +59,19 @@ self.addEventListener("message", (event) => {
   if (event?.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
+});
+
+self.addEventListener("sync", (event) => {
+  if (event.tag !== "pos-sync") return;
+  event.waitUntil(
+    self.clients
+      .matchAll({ includeUncontrolled: true, type: "window" })
+      .then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({ type: "POS_SYNC" });
+        });
+      })
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -88,20 +109,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests: avoid caching protected routes to prevent stale auth.
+  // Navigation requests: network-first with cached fallback (including protected routes).
   if (request.mode === "navigate") {
-    const protectedPrefixes = [
-      "/dashboard",
-      "/admin",
-      "/owner",
-      "/agent",
-      "/super-admin",
-    ];
-    if (protectedPrefixes.some((prefix) => url.pathname.startsWith(prefix))) {
-      event.respondWith(fetch(request));
-      return;
-    }
-    event.respondWith(handleNavigation(request));
+    event.respondWith(handleNavigation(request, url));
     return;
   }
 
@@ -111,8 +121,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Never intercept Next.js build assets. Their paths are not always hashed
-  // (e.g., app/layout.js, app/layout.css), so SW caching can serve stale code/CSS.
+  // Cache Next.js static build assets.
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(cacheFirstStatic(request, url, STATIC_CACHE_NAME));
+    return;
+  }
+
+  // Never intercept dynamic Next.js assets (images/data).
   if (url.pathname.startsWith("/_next/")) {
     return;
   }
@@ -129,12 +144,12 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-async function handleNavigation(request) {
+async function handleNavigation(request, url) {
   const cache = await caches.open(CACHE_NAME);
 
   try {
     const networkResponse = await fetch(request);
-    if (networkResponse && networkResponse.ok) {
+    if (networkResponse && networkResponse.ok && shouldCacheNavigation(url)) {
       cache.put(request, networkResponse.clone());
     }
     return networkResponse;

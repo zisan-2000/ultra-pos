@@ -33,10 +33,18 @@ export default function SyncBootstrap() {
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
+    const handleMessage = (event: MessageEvent) => {
+      if (event?.data?.type === "POS_SYNC") {
+        runSafe();
+      }
+    };
+    navigator.serviceWorker?.addEventListener("message", handleMessage);
+
     return () => {
       cancelled = true;
       clearInterval(id);
       document.removeEventListener("visibilitychange", handleVisibility);
+      navigator.serviceWorker?.removeEventListener("message", handleMessage);
     };
   }, []);
 

@@ -15,7 +15,7 @@ type Props = {
   id: string;
   shopId: string;
   amount?: number;
-  syncStatus?: "new" | "updated" | "deleted" | "synced";
+  syncStatus?: "new" | "updated" | "deleted" | "synced" | "conflict";
   onDeleted: (id: string) => void;
   className?: string;
 };
@@ -82,12 +82,28 @@ export function ExpensesDeleteButton({
           }, 400);
         }
       } else {
-        await db.expenses.delete(id);
-        if (isLocalOnly) {
-          await queueRemoveExpenseById(id);
-        } else {
-          await queueAdd("expense", "delete", { id, shopId });
-        }
+        await db.transaction("rw", db.expenses, db.queue, async () => {
+          if (isLocalOnly) {
+            await db.expenses.delete(id);
+            await queueRemoveExpenseById(id);
+          } else {
+            const existing = await db.expenses.get(id);
+            const now = Date.now();
+            if (existing) {
+              await db.expenses.update(id, {
+                syncStatus: "deleted",
+                deletedAt: now,
+                updatedAt: now,
+                conflictAction: undefined,
+              });
+            }
+            await queueAdd("expense", "delete", {
+              id,
+              shopId,
+              updatedAt: existing?.updatedAt,
+            });
+          }
+        });
       }
     } catch (err) {
       handlePermissionError(err);

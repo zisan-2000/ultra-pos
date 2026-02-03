@@ -387,11 +387,14 @@ export default function ExpenseFormClient({
       note: (form.get("note") as string) || "",
       expenseDate: (form.get("expenseDate") as string) || new Date().toISOString().slice(0, 10),
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       syncStatus: isEdit ? "updated" as const : "new" as const,
     };
 
-    await db.expenses.put(payload as any);
-    await queueAdd("expense", isEdit ? "update" : "create", payload);
+    await db.transaction("rw", db.expenses, db.queue, async () => {
+      await db.expenses.put(payload as any);
+      await queueAdd("expense", isEdit ? "update" : "create", payload);
+    });
     toast.warning(
       isEdit
         ? "অফলাইন: খরচ আপডেট কিউ হয়েছে, সংযোগ পেলে সিঙ্ক হবে।"

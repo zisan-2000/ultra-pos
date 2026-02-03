@@ -21,6 +21,7 @@ type CashEntry = {
   amount: string | number;
   reason?: string | null;
   createdAt?: string | number | Date;
+  updatedAt?: string | number | Date;
 };
 
 type Props = {
@@ -282,7 +283,11 @@ export function CashListClient({
       try {
         const entries = await db.cash.where("shopId").equals(shopId).toArray();
         if (cancelled) return;
-        if (!entries || entries.length === 0) {
+        const visible = (entries || []).filter(
+          (entry) =>
+            entry.syncStatus !== "deleted" && entry.syncStatus !== "conflict"
+        );
+        if (!visible || visible.length === 0) {
           try {
             const cached = safeLocalStorageGet(`cachedCash:${shopId}`);
             if (cached) setItems(JSON.parse(cached) as CashEntry[]);
@@ -292,7 +297,7 @@ export function CashListClient({
           return;
         }
         setItems(
-          entries.map((e) => ({
+          visible.map((e) => ({
             id: e.id,
             entryType: e.entryType,
             amount: e.amount,
@@ -324,11 +329,20 @@ export function CashListClient({
         createdAt: e.createdAt
           ? new Date(e.createdAt as any).getTime()
           : Date.now(),
+        updatedAt: e.updatedAt
+          ? new Date(e.updatedAt as any).getTime()
+          : Date.now(),
         syncStatus: "synced" as const,
       }));
-      db.cash
-        .bulkPut(mapped as any)
-        .catch((err) => console.error("Seed Dexie cash failed", err));
+      db.transaction("rw", db.cash, async () => {
+        for (const row of mapped) {
+          const existing = await db.cash.get(row.id);
+          if (existing && existing.syncStatus !== "synced") {
+            continue;
+          }
+          await db.cash.put(row as any);
+        }
+      }).catch((err) => console.error("Seed Dexie cash failed", err));
       try {
         safeLocalStorageSet(`cachedCash:${shopId}`, JSON.stringify(rows));
       } catch {

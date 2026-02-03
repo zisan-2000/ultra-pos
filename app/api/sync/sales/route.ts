@@ -24,6 +24,7 @@ type IncomingSaleItem = {
 };
 
 type IncomingSale = {
+  id?: string;
   shopId: string;
   items: IncomingSaleItem[];
   paymentMethod?: string;
@@ -42,6 +43,7 @@ const saleItemSchema = z.object({
 });
 
 const saleSchema = z.object({
+  id: z.string().optional(),
   shopId: z.string(),
   items: z.array(saleItemSchema).min(1),
   paymentMethod: z.string().optional(),
@@ -148,10 +150,26 @@ export async function POST(req: Request) {
         const note = raw?.note ?? null;
         const createdAt = toDateOrUndefined(raw?.createdAt);
         const customerId = raw?.customerId ?? null;
+        const clientSaleId = raw?.id;
 
         if (!shopId) {
           throw new Error("shopId is required");
         }
+
+        if (clientSaleId) {
+          const existingSale = await prisma.sale.findUnique({
+            where: { id: clientSaleId },
+            select: { id: true, shopId: true },
+          });
+          if (existingSale) {
+            if (existingSale.shopId !== shopId) {
+              throw new Error("Sale id conflict");
+            }
+            insertedSaleIds.push(existingSale.id);
+            continue;
+          }
+        }
+
         if (!Array.isArray(items) || items.length === 0) {
           throw new Error("items are required");
         }
@@ -242,6 +260,7 @@ export async function POST(req: Request) {
 
           const sale = await tx.sale.create({
             data: {
+              id: clientSaleId ?? undefined,
               shopId,
               customerId: isDue ? customerId : null,
               totalAmount,

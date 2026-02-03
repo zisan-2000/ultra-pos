@@ -21,7 +21,9 @@ export type LocalProduct = {
   expiryDate?: string | null;
   size?: string | null;
   updatedAt: number; // timestamp for sync
-  syncStatus: "new" | "updated" | "deleted" | "synced";
+  syncStatus: "new" | "updated" | "deleted" | "synced" | "conflict";
+  conflictAction?: "update" | "delete";
+  deletedAt?: number;
 };
 
 export type LocalSale = {
@@ -53,7 +55,10 @@ export type LocalExpense = {
   note?: string | null;
   expenseDate: string;
   createdAt: number;
-  syncStatus: "new" | "updated" | "deleted" | "synced";
+  updatedAt?: number;
+  syncStatus: "new" | "updated" | "deleted" | "synced" | "conflict";
+  conflictAction?: "update" | "delete";
+  deletedAt?: number;
 };
 
 export type LocalCashEntry = {
@@ -63,7 +68,10 @@ export type LocalCashEntry = {
   amount: string;
   reason?: string | null;
   createdAt: number;
-  syncStatus: "new" | "updated" | "deleted" | "synced";
+  updatedAt?: number;
+  syncStatus: "new" | "updated" | "deleted" | "synced" | "conflict";
+  conflictAction?: "update" | "delete";
+  deletedAt?: number;
 };
 
 export type LocalDueCustomer = {
@@ -104,11 +112,46 @@ export type SyncQueueItem = {
   payload: any;
   createdAt: number;
   retryCount: number;
+  nextAttemptAt?: number;
+  dead?: boolean;
+  lastError?: string;
 };
 
 // --------------------------
 // DEXIE DB
 // --------------------------
+const DB_PREFIX = "PosOfflineDB";
+const DB_LIST_KEY = "offline:dbs";
+
+function getStoredUserId() {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem("offline:userId");
+  } catch {
+    return null;
+  }
+}
+
+function getDbName(userId?: string | null) {
+  const scope = userId || "anon";
+  return `${DB_PREFIX}:${scope}`;
+}
+
+function rememberDbName(name: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.localStorage.getItem(DB_LIST_KEY);
+    const list = raw ? (JSON.parse(raw) as string[]) : [];
+    if (!Array.isArray(list)) return;
+    if (!list.includes(name)) {
+      list.push(name);
+      window.localStorage.setItem(DB_LIST_KEY, JSON.stringify(list));
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export class PosDexieDB extends Dexie {
   // tables
   products!: Table<LocalProduct, string>;
@@ -119,8 +162,8 @@ export class PosDexieDB extends Dexie {
   dueLedger!: Table<LocalDueLedger, string>;
   queue!: Table<SyncQueueItem, number>;
 
-  constructor() {
-    super("PosOfflineDB");
+  constructor(name: string) {
+    super(name);
 
     // v1: initial schema
     this.version(1).stores({
@@ -165,4 +208,19 @@ export class PosDexieDB extends Dexie {
   }
 }
 
-export const db = new PosDexieDB();
+export let db = new PosDexieDB(getDbName(getStoredUserId()));
+rememberDbName(db.name);
+
+export function setDbUser(userId: string | null) {
+  const name = getDbName(userId);
+  if (db.name === name) return;
+  try {
+    db.close();
+  } catch {
+    // ignore
+  }
+  db = new PosDexieDB(name);
+  rememberDbName(db.name);
+}
+
+export const offlineDbListKey = DB_LIST_KEY;

@@ -139,6 +139,7 @@ export async function getExpensesByShopCursorPaginated({
     note: e.note,
     expenseDate: e.expenseDate?.toISOString?.() ?? e.expenseDate,
     createdAt: e.createdAt?.toISOString?.() ?? e.createdAt,
+    updatedAt: e.updatedAt?.toISOString?.() ?? e.updatedAt,
   }));
 
   return { items, nextCursor, hasMore };

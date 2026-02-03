@@ -692,8 +692,10 @@ function ProductForm({ shop, businessConfig }: Props) {
         });
         toast.success("পণ্য তৈরি হয়েছে।");
       } else {
-        await db.products.put(payload);
-        await queueAdd("product", "create", payload);
+        await db.transaction("rw", db.products, db.queue, async () => {
+          await db.products.put(payload);
+          await queueAdd("product", "create", payload);
+        });
         emitProductEvent({
           shopId: ensuredShopId,
           at: Date.now(),

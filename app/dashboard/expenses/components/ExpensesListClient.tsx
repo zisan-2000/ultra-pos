@@ -22,7 +22,8 @@ type Expense = {
   note?: string | null;
   expenseDate?: string | Date | null;
   createdAt?: string | number | Date | null;
-  syncStatus?: "new" | "updated" | "deleted" | "synced";
+  updatedAt?: string | number | Date | null;
+  syncStatus?: "new" | "updated" | "deleted" | "synced" | "conflict";
 };
 
 type Props = {
@@ -259,7 +260,10 @@ export function ExpensesListClient({
       try {
         const rows = await db.expenses.where("shopId").equals(shopId).toArray();
         if (cancelled) return;
-        if (!rows || rows.length === 0) {
+        const visible = (rows || []).filter(
+          (row) => row.syncStatus !== "deleted" && row.syncStatus !== "conflict"
+        );
+        if (!visible || visible.length === 0) {
           try {
             const cached = safeLocalStorageGet(`cachedExpenses:${shopId}`);
             if (cached) setItems(JSON.parse(cached) as Expense[]);
@@ -269,7 +273,7 @@ export function ExpensesListClient({
           return;
         }
         setItems(
-          rows.map((r) => ({
+          visible.map((r) => ({
             id: r.id,
             amount: r.amount,
             category: r.category,
@@ -315,11 +319,23 @@ export function ExpensesListClient({
           const ts = new Date(raw as any).getTime();
           return Number.isFinite(ts) ? ts : Date.now();
         })(),
+        updatedAt: (() => {
+          const raw = (e as any).updatedAt;
+          if (!raw) return Date.now();
+          const ts = new Date(raw as any).getTime();
+          return Number.isFinite(ts) ? ts : Date.now();
+        })(),
         syncStatus: "synced" as const,
       }));
-      db.expenses
-        .bulkPut(rows)
-        .catch((err) => console.error("Seed Dexie expenses failed", err));
+      db.transaction("rw", db.expenses, async () => {
+        for (const row of rows) {
+          const existing = await db.expenses.get(row.id);
+          if (existing && existing.syncStatus !== "synced") {
+            continue;
+          }
+          await db.expenses.put(row as any);
+        }
+      }).catch((err) => console.error("Seed Dexie expenses failed", err));
       try {
         safeLocalStorageSet(`cachedExpenses:${shopId}`, JSON.stringify(expenses));
       } catch {

@@ -536,68 +536,6 @@ export function PosPageClient({
 
       const paidLedgerId = paidNowNumber > 0 ? crypto.randomUUID() : null;
       if (paidLedgerId) dueLedgerIds.push(paidLedgerId);
-
-      const totalAmount = Number(totalVal.toFixed(2));
-      const paidAmount = Number(paidNowNumber.toFixed(2));
-      const dueDelta = Number((totalAmount - paidAmount).toFixed(2));
-
-      await db.transaction("rw", db.dueCustomers, db.dueLedger, async () => {
-        await db.dueLedger.put({
-          id: saleLedgerId,
-          shopId,
-          customerId,
-          entryType: "SALE",
-          amount: totalAmount,
-          description: note || "Due sale",
-          entryDate: nowIso,
-          syncStatus: "new",
-        });
-
-        if (paidLedgerId) {
-          await db.dueLedger.put({
-            id: paidLedgerId,
-            shopId,
-            customerId,
-            entryType: "PAYMENT",
-            amount: paidAmount,
-            description: "Partial payment at sale",
-            entryDate: nowIso,
-            syncStatus: "new",
-          });
-        }
-
-        const existing = await db.dueCustomers.get(customerId);
-        const baseDueRaw =
-          existing?.totalDue ??
-          customerList.find((c) => c.id === customerId)?.totalDue ??
-          0;
-        const baseDue = Number(baseDueRaw);
-        const nextDue = Number(
-          ((Number.isFinite(baseDue) ? baseDue : 0) + dueDelta).toFixed(2)
-        );
-        const lastPaymentAt =
-          paidAmount > 0 ? nowIso : existing?.lastPaymentAt ?? null;
-
-        if (existing) {
-          await db.dueCustomers.update(customerId, {
-            totalDue: nextDue,
-            lastPaymentAt,
-            updatedAt: nowTs,
-            syncStatus: "synced",
-          });
-        } else {
-          const customer = customerList.find((c) => c.id === customerId);
-          await db.dueCustomers.put({
-            id: customerId,
-            shopId,
-            name: customer?.name || "",
-            totalDue: nextDue,
-            lastPaymentAt,
-            updatedAt: nowTs,
-            syncStatus: "synced",
-          });
-        }
-      });
     }
 
     const salePayload = {
@@ -620,8 +558,82 @@ export function PosPageClient({
       syncStatus: "new" as const,
     };
 
-    await db.sales.put(salePayload);
-    await queueAdd("sale", "create", salePayload);
+    await db.transaction(
+      "rw",
+      db.dueCustomers,
+      db.dueLedger,
+      db.sales,
+      db.queue,
+      async () => {
+        if (isDue) {
+          const totalAmount = Number(totalVal.toFixed(2));
+          const paidAmount = Number(paidNowNumber.toFixed(2));
+          const dueDelta = Number((totalAmount - paidAmount).toFixed(2));
+
+          const saleLedgerId = dueLedgerIds[0];
+          const paidLedgerId = dueLedgerIds.length > 1 ? dueLedgerIds[1] : null;
+
+          await db.dueLedger.put({
+            id: saleLedgerId,
+            shopId,
+            customerId,
+            entryType: "SALE",
+            amount: totalAmount,
+            description: note || "Due sale",
+            entryDate: nowIso,
+            syncStatus: "new",
+          });
+
+          if (paidLedgerId) {
+            await db.dueLedger.put({
+              id: paidLedgerId,
+              shopId,
+              customerId,
+              entryType: "PAYMENT",
+              amount: paidAmount,
+              description: "Partial payment at sale",
+              entryDate: nowIso,
+              syncStatus: "new",
+            });
+          }
+
+          const existing = await db.dueCustomers.get(customerId);
+          const baseDueRaw =
+            existing?.totalDue ??
+            customerList.find((c) => c.id === customerId)?.totalDue ??
+            0;
+          const baseDue = Number(baseDueRaw);
+          const nextDue = Number(
+            ((Number.isFinite(baseDue) ? baseDue : 0) + dueDelta).toFixed(2)
+          );
+          const lastPaymentAt =
+            paidAmount > 0 ? nowIso : existing?.lastPaymentAt ?? null;
+
+          if (existing) {
+            await db.dueCustomers.update(customerId, {
+              totalDue: nextDue,
+              lastPaymentAt,
+              updatedAt: nowTs,
+              syncStatus: "synced",
+            });
+          } else {
+            const customer = customerList.find((c) => c.id === customerId);
+            await db.dueCustomers.put({
+              id: customerId,
+              shopId,
+              name: customer?.name || "",
+              totalDue: nextDue,
+              lastPaymentAt,
+              updatedAt: nowTs,
+              syncStatus: "synced",
+            });
+          }
+        }
+
+        await db.sales.put(salePayload);
+        await queueAdd("sale", "create", salePayload);
+      }
+    );
     applyStockDelta(items);
     reportSale(totalVal);
 
