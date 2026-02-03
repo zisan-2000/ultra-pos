@@ -13,6 +13,13 @@ import { EditUserDialog } from "./EditUserDialog";
 import { DeleteUserDialog } from "./DeleteUserDialog";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { db } from "@/lib/dexie/db";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
@@ -24,6 +31,9 @@ type User = {
   emailVerified: boolean;
   createdAt: Date | string;
   createdBy: string | null;
+  staffShopId?: string | null;
+  staffShop?: { id: string; name: string } | null;
+  shops?: Array<{ id: string; name: string }>;
   roles: Array<{ id: string; name: string }>;
   pending?: boolean;
 };
@@ -50,6 +60,7 @@ export default function UserManagementPage({
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [viewingUser, setViewingUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -268,6 +279,24 @@ export default function UserManagementPage({
     });
   }, [users, searchQuery, roleFilter, fromDate, toDate]);
 
+  const formatDateTime = (value: Date | string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "তারিখ নেই";
+    }
+    return date.toLocaleString("bn-BD", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  };
+
+  const viewingUserIsOwner =
+    viewingUser?.roles.some((role) => role.name === "owner") ?? false;
+  const viewingUserIsStaff =
+    viewingUser?.roles.some((role) => role.name === "staff") ?? false;
+  const viewingOwnerShops = viewingUser?.shops ?? [];
+  const viewingStaffShopName = viewingUser?.staffShop?.name ?? null;
+
   const hasFilters =
     searchQuery.trim() !== "" ||
     roleFilter !== "all" ||
@@ -440,95 +469,194 @@ export default function UserManagementPage({
             No users matched the current filters.
           </div>
         ) : (
-          <div className="border border-border rounded-lg overflow-hidden max-h-[600px] overflow-y-auto">
-            <table className="min-w-full divide-y divide-border">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    নাম
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    ইমেইল
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    ভূমিকা
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    তৈরির তারিখ
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    কর্ম
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-card divide-y divide-border">
-                {filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-muted">
-                    <td className="px-4 py-3 text-sm font-medium text-foreground">
-                      {user.name || "(নাম নেই)"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">
-                      {user.email || "(ইমেইল নেই)"}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex flex-wrap gap-1">
-                        {user.roles.length === 0 ? (
-                          <span className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
-                            কোনো ভূমিকা নেই
-                          </span>
-                        ) : (
-                          user.roles.map((role) => (
-                            <span
-                              key={role.id}
-                              className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-                            >
-                              {role.name}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">
-                      {new Date(user.createdAt).toLocaleString("bn-BD", { dateStyle: "medium", timeStyle: "short" })}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <button
-                          onClick={() => {
-                            setEditingUser(user);
-                          }}
-                          className="text-primary hover:text-primary-hover font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+          <div className="space-y-4">
+            <div className="md:hidden space-y-3">
+              {filteredUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className="rounded-xl border border-border bg-card p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-foreground">
+                        {user.name || "(নাম নেই)"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground break-all">
+                        {user.email || "(ইমেইল নেই)"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setViewingUser(user)}
+                      className="rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs font-semibold text-foreground hover:bg-muted"
+                    >
+                      বিস্তারিত
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {user.roles.length === 0 ? (
+                      <span className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
+                        কোনো ভূমিকা নেই
+                      </span>
+                    ) : (
+                      user.roles.map((role) => (
+                        <span
+                          key={role.id}
+                          className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                         >
-                          সম্পাদনা
-                        </button>
-                        {canManageStaffPermissions &&
-                        user.roles.some((role) => role.name === "staff") ? (
-                          <>
-                            <span className="text-muted-foreground">|</span>
-                            <Link
-                              href={`/dashboard/users/${user.id}/access`}
-                              prefetch={false}
+                          {role.name}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">
+                        তৈরির তারিখ
+                      </p>
+                      <p className="text-sm text-foreground">
+                        {formatDateTime(user.createdAt)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">
+                        ইমেইল যাচাই
+                      </p>
+                      <p className="text-sm text-foreground">
+                        {user.emailVerified ? "যাচাই হয়েছে" : "যাচাই হয়নি"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingUser(user);
+                      }}
+                      className="rounded-md border border-primary/30 bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15"
+                    >
+                      সম্পাদনা
+                    </button>
+                    {canManageStaffPermissions &&
+                    user.roles.some((role) => role.name === "staff") ? (
+                      <Link
+                        href={`/dashboard/users/${user.id}/access`}
+                        prefetch={false}
+                        className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/40 hover:text-primary"
+                      >
+                        অ্যাকসেস
+                      </Link>
+                    ) : null}
+                    <button
+                      onClick={() => {
+                        setDeletingUser(user);
+                      }}
+                      className="rounded-md border border-danger/30 bg-danger-soft px-3 py-1.5 text-xs font-semibold text-danger hover:bg-danger/10"
+                    >
+                      মুছুন
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block border border-border rounded-lg overflow-hidden">
+              <div className="max-h-[600px] overflow-auto">
+                <table className="min-w-[920px] w-full divide-y divide-border">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                        নাম
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                        ইমেইল
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                        ভূমিকা
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                        তৈরির তারিখ
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                        কর্ম
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-card divide-y divide-border">
+                    {filteredUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-muted">
+                        <td className="px-4 py-3 text-sm font-medium text-foreground">
+                          {user.name || "(নাম নেই)"}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {user.email || "(ইমেইল নেই)"}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <div className="flex flex-wrap gap-1">
+                            {user.roles.length === 0 ? (
+                              <span className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
+                                কোনো ভূমিকা নেই
+                              </span>
+                            ) : (
+                              user.roles.map((role) => (
+                                <span
+                                  key={role.id}
+                                  className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                                >
+                                  {role.name}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {formatDateTime(user.createdAt)}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <button
+                              onClick={() => setViewingUser(user)}
                               className="text-foreground hover:text-primary font-medium"
                             >
-                              অ্যাকসেস
-                            </Link>
-                          </>
-                        ) : null}
-                        <span className="text-muted-foreground">|</span>
-                        <button
-                          onClick={() => {
-                            setDeletingUser(user);
-                          }}
-                          className="text-danger hover:text-danger/80 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                          মুছুন
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                              বিস্তারিত
+                            </button>
+                            <span className="text-muted-foreground">|</span>
+                            <button
+                              onClick={() => {
+                                setEditingUser(user);
+                              }}
+                              className="text-primary hover:text-primary-hover font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              সম্পাদনা
+                            </button>
+                            {canManageStaffPermissions &&
+                            user.roles.some((role) => role.name === "staff") ? (
+                              <>
+                                <span className="text-muted-foreground">|</span>
+                                <Link
+                                  href={`/dashboard/users/${user.id}/access`}
+                                  prefetch={false}
+                                  className="text-foreground hover:text-primary font-medium"
+                                >
+                                  অ্যাকসেস
+                                </Link>
+                              </>
+                            ) : null}
+                            <span className="text-muted-foreground">|</span>
+                            <button
+                              onClick={() => {
+                                setDeletingUser(user);
+                              }}
+                              className="text-danger hover:text-danger/80 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              মুছুন
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -558,6 +686,114 @@ export default function UserManagementPage({
         onSuccess={loadData}
         onOptimisticDelete={handleOptimisticDelete}
       />
+
+      {/* User Details Dialog */}
+      <Dialog
+        open={viewingUser !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewingUser(null);
+          }
+        }}
+      >
+        <DialogContent className="w-[95vw] max-w-md sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="text-left">
+            <DialogTitle>ব্যবহারকারী বিস্তারিত</DialogTitle>
+            <DialogDescription>
+              নির্বাচিত ব্যবহারকারীর গুরুত্বপূর্ণ তথ্য
+            </DialogDescription>
+          </DialogHeader>
+          {viewingUser ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground">নাম</p>
+                <p className="text-base font-semibold text-foreground mt-1">
+                  {viewingUser.name || "(নাম নেই)"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-3">ইমেইল</p>
+                <p className="text-sm text-foreground break-all mt-1">
+                  {viewingUser.email || "(ইমেইল নেই)"}
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-xs text-muted-foreground">ভূমিকা</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {viewingUser.roles.length === 0 ? (
+                      <span className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
+                        কোনো ভূমিকা নেই
+                      </span>
+                    ) : (
+                      viewingUser.roles.map((role) => (
+                        <span
+                          key={role.id}
+                          className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                        >
+                          {role.name}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-xs text-muted-foreground">ইমেইল যাচাই</p>
+                  <p className="mt-2 text-sm font-medium text-foreground">
+                    {viewingUser.emailVerified ? "যাচাই হয়েছে" : "যাচাই হয়নি"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-xs text-muted-foreground">তৈরির তারিখ</p>
+                  <p className="mt-2 text-sm text-foreground">
+                    {formatDateTime(viewingUser.createdAt)}
+                  </p>
+                </div>
+                {viewingUser.createdBy ? (
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs text-muted-foreground">তৈরি করেছেন</p>
+                    <p className="mt-2 text-sm text-foreground break-all">
+                      {viewingUser.createdBy}
+                    </p>
+                  </div>
+                ) : null}
+                {viewingUserIsStaff ? (
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs text-muted-foreground">
+                      নিয়োজিত দোকান
+                    </p>
+                    <p className="mt-2 text-sm text-foreground">
+                      {viewingStaffShopName ?? "অজানা"}
+                    </p>
+                  </div>
+                ) : null}
+                {viewingUserIsOwner ? (
+                  <div className="rounded-lg border border-border p-3 sm:col-span-2">
+                    <p className="text-xs text-muted-foreground">
+                      ওনার অধীন দোকান
+                    </p>
+                    {viewingOwnerShops.length ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {viewingOwnerShops.map((shop) => (
+                          <span
+                            key={shop.id}
+                            className="inline-flex items-center rounded-full border border-border bg-muted/60 px-2.5 py-0.5 text-xs text-muted-foreground"
+                          >
+                            {shop.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        কোনো দোকান নেই
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
