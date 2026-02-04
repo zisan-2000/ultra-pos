@@ -6,8 +6,8 @@
 
 const CACHE_PREFIX = "pos-cache-";
 // Bump this when deploying so clients drop old Next.js bundles & action IDs.
-const CACHE_NAME = `${CACHE_PREFIX}v12`;
-const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v12`;
+const CACHE_NAME = `${CACHE_PREFIX}v13`;
+const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v13`;
 
 const PRECACHE_URLS = [
   "/offline",
@@ -71,7 +71,8 @@ const NAVIGATION_FALLBACKS = {
     "/dashboard/cash",
     "/dashboard/due",
   ],
-  "/sales/new": ["/dashboard/sales/new", "/dashboard/sales"],
+  "/sales/new": ["/dashboard/sales/new", "/dashboard/sales", "/dashboard"],
+  "/dashboard/sales/new": ["/dashboard/sales", "/dashboard"],
 };
 
 function shouldCacheNavigation(url) {
@@ -89,6 +90,27 @@ function normalizePathname(pathname) {
 
 function getNavigationCacheKey(url) {
   return new Request(url.origin + normalizePathname(url.pathname));
+}
+
+function getNavigationFallbackPaths(path) {
+  const unique = new Set(NAVIGATION_FALLBACKS[path] || []);
+
+  if (path.startsWith("/sales/new")) {
+    unique.add("/dashboard/sales/new");
+    unique.add("/dashboard/sales");
+    unique.add("/dashboard");
+  }
+
+  if (path.startsWith("/dashboard/sales/new")) {
+    unique.add("/dashboard/sales");
+    unique.add("/dashboard");
+  }
+
+  if (path.startsWith("/dashboard/")) {
+    unique.add("/dashboard");
+  }
+
+  return Array.from(unique);
 }
 
 self.addEventListener("install", (event) => {
@@ -217,7 +239,7 @@ async function handleNavigation(request, url) {
       (await cache.match(getNavigationCacheKey(url)));
     if (cached) return cached;
 
-    const fallbackPaths = NAVIGATION_FALLBACKS[path] || [];
+    const fallbackPaths = getNavigationFallbackPaths(path);
     for (const fallbackPath of fallbackPaths) {
       const fallbackUrl = new URL(fallbackPath, self.location.origin);
       const fallbackResponse = await cache.match(getNavigationCacheKey(fallbackUrl));
