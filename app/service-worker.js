@@ -48,6 +48,18 @@ const NAVIGATION_CACHE_PREFIXES = [
   "/agent/dashboard",
   "/super-admin/dashboard",
 ];
+const NAVIGATION_WARM_ROUTES = [
+  "/dashboard",
+  "/dashboard/sales",
+  "/dashboard/products",
+  "/dashboard/expenses",
+  "/dashboard/cash",
+  "/dashboard/due",
+  "/owner/dashboard",
+  "/admin/dashboard",
+  "/agent/dashboard",
+  "/super-admin/dashboard",
+];
 
 function shouldCacheNavigation(url) {
   const path = normalizePathname(url.pathname);
@@ -80,6 +92,14 @@ self.addEventListener("install", (event) => {
 self.addEventListener("message", (event) => {
   if (event?.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
+    return;
+  }
+
+  if (event?.data?.type === "WARM_NAV_ROUTES") {
+    const routes = Array.isArray(event.data.routes)
+      ? event.data.routes
+      : NAVIGATION_WARM_ROUTES;
+    event.waitUntil(warmNavigationRoutes(routes));
   }
 });
 
@@ -216,5 +236,37 @@ async function cacheFirstStatic(request, url, cacheName) {
   } catch (error) {
     return cached || Response.error();
   }
+}
+
+async function warmNavigationRoutes(routes) {
+  const cache = await caches.open(CACHE_NAME);
+  await Promise.all(
+    routes.map(async (route) => {
+      if (typeof route !== "string" || route.length === 0) return;
+
+      const normalizedPath = normalizePathname(
+        route.startsWith("/") ? route : `/${route}`
+      );
+      const targetUrl = new URL(normalizedPath, self.location.origin);
+      const request = new Request(targetUrl.toString(), {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+      });
+
+      try {
+        const response = await fetch(request);
+        if (!response || !response.ok) return;
+
+        const responsePath = normalizePathname(new URL(response.url).pathname);
+        if (responsePath !== normalizedPath) return;
+
+        cache.put(getNavigationCacheKey(targetUrl), response.clone());
+        cache.put(request, response.clone());
+      } catch {
+        // Ignore warmup failures; navigation fallback will still handle offline.
+      }
+    })
+  );
 }
 

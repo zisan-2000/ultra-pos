@@ -2,6 +2,19 @@
 
 import { useEffect } from "react";
 
+const OFFLINE_WARM_ROUTES = [
+  "/dashboard",
+  "/dashboard/sales",
+  "/dashboard/products",
+  "/dashboard/expenses",
+  "/dashboard/cash",
+  "/dashboard/due",
+  "/owner/dashboard",
+  "/admin/dashboard",
+  "/agent/dashboard",
+  "/super-admin/dashboard",
+];
+
 // Registers the service worker from the client to avoid making the layout a client component.
 export default function ServiceWorkerRegister() {
   useEffect(() => {
@@ -22,6 +35,19 @@ export default function ServiceWorkerRegister() {
       worker.postMessage({ type: "SKIP_WAITING" });
     };
 
+    const warmOfflineRoutes = async () => {
+      if (!navigator.onLine) return;
+      try {
+        const ready = await navigator.serviceWorker.ready;
+        ready.active?.postMessage({
+          type: "WARM_NAV_ROUTES",
+          routes: OFFLINE_WARM_ROUTES,
+        });
+      } catch {
+        // Ignore warmup failures.
+      }
+    };
+
     const register = async () => {
       try {
         const registration = await navigator.serviceWorker.register(
@@ -32,6 +58,7 @@ export default function ServiceWorkerRegister() {
           }
         );
         registration.update();
+        void warmOfflineRoutes();
 
         if (registration.waiting) {
           maybeActivate(registration.waiting);
@@ -56,8 +83,14 @@ export default function ServiceWorkerRegister() {
       }
     };
 
+    const onOnline = () => {
+      void warmOfflineRoutes();
+    };
+
+    window.addEventListener("online", onOnline);
     register();
     return () => {
+      window.removeEventListener("online", onOnline);
       navigator.serviceWorker.removeEventListener(
         "controllerchange",
         onControllerChange
