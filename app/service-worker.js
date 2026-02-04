@@ -6,8 +6,8 @@
 
 const CACHE_PREFIX = "pos-cache-";
 // Bump this when deploying so clients drop old Next.js bundles & action IDs.
-const CACHE_NAME = `${CACHE_PREFIX}v10`;
-const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v10`;
+const CACHE_NAME = `${CACHE_PREFIX}v11`;
+const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v11`;
 
 const PRECACHE_URLS = [
   "/offline",
@@ -36,12 +36,34 @@ const STATIC_EXTENSIONS = [
   ".webmanifest",
 ];
 
-const NAVIGATION_CACHE_ALLOWLIST = ["/", "/offline", "/login"];
+const NAVIGATION_CACHE_EXACT = ["/", "/offline", "/login", "/dashboard"];
+const NAVIGATION_CACHE_PREFIXES = [
+  "/dashboard/sales",
+  "/dashboard/products",
+  "/dashboard/expenses",
+  "/dashboard/cash",
+  "/dashboard/due",
+  "/owner/dashboard",
+  "/admin/dashboard",
+  "/agent/dashboard",
+  "/super-admin/dashboard",
+];
 
 function shouldCacheNavigation(url) {
-  return NAVIGATION_CACHE_ALLOWLIST.some(
-    (path) => url.pathname === path || url.pathname.startsWith(`${path}/`)
+  const path = normalizePathname(url.pathname);
+  if (NAVIGATION_CACHE_EXACT.includes(path)) return true;
+  return NAVIGATION_CACHE_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`)
   );
+}
+
+function normalizePathname(pathname) {
+  if (!pathname || pathname === "/") return "/";
+  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+}
+
+function getNavigationCacheKey(url) {
+  return new Request(url.origin + normalizePathname(url.pathname));
 }
 
 self.addEventListener("install", (event) => {
@@ -150,11 +172,15 @@ async function handleNavigation(request, url) {
   try {
     const networkResponse = await fetch(request);
     if (networkResponse && networkResponse.ok && shouldCacheNavigation(url)) {
+      const navCacheKey = getNavigationCacheKey(url);
+      cache.put(navCacheKey, networkResponse.clone());
       cache.put(request, networkResponse.clone());
     }
     return networkResponse;
   } catch (error) {
-    const cached = await cache.match(request);
+    const cached =
+      (await cache.match(request)) ||
+      (await cache.match(getNavigationCacheKey(url)));
     if (cached) return cached;
     const offline = await cache.match("/offline");
     if (offline) return offline;
