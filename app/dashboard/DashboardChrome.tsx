@@ -26,7 +26,6 @@ import OwnerSummaryVoice from "@/components/voice/OwnerSummaryVoice";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { SHOP_TYPES_WITH_COGS } from "@/lib/accounting/cogs-types";
-import { scheduleIdle } from "@/lib/schedule-idle";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import {
   BarChart3,
@@ -287,25 +286,6 @@ export function DashboardShell({
   }, [drawerOpen]);
 
   useEffect(() => {
-    if (!mounted || !shops || shops.length <= 1) return;
-    const maxPrefetch = 4;
-    const candidates = shops
-      .filter((shop) => shop.id !== safeShopId)
-      .slice(0, maxPrefetch);
-    if (candidates.length === 0) return;
-
-    const cancel = scheduleIdle(() => {
-      candidates.forEach((shop) => {
-        const params = new URLSearchParams(searchParams?.toString() || "");
-        params.set("shopId", shop.id);
-        router.prefetch(`${pathname}?${params.toString()}`);
-      });
-    }, 600);
-
-    return () => cancel();
-  }, [mounted, pathname, router, safeShopId, searchParams, shops]);
-
-  useEffect(() => {
     if (!userMenuOpen) return;
 
     const onPointerDown = (e: MouseEvent | TouchEvent) => {
@@ -382,6 +362,14 @@ export function DashboardShell({
   }, [safeShopId]);
 
   const handleNavPrefetch = (href: string) => {
+    if (!online) return;
+    if (typeof window !== "undefined") {
+      const connection = (navigator as Navigator & {
+        connection?: { saveData?: boolean; effectiveType?: string };
+      }).connection;
+      if (connection?.saveData) return;
+      if (connection?.effectiveType?.includes("2g")) return;
+    }
     router.prefetch(buildShopHref(href));
   };
 
@@ -517,7 +505,6 @@ export function DashboardShell({
     const params = new URLSearchParams(searchParams?.toString() || "");
     params.set("shopId", id);
     const next = `${pathname}?${params.toString()}`;
-    router.prefetch(next);
     startTransition(() => {
       router.replace(next, { scroll: false });
     });
@@ -672,7 +659,7 @@ export function DashboardShell({
                       <Link
                         key={item.href}
                         href={scopedHref}
-                        prefetch
+                        prefetch={false}
                         onClick={(event) => {
                           // Prevent multi-clicks on rapid consecutive clicks
                           if (event.detail > 1) return;
@@ -713,7 +700,7 @@ export function DashboardShell({
                     {canViewUserCreationLog && (
                       <Link
                         href={buildShopHref(userCreationLogHref)}
-                        prefetch
+                        prefetch={false}
                         onClick={(event) => {
                           setDrawerOpen(false);
                           handleNavClick(event, userCreationLogHref);
@@ -749,7 +736,7 @@ export function DashboardShell({
                     {canAccessRbacAdmin && (
                       <Link
                         href={buildShopHref("/dashboard/admin/rbac")}
-                        prefetch
+                        prefetch={false}
                         onClick={(event) => {
                           setDrawerOpen(false);
                           handleNavClick(event, "/dashboard/admin/rbac");
@@ -800,7 +787,7 @@ export function DashboardShell({
                   <div className={navGroupClass}>
                     <Link
                       href={buildShopHref("/dashboard/admin/business-types")}
-                      prefetch
+                      prefetch={false}
                       onClick={(event) => {
                         setDrawerOpen(false);
                         handleNavClick(
@@ -841,7 +828,7 @@ export function DashboardShell({
                       href={buildShopHref(
                         "/dashboard/admin/business-product-library"
                       )}
-                      prefetch
+                      prefetch={false}
                       onClick={(event) => {
                         setDrawerOpen(false);
                         handleNavClick(
@@ -884,7 +871,7 @@ export function DashboardShell({
 
                     <Link
                       href={buildShopHref("/dashboard/admin/billing")}
-                      prefetch
+                      prefetch={false}
                       onClick={(event) => {
                         setDrawerOpen(false);
                         handleNavClick(event, "/dashboard/admin/billing");
@@ -920,7 +907,7 @@ export function DashboardShell({
 
                     <Link
                       href={buildShopHref(systemSettingsHref)}
-                      prefetch
+                      prefetch={false}
                       onClick={(event) => {
                         setDrawerOpen(false);
                         handleNavClick(event, systemSettingsHref);
@@ -1018,7 +1005,7 @@ export function DashboardShell({
                           setDrawerOpen(false);
                           handleNavClick(event, profileHref);
                         }}
-                        prefetch
+                        prefetch={false}
                         onMouseEnter={() => handleNavPrefetch(profileHref)}
                         onTouchStart={() => handleNavPrefetch(profileHref)}
                         className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -1143,7 +1130,7 @@ export function DashboardShell({
                 ) : (
                   <Link
                     href={buildShopHref("/dashboard/shops/new")}
-                    prefetch
+                    prefetch={false}
                     onClick={(event) =>
                       handleNavClick(event, "/dashboard/shops/new")
                     }
@@ -1218,7 +1205,7 @@ export function DashboardShell({
               <Link
                 key={item.href}
                 href={scopedHref}
-                prefetch
+                prefetch={false}
                 onClick={(event) => handleNavClick(event, targetHref)}
                 onMouseEnter={() => handleNavPrefetch(scopedHref)}
                 onTouchStart={() => handleNavPrefetch(scopedHref)}
@@ -1249,7 +1236,7 @@ export function DashboardShell({
       {fabConfig && safeShopId && !drawerOpen ? (
         <Link
           href={`${fabConfig.href}?shopId=${safeShopId}`}
-          prefetch
+          prefetch={false}
           onClick={(event) =>
             handleNavClick(event, `${fabConfig.href}?shopId=${safeShopId}`)
           }

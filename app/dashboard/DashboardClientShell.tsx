@@ -3,6 +3,8 @@
 import { useEffect, type ReactNode } from "react";
 import SyncBootstrap from "@/components/sync-bootstrap";
 import RealtimeBridge from "@/components/realtime/RealtimeBridge";
+import OfflineSessionGuard from "@/components/offline-session-guard";
+import OfflineCapabilityGuard from "@/components/offline-capability-guard";
 import { handlePermissionError } from "@/lib/permission-toast";
 import OfflineConflictBanner from "@/components/offline-conflict-banner";
 import SyncHealthBanner from "@/components/sync-health-banner";
@@ -33,6 +35,8 @@ export default function DashboardClientShell({
 
   return (
     <>
+      <OfflineSessionGuard />
+      <OfflineCapabilityGuard />
       <SyncBootstrap />
       <RealtimeBridge />
       <div className="px-4 pt-3">

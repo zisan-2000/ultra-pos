@@ -1,22 +1,22 @@
 // middleware.ts
 import { NextResponse, type NextRequest } from "next/server";
 
+const RESERVED_SLUGS = new Set([
+  "dashboard",
+  "login",
+  "register",
+  "offline",
+  "api",
+  "_next",
+  "service-worker",
+]);
+
 const hasBetterAuthCookie = (req: NextRequest) => {
   try {
     return req.cookies.getAll().some((c) => c.name.includes("better-auth"));
   } catch {
     return false;
   }
-};
-
-const appendCookies = (res: NextResponse, cookies: string[]) => {
-  cookies.filter(Boolean).forEach((c) => res.headers.append("set-cookie", c));
-  return res;
-};
-
-const withNoStore = (res: NextResponse) => {
-  res.headers.set("Cache-Control", "no-store");
-  return res;
 };
 
 const clearAuthCookies = (res: NextResponse, req: NextRequest) => {
@@ -34,25 +34,7 @@ const clearAuthCookies = (res: NextResponse, req: NextRequest) => {
   return res;
 };
 
-const fetchSession = async (req: NextRequest) => {
-  const cookieHeader = req.headers.get("cookie");
-  if (!cookieHeader) return null;
-
-  try {
-    const url = new URL("/api/auth/session-rbac", req.nextUrl.origin);
-    const res = await fetch(url, {
-      headers: { cookie: cookieHeader },
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.session?.userId ? data : null;
-  } catch {
-    return null;
-  }
-};
-
-export async function middleware(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   const { search } = req.nextUrl;
   if (pathname.startsWith("/api/")) {
@@ -72,26 +54,15 @@ export async function middleware(req: NextRequest) {
   // Backward-compatible shortcut routes.
   if (pathname === "/sales" || pathname.startsWith("/sales/")) {
     const suffix = pathname.slice("/sales".length);
-    return withNoStore(
-      NextResponse.redirect(
-        new URL(`/dashboard/sales${suffix}${search}`, req.url)
-      )
+    return NextResponse.redirect(
+      new URL(`/dashboard/sales${suffix}${search}`, req.url)
     );
   }
 
   const roleMatch = pathname.match(/^\/([A-Za-z0-9_-]+)(\/.*)?$/);
   const roleSlug = roleMatch?.[1] ?? null;
   const remainder = roleMatch?.[2] ?? "";
-  const reserved = new Set([
-    "dashboard",
-    "login",
-    "register",
-    "offline",
-    "api",
-    "_next",
-    "service-worker",
-  ]);
-  const looksRolePrefixed = Boolean(roleSlug && !reserved.has(roleSlug));
+  const looksRolePrefixed = Boolean(roleSlug && !RESERVED_SLUGS.has(roleSlug));
   const isDashboardPath =
     pathname === "/dashboard" || pathname.startsWith("/dashboard/");
   const isProtectedRoute = isDashboardPath || looksRolePrefixed;
@@ -100,46 +71,32 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const hasSessionCookie = hasBetterAuthCookie(req);
-  const session = hasSessionCookie ? await fetchSession(req) : null;
-  const cookiesToSet: string[] = [];
+  if (isAuthPage) {
+    return NextResponse.next();
+  }
 
-  if (!session && isProtectedRoute && !isAuthPage) {
+  if (!hasBetterAuthCookie(req)) {
     const res = NextResponse.redirect(new URL("/login", req.url));
-    return appendCookies(withNoStore(clearAuthCookies(res, req)), cookiesToSet);
-  }
-
-  if (session && isAuthPage) {
-    return appendCookies(
-      withNoStore(NextResponse.redirect(new URL("/dashboard", req.url))),
-      cookiesToSet
-    );
-  }
-
-  if (!isProtectedRoute) {
-    return appendCookies(withNoStore(NextResponse.next()), cookiesToSet);
+    return clearAuthCookies(res, req);
   }
 
   if (isDashboardPath) {
-    return appendCookies(withNoStore(NextResponse.next()), cookiesToSet);
+    return NextResponse.next();
   }
 
   // Allow super-admin system settings to resolve directly
   if (pathname.startsWith("/super-admin/system-settings")) {
-    return appendCookies(withNoStore(NextResponse.next()), cookiesToSet);
+    return NextResponse.next();
   }
 
   if (looksRolePrefixed) {
     const normalized = remainder || "/dashboard";
     const rewriteTarget =
       normalized === "/dashboard" ? "/dashboard" : "/dashboard" + normalized;
-    return appendCookies(
-      withNoStore(NextResponse.redirect(new URL(rewriteTarget + search, req.url))),
-      cookiesToSet
-    );
+    return NextResponse.redirect(new URL(rewriteTarget + search, req.url));
   }
 
-  return appendCookies(withNoStore(NextResponse.next()), cookiesToSet);
+  return NextResponse.next();
 }
 
 export const config = {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
 
 const RECOVERY_FLAG = "pos.css.recovery.attempted";
 const CHECK_DELAY_MS = 1200;
@@ -50,8 +49,6 @@ async function recoverStyles() {
 }
 
 export default function CssHealthGuard() {
-  const pathname = usePathname();
-
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") return;
     const timer = window.setTimeout(() => {
@@ -64,7 +61,7 @@ export default function CssHealthGuard() {
     }, CHECK_DELAY_MS);
 
     return () => window.clearTimeout(timer);
-  }, [pathname]);
+  }, []);
 
   return null;
 }

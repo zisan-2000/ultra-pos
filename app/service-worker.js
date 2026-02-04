@@ -50,18 +50,9 @@ const NAVIGATION_CACHE_PREFIXES = [
   "/super-admin/dashboard",
 ];
 const NAVIGATION_WARM_ROUTES = [
-  "/sales/new",
   "/dashboard",
   "/dashboard/sales",
-  "/dashboard/sales/new",
   "/dashboard/products",
-  "/dashboard/expenses",
-  "/dashboard/cash",
-  "/dashboard/due",
-  "/owner/dashboard",
-  "/admin/dashboard",
-  "/agent/dashboard",
-  "/super-admin/dashboard",
 ];
 const NAVIGATION_FALLBACKS = {
   "/dashboard": [
@@ -298,11 +289,7 @@ async function warmNavigationRoutes(routes) {
         route.startsWith("/") ? route : `/${route}`
       );
       const targetUrl = new URL(normalizedPath, self.location.origin);
-      const request = new Request(targetUrl.toString(), {
-        method: "GET",
-        cache: "no-store",
-        credentials: "include",
-      });
+      const request = new Request(targetUrl.toString(), { method: "GET" });
 
       try {
         const response = await fetch(request);

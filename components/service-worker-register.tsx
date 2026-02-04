@@ -3,18 +3,9 @@
 import { useEffect } from "react";
 
 const OFFLINE_WARM_ROUTES = [
-  "/sales/new",
   "/dashboard",
   "/dashboard/sales",
-  "/dashboard/sales/new",
   "/dashboard/products",
-  "/dashboard/expenses",
-  "/dashboard/cash",
-  "/dashboard/due",
-  "/owner/dashboard",
-  "/admin/dashboard",
-  "/agent/dashboard",
-  "/super-admin/dashboard",
 ];
 
 // Registers the service worker from the client to avoid making the layout a client component.
@@ -37,8 +28,14 @@ export default function ServiceWorkerRegister() {
       worker.postMessage({ type: "SKIP_WAITING" });
     };
 
+    const shouldWarmRoutes = () => {
+      if (!navigator.onLine) return false;
+      if (!window.location.pathname.startsWith("/dashboard")) return false;
+      return document.cookie.includes("better-auth");
+    };
+
     const warmOfflineRoutes = async () => {
-      if (!navigator.onLine) return;
+      if (!shouldWarmRoutes()) return;
       try {
         const ready = await navigator.serviceWorker.ready;
         ready.active?.postMessage({
@@ -59,7 +56,6 @@ export default function ServiceWorkerRegister() {
             updateViaCache: "none",
           }
         );
-        registration.update();
         void warmOfflineRoutes();
 
         if (registration.waiting) {
