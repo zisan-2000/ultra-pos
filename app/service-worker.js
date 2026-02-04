@@ -6,8 +6,8 @@
 
 const CACHE_PREFIX = "pos-cache-";
 // Bump this when deploying so clients drop old Next.js bundles & action IDs.
-const CACHE_NAME = `${CACHE_PREFIX}v11`;
-const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v11`;
+const CACHE_NAME = `${CACHE_PREFIX}v12`;
+const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v12`;
 
 const PRECACHE_URLS = [
   "/offline",
@@ -63,6 +63,16 @@ const NAVIGATION_WARM_ROUTES = [
   "/agent/dashboard",
   "/super-admin/dashboard",
 ];
+const NAVIGATION_FALLBACKS = {
+  "/dashboard": [
+    "/dashboard/sales",
+    "/dashboard/products",
+    "/dashboard/expenses",
+    "/dashboard/cash",
+    "/dashboard/due",
+  ],
+  "/sales/new": ["/dashboard/sales/new", "/dashboard/sales"],
+};
 
 function shouldCacheNavigation(url) {
   const path = normalizePathname(url.pathname);
@@ -191,6 +201,7 @@ self.addEventListener("fetch", (event) => {
 
 async function handleNavigation(request, url) {
   const cache = await caches.open(CACHE_NAME);
+  const path = normalizePathname(url.pathname);
 
   try {
     const networkResponse = await fetch(request);
@@ -205,9 +216,23 @@ async function handleNavigation(request, url) {
       (await cache.match(request)) ||
       (await cache.match(getNavigationCacheKey(url)));
     if (cached) return cached;
+
+    const fallbackPaths = NAVIGATION_FALLBACKS[path] || [];
+    for (const fallbackPath of fallbackPaths) {
+      const fallbackUrl = new URL(fallbackPath, self.location.origin);
+      const fallbackResponse = await cache.match(getNavigationCacheKey(fallbackUrl));
+      if (fallbackResponse) return fallbackResponse;
+    }
+
     const offline = await cache.match("/offline");
     if (offline) return offline;
-    throw error;
+    return new Response(
+      "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Offline</title></head><body><h1>Offline</h1><p>Please reconnect and try again.</p></body></html>",
+      {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }
+    );
   }
 }
 
