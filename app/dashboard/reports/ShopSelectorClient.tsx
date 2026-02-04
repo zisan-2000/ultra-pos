@@ -3,7 +3,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import {
   Select,
@@ -23,11 +22,6 @@ type Props = {
 export default function ShopSelectorClient({ shops, selectedShopId }: Props) {
   const router = useRouter();
   const { setShop } = useCurrentShop();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleChange = (id: string) => {
     // Persist globally selected shop
@@ -37,34 +31,20 @@ export default function ShopSelectorClient({ shops, selectedShopId }: Props) {
   };
 
   return (
-    mounted ? (
-      <Select value={selectedShopId} onValueChange={handleChange}>
-        <SelectTrigger className="h-11 w-full sm:w-[240px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
-          <SelectValue placeholder="দোকান সিলেক্ট করুন" />
-        </SelectTrigger>
-        <SelectContent
-          align="start"
-          className="min-w-[var(--radix-select-trigger-width)]"
-        >
-          {shops.map((shop) => (
-            <SelectItem key={shop.id} value={shop.id}>
-              {shop.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    ) : (
-      <select
-        className="h-11 w-full sm:w-[240px] border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-        value={selectedShopId}
-        onChange={(e) => handleChange(e.target.value)}
+    <Select value={selectedShopId} onValueChange={handleChange}>
+      <SelectTrigger className="h-11 w-full sm:w-[240px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+        <SelectValue placeholder="দোকান সিলেক্ট করুন" />
+      </SelectTrigger>
+      <SelectContent
+        align="start"
+        className="min-w-[var(--radix-select-trigger-width)]"
       >
         {shops.map((shop) => (
-          <option key={shop.id} value={shop.id}>
+          <SelectItem key={shop.id} value={shop.id}>
             {shop.name}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-    )
+      </SelectContent>
+    </Select>
   );
 }

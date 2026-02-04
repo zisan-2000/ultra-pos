@@ -77,6 +77,14 @@ function dedupe(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 function parseAmount(text: string) {
   const match = text.match(/(\d+(?:[.,]\d+)?)/);
   return match ? match[1].replace(",", "") : "";
@@ -125,20 +133,38 @@ export default function ExpenseFormClient({
       typeof window !== "undefined"
         ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
         : null;
-    setVoiceReady(Boolean(SpeechRecognitionImpl));
-    return () => recognitionRef.current?.stop?.();
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
+      setVoiceReady(Boolean(SpeechRecognitionImpl));
+    });
+    return () => {
+      cancelled = true;
+      recognitionRef.current?.stop?.();
+    };
   }, []);
 
   useEffect(() => {
     if (!storageKey) return;
+    let cancelled = false;
     const stored = safeLocalStorageGet(storageKey);
     if (stored) {
       try {
-        setTemplates(JSON.parse(stored) as ExpenseTemplate[]);
+        const parsed = JSON.parse(stored) as ExpenseTemplate[];
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setTemplates(parsed);
+        });
       } catch {
-        setTemplates([]);
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setTemplates([]);
+        });
       }
     }
+    return () => {
+      cancelled = true;
+    };
   }, [storageKey]);
 
   const frequentTemplates = useMemo(

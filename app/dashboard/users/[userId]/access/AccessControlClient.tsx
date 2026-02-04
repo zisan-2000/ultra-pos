@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { updateStaffPermissions } from "@/app/actions/user-management";
 import { useOnlineStatus } from "@/lib/sync/net-status";
@@ -33,6 +33,10 @@ type GroupedPermission = PermissionOption & { meta: PermissionMeta };
 type AccessControlClientProps = {
   user: StaffUserSummary;
   permissions: PermissionOption[];
+};
+
+type AccessControlInnerProps = AccessControlClientProps & {
+  initialEnabled: Set<string>;
 };
 
 const presetDefinitions = [
@@ -99,10 +103,11 @@ const presetDefinitions = [
   },
 ];
 
-export default function AccessControlClient({
+function AccessControlInner({
   user,
   permissions,
-}: AccessControlClientProps) {
+  initialEnabled,
+}: AccessControlInnerProps) {
   const online = useOnlineStatus();
   const readOnly = !online;
   const [saving, startSaving] = useTransition();
@@ -110,17 +115,12 @@ export default function AccessControlClient({
     null,
   );
 
-  const initialEnabled = useMemo(
-    () => new Set(permissions.filter((p) => p.enabled).map((p) => p.id)),
-    [permissions],
+  const [enabledIds, setEnabledIds] = useState<Set<string>>(
+    () => new Set(initialEnabled),
   );
-  const [enabledIds, setEnabledIds] = useState<Set<string>>(initialEnabled);
-  const [savedIds, setSavedIds] = useState<Set<string>>(initialEnabled);
-
-  useEffect(() => {
-    setEnabledIds(new Set(initialEnabled));
-    setSavedIds(new Set(initialEnabled));
-  }, [initialEnabled]);
+  const [savedIds, setSavedIds] = useState<Set<string>>(
+    () => new Set(initialEnabled),
+  );
 
   const permissionIdByName = useMemo(() => {
     const map = new Map<string, string>();
@@ -183,13 +183,8 @@ export default function AccessControlClient({
 
   const hasChanges = changedCount > 0;
 
-  useEffect(() => {
-    if (hasChanges) {
-      setFeedback(null);
-    }
-  }, [hasChanges]);
-
   const updateEnabled = (updater: (next: Set<string>) => void) => {
+    setFeedback(null);
     setEnabledIds((prev) => {
       const next = new Set(prev);
       updater(next);
@@ -205,6 +200,7 @@ export default function AccessControlClient({
   };
 
   const setAll = (enabled: boolean) => {
+    setFeedback(null);
     if (enabled) {
       setEnabledIds(new Set(permissions.map((p) => p.id)));
     } else {
@@ -228,6 +224,7 @@ export default function AccessControlClient({
     if (resolved.length === 0) {
       return;
     }
+    setFeedback(null);
     setEnabledIds(new Set(resolved));
   };
 
@@ -540,5 +537,28 @@ export default function AccessControlClient({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AccessControlClient({
+  user,
+  permissions,
+}: AccessControlClientProps) {
+  const initialEnabled = useMemo(
+    () => new Set(permissions.filter((p) => p.enabled).map((p) => p.id)),
+    [permissions],
+  );
+  const initialEnabledKey = useMemo(
+    () => Array.from(initialEnabled).sort().join("|"),
+    [initialEnabled],
+  );
+
+  return (
+    <AccessControlInner
+      key={initialEnabledKey}
+      user={user}
+      permissions={permissions}
+      initialEnabled={initialEnabled}
+    />
   );
 }

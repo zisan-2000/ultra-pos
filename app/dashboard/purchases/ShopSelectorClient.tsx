@@ -4,7 +4,6 @@
 
 import { useRouter } from "next/navigation";
 import { useCurrentShop } from "@/hooks/use-current-shop";
-import { useEffect, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -23,11 +22,6 @@ type Props = {
 export default function ShopSelectorClient({ shops, selectedShopId }: Props) {
   const router = useRouter();
   const { setShop } = useCurrentShop();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleSelect = (id: string) => {
     setShop(id);
@@ -35,7 +29,7 @@ export default function ShopSelectorClient({ shops, selectedShopId }: Props) {
     router.push(`/dashboard/purchases?shopId=${id}`);
   };
 
-  return mounted ? (
+  return (
     <Select value={selectedShopId} onValueChange={handleSelect}>
       <SelectTrigger className="h-11 w-full sm:w-[220px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
         <SelectValue placeholder="দোকান সিলেক্ট করুন" />
@@ -51,17 +45,5 @@ export default function ShopSelectorClient({ shops, selectedShopId }: Props) {
         ))}
       </SelectContent>
     </Select>
-  ) : (
-    <select
-      className="h-11 w-full sm:w-[220px] border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-      value={selectedShopId}
-      onChange={(e) => handleSelect(e.target.value)}
-    >
-      {shops.map((shop) => (
-        <option key={shop.id} value={shop.id}>
-          {shop.name}
-        </option>
-      ))}
-    </select>
   );
 }

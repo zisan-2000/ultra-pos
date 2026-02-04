@@ -51,6 +51,55 @@ const PRESETS: { key: RangePreset; label: string }[] = [
   { key: "custom", label: "কাস্টম" },
 ];
 
+type DateFilterRowProps = {
+  online: boolean;
+  preset: RangePreset;
+  customFrom?: string;
+  customTo?: string;
+  setPreset: (next: RangePreset) => void;
+  applyRangeToUrl: (nextFrom: string, nextTo: string) => void;
+  className?: string;
+};
+
+function DateFilterRow({
+  online,
+  preset,
+  customFrom,
+  customTo,
+  setPreset,
+  applyRangeToUrl,
+  className = "",
+}: DateFilterRowProps) {
+  return (
+    <div className={`relative ${className}`}>
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pr-10 py-1">
+        {PRESETS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => {
+              setPreset(key);
+              if (online) {
+                const next = computeRange(key, customFrom, customTo);
+                const nextFrom = next.from ?? todayStr();
+                const nextTo = next.to ?? nextFrom;
+                applyRangeToUrl(nextFrom, nextTo);
+              }
+            }}
+            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border transition ${
+              preset === key
+                ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
+                : "bg-card text-foreground border-border/70 hover:border-primary/30 hover:bg-primary-soft/40"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
+    </div>
+  );
+}
+
 function computeRange(preset: RangePreset, customFrom?: string, customTo?: string) {
   const toStr = (d: Date) => d.toISOString().split("T")[0];
   const today = new Date();
@@ -145,9 +194,12 @@ export function CashListClient({
   const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<CashEntry[]>(rows);
-  const [preset, setPreset] = useState<RangePreset>("today");
+  const [preset, setPreset] = useState<RangePreset>(resolvePreset(from, to));
   const [customFrom, setCustomFrom] = useState<string | undefined>(from);
   const [customTo, setCustomTo] = useState<string | undefined>(to);
+  const [optimisticDeletedIds, setOptimisticDeletedIds] = useState<
+    Set<string>
+  >(new Set());
   const serverSnapshotRef = useRef(rows);
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
@@ -163,14 +215,6 @@ export function CashListClient({
     return customFrom <= customTo;
   })();
 
-  useEffect(() => {
-    if (!online) return;
-    const resolvedPreset = resolvePreset(from, to);
-    setPreset(resolvedPreset);
-    setCustomFrom(from || undefined);
-    setCustomTo(to || undefined);
-  }, [online, from, to]);
-
   const applyRangeToUrl = useCallback(
     (nextFrom: string, nextTo: string) => {
       const params = new URLSearchParams({ shopId, from: nextFrom, to: nextTo });
@@ -180,6 +224,14 @@ export function CashListClient({
   );
   const handleOptimisticDelete = useCallback(
     (id: string) => {
+      if (online) {
+        setOptimisticDeletedIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+        return;
+      }
       setItems((prev) => {
         const next = prev.filter((item) => item.id !== id);
         try {
@@ -190,7 +242,7 @@ export function CashListClient({
         return next;
       });
     },
-    [shopId]
+    [online, shopId]
   );
 
   useEffect(() => {
@@ -319,7 +371,6 @@ export function CashListClient({
         };
       }
 
-      setItems(rows);
       const mapped = rows.map((e) => ({
         id: e.id,
         shopId,
@@ -364,8 +415,14 @@ export function CashListClient({
     [preset, customFrom, customTo]
   );
 
+  const sourceItems = useMemo(() => {
+    if (!online) return items;
+    if (optimisticDeletedIds.size === 0) return rows;
+    return rows.filter((item) => !optimisticDeletedIds.has(item.id));
+  }, [online, items, optimisticDeletedIds, rows]);
+
   const rendered = useMemo(() => {
-    return items.filter((e) => {
+    return sourceItems.filter((e) => {
       const d = e.createdAt ? new Date(e.createdAt as any) : null;
       const ds = d ? d.toISOString().slice(0, 10) : undefined;
       if (online) return true;
@@ -375,7 +432,7 @@ export function CashListClient({
       if (range.to && ds > range.to) return false;
       return true;
     });
-  }, [items, online, range.from, range.to]);
+  }, [sourceItems, online, range.from, range.to]);
 
   const totals = useMemo(() => {
     if (
@@ -433,35 +490,6 @@ export function CashListClient({
     return groups;
   }, [rendered]);
 
-  const DateFilterRow = ({ className = "" }: { className?: string }) => (
-    <div className={`relative ${className}`}>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar pr-10 py-1">
-        {PRESETS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => {
-              setPreset(key);
-              if (online) {
-                const next = computeRange(key, customFrom, customTo);
-                const nextFrom = next.from ?? todayStr();
-                const nextTo = next.to ?? nextFrom;
-                applyRangeToUrl(nextFrom, nextTo);
-              }
-            }}
-            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border transition ${
-              preset === key
-                ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
-                : "bg-card text-foreground border-border/70 hover:border-primary/30 hover:bg-primary-soft/40"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
-    </div>
-  );
-
   return (
     <div className="space-y-4 pb-16">
       {/* Sticky time filter (mobile only) */}
@@ -472,7 +500,14 @@ export function CashListClient({
               <p className="text-[11px] font-semibold text-muted-foreground">সময়</p>
               <span className="text-[11px] text-muted-foreground">{rangeLabel}</span>
             </div>
-            <DateFilterRow />
+            <DateFilterRow
+              preset={preset}
+              online={online}
+              customFrom={customFrom}
+              customTo={customTo}
+              setPreset={setPreset}
+              applyRangeToUrl={applyRangeToUrl}
+            />
             {preset === "custom" && (
               <div className="grid grid-cols-2 gap-2">
                 <input
@@ -541,7 +576,14 @@ export function CashListClient({
               <p className="text-xs font-semibold text-muted-foreground">সময়</p>
               <span className="text-xs text-muted-foreground">{rangeLabel}</span>
             </div>
-            <DateFilterRow />
+            <DateFilterRow
+              preset={preset}
+              online={online}
+              customFrom={customFrom}
+              customTo={customTo}
+              setPreset={setPreset}
+              applyRangeToUrl={applyRangeToUrl}
+            />
             {preset === "custom" && (
               <div className="grid grid-cols-3 gap-2">
                 <input

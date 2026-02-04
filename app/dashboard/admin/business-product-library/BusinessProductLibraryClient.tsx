@@ -58,6 +58,14 @@ type Props = {
 
 const MAX_IMPORT_ERRORS = 4;
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 function parseImportPayload(raw: string, defaultBusinessType?: string | null) {
   const errors: string[] = [];
   const trimmed = raw.trim();
@@ -441,9 +449,13 @@ export default function BusinessProductLibraryClient({
   );
 
   useEffect(() => {
+    let cancelled = false;
     if (online) {
       if (Array.isArray(initialTemplates) && initialTemplates.length > 0) {
-        setTemplates(initialTemplates);
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setTemplates(initialTemplates);
+        });
         try {
           safeLocalStorageSet(templatesKey, JSON.stringify(initialTemplates));
         } catch {
@@ -455,7 +467,10 @@ export default function BusinessProductLibraryClient({
           if (raw) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
-              setTemplates(parsed);
+              scheduleStateUpdate(() => {
+                if (cancelled) return;
+                setTemplates(parsed);
+              });
             }
           }
         } catch {
@@ -464,14 +479,19 @@ export default function BusinessProductLibraryClient({
       }
 
       if (Array.isArray(initialBusinessTypes) && initialBusinessTypes.length > 0) {
-        setBusinessTypes(initialBusinessTypes);
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setBusinessTypes(initialBusinessTypes);
+        });
         try {
           safeLocalStorageSet(typesKey, JSON.stringify(initialBusinessTypes));
         } catch {
           // ignore cache errors
         }
       }
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     try {
@@ -479,7 +499,10 @@ export default function BusinessProductLibraryClient({
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          setTemplates(parsed);
+          scheduleStateUpdate(() => {
+            if (cancelled) return;
+            setTemplates(parsed);
+          });
         }
       }
     } catch {
@@ -491,12 +514,18 @@ export default function BusinessProductLibraryClient({
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          setBusinessTypes(parsed);
+          scheduleStateUpdate(() => {
+            if (cancelled) return;
+            setBusinessTypes(parsed);
+          });
         }
       }
     } catch {
       // ignore cache errors
     }
+    return () => {
+      cancelled = true;
+    };
   }, [online, initialTemplates, initialBusinessTypes, error]);
 
   useEffect(() => {

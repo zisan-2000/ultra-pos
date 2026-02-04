@@ -3,7 +3,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import AdminHierarchyDrilldownClient from "@/components/admin-hierarchy-drilldown-client";
 import AgentHierarchyDrilldownClient from "@/components/agent-hierarchy-drilldown-client";
 import { buttonVariants } from "@/components/ui/button";
@@ -166,34 +166,33 @@ function MetricCard({
 
 export default function SuperAdminDashboardClient({ userId, initialData }: Props) {
   const online = useOnlineStatus();
-  const [data, setData] = useState<SuperAdminDashboardData>(initialData);
-  const [cacheMissing, setCacheMissing] = useState(false);
-
   const cacheKey = useMemo(() => `super-admin:dashboard:${userId}`, [userId]);
 
   useEffect(() => {
-    if (online) {
-      setData(initialData);
-      setCacheMissing(false);
-      try {
-        safeLocalStorageSet(cacheKey, JSON.stringify(initialData));
-      } catch {
-        // ignore cache errors
-      }
-      return;
+    if (!online) return;
+    try {
+      safeLocalStorageSet(cacheKey, JSON.stringify(initialData));
+    } catch {
+      // ignore cache errors
     }
+  }, [online, initialData, cacheKey]);
 
+  const { data, cacheMissing } = useMemo(() => {
+    if (online) {
+      return { data: initialData, cacheMissing: false };
+    }
     try {
       const raw = safeLocalStorageGet(cacheKey);
       if (!raw) {
-        setCacheMissing(true);
-        return;
+        return { data: initialData, cacheMissing: true };
       }
       const parsed = JSON.parse(raw) as SuperAdminDashboardData;
-      setData(parsed);
-      setCacheMissing(false);
+      if (parsed && parsed.counts && parsed.warnings) {
+        return { data: parsed, cacheMissing: false };
+      }
+      return { data: initialData, cacheMissing: true };
     } catch {
-      setCacheMissing(true);
+      return { data: initialData, cacheMissing: true };
     }
   }, [online, initialData, cacheKey]);
 

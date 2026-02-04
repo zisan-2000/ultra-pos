@@ -352,6 +352,14 @@ export const useRealTimeReports = (shopId: string) => {
     };
   }, []);
 
+  const getPendingUpdatesCount = useCallback(() => {
+    return pendingUpdatesRef.current.size;
+  }, []);
+
+  const getRollbackStackSize = useCallback(() => {
+    return rollbackStackRef.current.length;
+  }, []);
+
   /**
    * Auto-sync on window focus and reconnect
    */
@@ -404,8 +412,8 @@ export const useRealTimeReports = (shopId: string) => {
     resetMetrics,
     
     // State inspection
-    pendingUpdatesCount: pendingUpdatesRef.current.size,
-    rollbackStackSize: rollbackStackRef.current.length
+    getPendingUpdatesCount,
+    getRollbackStackSize
   };
 };
 

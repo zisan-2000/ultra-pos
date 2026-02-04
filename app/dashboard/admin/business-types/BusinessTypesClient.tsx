@@ -42,6 +42,14 @@ type Props = {
 // Structured edit (no JSON needed)
 const ALL_FIELDS: Field[] = ["name", "sellPrice", "buyPrice", "unit", "expiry", "size"];
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 export default function BusinessTypesClient({
   initialTypes,
   initialUsage,
@@ -158,9 +166,13 @@ export default function BusinessTypesClient({
   );
 
   useEffect(() => {
+    let cancelled = false;
     if (online) {
       if (Array.isArray(initialTypes) && initialTypes.length > 0) {
-        setTypes(initialTypes);
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setTypes(initialTypes);
+        });
         try {
           safeLocalStorageSet(cacheKey, JSON.stringify(initialTypes));
         } catch {
@@ -172,7 +184,10 @@ export default function BusinessTypesClient({
           if (raw) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
-              setTypes(parsed);
+              scheduleStateUpdate(() => {
+                if (cancelled) return;
+                setTypes(parsed);
+              });
             }
           }
         } catch {
@@ -181,14 +196,19 @@ export default function BusinessTypesClient({
       }
 
       if (initialUsage && Object.keys(initialUsage).length > 0) {
-        setUsage(initialUsage);
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setUsage(initialUsage);
+        });
         try {
           safeLocalStorageSet(usageKey, JSON.stringify(initialUsage));
         } catch {
           // ignore cache errors
         }
       }
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     try {
@@ -196,7 +216,10 @@ export default function BusinessTypesClient({
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          setTypes(parsed);
+          scheduleStateUpdate(() => {
+            if (cancelled) return;
+            setTypes(parsed);
+          });
         }
       }
     } catch {
@@ -208,12 +231,18 @@ export default function BusinessTypesClient({
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === "object") {
-          setUsage(parsed);
+          scheduleStateUpdate(() => {
+            if (cancelled) return;
+            setUsage(parsed);
+          });
         }
       }
     } catch {
       // ignore cache errors
     }
+    return () => {
+      cancelled = true;
+    };
   }, [online, initialTypes, initialUsage, error]);
 
   useEffect(() => {

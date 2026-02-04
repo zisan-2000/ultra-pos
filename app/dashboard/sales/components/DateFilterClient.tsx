@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
@@ -59,7 +59,6 @@ function getMonthStart(dateStr: string) {
 
 export default function DateFilterClient({ shopId, from, to }: Props) {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState(from);
   const [customTo, setCustomTo] = useState(to);
@@ -80,15 +79,6 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
       return formatDate(from);
     }
     return `${formatDate(from)} - ${formatDate(to)}`;
-  }, [from, to]);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    setCustomFrom(from);
-    setCustomTo(to);
   }, [from, to]);
 
   const applyRange = (nextFrom: string, nextTo: string) => {
@@ -136,7 +126,11 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setCustomFrom(from);
+          setCustomTo(to);
+          setOpen(true);
+        }}
         className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-border bg-card/90 px-3 text-sm font-semibold text-foreground shadow-[0_1px_0_rgba(0,0,0,0.03)] hover:bg-muted transition sm:inline-flex sm:w-auto sm:min-w-[200px]"
       >
         <span className="shrink-0">📅</span>
@@ -145,8 +139,7 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
         </span>
       </button>
 
-      {mounted &&
-        open &&
+      {open &&
         typeof document !== "undefined" &&
         createPortal(
           <div

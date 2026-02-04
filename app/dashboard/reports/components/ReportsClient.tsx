@@ -85,11 +85,19 @@ function LazyReport({
   const ref = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
 
+  const scheduleStateUpdate = useCallback((fn: () => void) => {
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(fn);
+      return;
+    }
+    Promise.resolve().then(fn);
+  }, []);
+
   useEffect(() => {
     if (visible) return;
     const node = ref.current;
     if (!node || typeof IntersectionObserver === "undefined") {
-      setVisible(true);
+      scheduleStateUpdate(() => setVisible(true));
       return;
     }
 
@@ -105,7 +113,7 @@ function LazyReport({
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [visible, rootMargin]);
+  }, [visible, rootMargin, scheduleStateUpdate]);
 
   return <div ref={ref}>{visible ? children : fallback}</div>;
 }

@@ -20,6 +20,14 @@ type Props = {
   onUpdate: (formData: FormData) => void | Promise<void>;
 };
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 export default function SystemSettingsClient({
   saved,
   initialSupport,
@@ -39,30 +47,50 @@ export default function SystemSettingsClient({
   const cacheKey = useMemo(() => "super-admin:system-settings", []);
 
   useEffect(() => {
+    let cancelled = false;
     if (online) {
-      setSupport(initialSupport);
-      setCacheMissing(false);
-      setQueued(false);
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setSupport(initialSupport);
+        setCacheMissing(false);
+        setQueued(false);
+      });
       try {
         safeLocalStorageSet(cacheKey, JSON.stringify(initialSupport));
       } catch {
         // ignore cache errors
       }
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     try {
       const raw = safeLocalStorageGet(cacheKey);
       if (!raw) {
-        setCacheMissing(true);
-        return;
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setCacheMissing(true);
+        });
+        return () => {
+          cancelled = true;
+        };
       }
       const parsed = JSON.parse(raw) as SupportContact;
-      setSupport(parsed || {});
-      setCacheMissing(false);
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setSupport(parsed || {});
+        setCacheMissing(false);
+      });
     } catch {
-      setCacheMissing(true);
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setCacheMissing(true);
+      });
     }
+    return () => {
+      cancelled = true;
+    };
   }, [online, initialSupport, cacheKey]);
 
   useEffect(() => {

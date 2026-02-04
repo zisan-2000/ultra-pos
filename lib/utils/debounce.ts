@@ -1,6 +1,14 @@
 // lib/utils/debounce.ts
 import { useState, useEffect, useRef, useCallback } from "react";
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 /**
  * Debounce a function to prevent it from being called too frequently
  * @param func The function to debounce
@@ -91,13 +99,19 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
  */
 export function useThrottledValue<T>(value: T, interval: number): T {
   const [throttledValue, setThrottledValue] = useState<T>(value);
-  const lastUpdatedRef = useRef<number>(Date.now());
+  const lastUpdatedRef = useRef<number>(0);
 
   useEffect(() => {
+    if (lastUpdatedRef.current === 0) {
+      lastUpdatedRef.current = Date.now();
+      scheduleStateUpdate(() => setThrottledValue(value));
+      return;
+    }
+
     const now = Date.now();
     if (now >= lastUpdatedRef.current + interval) {
       lastUpdatedRef.current = now;
-      setThrottledValue(value);
+      scheduleStateUpdate(() => setThrottledValue(value));
     } else {
       const handler = setTimeout(() => {
         lastUpdatedRef.current = Date.now();

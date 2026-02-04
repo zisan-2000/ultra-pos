@@ -93,7 +93,10 @@ export default function ProfitTrendReport({ shopId, from, to }: Props) {
     placeholderData: keepPreviousData,
   });
 
-  const data: ProfitRow[] = profitQuery.data ?? [];
+  const data: ProfitRow[] = useMemo(
+    () => profitQuery.data ?? [],
+    [profitQuery.data]
+  );
   const loading = profitQuery.isFetching && online;
   const hasFetched = profitQuery.isFetchedAfterMount;
   const showEmpty = data.length === 0 && (!online || hasFetched) && !loading;

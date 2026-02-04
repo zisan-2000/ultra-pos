@@ -103,8 +103,6 @@ export default function OwnerDashboardClient({
   const router = useRouter();
   const online = useOnlineStatus();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
-  const [data, setData] = useState<OwnerDashboardData>(initialData);
-  const [cacheMissing, setCacheMissing] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const serverSnapshotRef = useRef(initialData);
   const refreshInFlightRef = useRef(false);
@@ -112,42 +110,43 @@ export default function OwnerDashboardClient({
   const REFRESH_MIN_INTERVAL_MS = 15_000;
 
   const cacheKey = useMemo(() => `owner:dashboard:${userId}`, [userId]);
-  const selectedShopId = data.shopId || data.shops?.[0]?.id || "";
 
   useEffect(() => {
     if (serverSnapshotRef.current !== initialData) {
       serverSnapshotRef.current = initialData;
       refreshInFlightRef.current = false;
     }
+  }, [initialData]);
 
-    if (online) {
-      setData(initialData);
-      setCacheMissing(false);
-      try {
-        safeLocalStorageSet(cacheKey, JSON.stringify(initialData));
-      } catch {
-        // ignore cache errors
-      }
-      return;
+  useEffect(() => {
+    if (!online) return;
+    try {
+      safeLocalStorageSet(cacheKey, JSON.stringify(initialData));
+    } catch {
+      // ignore cache errors
     }
+  }, [online, initialData, cacheKey]);
 
+  const { data, cacheMissing } = useMemo(() => {
+    if (online) {
+      return { data: initialData, cacheMissing: false };
+    }
     try {
       const raw = safeLocalStorageGet(cacheKey);
       if (!raw) {
-        setCacheMissing(true);
-        return;
+        return { data: initialData, cacheMissing: true };
       }
       const parsed = JSON.parse(raw) as OwnerDashboardData;
       if (parsed && parsed.summary) {
-        setData(parsed);
-        setCacheMissing(false);
-      } else {
-        setCacheMissing(true);
+        return { data: parsed, cacheMissing: false };
       }
+      return { data: initialData, cacheMissing: true };
     } catch {
-      setCacheMissing(true);
+      return { data: initialData, cacheMissing: true };
     }
   }, [online, initialData, cacheKey]);
+
+  const selectedShopId = data.shopId || data.shops?.[0]?.id || "";
 
   useEffect(() => {
     if (!online || !lastSyncAt || syncing || pendingCount > 0) return;

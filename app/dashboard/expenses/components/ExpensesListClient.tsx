@@ -50,6 +50,110 @@ const PRESETS: { key: RangePreset; label: string }[] = [
   { key: "custom", label: "কাস্টম" },
 ];
 
+type DateFilterRowProps = {
+  online: boolean;
+  preset: RangePreset;
+  customFrom?: string;
+  customTo?: string;
+  setPreset: (next: RangePreset) => void;
+  applyRangeToUrl: (nextFrom: string, nextTo: string) => void;
+};
+
+function DateFilterRow({
+  online,
+  preset,
+  customFrom,
+  customTo,
+  setPreset,
+  applyRangeToUrl,
+}: DateFilterRowProps) {
+  return (
+    <div className="relative">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pr-10 py-1">
+        {PRESETS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => {
+              setPreset(key);
+              if (online) {
+                const next = computeRange(key, customFrom, customTo);
+                const nextFrom = next.from ?? todayStr();
+                const nextTo = next.to ?? nextFrom;
+                applyRangeToUrl(nextFrom, nextTo);
+              }
+            }}
+            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border transition ${
+              preset === key
+                ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
+                : "bg-card text-foreground border-border/70 hover:border-primary/30 hover:bg-primary-soft/40"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
+    </div>
+  );
+}
+
+type CustomRangeInputsProps = {
+  online: boolean;
+  preset: RangePreset;
+  customFrom?: string;
+  customTo?: string;
+  canApplyCustom: boolean;
+  setCustomFrom: (next?: string) => void;
+  setCustomTo: (next?: string) => void;
+  applyRangeToUrl: (nextFrom: string, nextTo: string) => void;
+};
+
+function CustomRangeInputs({
+  online,
+  preset,
+  customFrom,
+  customTo,
+  canApplyCustom,
+  setCustomFrom,
+  setCustomTo,
+  applyRangeToUrl,
+}: CustomRangeInputsProps) {
+  if (preset !== "custom") return null;
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <input
+        type="date"
+        className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        value={customFrom ?? ""}
+        onChange={(e) => setCustomFrom(e.target.value)}
+      />
+      <input
+        type="date"
+        className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        value={customTo ?? ""}
+        onChange={(e) => setCustomTo(e.target.value)}
+      />
+      {online && (
+        <button
+          type="button"
+          disabled={!canApplyCustom}
+          onClick={() => {
+            if (!canApplyCustom) return;
+            const cf = customFrom;
+            const ct = customTo;
+            if (!cf || !ct) return;
+            applyRangeToUrl(cf, ct);
+          }}
+          className="col-span-2 w-full h-11 rounded-xl bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
+        >
+          রেঞ্জ প্রয়োগ করুন
+        </button>
+      )}
+    </div>
+  );
+}
+
 function todayStr() {
   const d = new Date();
   const y = d.getFullYear();
@@ -137,9 +241,11 @@ export function ExpensesListClient({
   const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<Expense[]>(expenses);
-  const [preset, setPreset] = useState<RangePreset>("today");
-  const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
-  const [customTo, setCustomTo] = useState<string | undefined>(undefined);
+  const [preset, setPreset] = useState<RangePreset>(resolvePreset(from, to));
+  const [customFrom, setCustomFrom] = useState<string | undefined>(
+    from || undefined
+  );
+  const [customTo, setCustomTo] = useState<string | undefined>(to || undefined);
   const serverSnapshotRef = useRef(expenses);
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
@@ -296,13 +402,6 @@ export function ExpensesListClient({
           cancelled = true;
         };
       }
-
-      setItems(
-        expenses.map((e) => ({
-          ...e,
-          syncStatus: "synced",
-        }))
-      );
       const rows = expenses.map((e) => ({
         id: e.id,
         shopId,
@@ -357,13 +456,14 @@ export function ExpensesListClient({
     [preset, customFrom, customTo]
   );
 
-  useEffect(() => {
-    if (!online) return;
-    const resolvedPreset = resolvePreset(from, to);
-    setPreset(resolvedPreset);
-    setCustomFrom(from || undefined);
-    setCustomTo(to || undefined);
-  }, [online, from, to]);
+  const serverItems = useMemo(
+    () =>
+      expenses.map((e) => ({
+        ...e,
+        syncStatus: "synced" as const,
+      })),
+    [expenses]
+  );
 
   const applyRangeToUrl = useCallback(
     (nextFrom: string, nextTo: string) => {
@@ -379,7 +479,7 @@ export function ExpensesListClient({
 
   const filteredItems = useMemo(() => {
     // Online: server already applied the range. Don't client-filter again.
-    if (online) return items;
+    if (online) return serverItems;
     return items.filter((e) => {
       const dateStr = e.expenseDate
         ? new Date(e.expenseDate as any).toISOString().slice(0, 10)
@@ -390,7 +490,7 @@ export function ExpensesListClient({
       if (range.to && dateStr > range.to) return false;
       return true;
     });
-  }, [items, online, range.from, range.to]);
+  }, [items, online, range.from, range.to, serverItems]);
 
   const totalAmount = useMemo(() => {
     if (online && summaryTotal !== undefined) {
@@ -415,69 +515,6 @@ export function ExpensesListClient({
     if (range.from && range.to) return `${range.from} → ${range.to}`;
     return "কাস্টম";
   }, [online, from, to, range.from, range.to]);
-
-  const DateFilterRow = ({ className = "" }: { className?: string }) => (
-    <div className={`relative ${className}`}>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar pr-10 py-1">
-        {PRESETS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => {
-              setPreset(key);
-              if (online) {
-                const next = computeRange(key, customFrom, customTo);
-                const nextFrom = next.from ?? todayStr();
-                const nextTo = next.to ?? nextFrom;
-                applyRangeToUrl(nextFrom, nextTo);
-              }
-            }}
-            className={`px-3.5 py-2 rounded-full text-sm font-semibold whitespace-nowrap border transition ${
-              preset === key
-                ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
-                : "bg-card text-foreground border-border/70 hover:border-primary/30 hover:bg-primary-soft/40"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
-    </div>
-  );
-
-  const CustomRangeInputs = () =>
-    preset === "custom" ? (
-      <div className="grid grid-cols-2 gap-2">
-        <input
-          type="date"
-          className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          value={customFrom ?? ""}
-          onChange={(e) => setCustomFrom(e.target.value)}
-        />
-        <input
-          type="date"
-          className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          value={customTo ?? ""}
-          onChange={(e) => setCustomTo(e.target.value)}
-        />
-        {online && (
-          <button
-            type="button"
-            disabled={!canApplyCustom}
-            onClick={() => {
-              if (!canApplyCustom) return;
-              const cf = customFrom;
-              const ct = customTo;
-              if (!cf || !ct) return;
-              applyRangeToUrl(cf, ct);
-            }}
-            className="col-span-2 w-full h-11 rounded-xl bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
-          >
-            রেঞ্জ প্রয়োগ করুন
-          </button>
-        )}
-      </div>
-    ) : null;
 
   return (
     <div className="space-y-4">
@@ -541,8 +578,24 @@ export function ExpensesListClient({
                 <p className="text-[11px] font-semibold text-muted-foreground">📅 সময়</p>
                 <span className="text-[11px] text-muted-foreground">{rangeLabel}</span>
               </div>
-              <DateFilterRow />
-              <CustomRangeInputs />
+              <DateFilterRow
+                online={online}
+                preset={preset}
+                customFrom={customFrom}
+                customTo={customTo}
+                setPreset={setPreset}
+                applyRangeToUrl={applyRangeToUrl}
+              />
+              <CustomRangeInputs
+                online={online}
+                preset={preset}
+                customFrom={customFrom}
+                customTo={customTo}
+                canApplyCustom={canApplyCustom}
+                setCustomFrom={setCustomFrom}
+                setCustomTo={setCustomTo}
+                applyRangeToUrl={applyRangeToUrl}
+              />
             </div>
           </div>
         </div>
@@ -575,8 +628,24 @@ export function ExpensesListClient({
               <p className="text-xs font-semibold text-muted-foreground">📅 সময়</p>
               <span className="text-xs text-muted-foreground">{rangeLabel}</span>
             </div>
-            <DateFilterRow />
-            <CustomRangeInputs />
+            <DateFilterRow
+              online={online}
+              preset={preset}
+              customFrom={customFrom}
+              customTo={customTo}
+              setPreset={setPreset}
+              applyRangeToUrl={applyRangeToUrl}
+            />
+            <CustomRangeInputs
+              online={online}
+              preset={preset}
+              customFrom={customFrom}
+              customTo={customTo}
+              canApplyCustom={canApplyCustom}
+              setCustomFrom={setCustomFrom}
+              setCustomTo={setCustomTo}
+              applyRangeToUrl={applyRangeToUrl}
+            />
           </div>
         </div>
       </div>

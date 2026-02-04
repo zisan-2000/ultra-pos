@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createPortal } from "react-dom";
 
@@ -37,11 +37,6 @@ export function VoidSaleControls({
   formId,
 }: VoidSaleControlsProps) {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   if (isVoided) {
     return (
@@ -61,8 +56,8 @@ export function VoidSaleControls({
         ❌ বাতিল করুন
       </button>
 
-      {mounted &&
-        open &&
+      {open &&
+        typeof document !== "undefined" &&
         createPortal(
           <div
             className="fixed inset-0 z-[9999] flex items-end bg-foreground/30 backdrop-blur-[2px]"

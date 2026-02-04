@@ -29,6 +29,14 @@ const tabs = [
   { id: "permissions", label: "রোলের পারমিশন" },
 ] as const;
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 export default function RbacAdminClient({ users, roleOptions, roles, permissions }: Props) {
   const online = useOnlineStatus();
   const router = useRouter();
@@ -50,11 +58,15 @@ export default function RbacAdminClient({ users, roleOptions, roles, permissions
 
   useEffect(() => {
     const cacheKey = "admin:rbac";
+    let cancelled = false;
     if (online) {
-      setCachedUsers(users);
-      setCachedRoleOptions(roleOptions);
-      setCachedRoles(roles);
-      setCachedPermissions(permissions);
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setCachedUsers(users);
+        setCachedRoleOptions(roleOptions);
+        setCachedRoles(roles);
+        setCachedPermissions(permissions);
+      });
       try {
         safeLocalStorageSet(
           cacheKey,
@@ -63,22 +75,30 @@ export default function RbacAdminClient({ users, roleOptions, roles, permissions
       } catch {
         // ignore cache errors
       }
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     try {
       const raw = safeLocalStorageGet(cacheKey);
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<Props>;
-      if (Array.isArray(parsed.users)) setCachedUsers(parsed.users as UserRow[]);
-      if (Array.isArray(parsed.roleOptions))
-        setCachedRoleOptions(parsed.roleOptions as Role[]);
-      if (Array.isArray(parsed.roles)) setCachedRoles(parsed.roles as RoleWithPermissions[]);
-      if (Array.isArray(parsed.permissions))
-        setCachedPermissions(parsed.permissions as Permission[]);
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        if (Array.isArray(parsed.users)) setCachedUsers(parsed.users as UserRow[]);
+        if (Array.isArray(parsed.roleOptions))
+          setCachedRoleOptions(parsed.roleOptions as Role[]);
+        if (Array.isArray(parsed.roles)) setCachedRoles(parsed.roles as RoleWithPermissions[]);
+        if (Array.isArray(parsed.permissions))
+          setCachedPermissions(parsed.permissions as Permission[]);
+      });
     } catch {
       // ignore cache errors
     }
+    return () => {
+      cancelled = true;
+    };
   }, [online, users, roleOptions, roles, permissions]);
 
   useEffect(() => {

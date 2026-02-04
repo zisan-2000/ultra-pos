@@ -65,6 +65,14 @@ function formatTime(iso: string) {
   });
 }
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 export default function SalesListClient({
   shopId,
   sales,
@@ -252,7 +260,10 @@ export default function SalesListClient({
         };
       }
 
-      setItems(sales);
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setItems(sales);
+      });
       const rows = sales.map((s) => ({
         tempId: s.id,
         id: s.id,

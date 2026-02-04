@@ -2,7 +2,6 @@ import http from "http";
 
 try {
   // Load .env for standalone realtime server (safe in dev/prod).
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   require("dotenv").config();
 } catch {
   // Ignore if dotenv is not available or env is already provided.

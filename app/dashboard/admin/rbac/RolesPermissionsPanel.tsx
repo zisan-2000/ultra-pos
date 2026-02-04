@@ -17,6 +17,14 @@ interface RolesPermissionsPanelProps {
   permissions: Permission[];
 }
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 export type ModuleKey =
   | "dashboard"
   | "shops"
@@ -186,17 +194,24 @@ export function RolesPermissionsPanel({
   useEffect(() => {
     if (!selectedRole || selectedRole.name !== "staff") return;
     if (staffBaselineIds.size === 0) return;
-    setLocalAssignments((prev) => {
-      const current = new Set(prev[selectedRole.id] ?? []);
-      let changed = false;
-      staffBaselineIds.forEach((id) => {
-        if (!current.has(id)) {
-          current.add(id);
-          changed = true;
-        }
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
+      setLocalAssignments((prev) => {
+        const current = new Set(prev[selectedRole.id] ?? []);
+        let changed = false;
+        staffBaselineIds.forEach((id) => {
+          if (!current.has(id)) {
+            current.add(id);
+            changed = true;
+          }
+        });
+        return changed ? { ...prev, [selectedRole.id]: current } : prev;
       });
-      return changed ? { ...prev, [selectedRole.id]: current } : prev;
     });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedRole, staffBaselineIds]);
 
   const groupedPermissions = useMemo(() => {

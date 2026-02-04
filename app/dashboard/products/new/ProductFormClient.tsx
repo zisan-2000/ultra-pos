@@ -192,6 +192,15 @@ function mergeTemplates(existing: TemplateItem[], incoming: TemplateItem) {
 function dedupe(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
+
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 function ProductForm({ shop, businessConfig }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -314,30 +323,37 @@ function ProductForm({ shop, businessConfig }: Props) {
 
   // Reset stock/unit when business type changes
   useEffect(() => {
-    setStockEnabled((prev) =>
-      prev === stock.enabledByDefault ? prev : stock.enabledByDefault
-    );
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
+      setStockEnabled((prev) =>
+        prev === stock.enabledByDefault ? prev : stock.enabledByDefault
+      );
 
-    setUnitOptions((prev) => {
-      const sameLength = prev.length === configUnits.length;
-      const sameItems =
-        sameLength && prev.every((item, idx) => item === configUnits[idx]);
-      return sameItems ? prev : configUnits;
-    });
+      setUnitOptions((prev) => {
+        const sameLength = prev.length === configUnits.length;
+        const sameItems =
+          sameLength && prev.every((item, idx) => item === configUnits[idx]);
+        return sameItems ? prev : configUnits;
+      });
 
-    setSelectedUnit((prev) => {
-      const nextUnit = configDefaultUnit || configUnits[0] || "pcs";
-      return prev === nextUnit ? prev : nextUnit;
+      setSelectedUnit((prev) => {
+        const nextUnit = configDefaultUnit || configUnits[0] || "pcs";
+        return prev === nextUnit ? prev : nextUnit;
+      });
+      if (fallbackName) {
+        setName((prev) => (prev ? prev : fallbackName));
+      }
+      const assistCategory = businessAssist?.defaultCategory;
+      const nextCategory =
+        assistCategory && baseCategories.includes(assistCategory)
+          ? assistCategory
+          : baseCategories[0] || "Uncategorized";
+      setSelectedCategory((prev) => (prev === nextCategory ? prev : nextCategory));
     });
-    if (fallbackName) {
-      setName((prev) => (prev ? prev : fallbackName));
-    }
-    const assistCategory = businessAssist?.defaultCategory;
-    const nextCategory =
-      assistCategory && baseCategories.includes(assistCategory)
-        ? assistCategory
-        : baseCategories[0] || "Uncategorized";
-    setSelectedCategory((prev) => (prev === nextCategory ? prev : nextCategory));
+    return () => {
+      cancelled = true;
+    };
   }, [
     businessType,
     configUnitsKey,
@@ -356,83 +372,125 @@ function ProductForm({ shop, businessConfig }: Props) {
       typeof window !== "undefined"
         ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
         : null;
-    setVoiceReady(Boolean(SpeechRecognitionImpl));
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
+      setVoiceReady(Boolean(SpeechRecognitionImpl));
+    });
 
     return () => {
+      cancelled = true;
       recognitionRef.current?.stop?.();
     };
   }, []);
   useEffect(() => {
-    setIsMounted(true);
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
+      setIsMounted(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Load recent/frequent templates
   useEffect(() => {
     if (!templateStorageKey) return;
+    let cancelled = false;
     const stored = safeLocalStorageGet(templateStorageKey);
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as TemplateItem[];
-        setTemplates(parsed);
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setTemplates(parsed);
+        });
       } catch {
-        setTemplates([]);
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setTemplates([]);
+        });
       }
     }
+    return () => {
+      cancelled = true;
+    };
   }, [templateStorageKey]);
 
   useEffect(() => {
     if (!ensuredShopId) return;
+    let cancelled = false;
     try {
       const stored = safeLocalStorageGet(`customCategories:${ensuredShopId}`);
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
       const custom = Array.isArray(parsed) ? parsed : [];
       const merged = Array.from(new Set([...baseCategories, ...custom]));
-      setCategoryOptions(merged);
-      setSelectedCategory((prev) =>
-        merged.includes(prev)
-          ? prev
-          : businessAssist?.defaultCategory && merged.includes(businessAssist.defaultCategory)
-          ? businessAssist.defaultCategory
-          : merged[0] || "Uncategorized"
-      );
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setCategoryOptions(merged);
+        setSelectedCategory((prev) =>
+          merged.includes(prev)
+            ? prev
+            : businessAssist?.defaultCategory && merged.includes(businessAssist.defaultCategory)
+            ? businessAssist.defaultCategory
+            : merged[0] || "Uncategorized"
+        );
+      });
     } catch (err) {
       handlePermissionError(err);
       console.error("Failed to load custom categories", err);
-      setCategoryOptions(baseCategories);
-      setSelectedCategory(
-        (businessAssist?.defaultCategory &&
-          baseCategories.includes(businessAssist.defaultCategory) &&
-          businessAssist.defaultCategory) ||
-          baseCategories[0] ||
-          "Uncategorized"
-      );
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setCategoryOptions(baseCategories);
+        setSelectedCategory(
+          (businessAssist?.defaultCategory &&
+            baseCategories.includes(businessAssist.defaultCategory) &&
+            businessAssist.defaultCategory) ||
+            baseCategories[0] ||
+            "Uncategorized"
+        );
+      });
     }
+    return () => {
+      cancelled = true;
+    };
   }, [ensuredShopId, baseCategories, businessAssist]);
 
   useEffect(() => {
     if (!ensuredShopId) return;
+    let cancelled = false;
     try {
       const stored = safeLocalStorageGet(`customUnits:${ensuredShopId}`);
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
       const custom = Array.isArray(parsed) ? parsed : [];
       const merged = Array.from(new Set([...configUnits, ...custom]));
 
-      setUnitOptions((prev) => {
-        const sameLength = prev.length === merged.length;
-        const sameItems = sameLength && prev.every((v, idx) => v === merged[idx]);
-        return sameItems ? prev : merged;
-      });
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setUnitOptions((prev) => {
+          const sameLength = prev.length === merged.length;
+          const sameItems = sameLength && prev.every((v, idx) => v === merged[idx]);
+          return sameItems ? prev : merged;
+        });
 
-      setSelectedUnit((prev) => {
-        const next = configDefaultUnit || merged[0] || "pcs";
-        return merged.includes(prev) ? prev : next;
+        setSelectedUnit((prev) => {
+          const next = configDefaultUnit || merged[0] || "pcs";
+          return merged.includes(prev) ? prev : next;
+        });
       });
     } catch (err) {
       handlePermissionError(err);
       console.error("Failed to load custom units", err);
-      setUnitOptions((prev) => (prev.length ? prev : configUnits));
-      setSelectedUnit((prev) => (prev ? prev : configDefaultUnit || configUnits[0] || "pcs"));
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setUnitOptions((prev) => (prev.length ? prev : configUnits));
+        setSelectedUnit((prev) => (prev ? prev : configDefaultUnit || configUnits[0] || "pcs"));
+      });
     }
+    return () => {
+      cancelled = true;
+    };
   }, [ensuredShopId, configUnitsKey, configDefaultUnit, configUnits]);
 
   function handleAddCustomCategory() {

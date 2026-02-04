@@ -161,6 +161,14 @@ function dedupe(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 export default function EditProductClient({ product, shop, businessConfig }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -294,9 +302,14 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       typeof window !== "undefined"
         ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
         : null;
-    setVoiceReady(Boolean(SpeechRecognitionImpl));
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
+      setVoiceReady(Boolean(SpeechRecognitionImpl));
+    });
 
     return () => {
+      cancelled = true;
       recognitionRef.current?.stop?.();
     };
   }, []);
@@ -304,45 +317,68 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   // Load templates
   useEffect(() => {
     if (!templateStorageKey) return;
+    let cancelled = false;
     const stored = safeLocalStorageGet(templateStorageKey);
     if (stored) {
       try {
-        setTemplates(JSON.parse(stored) as TemplateItem[]);
+        const parsed = JSON.parse(stored) as TemplateItem[];
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setTemplates(parsed);
+        });
       } catch {
-        setTemplates([]);
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setTemplates([]);
+        });
       }
     }
+    return () => {
+      cancelled = true;
+    };
   }, [templateStorageKey]);
 
   // Load categories
   useEffect(() => {
+    let cancelled = false;
     try {
       const stored = safeLocalStorageGet(`customCategories:${shopId}`);
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
       const custom = Array.isArray(parsed) ? parsed : [];
       const merged = Array.from(new Set([...baseCategories, ...custom, product.category]));
-      setCategoryOptions(merged);
-      setSelectedCategory((prev: string) =>
-        merged.includes(prev)
-          ? prev
-          : businessAssist?.defaultCategory && merged.includes(businessAssist.defaultCategory)
-          ? businessAssist.defaultCategory
-          : merged[0] || "Uncategorized"
-      );
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setCategoryOptions(merged);
+        setSelectedCategory((prev: string) =>
+          merged.includes(prev)
+            ? prev
+            : businessAssist?.defaultCategory && merged.includes(businessAssist.defaultCategory)
+            ? businessAssist.defaultCategory
+            : merged[0] || "Uncategorized"
+        );
+      });
     } catch (err) {
       handlePermissionError(err);
       console.error("Failed to load custom categories", err);
-      setCategoryOptions(baseCategories);
-      setSelectedCategory(
-        (businessAssist?.defaultCategory && baseCategories.includes(businessAssist.defaultCategory)
-          ? businessAssist.defaultCategory
-          : baseCategories[0]) || "Uncategorized"
-      );
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setCategoryOptions(baseCategories);
+        setSelectedCategory(
+          (businessAssist?.defaultCategory &&
+          baseCategories.includes(businessAssist.defaultCategory)
+            ? businessAssist.defaultCategory
+            : baseCategories[0]) || "Uncategorized"
+        );
+      });
     }
+    return () => {
+      cancelled = true;
+    };
   }, [baseCategories, businessAssist, product.category, shopId]);
 
   // Load units (guard against infinite re-renders)
   useEffect(() => {
+    let cancelled = false;
     try {
       const stored = safeLocalStorageGet(`customUnits:${shopId}`);
       const parsed = stored ? (JSON.parse(stored) as string[]) : [];
@@ -351,24 +387,40 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       const initialUnit = product.baseUnit || configDefaultUnit || configUnits[0] || "pcs";
       const merged = Array.from(new Set([...configUnits, ...custom, initialUnit].filter(Boolean)));
 
-      setUnitOptions((prev) => {
-        const sameLength = prev.length === merged.length;
-        const sameItems = sameLength && prev.every((v, idx) => v === merged[idx]);
-        return sameItems ? prev : merged;
-      });
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setUnitOptions((prev) => {
+          const sameLength = prev.length === merged.length;
+          const sameItems = sameLength && prev.every((v, idx) => v === merged[idx]);
+          return sameItems ? prev : merged;
+        });
 
-      setSelectedUnit((prev: string) => (merged.includes(prev) ? prev : initialUnit));
+        setSelectedUnit((prev: string) => (merged.includes(prev) ? prev : initialUnit));
+      });
     } catch (err) {
       handlePermissionError(err);
       console.error("Failed to load custom units", err);
-      setUnitOptions((prev) => (prev.length ? prev : configUnits));
-      setSelectedUnit((prev: string) => (prev ? prev : configDefaultUnit || configUnits[0] || "pcs"));
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setUnitOptions((prev) => (prev.length ? prev : configUnits));
+        setSelectedUnit((prev: string) => (prev ? prev : configDefaultUnit || configUnits[0] || "pcs"));
+      });
     }
+    return () => {
+      cancelled = true;
+    };
   }, [shopId, configUnitsKey, configDefaultUnit, product.baseUnit, configUnits]);
 
   // Track stock default
   useEffect(() => {
-    setStockEnabled(product.trackStock ?? stock.enabledByDefault);
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
+      setStockEnabled(product.trackStock ?? stock.enabledByDefault);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [product.trackStock, stock.enabledByDefault, businessType]);
 
   function handleAddCustomCategory() {

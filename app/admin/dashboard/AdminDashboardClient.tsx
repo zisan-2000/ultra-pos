@@ -3,7 +3,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import AgentHierarchyDrilldownClient from "@/components/agent-hierarchy-drilldown-client";
 import { buttonVariants } from "@/components/ui/button";
 import { useOnlineStatus } from "@/lib/sync/net-status";
@@ -145,34 +145,31 @@ function MetricCard({
 
 export default function AdminDashboardClient({ userId, initialData }: Props) {
   const online = useOnlineStatus();
-  const [data, setData] = useState<AdminDashboardData>(initialData);
-  const [cacheMissing, setCacheMissing] = useState(false);
-
   const cacheKey = useMemo(() => `admin:dashboard:${userId}`, [userId]);
 
   useEffect(() => {
-    if (online) {
-      setData(initialData);
-      setCacheMissing(false);
-      try {
-        safeLocalStorageSet(cacheKey, JSON.stringify(initialData));
-      } catch {
-        // ignore cache errors
-      }
-      return;
+    if (!online) return;
+    try {
+      safeLocalStorageSet(cacheKey, JSON.stringify(initialData));
+    } catch {
+      // ignore cache errors
     }
+  }, [online, initialData, cacheKey]);
 
+  const { data, cacheMissing } = useMemo(() => {
+    if (online) {
+      return { data: initialData, cacheMissing: false };
+    }
     try {
       const raw = safeLocalStorageGet(cacheKey);
-      if (!raw) {
-        setCacheMissing(true);
-        return;
-      }
+      if (!raw) return { data: initialData, cacheMissing: true };
       const parsed = JSON.parse(raw) as AdminDashboardData;
-      setData(parsed);
-      setCacheMissing(false);
+      if (!parsed || !parsed.counts) {
+        return { data: initialData, cacheMissing: true };
+      }
+      return { data: parsed, cacheMissing: false };
     } catch {
-      setCacheMissing(true);
+      return { data: initialData, cacheMissing: true };
     }
   }, [online, initialData, cacheKey]);
 

@@ -177,10 +177,23 @@ export const PosProductSearch = memo(function PosProductSearch({
 }: PosProductSearchProps) {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
-  const [usage, setUsage] = useState<Record<string, UsageEntry>>({});
+  const [usage, setUsage] = useState<Record<string, UsageEntry>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const stored = safeLocalStorageGet(`pos-usage-${shopId}`);
+      return stored ? (JSON.parse(stored) as Record<string, UsageEntry>) : {};
+    } catch {
+      return {};
+    }
+  });
   const [showAllProducts, setShowAllProducts] = useState(false);
   const [listening, setListening] = useState(false);
-  const [voiceReady, setVoiceReady] = useState(false);
+  const [voiceReady] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const SpeechRecognitionImpl =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    return Boolean(SpeechRecognitionImpl);
+  });
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
   const [cooldownProductId, setCooldownProductId] = useState<string | null>(
@@ -194,7 +207,6 @@ export const PosProductSearch = memo(function PosProductSearch({
   const add = useCart((s: any) => s.add);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const quickSlotsRef = useRef<QuickSlot[] | null>(null);
   const lastAddRef = useRef(0);
   const recentlyAddedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -205,35 +217,6 @@ export const PosProductSearch = memo(function PosProductSearch({
 
   const deferredQuery = useDeferredValue(query);
   const debouncedQuery = useDebounce(deferredQuery, 200);
-
-  useEffect(() => {
-    const stored =
-      typeof window !== "undefined" ? safeLocalStorageGet(storageKey) : null;
-    let parsed: Record<string, UsageEntry> = {};
-    if (stored) {
-      try {
-        parsed = JSON.parse(stored);
-      } catch {
-        parsed = {};
-      }
-    }
-    setUsage(parsed);
-
-    const normalizedProducts: EnrichedProduct[] = products.map((p) => ({
-      ...p,
-      category: normalizeCategory(p.category),
-    }));
-    const productById = new Map(normalizedProducts.map((p) => [p.id, p]));
-
-    // Initialize session-locked quick slots once, then keep stock/price fresh.
-    if (!quickSlotsRef.current) {
-      quickSlotsRef.current = buildQuickSlots(normalizedProducts, parsed);
-    } else {
-      quickSlotsRef.current = quickSlotsRef.current.map((slot) =>
-        slot ? productById.get(slot.id) ?? slot : null
-      );
-    }
-  }, [storageKey, products]);
 
   // Persist usage separately to avoid doing localStorage writes in setState updaters
   useEffect(() => {
@@ -249,14 +232,6 @@ export const PosProductSearch = memo(function PosProductSearch({
   }, [usage, storageKey]);
 
   useEffect(() => {
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? (window as any).SpeechRecognition ||
-          (window as any).webkitSpeechRecognition
-        : null;
-
-    setVoiceReady(Boolean(SpeechRecognitionImpl));
-
     return () => {
       recognitionRef.current?.stop?.();
     };
@@ -291,6 +266,11 @@ export const PosProductSearch = memo(function PosProductSearch({
     () =>
       products.map((p) => ({ ...p, category: normalizeCategory(p.category) })),
     [products]
+  );
+
+  const quickSlots = useMemo(
+    () => buildQuickSlots(productsWithCategory, usage),
+    [productsWithCategory, usage]
   );
 
   const availableCategories = useMemo(() => {
@@ -384,8 +364,6 @@ export const PosProductSearch = memo(function PosProductSearch({
   }, [filteredByQuery, usage, debouncedQuery, shouldSort]);
 
   const smartSuggestions = useMemo(() => {
-    const quickSlots = (quickSlotsRef.current ??
-      Array(QUICK_LIMIT).fill(null)) as QuickSlot[];
     if (debouncedQuery.trim()) return sortedResults.slice(0, 6);
 
     const quickIds = new Set(
@@ -402,12 +380,7 @@ export const PosProductSearch = memo(function PosProductSearch({
     if (recent.length > 0) return recent;
     const slotProducts = quickSlots.filter(Boolean) as EnrichedProduct[];
     return slotProducts.filter((p) => !quickIds.has(p.id)).slice(0, 6);
-  }, [debouncedQuery, filteredByCategory, sortedResults, usage]);
-
-  useEffect(() => {
-    if (!showAllProducts) return;
-    setRenderCount(Math.min(INITIAL_RENDER, sortedResults.length));
-  }, [showAllProducts, sortedResults.length]);
+  }, [debouncedQuery, filteredByCategory, quickSlots, sortedResults, usage]);
 
   useEffect(() => {
     if (!showAllProducts) return;
@@ -494,7 +467,6 @@ export const PosProductSearch = memo(function PosProductSearch({
         : null;
 
     if (!SpeechRecognitionImpl) {
-      setVoiceReady(false);
       setVoiceError("ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না");
       return;
     }
@@ -623,9 +595,8 @@ export const PosProductSearch = memo(function PosProductSearch({
             </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-3.5 px-1 pb-1">
-            {(quickSlotsRef.current ?? Array(QUICK_LIMIT).fill(null)).map(
-              (slot, idx) =>
-                slot ? renderProductButton(slot) : renderPlaceholderSlot(idx)
+            {quickSlots.map((slot, idx) =>
+              slot ? renderProductButton(slot) : renderPlaceholderSlot(idx)
             )}
           </div>
         </div>

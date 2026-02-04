@@ -441,37 +441,43 @@ export default function DuePageClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customers]);
 
-  async function refreshData(options?: {
-    force?: boolean;
-    source?: "refresh" | "create" | "payment" | "sync" | "local";
-  }) {
-    if (refreshInFlightRef.current) return;
-    const now = Date.now();
-    if (!options?.force && now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) {
-      return;
-    }
-    refreshInFlightRef.current = true;
-    lastRefreshAtRef.current = now;
-    try {
-      if (online) {
-        await queryClient.invalidateQueries({
-          queryKey: customerQueryKey,
-          refetchType: "active",
-        });
+  const refreshData = useCallback(
+    async (options?: {
+      force?: boolean;
+      source?: "refresh" | "create" | "payment" | "sync" | "local";
+    }) => {
+      if (refreshInFlightRef.current) return;
+      const now = Date.now();
+      if (
+        !options?.force &&
+        now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS
+      ) {
+        return;
       }
-      await loadCustomersFromDexie();
-      emitDueCustomersEvent({
-        shopId,
-        at: Date.now(),
-        source: options?.source ?? "refresh",
-      });
-    } catch (err) {
-      handlePermissionError(err);
-      console.error("Refresh due customers request failed", err);
-    } finally {
-      refreshInFlightRef.current = false;
-    }
-  }
+      refreshInFlightRef.current = true;
+      lastRefreshAtRef.current = now;
+      try {
+        if (online) {
+          await queryClient.invalidateQueries({
+            queryKey: customerQueryKey,
+            refetchType: "active",
+          });
+        }
+        await loadCustomersFromDexie();
+        emitDueCustomersEvent({
+          shopId,
+          at: Date.now(),
+          source: options?.source ?? "refresh",
+        });
+      } catch (err) {
+        handlePermissionError(err);
+        console.error("Refresh due customers request failed", err);
+      } finally {
+        refreshInFlightRef.current = false;
+      }
+    },
+    [online, queryClient, customerQueryKey, loadCustomersFromDexie, shopId]
+  );
 
   const readStatementFromDexie = useCallback(
     async (customerId: string) => {
@@ -556,7 +562,10 @@ export default function DuePageClient({
     placeholderData: (prev) => prev ?? [],
   });
 
-  const statement = statementQuery.data ?? [];
+  const statement = useMemo<StatementRow[]>(
+    () => statementQuery.data ?? [],
+    [statementQuery.data]
+  );
   const loadingStatement = statementQuery.isFetching && online;
   const refreshStatement = useCallback(
     (customerId?: string) => {

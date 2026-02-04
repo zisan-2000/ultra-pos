@@ -20,35 +20,35 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
+function getSuppressionState() {
+  const dismissed = safeLocalStorageGet("pwa-install-dismissed");
+  if (dismissed) {
+    const dismissedTime = parseInt(dismissed, 10);
+    const weekInMs = 7 * 24 * 60 * 60 * 1000;
+    if (Date.now() - dismissedTime < weekInMs) return true;
+  }
+
+  const later = safeLocalStorageGet("pwa-install-later");
+  if (later) {
+    const laterTime = parseInt(later, 10);
+    const dayInMs = 24 * 60 * 60 * 1000;
+    if (Date.now() - laterTime < dayInMs) return true;
+  }
+
+  return false;
+}
+
 export default function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isEngaged, setIsEngaged] = useState(false);
-  const [isSuppressed, setIsSuppressed] = useState(false);
+  const [isSuppressed, setIsSuppressed] = useState(() => getSuppressionState());
   const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const engagementTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const interactionCountRef = useRef(0);
   const engagementReachedRef = useRef(false);
   const autoPromptedRef = useRef(false);
-
-  const getSuppressionState = () => {
-    const dismissed = safeLocalStorageGet("pwa-install-dismissed");
-    if (dismissed) {
-      const dismissedTime = parseInt(dismissed, 10);
-      const weekInMs = 7 * 24 * 60 * 60 * 1000;
-      if (Date.now() - dismissedTime < weekInMs) return true;
-    }
-
-    const later = safeLocalStorageGet("pwa-install-later");
-    if (later) {
-      const laterTime = parseInt(later, 10);
-      const dayInMs = 24 * 60 * 60 * 1000;
-      if (Date.now() - laterTime < dayInMs) return true;
-    }
-
-    return false;
-  };
 
   useEffect(() => {
     // Check if app is already installed
@@ -59,8 +59,6 @@ export default function PWAInstallPrompt() {
     };
 
     checkIfInstalled();
-
-    setIsSuppressed(getSuppressionState());
 
     // Listen for beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {

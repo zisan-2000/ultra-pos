@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
@@ -24,20 +24,24 @@ export function ThemeToggle({
   className?: string;
   iconClassName?: string;
 }) {
-  const [theme, setTheme] = useState<Theme | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = safeLocalStorageGet(STORAGE_KEY);
+    return stored === "light" || stored === "dark" ? stored : "light";
+  });
 
   useEffect(() => {
-    setMounted(true);
-    const stored = safeLocalStorageGet(STORAGE_KEY);
-    const initial = stored === "light" || stored === "dark" ? stored : "light";
-    setTheme(initial);
-    applyTheme(initial);
-  }, []);
+    if (!mounted) return;
+    applyTheme(theme);
+  }, [mounted, theme]);
 
   const isDark = useMemo(() => theme === "dark", [theme]);
 
-  if (!mounted || !theme) return null;
+  if (!mounted) return null;
 
   const handleToggle = () => {
     const next = isDark ? "light" : "dark";

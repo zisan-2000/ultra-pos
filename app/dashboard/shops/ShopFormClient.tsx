@@ -88,6 +88,14 @@ function parseSpokenNameAndPhone(spoken: string) {
   return { name, phone };
 }
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 export default function ShopFormClient({
   backHref,
   action,
@@ -124,13 +132,24 @@ export default function ShopFormClient({
   useEffect(() => {
     const stored =
       typeof window !== "undefined" ? safeLocalStorageGet(SHOP_TEMPLATE_KEY) : null;
+    let cancelled = false;
     if (stored) {
       try {
-        setTemplates(JSON.parse(stored) as ShopTemplate[]);
+        const parsed = JSON.parse(stored) as ShopTemplate[];
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setTemplates(parsed);
+        });
       } catch {
-        setTemplates([]);
+        scheduleStateUpdate(() => {
+          if (cancelled) return;
+          setTemplates([]);
+        });
       }
     }
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -138,19 +157,36 @@ export default function ShopFormClient({
       typeof window !== "undefined"
         ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
         : null;
-    setVoiceReady(Boolean(SpeechRecognitionImpl));
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
+      setVoiceReady(Boolean(SpeechRecognitionImpl));
+    });
     return () => {
+      cancelled = true;
       recognitionRef.current?.stop?.();
     };
   }, []);
 
   useEffect(() => {
     if (!ownerOptions) return;
+    let cancelled = false;
     if (ownerOptions.length === 0) {
-      setSelectedOwnerId("");
-      return;
+      scheduleStateUpdate(() => {
+        if (cancelled) return;
+        setSelectedOwnerId("");
+      });
+      return () => {
+        cancelled = true;
+      };
     }
-    setSelectedOwnerId((prev) => prev || ownerOptions[0]?.id || "");
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
+      setSelectedOwnerId((prev) => prev || ownerOptions[0]?.id || "");
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [ownerOptions]);
 
   const frequentTemplates = useMemo(

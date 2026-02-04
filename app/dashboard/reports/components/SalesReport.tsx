@@ -23,6 +23,14 @@ type SalesRow = {
   note?: string | null;
 };
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 export default function SalesReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
   const queryClient = useQueryClient();
@@ -39,8 +47,15 @@ export default function SalesReport({ shopId, from, to }: Props) {
   );
 
   useEffect(() => {
-    setPage(1);
-    setCursorList([]);
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
+      setPage(1);
+      setCursorList([]);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [shopId, from, to]);
 
   const readCached = useCallback(
@@ -148,7 +163,10 @@ export default function SalesReport({ shopId, from, to }: Props) {
       prev ?? { rows: [], hasMore: false, nextCursor: null },
   });
 
-  const items: SalesRow[] = salesQuery.data?.rows ?? [];
+  const items: SalesRow[] = useMemo(
+    () => salesQuery.data?.rows ?? [],
+    [salesQuery.data?.rows]
+  );
   const hasMore = salesQuery.data?.hasMore ?? false;
   const nextCursor = salesQuery.data?.nextCursor ?? null;
   const loading = salesQuery.isFetching && online;
@@ -156,16 +174,28 @@ export default function SalesReport({ shopId, from, to }: Props) {
   const showEmpty = items.length === 0 && (!online || hasFetched) && !loading;
 
   useEffect(() => {
-    if (!online && page > 1) {
+    if (online || page <= 1) return;
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
       setPage(1);
       setCursorList([]);
-    }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [online, page]);
 
   useEffect(() => {
-    if (page > 1 && !currentCursor) {
+    if (page <= 1 || currentCursor) return;
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
       setPage(1);
-    }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [page, currentCursor]);
 
   useEffect(() => {

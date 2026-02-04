@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { MetricCard } from "@/components/metric-card";
 import { buttonVariants } from "@/components/ui/button";
 import OwnerStaffDrilldownClient from "@/components/owner-staff-drilldown-client";
@@ -57,38 +57,33 @@ type Props = {
 
 export default function AgentDashboardClient({ userId, initialData }: Props) {
   const online = useOnlineStatus();
-  const [data, setData] = useState<AgentDashboardData>(initialData);
-  const [cacheMissing, setCacheMissing] = useState(false);
-
   const cacheKey = useMemo(() => `agent:dashboard:${userId}`, [userId]);
 
   useEffect(() => {
-    if (online) {
-      setData(initialData);
-      setCacheMissing(false);
-      try {
-        safeLocalStorageSet(cacheKey, JSON.stringify(initialData));
-      } catch {
-        // ignore cache errors
-      }
-      return;
+    if (!online) return;
+    try {
+      safeLocalStorageSet(cacheKey, JSON.stringify(initialData));
+    } catch {
+      // ignore cache errors
     }
+  }, [online, initialData, cacheKey]);
 
+  const { data, cacheMissing } = useMemo(() => {
+    if (online) {
+      return { data: initialData, cacheMissing: false };
+    }
     try {
       const raw = safeLocalStorageGet(cacheKey);
       if (!raw) {
-        setCacheMissing(true);
-        return;
+        return { data: initialData, cacheMissing: true };
       }
       const parsed = JSON.parse(raw) as AgentDashboardData;
       if (parsed && parsed.counts) {
-        setData(parsed);
-        setCacheMissing(false);
-      } else {
-        setCacheMissing(true);
+        return { data: parsed, cacheMissing: false };
       }
+      return { data: initialData, cacheMissing: true };
     } catch {
-      setCacheMissing(true);
+      return { data: initialData, cacheMissing: true };
     }
   }, [online, initialData, cacheKey]);
 

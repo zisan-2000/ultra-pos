@@ -102,7 +102,10 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
     placeholderData: keepPreviousData,
   });
 
-  const data: PaymentRow[] = paymentQuery.data ?? [];
+  const data: PaymentRow[] = useMemo(
+    () => paymentQuery.data ?? [],
+    [paymentQuery.data]
+  );
   const loading = paymentQuery.isFetching && online;
   const hasFetched = paymentQuery.isFetchedAfterMount;
   const showEmpty = data.length === 0 && (!online || hasFetched) && !loading;

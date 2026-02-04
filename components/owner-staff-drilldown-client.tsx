@@ -46,6 +46,14 @@ const formatDate = (value: string) => {
 const toStartOfDay = (value: string) => new Date(`${value}T00:00:00`);
 const toEndOfDay = (value: string) => new Date(`${value}T23:59:59.999`);
 
+function scheduleStateUpdate(fn: () => void) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+}
+
 export default function OwnerStaffDrilldownClient({
   owners,
   emptyMessage = "No owners found.",
@@ -136,7 +144,14 @@ export default function OwnerStaffDrilldownClient({
   };
 
   useEffect(() => {
-    setOpenOwners({});
+    let cancelled = false;
+    scheduleStateUpdate(() => {
+      if (cancelled) return;
+      setOpenOwners({});
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [activeQuery, activeFromDate, activeToDate]);
 
   if (owners.length === 0) {
