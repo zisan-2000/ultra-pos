@@ -74,6 +74,7 @@ export async function middleware(req: NextRequest) {
     "dashboard",
     "login",
     "register",
+    "offline",
     "api",
     "_next",
     "service-worker",
