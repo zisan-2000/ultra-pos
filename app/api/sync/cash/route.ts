@@ -19,6 +19,7 @@ type IncomingCash = {
   reason?: string | null;
   createdAt?: number | string | Date;
   updatedAt?: number | string | Date;
+  force?: boolean;
 };
 
 type SyncUpdatedRow = {

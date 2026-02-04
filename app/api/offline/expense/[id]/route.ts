@@ -6,14 +6,15 @@ import { assertShopAccess } from "@/lib/shop-access";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const user = await requireUser();
     requirePermission(user, "view_expenses");
 
     const expense = await prisma.expense.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!expense) {

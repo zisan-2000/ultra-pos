@@ -21,6 +21,7 @@ type IncomingExpense = {
   expenseDate?: string | number | Date;
   createdAt?: number | string;
   updatedAt?: number | string | Date;
+  force?: boolean;
 };
 
 type SyncUpdatedRow = {
