@@ -5,8 +5,12 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
 });
 
+const resolvedDistDir =
+  process.env.NEXT_DIST_DIR ||
+  (process.env.VERCEL ? ".next" : ".next-build");
+
 const nextConfig: NextConfig = {
-  distDir: process.env.NEXT_DIST_DIR || ".next-build",
+  distDir: resolvedDistDir,
   experimental: {},
 };
 
