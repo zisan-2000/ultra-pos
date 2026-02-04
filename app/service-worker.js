@@ -38,6 +38,7 @@ const STATIC_EXTENSIONS = [
 
 const NAVIGATION_CACHE_EXACT = ["/", "/offline", "/login", "/dashboard"];
 const NAVIGATION_CACHE_PREFIXES = [
+  "/sales",
   "/dashboard/sales",
   "/dashboard/products",
   "/dashboard/expenses",
@@ -49,8 +50,10 @@ const NAVIGATION_CACHE_PREFIXES = [
   "/super-admin/dashboard",
 ];
 const NAVIGATION_WARM_ROUTES = [
+  "/sales/new",
   "/dashboard",
   "/dashboard/sales",
+  "/dashboard/sales/new",
   "/dashboard/products",
   "/dashboard/expenses",
   "/dashboard/cash",
@@ -259,10 +262,16 @@ async function warmNavigationRoutes(routes) {
         if (!response || !response.ok) return;
 
         const responsePath = normalizePathname(new URL(response.url).pathname);
-        if (responsePath !== normalizedPath) return;
+        if (responsePath === "/login") return;
 
         cache.put(getNavigationCacheKey(targetUrl), response.clone());
         cache.put(request, response.clone());
+        if (responsePath !== normalizedPath) {
+          cache.put(
+            getNavigationCacheKey(new URL(response.url)),
+            response.clone()
+          );
+        }
       } catch {
         // Ignore warmup failures; navigation fallback will still handle offline.
       }

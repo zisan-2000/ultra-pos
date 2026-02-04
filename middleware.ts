@@ -54,6 +54,7 @@ const fetchSession = async (req: NextRequest) => {
 
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
+  const { search } = req.nextUrl;
   if (pathname.startsWith("/api/")) {
     const res = NextResponse.next();
     // Attach a request id for downstream tracing if not provided by the client.
@@ -67,6 +68,17 @@ export async function middleware(req: NextRequest) {
 
   const isAuthPage =
     pathname.startsWith("/login") || pathname.startsWith("/register");
+
+  // Backward-compatible shortcut routes.
+  if (pathname === "/sales" || pathname.startsWith("/sales/")) {
+    const suffix = pathname.slice("/sales".length);
+    return withNoStore(
+      NextResponse.redirect(
+        new URL(`/dashboard/sales${suffix}${search}`, req.url)
+      )
+    );
+  }
+
   const roleMatch = pathname.match(/^\/([A-Za-z0-9_-]+)(\/.*)?$/);
   const roleSlug = roleMatch?.[1] ?? null;
   const remainder = roleMatch?.[2] ?? "";
@@ -107,8 +119,6 @@ export async function middleware(req: NextRequest) {
   if (!isProtectedRoute) {
     return appendCookies(withNoStore(NextResponse.next()), cookiesToSet);
   }
-
-  const { search } = req.nextUrl;
 
   if (isDashboardPath) {
     return appendCookies(withNoStore(NextResponse.next()), cookiesToSet);
