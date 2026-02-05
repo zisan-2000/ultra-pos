@@ -1,4 +1,4 @@
-// middleware.ts
+// proxy.ts
 import { NextResponse, type NextRequest } from "next/server";
 
 const RESERVED_SLUGS = new Set([
@@ -34,7 +34,7 @@ const clearAuthCookies = (res: NextResponse, req: NextRequest) => {
   return res;
 };
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   const { search } = req.nextUrl;
   if (pathname.startsWith("/api/")) {
