@@ -14,13 +14,14 @@ import { revalidateReportsForCash } from "@/lib/reports/revalidate";
 import { Prisma } from "@prisma/client";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { type CursorToken } from "@/lib/cursor-pagination";
+import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
 import {
   getDhakaDateString,
   parseDhakaDateOnlyRange,
   toDhakaBusinessDate,
 } from "@/lib/dhaka-date";
 
-const CASH_SUMMARY_TAG = "cash-summary";
+const CASH_SUMMARY_TAG = REPORTS_CACHE_TAGS.cashSummary;
 
 async function computeCashSummaryByRange(
   shopId: string,

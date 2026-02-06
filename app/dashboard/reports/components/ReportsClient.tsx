@@ -27,9 +27,10 @@ import {
   PREFETCH_PRESETS,
   computeRange,
   computePresetRange,
+  getDateRangeSpanDays,
   type RangePreset,
 } from "@/lib/reporting-range";
-import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
+import { REPORT_MAX_RANGE_DAYS, REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { scheduleIdle } from "@/lib/schedule-idle";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { reportEvents } from "@/lib/events/reportEvents";
@@ -201,7 +202,6 @@ const PRESETS: { key: RangePreset; label: string }[] = [
   { key: "yesterday", label: "গতকাল" },
   { key: "7d", label: "৭ দিন" },
   { key: "month", label: "এই মাস" },
-  { key: "all", label: "সব" },
   { key: "custom", label: "কাস্টম" },
 ];
 
@@ -276,6 +276,44 @@ export default function ReportsClient({
   const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
   const pollingEnabled = !realtime.connected;
   const EVENT_DEBOUNCE_MS = 600;
+  const customRangeValidation = useMemo(() => {
+    if (preset !== "custom") {
+      return { isValid: true, message: null as string | null };
+    }
+    if (!customFrom || !customTo) {
+      return {
+        isValid: false,
+        message: `শুরুর ও শেষের তারিখ দিন (সর্বোচ্চ ${REPORT_MAX_RANGE_DAYS} দিন)।`,
+      };
+    }
+    if (customFrom > customTo) {
+      return {
+        isValid: false,
+        message: "শুরুর তারিখ শেষের তারিখের আগে হতে হবে।",
+      };
+    }
+    const span = getDateRangeSpanDays(customFrom, customTo);
+    if (!span) {
+      return {
+        isValid: false,
+        message: "সঠিক তারিখ দিন (YYYY-MM-DD)।",
+      };
+    }
+    if (span > REPORT_MAX_RANGE_DAYS) {
+      return {
+        isValid: false,
+        message: `সর্বোচ্চ ${REPORT_MAX_RANGE_DAYS} দিনের রেঞ্জ নির্বাচন করুন।`,
+      };
+    }
+    return {
+      isValid: true,
+      message: `রেঞ্জ: ${span} দিন (সর্বোচ্চ ${REPORT_MAX_RANGE_DAYS} দিন)।`,
+    };
+  }, [preset, customFrom, customTo]);
+  const effectiveCustomFrom =
+    preset === "custom" && !customRangeValidation.isValid ? undefined : customFrom;
+  const effectiveCustomTo =
+    preset === "custom" && !customRangeValidation.isValid ? undefined : customTo;
   
   // Auto-sync on real-time events
   useEffect(() => {
@@ -318,8 +356,8 @@ export default function ReportsClient({
     };
   }, [shopId]);
   const range = useMemo(
-    () => computeRange(preset, customFrom, customTo),
-    [preset, customFrom, customTo]
+    () => computeRange(preset, effectiveCustomFrom, effectiveCustomTo),
+    [preset, effectiveCustomFrom, effectiveCustomTo]
   );
   const presetLabel = useMemo(
     () => PRESETS.find((item) => item.key === preset)?.label ?? "",
@@ -954,12 +992,6 @@ export default function ReportsClient({
     return () => cancel();
   }, [active, online]);
 
-  useEffect(() => {
-    if (preset === "custom" && customFrom && customTo && customFrom > customTo) {
-      alert("শুরুর তারিখ শেষের তারিখের আগে হতে হবে");
-    }
-  }, [preset, customFrom, customTo]);
-
   const fetchAllRows = useCallback(
     async (endpoint: string, rangeFrom?: string, rangeTo?: string) => {
       const rows: any[] = [];
@@ -1519,6 +1551,17 @@ export default function ReportsClient({
                 value={customTo ?? ""}
                 onChange={(e) => setCustomTo(e.target.value)}
               />
+              {customRangeValidation.message ? (
+                <p
+                  className={`col-span-2 text-[11px] ${
+                    customRangeValidation.isValid
+                      ? "text-muted-foreground"
+                      : "text-danger"
+                  }`}
+                >
+                  {customRangeValidation.message}
+                </p>
+              ) : null}
             </div>
           )}
           <div>
@@ -1586,6 +1629,17 @@ export default function ReportsClient({
                 value={customTo ?? ""}
                 onChange={(e) => setCustomTo(e.target.value)}
               />
+              {customRangeValidation.message ? (
+                <p
+                  className={`basis-full text-xs ${
+                    customRangeValidation.isValid
+                      ? "text-muted-foreground"
+                      : "text-danger"
+                  }`}
+                >
+                  {customRangeValidation.message}
+                </p>
+              ) : null}
             </div>
           )}
           <div className="rounded-xl border border-primary/20 bg-primary-soft px-3 py-2 text-xs font-semibold text-primary">

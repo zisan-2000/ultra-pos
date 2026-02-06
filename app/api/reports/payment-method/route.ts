@@ -8,6 +8,10 @@ import { assertShopAccess } from "@/lib/shop-access";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
 import { jsonWithEtag } from "@/lib/http/etag";
 import { parseDhakaDateOnlyRange } from "@/lib/dhaka-date";
+import {
+  isReportRangeValidationError,
+  validateBoundedReportRange,
+} from "@/lib/reporting-config";
 
 const parseDateRange = (from?: string, to?: string) =>
   parseDhakaDateOnlyRange(from, to, true);
@@ -66,17 +70,24 @@ export async function GET(request: NextRequest) {
     if (!shopId) {
       return NextResponse.json({ error: "shopId required" }, { status: 400 });
     }
+    const validated = validateBoundedReportRange(from, to);
 
     await assertShopAccess(shopId, user);
 
     const data = fresh
-      ? await computePaymentMethodReport(shopId, from, to)
-      : await getPaymentMethodCached(shopId, from, to);
+      ? await computePaymentMethodReport(shopId, validated.from, validated.to)
+      : await getPaymentMethodCached(shopId, validated.from, validated.to);
 
     return jsonWithEtag(request, { data }, {
       cacheControl: "private, no-cache",
     });
   } catch (error: any) {
+    if (isReportRangeValidationError(error)) {
+      return NextResponse.json(
+        { error: error.message, code: "INVALID_REPORT_RANGE" },
+        { status: error.status }
+      );
+    }
     console.error("Payment method report error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

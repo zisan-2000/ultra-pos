@@ -12,6 +12,7 @@ import {
   type SaleCursor,
 } from "@/app/actions/sales";
 import { getDhakaDateString } from "@/lib/dhaka-date";
+import { validateBoundedReportRange } from "@/lib/reporting-config";
 import ShopSelectorClient from "./ShopSelectorClient";
 import SalesListClient from "./components/SalesListClient";
 import DateFilterClient from "./components/DateFilterClient";
@@ -38,34 +39,9 @@ function parsePositiveInt(value?: string) {
   return Number.isFinite(num) && num > 0 ? num : null;
 }
 
-function formatDateInput(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function normalizeDateInput(value?: string) {
   if (!value) return null;
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
-}
-
-function parseDateInput(value: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const date = new Date(year, month - 1, day);
-  if (Number.isNaN(date.getTime())) return null;
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    return null;
-  }
-  return date;
 }
 
 function encodeCursorList(list: SaleCursor[]) {
@@ -215,16 +191,18 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   const rawFrom = normalizeDateInput(resolvedSearch?.from);
   const rawTo = normalizeDateInput(resolvedSearch?.to);
   const fromInput = rawFrom ?? rawTo ?? todayStr;
-  const toInput = rawTo ?? fromInput;
-
-  let fromDate = parseDateInput(fromInput) ?? parseDateInput(todayStr)!;
-  let toDate = parseDateInput(toInput) ?? fromDate;
-  if (toDate < fromDate) {
-    toDate = fromDate;
+  const toInput = rawTo ?? fromInput ?? todayStr;
+  let fromStr = todayStr;
+  let toStr = todayStr;
+  try {
+    const validated = validateBoundedReportRange(fromInput, toInput);
+    fromStr = validated.from;
+    toStr = validated.to;
+  } catch {
+    // Defensive fallback against tampered query params.
+    fromStr = todayStr;
+    toStr = todayStr;
   }
-
-  const fromStr = formatDateInput(fromDate);
-  const toStr = formatDateInput(toDate);
 
   let page = parsePositiveInt(resolvedSearch?.page) ?? 1;
   let cursorList = decodeCursorList(resolvedSearch?.cursors);
@@ -342,10 +320,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   }));
 
   const summaryTotalDisplay = formatCurrency(summary.totalAmount);
-  const isAllTime = fromStr === "1970-01-01" && toStr === "2099-12-31";
-  const rangeLabel = isAllTime
-    ? "সব সময়"
-    : fromStr === toStr
+  const rangeLabel = fromStr === toStr
     ? fromStr
     : `${fromStr} – ${toStr}`;
 

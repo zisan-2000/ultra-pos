@@ -15,7 +15,6 @@ import {
   getDhakaDateString,
   normalizeDhakaBusinessDate,
   parseDhakaDateOnlyRange,
-  toDhakaBusinessDate,
 } from "@/lib/dhaka-date";
 import { hasPermission, type UserContext } from "@/lib/rbac";
 
@@ -41,15 +40,6 @@ function clampRange(start?: Date | null, end?: Date | null, maxDays = 90) {
     return { start: clampedStart, end: bounded.end };
   }
   return bounded;
-}
-
-function sumCogs(rows: { qty: any; buyPrice: any }[]) {
-  return rows.reduce((sum, r) => {
-    const qty = Number(r.qty ?? 0);
-    const buy = Number(r.buyPrice ?? 0);
-    if (!Number.isFinite(qty) || !Number.isFinite(buy)) return sum;
-    return sum + qty * buy;
-  }, 0);
 }
 
 function ensureReportPermission(user: UserContext, permission: string) {
@@ -603,12 +593,12 @@ async function computeProfitSummary(
   to?: string
 ) {
   const parsed = parseDateRange(from, to);
-  const fallbackDays = !from && !to ? 3650 : 30;
-  const fallbackEnd = parsed.end ?? toDhakaBusinessDate();
-  const bounded = ensureBoundedRange(parsed.start, fallbackEnd, fallbackDays);
-
-  const rangeFrom = bounded.start.toISOString().slice(0, 10);
-  const rangeTo = bounded.end.toISOString().slice(0, 10);
+  const useUnbounded = !from && !to;
+  const bounded = useUnbounded
+    ? null
+    : clampRange(parsed.start, parsed.end, 90);
+  const rangeFrom = bounded?.start.toISOString().slice(0, 10);
+  const rangeTo = bounded?.end.toISOString().slice(0, 10);
 
   // Fetch shop type and sales/expense data in parallel (not sequential)
   const [salesData, expenseData, needsCogs] = await Promise.all([
@@ -619,7 +609,7 @@ async function computeProfitSummary(
 
   // Only fetch COGS if needed
   const cogs = needsCogs
-    ? await getCogsTotalRaw(shopId, bounded.start, bounded.end)
+    ? await getCogsTotalRaw(shopId, bounded?.start, bounded?.end)
     : 0;
 
   const totalExpense = expenseData.totalAmount + cogs;

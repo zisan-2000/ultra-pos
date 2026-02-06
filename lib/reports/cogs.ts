@@ -20,10 +20,19 @@ export async function getCogsTotalRaw(
   from?: Date | null,
   to?: Date | null
 ) {
-  const startInput = from ? normalizeDhakaBusinessDate(from) : undefined;
-  const endInput = to ? normalizeDhakaBusinessDate(to) : undefined;
-  const fallbackEnd = endInput ?? normalizeDhakaBusinessDate();
-  const { start, end } = ensureBoundedRange(startInput, fallbackEnd);
+  const where: Prisma.Sql[] = [
+    Prisma.sql`s.shop_id = CAST(${shopId} AS uuid)`,
+    Prisma.sql`s.status <> 'VOIDED'`,
+  ];
+
+  if (from || to) {
+    const startInput = from ? normalizeDhakaBusinessDate(from) : undefined;
+    const endInput = to ? normalizeDhakaBusinessDate(to) : undefined;
+    const fallbackEnd = endInput ?? normalizeDhakaBusinessDate();
+    const { start, end } = ensureBoundedRange(startInput, fallbackEnd);
+    where.push(Prisma.sql`s.business_date >= ${start}`);
+    where.push(Prisma.sql`s.business_date <= ${end}`);
+  }
 
   const rows = await prisma.$queryRaw<
     { sum: Prisma.Decimal | number | null }[]
@@ -33,10 +42,7 @@ export async function getCogsTotalRaw(
     FROM "sale_items" si
     JOIN "sales" s ON s.id = si.sale_id
     JOIN "products" p ON p.id = si.product_id
-    WHERE s.shop_id = CAST(${shopId} AS uuid)
-      AND s.status <> 'VOIDED'
-      AND s.business_date >= ${start}
-      AND s.business_date <= ${end}
+    WHERE ${Prisma.join(where, " AND ")}
   `);
 
   const raw = rows[0]?.sum ?? 0;

@@ -5,7 +5,11 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { getDhakaDateString } from "@/lib/reporting-range";
+import {
+  getDateRangeSpanDays,
+  getDhakaDateString,
+} from "@/lib/reporting-range";
+import { REPORT_MAX_RANGE_DAYS } from "@/lib/reporting-config";
 
 type Props = {
   shopId: string;
@@ -53,10 +57,6 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
   const [customFrom, setCustomFrom] = useState(from);
   const [customTo, setCustomTo] = useState(to);
   const rangeText = useMemo(() => {
-    // Check if this is "all time" range
-    if (from === "1970-01-01" && to === "2099-12-31") {
-      return "সর্বকাল";
-    }
     if (from === to) {
       const today = getDhakaDateString();
       const yesterday = addDays(today, -1);
@@ -81,7 +81,7 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
     setOpen(false);
   };
 
-  const setPreset = (key: "today" | "yesterday" | "7d" | "month" | "all") => {
+  const setPreset = (key: "today" | "yesterday" | "7d" | "month") => {
     const today = getDhakaDateString();
     if (key === "today") {
       applyRange(today, today);
@@ -103,14 +103,41 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
       // this month
       const startStr = getMonthStart(today);
       applyRange(startStr, today);
-      return;
     }
-    // all time
-    applyRange("1970-01-01", "2099-12-31");
   };
 
-  const canApplyCustom =
-    Boolean(customFrom) && Boolean(customTo) && customFrom <= customTo;
+  const customRangeValidation = useMemo(() => {
+    if (!customFrom || !customTo) {
+      return {
+        isValid: false,
+        message: `শুরুর ও শেষের তারিখ দিন (সর্বোচ্চ ${REPORT_MAX_RANGE_DAYS} দিন)।`,
+      };
+    }
+    if (customFrom > customTo) {
+      return {
+        isValid: false,
+        message: "শুরুর তারিখ শেষের তারিখের আগে হতে হবে।",
+      };
+    }
+    const span = getDateRangeSpanDays(customFrom, customTo);
+    if (!span) {
+      return {
+        isValid: false,
+        message: "সঠিক তারিখ দিন (YYYY-MM-DD)।",
+      };
+    }
+    if (span > REPORT_MAX_RANGE_DAYS) {
+      return {
+        isValid: false,
+        message: `সর্বোচ্চ ${REPORT_MAX_RANGE_DAYS} দিনের রেঞ্জ নির্বাচন করুন।`,
+      };
+    }
+    return {
+      isValid: true,
+      message: `রেঞ্জ: ${span} দিন (সর্বোচ্চ ${REPORT_MAX_RANGE_DAYS} দিন)।`,
+    };
+  }, [customFrom, customTo]);
+  const canApplyCustom = customRangeValidation.isValid;
 
   return (
     <>
@@ -185,13 +212,6 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
                 >
                   এই মাস
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setPreset("all")}
-                  className="rounded-lg border border-border px-3 py-2 font-semibold text-foreground hover:bg-muted sm:col-span-1"
-                >
-                  সব
-                </button>
               </div>
 
               <div className="space-y-2">
@@ -220,6 +240,17 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
                 >
                   রেঞ্জ প্রয়োগ করুন
                 </button>
+                {customRangeValidation.message ? (
+                  <p
+                    className={`text-[11px] ${
+                      customRangeValidation.isValid
+                        ? "text-muted-foreground"
+                        : "text-danger"
+                    }`}
+                  >
+                    {customRangeValidation.message}
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>,

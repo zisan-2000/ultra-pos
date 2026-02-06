@@ -13,6 +13,7 @@ import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidateReportsForSale } from "@/lib/reports/revalidate";
 import { shopNeedsCogs } from "@/lib/accounting/cogs";
 import { parseDhakaDateOnlyRange, toDhakaBusinessDate } from "@/lib/dhaka-date";
+import { validateBoundedReportRange } from "@/lib/reporting-config";
 
 const logPerf = (...args: unknown[]) => {
   if (process.env.NODE_ENV !== "production") {
@@ -486,14 +487,16 @@ export async function getSalesByShopPaginated({
   const safeLimit = Math.max(1, Math.min(limit, 100));
 
   const where: Prisma.SaleWhereInput = { shopId };
-  const useUnbounded = !from && !to;
-  if (!useUnbounded) {
-    const { start, end } = parseDhakaDateOnlyRange(from, to, true);
-    where.businessDate = {
-      ...(start ? { gte: start } : {}),
-      ...(end ? { lte: end } : {}),
-    };
-  }
+  const validatedRange = validateBoundedReportRange(from, to);
+  const { start, end } = parseDhakaDateOnlyRange(
+    validatedRange.from,
+    validatedRange.to,
+    true
+  );
+  where.businessDate = {
+    ...(start ? { gte: start } : {}),
+    ...(end ? { lte: end } : {}),
+  };
 
   if (cursor) {
     where.AND = [
@@ -559,13 +562,16 @@ export async function getSalesSummary({
     status: { not: "VOIDED" },
   };
 
-  if (from || to) {
-    const { start, end } = parseDhakaDateOnlyRange(from, to, true);
-    where.businessDate = {
-      ...(start ? { gte: start } : {}),
-      ...(end ? { lte: end } : {}),
-    };
-  }
+  const validatedRange = validateBoundedReportRange(from, to);
+  const { start, end } = parseDhakaDateOnlyRange(
+    validatedRange.from,
+    validatedRange.to,
+    true
+  );
+  where.businessDate = {
+    ...(start ? { gte: start } : {}),
+    ...(end ? { lte: end } : {}),
+  };
 
   const agg = await prisma.sale.aggregate({
     where,

@@ -16,8 +16,10 @@ import { usePageVisibility } from "@/lib/use-page-visibility";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import {
   computeRange as computeDhakaRange,
+  getDateRangeSpanDays,
   getDhakaDateString,
 } from "@/lib/reporting-range";
+import { REPORT_MAX_RANGE_DAYS } from "@/lib/reporting-config";
 
 type Expense = {
   id: string;
@@ -43,14 +45,13 @@ type Props = {
   summaryCount?: number;
 };
 
-type RangePreset = "today" | "yesterday" | "7d" | "month" | "all" | "custom";
+type RangePreset = "today" | "yesterday" | "7d" | "month" | "custom";
 
 const PRESETS: { key: RangePreset; label: string }[] = [
   { key: "today", label: "আজ" },
   { key: "yesterday", label: "গতকাল" },
   { key: "7d", label: "৭ দিন" },
   { key: "month", label: "এই মাস" },
-  { key: "all", label: "সব" },
   { key: "custom", label: "কাস্টম" },
 ];
 
@@ -107,6 +108,8 @@ type CustomRangeInputsProps = {
   customFrom?: string;
   customTo?: string;
   canApplyCustom: boolean;
+  isRangeValid: boolean;
+  validationMessage?: string | null;
   setCustomFrom: (next?: string) => void;
   setCustomTo: (next?: string) => void;
   applyRangeToUrl: (nextFrom: string, nextTo: string) => void;
@@ -118,6 +121,8 @@ function CustomRangeInputs({
   customFrom,
   customTo,
   canApplyCustom,
+  isRangeValid,
+  validationMessage,
   setCustomFrom,
   setCustomTo,
   applyRangeToUrl,
@@ -154,6 +159,15 @@ function CustomRangeInputs({
           রেঞ্জ প্রয়োগ করুন
         </button>
       )}
+      {validationMessage ? (
+        <p
+          className={`col-span-2 text-[11px] ${
+            isRangeValid ? "text-muted-foreground" : "text-danger"
+          }`}
+        >
+          {validationMessage}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -176,7 +190,7 @@ function formatExpenseDate(input?: string | number | Date | null) {
 }
 
 function resolvePreset(from?: string, to?: string): RangePreset {
-  if (!from && !to) return "all";
+  if (!from && !to) return "today";
   if (!from || !to) return "custom";
   if (from === to) {
     const today = getDhakaDateString();
@@ -225,10 +239,41 @@ export function ExpensesListClient({
   const pollingEnabled = !realtime.connected;
   const EVENT_DEBOUNCE_MS = 800;
 
-  const canApplyCustom = (() => {
-    if (!customFrom || !customTo) return false;
-    return customFrom <= customTo;
-  })();
+  const customRangeValidation = useMemo(() => {
+    if (preset !== "custom") {
+      return { isValid: true, message: null as string | null };
+    }
+    if (!customFrom || !customTo) {
+      return {
+        isValid: false,
+        message: `শুরুর ও শেষের তারিখ দিন (সর্বোচ্চ ${REPORT_MAX_RANGE_DAYS} দিন)।`,
+      };
+    }
+    if (customFrom > customTo) {
+      return {
+        isValid: false,
+        message: "শুরুর তারিখ শেষের তারিখের আগে হতে হবে।",
+      };
+    }
+    const span = getDateRangeSpanDays(customFrom, customTo);
+    if (!span) {
+      return {
+        isValid: false,
+        message: "সঠিক তারিখ দিন (YYYY-MM-DD)।",
+      };
+    }
+    if (span > REPORT_MAX_RANGE_DAYS) {
+      return {
+        isValid: false,
+        message: `সর্বোচ্চ ${REPORT_MAX_RANGE_DAYS} দিনের রেঞ্জ নির্বাচন করুন।`,
+      };
+    }
+    return {
+      isValid: true,
+      message: `রেঞ্জ: ${span} দিন (সর্বোচ্চ ${REPORT_MAX_RANGE_DAYS} দিন)।`,
+    };
+  }, [preset, customFrom, customTo]);
+  const canApplyCustom = customRangeValidation.isValid;
   const handleOptimisticDelete = useCallback(
     (id: string) => {
       setItems((prev) => {
@@ -557,6 +602,8 @@ export function ExpensesListClient({
                 customFrom={customFrom}
                 customTo={customTo}
                 canApplyCustom={canApplyCustom}
+                isRangeValid={customRangeValidation.isValid}
+                validationMessage={customRangeValidation.message}
                 setCustomFrom={setCustomFrom}
                 setCustomTo={setCustomTo}
                 applyRangeToUrl={applyRangeToUrl}
@@ -607,6 +654,8 @@ export function ExpensesListClient({
               customFrom={customFrom}
               customTo={customTo}
               canApplyCustom={canApplyCustom}
+              isRangeValid={customRangeValidation.isValid}
+              validationMessage={customRangeValidation.message}
               setCustomFrom={setCustomFrom}
               setCustomTo={setCustomTo}
               applyRangeToUrl={applyRangeToUrl}

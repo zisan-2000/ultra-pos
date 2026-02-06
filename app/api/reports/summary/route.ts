@@ -14,6 +14,10 @@ import { assertShopAccess } from "@/lib/shop-access";
 import { reportError } from "@/lib/monitoring";
 import { withTracing } from "@/lib/tracing";
 import { jsonWithEtag } from "@/lib/http/etag";
+import {
+  isReportRangeValidationError,
+  validateBoundedReportRange,
+} from "@/lib/reporting-config";
 
 export async function GET(req: Request) {
   return withTracing(req, "/api/reports/summary", async () => {
@@ -27,6 +31,7 @@ export async function GET(req: Request) {
       if (!shopId) {
         return NextResponse.json({ error: "shopId missing" }, { status: 400 });
       }
+      const validated = validateBoundedReportRange(from, to);
 
       const user = await requireUser();
       await assertShopAccess(shopId, user);
@@ -34,16 +39,16 @@ export async function GET(req: Request) {
       const [sales, expense, cash, profit] = await Promise.all(
         fresh
           ? [
-              getSalesSummaryFresh(shopId, from, to),
-              getExpenseSummaryFresh(shopId, from, to),
-              getCashSummaryFresh(shopId, from, to),
-              getProfitSummaryFresh(shopId, from, to),
+              getSalesSummaryFresh(shopId, validated.from, validated.to),
+              getExpenseSummaryFresh(shopId, validated.from, validated.to),
+              getCashSummaryFresh(shopId, validated.from, validated.to),
+              getProfitSummaryFresh(shopId, validated.from, validated.to),
             ]
           : [
-              getSalesSummary(shopId, from, to),
-              getExpenseSummary(shopId, from, to),
-              getCashSummary(shopId, from, to),
-              getProfitSummary(shopId, from, to),
+              getSalesSummary(shopId, validated.from, validated.to),
+              getExpenseSummary(shopId, validated.from, validated.to),
+              getCashSummary(shopId, validated.from, validated.to),
+              getProfitSummary(shopId, validated.from, validated.to),
             ]
       );
 
@@ -51,6 +56,12 @@ export async function GET(req: Request) {
         cacheControl: "private, no-store",
       });
     } catch (err) {
+      if (isReportRangeValidationError(err)) {
+        return NextResponse.json(
+          { error: err.message, code: "INVALID_REPORT_RANGE" },
+          { status: err.status }
+        );
+      }
       console.error("summary report error", err);
       await reportError(err, { route: "/api/reports/summary" });
       return NextResponse.json(
