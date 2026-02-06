@@ -11,6 +11,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { publishRealtimeEvent } from "@/lib/realtime/publisher";
 import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidateReportsForCash } from "@/lib/reports/revalidate";
+import { toDhakaBusinessDate } from "@/lib/dhaka-date";
 
 type IncomingCustomer = {
   id?: string;
@@ -159,6 +160,7 @@ export async function POST(req: Request) {
 
       const amountStr = money(p.amount);
       const createdAt = toDate(p.createdAt);
+      const businessDate = toDhakaBusinessDate(createdAt);
 
       const customer = await prisma.customer.findUnique({
         where: { id: p.customerId },
@@ -187,6 +189,7 @@ export async function POST(req: Request) {
             amount: amountStr,
             description: p.description || "Offline payment",
             entryDate: createdAt,
+            businessDate,
           },
         });
 
@@ -197,6 +200,7 @@ export async function POST(req: Request) {
             amount: amountStr,
             reason: `Due payment from customer #${p.customerId}`,
             createdAt,
+            businessDate,
           },
         });
 

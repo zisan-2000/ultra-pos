@@ -8,6 +8,11 @@ import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
 import { revalidatePath } from "next/cache";
 import { revalidateReportsForProduct } from "@/lib/reports/revalidate";
+import {
+  getDhakaDateString,
+  parseDhakaDateOnlyRange,
+  toDhakaBusinessDate,
+} from "@/lib/dhaka-date";
 
 type PurchaseItemInput = {
   productId: string;
@@ -36,14 +41,9 @@ function toMoney(value: number | string, field: string) {
 
 function normalizePurchaseDate(raw?: string | null) {
   const trimmed = raw?.trim();
-  const date = trimmed ? new Date(trimmed) : new Date();
-  if (Number.isNaN(date.getTime())) {
-    const fallback = new Date();
-    fallback.setUTCHours(0, 0, 0, 0);
-    return fallback;
-  }
-  date.setUTCHours(0, 0, 0, 0);
-  return date;
+  const day = trimmed || getDhakaDateString();
+  const { start } = parseDhakaDateOnlyRange(day, day, true);
+  return start ?? new Date(`${day}T00:00:00.000Z`);
 }
 
 export async function createPurchase(input: CreatePurchaseInput) {
@@ -191,6 +191,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
           amount: paidAmount.toFixed(2),
           reason: `Purchase #${created.id}`,
           createdAt: purchaseDate,
+          businessDate: toDhakaBusinessDate(purchaseDate),
         },
       });
     }
@@ -204,6 +205,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
           amount: totalAmount.toFixed(2),
           note: `Purchase #${created.id}`,
           entryDate: purchaseDate,
+          businessDate: toDhakaBusinessDate(purchaseDate),
         },
       });
 
@@ -216,6 +218,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
             amount: paidAmount.toFixed(2),
             method: paymentMethod === "due" ? "cash" : paymentMethod,
             paidAt: purchaseDate,
+            businessDate: toDhakaBusinessDate(purchaseDate),
             note: `Payment for purchase #${created.id}`,
           },
         });
@@ -228,6 +231,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
             amount: paidAmount.toFixed(2),
             note: `Payment for purchase #${created.id}`,
             entryDate: purchaseDate,
+            businessDate: toDhakaBusinessDate(purchaseDate),
           },
         });
       }
@@ -259,6 +263,7 @@ export async function recordPurchasePayment(input: {
   if (amount <= 0) throw new Error("Amount must be greater than 0");
   const paidAt = input.paidAt ? new Date(input.paidAt) : new Date();
   if (Number.isNaN(paidAt.getTime())) throw new Error("Invalid payment date");
+  const paymentBusinessDate = toDhakaBusinessDate(paidAt);
 
   const purchase = await prisma.purchase.findUnique({
     where: { id: input.purchaseId },
@@ -302,6 +307,7 @@ export async function recordPurchasePayment(input: {
         amount: payAmount.toFixed(2),
         method: input.method || "cash",
         paidAt,
+        businessDate: paymentBusinessDate,
         note: input.note?.trim() || null,
       },
     });
@@ -313,6 +319,7 @@ export async function recordPurchasePayment(input: {
         amount: payAmount.toFixed(2),
         reason: `Purchase payment #${purchase.id}`,
         createdAt: paidAt,
+        businessDate: paymentBusinessDate,
       },
     });
 
@@ -324,6 +331,7 @@ export async function recordPurchasePayment(input: {
         amount: payAmount.toFixed(2),
         note: `Payment for purchase #${purchase.id}`,
         entryDate: paidAt,
+        businessDate: paymentBusinessDate,
       },
     });
   });

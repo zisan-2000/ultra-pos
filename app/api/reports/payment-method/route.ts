@@ -7,33 +7,17 @@ import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
 import { jsonWithEtag } from "@/lib/http/etag";
+import { parseDhakaDateOnlyRange } from "@/lib/dhaka-date";
 
-function parseTimestampRange(from?: string, to?: string) {
-  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
-  const parse = (value?: string, mode?: "start" | "end") => {
-    if (!value) return undefined;
-    if (isDateOnly(value)) {
-      const tzOffset = "+06:00";
-      const iso =
-        mode === "end"
-          ? `${value}T23:59:59.999${tzOffset}`
-          : `${value}T00:00:00.000${tzOffset}`;
-      const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? undefined : d;
-    }
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return undefined;
-    return d;
-  };
-  return { start: parse(from, "start"), end: parse(to, "end") };
-}
+const parseDateRange = (from?: string, to?: string) =>
+  parseDhakaDateOnlyRange(from, to, true);
 
 async function computePaymentMethodReport(
   shopId: string,
   from?: string,
   to?: string
 ) {
-  const { start, end } = parseTimestampRange(from, to);
+  const { start, end } = parseDateRange(from, to);
   const useUnbounded = !from && !to;
 
   const sales = await prisma.sale.groupBy({
@@ -41,7 +25,7 @@ async function computePaymentMethodReport(
     where: {
       shopId,
       status: { not: "VOIDED" },
-      saleDate: useUnbounded
+      businessDate: useUnbounded
         ? undefined
         : {
             gte: start,

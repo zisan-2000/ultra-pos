@@ -28,8 +28,63 @@ export function getDhakaDateString(date: Date = new Date()) {
   }).format(date);
 }
 
+export function getDhakaBusinessDate(date: Date = new Date()) {
+  const day = getDhakaDateString(date);
+  return new Date(`${day}T00:00:00.000Z`);
+}
+
+export function toDhakaBusinessDate(input?: Date | string | number | null) {
+  const base = input ? new Date(input as any) : new Date();
+  if (Number.isNaN(base.getTime())) {
+    return getDhakaBusinessDate();
+  }
+  return getDhakaBusinessDate(base);
+}
+
+export function normalizeDhakaBusinessDate(
+  input?: Date | string | number | null
+) {
+  if (!input) {
+    return getDhakaBusinessDate();
+  }
+
+  const base = new Date(input as any);
+  if (Number.isNaN(base.getTime())) {
+    return getDhakaBusinessDate();
+  }
+
+  const isUtcStartOfDay =
+    base.getUTCHours() === 0 &&
+    base.getUTCMinutes() === 0 &&
+    base.getUTCSeconds() === 0 &&
+    base.getUTCMilliseconds() === 0;
+  const isUtcEndOfDay = base.getUTCHours() === 23 && base.getUTCMinutes() === 59;
+
+  if (isUtcStartOfDay || isUtcEndOfDay) {
+    return new Date(
+      Date.UTC(
+        base.getUTCFullYear(),
+        base.getUTCMonth(),
+        base.getUTCDate()
+      )
+    );
+  }
+
+  return getDhakaBusinessDate(base);
+}
+
 export function getDhakaDateOnlyRange(date: Date = new Date()) {
   const day = getDhakaDateString(date);
   const { start, end } = parseUtcDateRange(day, day, true);
   return { start, end };
+}
+
+// Date-only ranges use UTC midnight boundaries for stability,
+// but callers should pass Dhaka-based day strings.
+export function parseDhakaDateOnlyRange(
+  from?: string,
+  to?: string,
+  clampTime = false
+) {
+  return parseUtcDateRange(from, to, clampTime);
 }

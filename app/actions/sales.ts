@@ -12,6 +12,7 @@ import { publishRealtimeEvent } from "@/lib/realtime/publisher";
 import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidateReportsForSale } from "@/lib/reports/revalidate";
 import { shopNeedsCogs } from "@/lib/accounting/cogs";
+import { parseDhakaDateOnlyRange, toDhakaBusinessDate } from "@/lib/dhaka-date";
 
 const logPerf = (...args: unknown[]) => {
   if (process.env.NODE_ENV !== "production") {
@@ -60,8 +61,8 @@ type GetSalesByShopPaginatedInput = {
   shopId: string;
   limit?: number;
   cursor?: { saleDate: Date; id: string } | null;
-  dateFrom?: Date | null;
-  dateTo?: Date | null;
+  from?: string;
+  to?: string;
 };
 
 async function attachSaleSummaries(
@@ -238,6 +239,7 @@ export async function createSale(input: CreateSaleInput) {
       : normalizedPaymentMethod === "due" && payNow > 0
       ? payNow
       : null;
+  const saleTimestamp = new Date();
 
   const saleId = await prisma.$transaction(async (tx) => {
     const transactionStart = Date.now();
@@ -258,6 +260,8 @@ export async function createSale(input: CreateSaleInput) {
         totalAmount: totalStr,
         paymentMethod: input.paymentMethod || "cash",
         note: input.note || null,
+        saleDate: saleTimestamp,
+        businessDate: toDhakaBusinessDate(saleTimestamp),
       },
       select: { id: true },
     });
@@ -295,6 +299,7 @@ export async function createSale(input: CreateSaleInput) {
             normalizedPaymentMethod === "due"
               ? `Partial cash received for due sale #${inserted.id}`
               : `Cash sale #${inserted.id}`,
+          businessDate: toDhakaBusinessDate(saleTimestamp),
         },
       });
     }
@@ -336,6 +341,8 @@ export async function createSale(input: CreateSaleInput) {
           entryType: "SALE",
           amount: totalStr,
           description: input.note || "Due sale",
+          entryDate: saleTimestamp,
+          businessDate: toDhakaBusinessDate(saleTimestamp),
         },
       });
 
@@ -347,6 +354,8 @@ export async function createSale(input: CreateSaleInput) {
             entryType: "PAYMENT",
             amount: payNow.toFixed(2),
             description: "Partial payment at sale",
+            entryDate: saleTimestamp,
+            businessDate: toDhakaBusinessDate(saleTimestamp),
           },
         });
       }
@@ -467,8 +476,8 @@ export async function getSalesByShopPaginated({
   shopId,
   limit = 12,
   cursor,
-  dateFrom,
-  dateTo,
+  from,
+  to,
 }: GetSalesByShopPaginatedInput) {
   const user = await requireUser();
   requirePermission(user, "view_sales");
@@ -477,10 +486,12 @@ export async function getSalesByShopPaginated({
   const safeLimit = Math.max(1, Math.min(limit, 100));
 
   const where: Prisma.SaleWhereInput = { shopId };
-  if (dateFrom || dateTo) {
-    where.saleDate = {
-      ...(dateFrom ? { gte: dateFrom } : {}),
-      ...(dateTo ? { lt: dateTo } : {}),
+  const useUnbounded = !from && !to;
+  if (!useUnbounded) {
+    const { start, end } = parseDhakaDateOnlyRange(from, to, true);
+    where.businessDate = {
+      ...(start ? { gte: start } : {}),
+      ...(end ? { lte: end } : {}),
     };
   }
 
@@ -532,12 +543,12 @@ export async function getSalesByShopPaginated({
 // ------------------------------
 export async function getSalesSummary({
   shopId,
-  dateFrom,
-  dateTo,
+  from,
+  to,
 }: {
   shopId: string;
-  dateFrom?: Date | null;
-  dateTo?: Date | null;
+  from?: string;
+  to?: string;
 }) {
   const user = await requireUser();
   requirePermission(user, "view_sales");
@@ -548,10 +559,11 @@ export async function getSalesSummary({
     status: { not: "VOIDED" },
   };
 
-  if (dateFrom || dateTo) {
-    where.saleDate = {
-      ...(dateFrom ? { gte: dateFrom } : {}),
-      ...(dateTo ? { lt: dateTo } : {}),
+  if (from || to) {
+    const { start, end } = parseDhakaDateOnlyRange(from, to, true);
+    where.businessDate = {
+      ...(start ? { gte: start } : {}),
+      ...(end ? { lte: end } : {}),
     };
   }
 
@@ -595,6 +607,7 @@ export async function voidSale(saleId: string, reason?: string | null) {
   }
 
   const isCashSale = (sale.paymentMethod || "").toLowerCase() === "cash";
+  const voidTimestamp = new Date();
   let affectedProductIds: string[] = [];
 
   await prisma.$transaction(async (tx) => {
@@ -640,6 +653,7 @@ export async function voidSale(saleId: string, reason?: string | null) {
           entryType: "OUT",
           amount: sale.totalAmount,
           reason: `Reversal of sale #${sale.id}`,
+          businessDate: toDhakaBusinessDate(voidTimestamp),
         },
       });
     }

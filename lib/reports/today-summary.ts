@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCogsTotalRaw } from "@/lib/reports/cogs";
-import { getDhakaDateOnlyRange, getDhakaDayRange } from "@/lib/dhaka-date";
+import { getDhakaDateOnlyRange } from "@/lib/dhaka-date";
 import { assertShopAccess } from "@/lib/shop-access";
 import type { UserContext } from "@/lib/rbac";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
@@ -18,8 +18,7 @@ async function computeTodaySummary(
   shopId: string,
   businessType?: string | null
 ): Promise<TodaySummary> {
-  const { start: todayStart, end: todayEnd } = getDhakaDayRange();
-  const { start: expenseStart, end: expenseEnd } = getDhakaDateOnlyRange();
+  const { start: todayStart, end: todayEnd } = getDhakaDateOnlyRange();
 
   const [resolvedShopType, salesAgg, expenseAgg, cashAgg] = await Promise.all([
     businessType
@@ -34,19 +33,19 @@ async function computeTodaySummary(
       where: {
         shopId,
         status: { not: "VOIDED" },
-        saleDate: { gte: todayStart, lte: todayEnd },
+        businessDate: { gte: todayStart, lte: todayEnd },
       },
       _sum: { totalAmount: true },
       _count: { _all: true },
     }),
     prisma.expense.aggregate({
-      where: { shopId, expenseDate: { gte: expenseStart, lte: expenseEnd } },
+      where: { shopId, expenseDate: { gte: todayStart, lte: todayEnd } },
       _sum: { amount: true },
       _count: { _all: true },
     }),
     prisma.cashEntry.groupBy({
       by: ["entryType"],
-      where: { shopId, createdAt: { gte: todayStart, lte: todayEnd } },
+      where: { shopId, businessDate: { gte: todayStart, lte: todayEnd } },
       _sum: { amount: true },
       _count: { _all: true },
     }),

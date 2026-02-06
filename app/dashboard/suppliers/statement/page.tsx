@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getSuppliersByShop, getSupplierStatement } from "@/app/actions/suppliers";
 import SupplierStatementClient from "./statement-client";
+import { getDhakaDateString } from "@/lib/dhaka-date";
 
 type SupplierStatementPageProps = {
   searchParams?: Promise<{
@@ -15,14 +16,6 @@ type SupplierStatementPageProps = {
     page?: string;
   }>;
 };
-
-function todayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 export default async function SupplierStatementPage({
   searchParams,
@@ -64,8 +57,9 @@ export default async function SupplierStatementPage({
       ? resolvedSearch.supplierId
       : suppliers[0]?.id ?? "";
 
-  const from = resolvedSearch?.from ?? todayStr();
-  const to = resolvedSearch?.to ?? todayStr();
+  const today = getDhakaDateString();
+  const from = resolvedSearch?.from ?? today;
+  const to = resolvedSearch?.to ?? today;
 
   const page = Number(resolvedSearch?.page ?? 1);
   const statement = selectedSupplierId

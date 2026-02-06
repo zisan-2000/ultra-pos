@@ -14,6 +14,10 @@ import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
 import { useRealtimeStatus } from "@/lib/realtime/status";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import {
+  computeRange as computeDhakaRange,
+  getDhakaDateString,
+} from "@/lib/reporting-range";
 
 type Expense = {
   id: string;
@@ -76,8 +80,8 @@ function DateFilterRow({
             onClick={() => {
               setPreset(key);
               if (online) {
-                const next = computeRange(key, customFrom, customTo);
-                const nextFrom = next.from ?? todayStr();
+                const next = computeDhakaRange(key, customFrom, customTo);
+                const nextFrom = next.from ?? getDhakaDateString();
                 const nextTo = next.to ?? nextFrom;
                 applyRangeToUrl(nextFrom, nextTo);
               }
@@ -154,21 +158,6 @@ function CustomRangeInputs({
   );
 }
 
-function todayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function formatDate(d: Date) {
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 function formatTime(input?: string | number | Date | null) {
   if (!input) return "";
   const date = new Date(input as any);
@@ -179,47 +168,27 @@ function formatTime(input?: string | number | Date | null) {
   });
 }
 
-function computeRange(preset: RangePreset, customFrom?: string, customTo?: string) {
-  const toStr = (d: Date) => d.toISOString().split("T")[0];
-  const today = new Date();
-  if (preset === "custom") return { from: customFrom, to: customTo };
-  if (preset === "today") return { from: toStr(today), to: toStr(today) };
-  if (preset === "yesterday") {
-    const y = new Date(today);
-    y.setDate(y.getDate() - 1);
-    return { from: toStr(y), to: toStr(y) };
-  }
-  if (preset === "7d") {
-    const start = new Date(today);
-    start.setDate(start.getDate() - 6);
-    return { from: toStr(start), to: toStr(today) };
-  }
-  if (preset === "month") {
-    const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    return { from: toStr(start), to: toStr(today) };
-  }
-  return { from: undefined, to: undefined };
+function formatExpenseDate(input?: string | number | Date | null) {
+  if (!input) return undefined;
+  const date = new Date(input as any);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return getDhakaDateString(date);
 }
 
 function resolvePreset(from?: string, to?: string): RangePreset {
   if (!from && !to) return "all";
   if (!from || !to) return "custom";
   if (from === to) {
-    const today = todayStr();
+    const today = getDhakaDateString();
     if (from === today) return "today";
-    const y = new Date();
-    y.setDate(y.getDate() - 1);
-    if (from === formatDate(y)) return "yesterday";
+    const yesterday = computeDhakaRange("yesterday");
+    if (from === yesterday.from && from === yesterday.to) return "yesterday";
     return "custom";
   }
-  const today = todayStr();
-  if (to !== today) return "custom";
-  const seven = new Date();
-  seven.setDate(seven.getDate() - 6);
-  if (from === formatDate(seven)) return "7d";
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  if (from === formatDate(monthStart)) return "month";
+  const seven = computeDhakaRange("7d");
+  if (from === seven.from && to === seven.to) return "7d";
+  const month = computeDhakaRange("month");
+  if (from === month.from && to === month.to) return "month";
   return "custom";
 }
 
@@ -409,9 +378,7 @@ export function ExpensesListClient({
           (e.amount as any)?.toString?.() ?? e.amount?.toString?.() ?? "0",
         category: e.category || "Uncategorized",
         note: e.note || "",
-        expenseDate: e.expenseDate
-          ? new Date(e.expenseDate as any).toISOString().slice(0, 10)
-          : new Date().toISOString().slice(0, 10),
+        expenseDate: formatExpenseDate(e.expenseDate) ?? getDhakaDateString(),
         createdAt: (() => {
           const raw = (e as any).createdAt;
           if (!raw) return Date.now();
@@ -452,7 +419,7 @@ export function ExpensesListClient({
   }, [online, expenses, shopId, pendingCount, syncing]);
 
   const range = useMemo(
-    () => computeRange(preset, customFrom, customTo),
+    () => computeDhakaRange(preset, customFrom, customTo),
     [preset, customFrom, customTo]
   );
 
@@ -481,9 +448,7 @@ export function ExpensesListClient({
     // Online: server already applied the range. Don't client-filter again.
     if (online) return serverItems;
     return items.filter((e) => {
-      const dateStr = e.expenseDate
-        ? new Date(e.expenseDate as any).toISOString().slice(0, 10)
-        : undefined;
+      const dateStr = formatExpenseDate(e.expenseDate);
       if (!range.from && !range.to) return true;
       if (!dateStr) return false;
       if (range.from && dateStr < range.from) return false;
@@ -657,9 +622,7 @@ export function ExpensesListClient({
             const formattedAmount = Number.isFinite(amountNum)
               ? amountNum.toFixed(2)
               : (e.amount as any)?.toString?.() ?? "0.00";
-            const expenseDateStr = e.expenseDate
-              ? new Date(e.expenseDate as any).toISOString().slice(0, 10)
-              : "-";
+            const expenseDateStr = formatExpenseDate(e.expenseDate) ?? "-";
             const timeStr =
               formatTime(e.createdAt) ||
               (typeof e.expenseDate === "string" && e.expenseDate.includes("T")

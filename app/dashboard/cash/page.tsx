@@ -6,6 +6,7 @@ import { getShopsByUser } from "@/app/actions/shops";
 import { getCashByShopCursorPaginated, getCashSummaryByRange } from "@/app/actions/cash";
 import ShopSelectorClient from "./ShopSelectorClient";
 import { CashListClient } from "./components/CashListClient";
+import { getDhakaDateString } from "@/lib/dhaka-date";
 
 import {
   buildCursorPageLink,
@@ -33,14 +34,6 @@ function parsePositiveInt(value?: string) {
   if (!value) return null;
   const num = Number.parseInt(value, 10);
   return Number.isFinite(num) && num > 0 ? num : null;
-}
-
-function todayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 export default async function CashPage({ searchParams }: CashPageProps) {
@@ -80,7 +73,8 @@ export default async function CashPage({ searchParams }: CashPageProps) {
 
   const rawFrom = resolvedSearch?.from;
   const rawTo = resolvedSearch?.to;
-  const from = rawFrom ?? rawTo ?? todayStr();
+  const today = getDhakaDateString();
+  const from = rawFrom ?? rawTo ?? today;
   const to = rawTo ?? from;
 
   const pageParam = parsePositiveInt(resolvedSearch?.page) ?? 1;
@@ -107,7 +101,6 @@ export default async function CashPage({ searchParams }: CashPageProps) {
     ]);
   const balance = Number(summary.balance ?? 0);
   const formattedBalance = Number.isFinite(balance) ? balance.toFixed(2) : "0.00";
-  const today = todayStr();
   const rangeLabel =
     from === to ? (from === today ? "আজ" : from) : `${from} → ${to}`;
 

@@ -8,6 +8,7 @@ import {
   getPurchaseSummaryByRange,
 } from "@/app/actions/purchases";
 import ShopSelectorClient from "./ShopSelectorClient";
+import { getDhakaDateString } from "@/lib/dhaka-date";
 
 type PurchasePageProps = {
   searchParams?: Promise<{
@@ -24,14 +25,6 @@ function parsePositiveInt(value?: string) {
   if (!value) return null;
   const num = Number.parseInt(value, 10);
   return Number.isFinite(num) && num > 0 ? num : null;
-}
-
-function todayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 export default async function PurchasesPage({ searchParams }: PurchasePageProps) {
@@ -73,7 +66,8 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
 
   const rawFrom = resolvedSearch?.from;
   const rawTo = resolvedSearch?.to;
-  const from = rawFrom ?? rawTo ?? todayStr();
+  const today = getDhakaDateString();
+  const from = rawFrom ?? rawTo ?? today;
   const to = rawTo ?? from;
 
   const page = parsePositiveInt(resolvedSearch?.page) ?? 1;

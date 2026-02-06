@@ -12,6 +12,7 @@ import { emitExpenseUpdate } from "@/lib/events/reportEvents";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import Link from "next/link";
 import { toast } from "sonner";
+import { getDhakaDateString } from "@/lib/reporting-range";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -125,7 +126,7 @@ export default function ExpenseFormClient({
   const [category, setCategory] = useState(initialValues?.category || "");
   const [note, setNote] = useState(initialValues?.note || "");
   const [expenseDate, setExpenseDate] = useState(
-    initialValues?.expenseDate || new Date().toISOString().slice(0, 10)
+    initialValues?.expenseDate || getDhakaDateString()
   );
 
   useEffect(() => {
@@ -411,7 +412,7 @@ export default function ExpenseFormClient({
       amount: form.get("amount") as string,
       category: (form.get("category") as string) || "অন্যান্য",
       note: (form.get("note") as string) || "",
-      expenseDate: (form.get("expenseDate") as string) || new Date().toISOString().slice(0, 10),
+      expenseDate: (form.get("expenseDate") as string) || getDhakaDateString(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
       syncStatus: isEdit ? "updated" as const : "new" as const,

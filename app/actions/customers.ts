@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { requirePermission } from "@/lib/rbac";
+import { toDhakaBusinessDate } from "@/lib/dhaka-date";
 
 type CreateCustomerInput = {
   shopId: string;
@@ -114,6 +115,7 @@ export async function addDueSaleEntry(input: {
   if (!amount || amount <= 0) throw new Error("Amount must be positive");
 
   await prisma.$transaction(async (tx) => {
+    const businessDate = toDhakaBusinessDate();
     await tx.customerLedger.create({
       data: {
         shopId: input.shopId,
@@ -121,6 +123,7 @@ export async function addDueSaleEntry(input: {
         entryType: "SALE",
         amount: amount.toFixed(2),
         description: input.description || "Due sale",
+        businessDate,
       },
     });
 
@@ -155,6 +158,7 @@ export async function recordCustomerPayment(input: PaymentInput) {
   if (!amount || amount <= 0) throw new Error("Amount must be positive");
 
   await prisma.$transaction(async (tx) => {
+    const businessDate = toDhakaBusinessDate();
     await tx.customerLedger.create({
       data: {
         shopId: input.shopId,
@@ -162,6 +166,7 @@ export async function recordCustomerPayment(input: PaymentInput) {
         entryType: "PAYMENT",
         amount: amount.toFixed(2),
         description: input.description || "Payment",
+        businessDate,
       },
     });
 
@@ -171,6 +176,7 @@ export async function recordCustomerPayment(input: PaymentInput) {
         entryType: "IN",
         amount: amount.toFixed(2),
         reason: `Due payment from customer #${customer.id}`,
+        businessDate,
       },
     });
 

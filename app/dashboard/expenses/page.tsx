@@ -7,6 +7,7 @@ import {
   getExpenseSummaryByRange,
   getExpensesByShopCursorPaginated,
 } from "@/app/actions/expenses";
+import { getDhakaDateString } from "@/lib/dhaka-date";
 
 import ShopSelectorClient from "./ShopSelectorClient";
 import { ExpensesListClient } from "./components/ExpensesListClient";
@@ -37,14 +38,6 @@ function parsePositiveInt(value?: string) {
   if (!value) return null;
   const num = Number.parseInt(value, 10);
   return Number.isFinite(num) && num > 0 ? num : null;
-}
-
-function todayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 export default async function ExpensesPage({
@@ -86,7 +79,8 @@ export default async function ExpensesPage({
 
   const rawFrom = resolvedSearch?.from;
   const rawTo = resolvedSearch?.to;
-  const from = rawFrom ?? rawTo ?? todayStr();
+  const today = getDhakaDateString();
+  const from = rawFrom ?? rawTo ?? today;
   const to = rawTo ?? from;
 
   const pageParam = parsePositiveInt(resolvedSearch?.page) ?? 1;
@@ -113,7 +107,6 @@ export default async function ExpensesPage({
     ]);
   const totalAmount = Number(summary.totalAmount ?? 0);
   const formattedTotal = Number.isFinite(totalAmount) ? totalAmount.toFixed(2) : "0.00";
-  const today = todayStr();
   const rangeLabel =
     from === to ? (from === today ? "আজ" : from) : `${from} → ${to}`;
 

@@ -14,7 +14,11 @@ import { revalidateReportsForCash } from "@/lib/reports/revalidate";
 import { Prisma } from "@prisma/client";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { type CursorToken } from "@/lib/cursor-pagination";
-import { parseDhakaDateRange } from "@/lib/date-range";
+import {
+  getDhakaDateString,
+  parseDhakaDateOnlyRange,
+  toDhakaBusinessDate,
+} from "@/lib/dhaka-date";
 
 const CASH_SUMMARY_TAG = "cash-summary";
 
@@ -23,12 +27,12 @@ async function computeCashSummaryByRange(
   from?: string,
   to?: string
 ) {
-  const { start, end } = parseDhakaDateRange(from, to, true);
+  const { start, end } = parseDhakaDateOnlyRange(from, to, true);
   const useUnbounded = !from && !to;
 
   const where: Prisma.CashEntryWhereInput = {
     shopId,
-    createdAt: useUnbounded
+    businessDate: useUnbounded
       ? undefined
       : {
           gte: start,
@@ -111,12 +115,12 @@ export async function getCashByShopCursorPaginated({
 
   const safeLimit = Math.max(1, Math.min(Math.floor(limit), 100));
 
-  const { start, end } = parseDhakaDateRange(from, to, true);
+  const { start, end } = parseDhakaDateOnlyRange(from, to, true);
   const useUnbounded = !from && !to;
 
   const where: Prisma.CashEntryWhereInput = {
     shopId,
-    createdAt: useUnbounded
+    businessDate: useUnbounded
       ? undefined
       : {
           gte: start,
@@ -142,6 +146,7 @@ export async function getCashByShopCursorPaginated({
       entryType: true,
       amount: true,
       reason: true,
+      businessDate: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -163,6 +168,7 @@ export async function getCashByShopCursorPaginated({
     entryType: (e.entryType as "IN" | "OUT") || "IN",
     amount: e.amount?.toString?.() ?? (e as any).amount ?? "0",
     reason: e.reason,
+    businessDate: e.businessDate ? getDhakaDateString(e.businessDate as any) : undefined,
     createdAt: e.createdAt?.toISOString?.() ?? e.createdAt,
     updatedAt: e.updatedAt?.toISOString?.() ?? e.updatedAt,
   }));
@@ -180,14 +186,15 @@ export async function createCashEntry(input: any) {
   requirePermission(user, "create_cash_entry");
   await assertShopAccess(parsed.shopId, user);
 
-  await prisma.cashEntry.create({
-    data: {
-      shopId: parsed.shopId,
-      entryType: parsed.entryType,
-      amount: parsed.amount,
-      reason: parsed.reason || "",
-    },
-  });
+    await prisma.cashEntry.create({
+      data: {
+        shopId: parsed.shopId,
+        entryType: parsed.entryType,
+        amount: parsed.amount,
+        reason: parsed.reason || "",
+        businessDate: toDhakaBusinessDate(),
+      },
+    });
 
   revalidateCashSummary();
   revalidateReportsForCash();

@@ -11,19 +11,23 @@ import { publishRealtimeEvent } from "@/lib/realtime/publisher";
 import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidatePath } from "next/cache";
 import { revalidateReportsForExpense } from "@/lib/reports/revalidate";
+import {
+  getDhakaDateString,
+  parseDhakaDateOnlyRange,
+  toDhakaBusinessDate,
+} from "@/lib/dhaka-date";
 
 import { Prisma } from "@prisma/client";
 import { type CursorToken } from "@/lib/cursor-pagination";
-import { parseUtcDateRange } from "@/lib/date-range";
 
 function normalizeExpenseDate(raw?: string | null) {
   const trimmed = raw?.trim();
-  const date = trimmed ? new Date(trimmed) : new Date();
+  const fallbackDay = getDhakaDateString();
+  const fallbackDate = new Date(`${fallbackDay}T00:00:00.000Z`);
+  const date = trimmed ? new Date(trimmed) : fallbackDate;
   if (Number.isNaN(date.getTime())) {
-    // fallback to today's date if parsing fails
-    const fallback = new Date();
-    fallback.setUTCHours(0, 0, 0, 0);
-    return fallback;
+    // fallback to Dhaka "today" if parsing fails
+    return fallbackDate;
   }
   date.setUTCHours(0, 0, 0, 0);
   return date;
@@ -46,7 +50,7 @@ export async function getExpenseSummaryByRange(
   requirePermission(user, "view_expenses");
   await assertShopAccess(shopId, user);
 
-  const { start, end } = parseUtcDateRange(from, to, true);
+  const { start, end } = parseDhakaDateOnlyRange(from, to, true);
   const useUnbounded = !from && !to;
 
   const agg = await prisma.expense.aggregate({
@@ -92,7 +96,7 @@ export async function getExpensesByShopCursorPaginated({
 
   const safeLimit = Math.max(1, Math.min(Math.floor(limit), 100));
 
-  const { start, end } = parseUtcDateRange(from, to, true);
+  const { start, end } = parseDhakaDateOnlyRange(from, to, true);
   const useUnbounded = !from && !to;
 
   const where: Prisma.ExpenseWhereInput = {
@@ -175,7 +179,7 @@ export async function createExpense(input: any) {
         entryType: "OUT",
         amount: created.amount,
         reason: `Expense: ${created.category} (#${created.id})`,
-        createdAt: expenseDate,
+        businessDate: toDhakaBusinessDate(expenseDate),
       },
     });
   });
@@ -235,6 +239,7 @@ export async function updateExpense(id: string, input: any) {
           entryType: delta > 0 ? "OUT" : "IN",
           amount: Math.abs(delta).toFixed(2),
           reason: `Expense adjustment #${id}`,
+          businessDate: toDhakaBusinessDate(parsed.expenseDate || existing.expenseDate),
         },
       });
     }
@@ -311,6 +316,7 @@ export async function deleteExpense(id: string) {
         entryType: "IN",
         amount: expense.amount,
         reason: `Reversal of expense #${expense.id}`,
+        businessDate: toDhakaBusinessDate(expense.expenseDate),
       },
     });
     await tx.expense.delete({ where: { id } });

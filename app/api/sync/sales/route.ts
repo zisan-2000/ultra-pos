@@ -15,6 +15,7 @@ import { publishRealtimeEvent } from "@/lib/realtime/publisher";
 import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidateReportsForSale } from "@/lib/reports/revalidate";
 import { shopNeedsCogs } from "@/lib/accounting/cogs";
+import { toDhakaBusinessDate } from "@/lib/dhaka-date";
 
 type IncomingSaleItem = {
   productId: string;
@@ -148,7 +149,8 @@ export async function POST(req: Request) {
         const items = raw?.items || [];
         const paymentMethod = (raw?.paymentMethod || "cash").toLowerCase();
         const note = raw?.note ?? null;
-        const createdAt = toDateOrUndefined(raw?.createdAt);
+        const createdAt = toDateOrUndefined(raw?.createdAt) ?? new Date();
+        const businessDate = toDhakaBusinessDate(createdAt);
         const customerId = raw?.customerId ?? null;
         const clientSaleId = raw?.id;
 
@@ -267,6 +269,7 @@ export async function POST(req: Request) {
               paymentMethod,
               note,
               saleDate: createdAt,
+              businessDate,
               createdAt: createdAt,
             },
             select: { id: true },
@@ -280,6 +283,7 @@ export async function POST(req: Request) {
                 amount: totalAmount,
                 reason: `Cash sale #${sale.id}`,
                 createdAt: createdAt,
+                businessDate,
               },
             });
           } else if (isDue && payNow > 0) {
@@ -290,6 +294,7 @@ export async function POST(req: Request) {
                 amount: payNow.toFixed(2),
                 reason: `Partial cash received for due sale #${sale.id}`,
                 createdAt: createdAt,
+                businessDate,
               },
             });
           }
@@ -341,6 +346,7 @@ export async function POST(req: Request) {
                 amount: totalAmount,
                 description: note || "Due sale",
                 entryDate: createdAt,
+                businessDate,
               },
             });
 
@@ -353,6 +359,7 @@ export async function POST(req: Request) {
                   amount: payNow.toFixed(2),
                   description: "Partial payment at sale",
                   entryDate: createdAt,
+                  businessDate,
                 },
               });
             }

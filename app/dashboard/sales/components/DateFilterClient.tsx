@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { getDhakaDateString } from "@/lib/reporting-range";
 
 type Props = {
   shopId: string;
@@ -31,30 +32,19 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-function getDhakaTodayStr() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: DHAKA_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
 function addDays(dateStr: string, days: number) {
   const date = parseDateParts(dateStr);
   if (!date) return dateStr;
   date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
+  return getDhakaDateString(date);
 }
 
 function getMonthStart(dateStr: string) {
   const date = parseDateParts(dateStr);
   if (!date) return dateStr;
-  return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)
-  )
-    .toISOString()
-    .slice(0, 10);
+  return getDhakaDateString(
+    new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1))
+  );
 }
 
 export default function DateFilterClient({ shopId, from, to }: Props) {
@@ -68,7 +58,7 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
       return "সর্বকাল";
     }
     if (from === to) {
-      const today = getDhakaTodayStr();
+      const today = getDhakaDateString();
       const yesterday = addDays(today, -1);
       if (from === today) {
         return `আজ · ${formatDate(from)}`;
@@ -92,7 +82,7 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
   };
 
   const setPreset = (key: "today" | "yesterday" | "7d" | "month" | "all") => {
-    const today = getDhakaTodayStr();
+    const today = getDhakaDateString();
     if (key === "today") {
       applyRange(today, today);
       return;

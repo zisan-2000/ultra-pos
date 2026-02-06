@@ -11,7 +11,7 @@ import {
   voidSale,
   type SaleCursor,
 } from "@/app/actions/sales";
-import { getDhakaDateString, getDhakaRangeFromDays } from "@/lib/dhaka-date";
+import { getDhakaDateString } from "@/lib/dhaka-date";
 import ShopSelectorClient from "./ShopSelectorClient";
 import SalesListClient from "./components/SalesListClient";
 import DateFilterClient from "./components/DateFilterClient";
@@ -225,8 +225,6 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
 
   const fromStr = formatDateInput(fromDate);
   const toStr = formatDateInput(toDate);
-  const { start: rangeStart, endExclusive: rangeEndExclusive } =
-    getDhakaRangeFromDays(fromStr, toStr);
 
   let page = parsePositiveInt(resolvedSearch?.page) ?? 1;
   let cursorList = decodeCursorList(resolvedSearch?.cursors);
@@ -269,13 +267,13 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
       shopId: selectedShopId,
       limit: PAGE_SIZE,
       cursor: toCursorInput(currentCursor),
-      dateFrom: rangeStart,
-      dateTo: rangeEndExclusive,
+      from: fromStr,
+      to: toStr,
     }),
     getSalesSummary({
       shopId: selectedShopId,
-      dateFrom: rangeStart,
-      dateTo: rangeEndExclusive,
+      from: fromStr,
+      to: toStr,
     }),
   ]);
 

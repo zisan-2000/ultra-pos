@@ -3,6 +3,7 @@
 import ExpenseFormClient from "./ExpenseFormClient";
 import { createExpense } from "@/app/actions/expenses";
 import { getShop } from "@/app/actions/shops";
+import { getDhakaDateString } from "@/lib/dhaka-date";
 
 type NewExpensePageProps = {
   searchParams?: Promise<{ shopId?: string } | undefined>;
@@ -31,7 +32,7 @@ export default async function NewExpensePage({ searchParams }: NewExpensePagePro
       shopId,
       amount: formData.get("amount") as string,
       category: (formData.get("category") as string) || "অন্যান্য",
-      expenseDate: (formData.get("expenseDate") as string) || new Date().toISOString().slice(0, 10),
+      expenseDate: (formData.get("expenseDate") as string) || getDhakaDateString(),
       note: (formData.get("note") as string) || "",
     });
   }

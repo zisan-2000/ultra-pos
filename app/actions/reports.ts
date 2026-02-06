@@ -11,7 +11,12 @@ import { unstable_cache } from "next/cache";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
 import { shopNeedsCogs } from "@/lib/accounting/cogs";
 import { getCogsTotalRaw } from "@/lib/reports/cogs";
-import { parseDhakaDateRange, parseUtcDateRange } from "@/lib/date-range";
+import {
+  getDhakaDateString,
+  normalizeDhakaBusinessDate,
+  parseDhakaDateOnlyRange,
+  toDhakaBusinessDate,
+} from "@/lib/dhaka-date";
 import { hasPermission, type UserContext } from "@/lib/rbac";
 
 function ensureBoundedRange(
@@ -74,38 +79,39 @@ export async function getCogsByDay(
   ensureReportPermission(user, "view_profit_report");
   await assertShopAccess(shopId, user);
 
-  const { start, end } = ensureBoundedRange(from, to);
+  const startInput = from ? normalizeDhakaBusinessDate(from) : undefined;
+  const endInput = to
+    ? normalizeDhakaBusinessDate(to)
+    : normalizeDhakaBusinessDate();
+  const { start, end } = ensureBoundedRange(startInput, endInput);
 
   const rows = await prisma.$queryRaw<
     { day: Date; sum: Prisma.Decimal | number | null }[]
   >(Prisma.sql`
     SELECT
-      DATE(s.sale_date) AS day,
+      s.business_date AS day,
       SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS sum
     FROM "sale_items" si
     JOIN "sales" s ON s.id = si.sale_id
     JOIN "products" p ON p.id = si.product_id
     WHERE s.shop_id = CAST(${shopId} AS uuid)
       AND s.status <> 'VOIDED'
-      AND s.sale_date >= ${start}
-      AND s.sale_date <= ${end}
-    GROUP BY DATE(s.sale_date)
-    ORDER BY DATE(s.sale_date)
+      AND s.business_date >= ${start}
+      AND s.business_date <= ${end}
+    GROUP BY s.business_date
+    ORDER BY s.business_date
   `);
 
   const byDay: Record<string, number> = {};
   rows.forEach((r) => {
-    const day = new Date(r.day).toISOString().split("T")[0];
+    const day = getDhakaDateString(new Date(r.day));
     byDay[day] = Number(r.sum ?? 0);
   });
   return byDay;
 }
 
-const parseTimestampRange = (from?: string, to?: string) =>
-  parseDhakaDateRange(from, to, false);
-
 const parseDateRange = (from?: string, to?: string) =>
-  parseUtcDateRange(from, to, true);
+  parseDhakaDateOnlyRange(from, to, true);
 
 function normalizeLimit(
   limit?: number | null,
@@ -143,7 +149,7 @@ export async function getSalesWithFilterPaginated({
   ensureReportPermission(user, "view_sales_report");
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
-  const parsed = parseTimestampRange(from, to);
+  const parsed = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const { start, end } = useUnbounded
     ? { start: undefined, end: undefined }
@@ -152,7 +158,7 @@ export async function getSalesWithFilterPaginated({
   const where: Prisma.SaleWhereInput = {
     shopId,
     status: { not: "VOIDED" },
-    saleDate: {
+    businessDate: {
       gte: start ?? undefined,
       lte: end ?? undefined,
     },
@@ -297,7 +303,7 @@ export async function getCashWithFilterPaginated({
   ensureReportPermission(user, "view_cashbook_report");
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
-  const parsed = parseTimestampRange(from, to);
+  const parsed = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const { start, end } = useUnbounded
     ? { start: undefined, end: undefined }
@@ -305,7 +311,7 @@ export async function getCashWithFilterPaginated({
 
   const where: Prisma.CashEntryWhereInput = {
     shopId,
-    createdAt: {
+    businessDate: {
       gte: start ?? undefined,
       lte: end ?? undefined,
     },
@@ -367,7 +373,7 @@ async function computeSalesSummary(
   from?: string,
   to?: string
 ) {
-  const parsed = parseTimestampRange(from, to);
+  const parsed = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const { start, end } = useUnbounded
     ? { start: undefined, end: undefined }
@@ -375,7 +381,7 @@ async function computeSalesSummary(
   const where: Prisma.SaleWhereInput = {
     shopId,
     status: { not: "VOIDED" },
-    saleDate: {
+    businessDate: {
       gte: start ?? undefined,
       lte: end ?? undefined,
     },
@@ -391,7 +397,7 @@ async function computeSalesSummary(
       where: {
         shopId,
         status: "VOIDED",
-        saleDate: {
+        businessDate: {
           gte: start ?? undefined,
           lte: end ?? undefined,
         },
@@ -547,7 +553,7 @@ async function computeCashSummary(
   from?: string,
   to?: string
 ) {
-  const parsed = parseTimestampRange(from, to);
+  const parsed = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const { start, end } = useUnbounded
     ? { start: undefined, end: undefined }
@@ -556,7 +562,7 @@ async function computeCashSummary(
     by: ["entryType"],
     where: {
       shopId,
-      createdAt: {
+      businessDate: {
         gte: start ?? undefined,
         lte: end ?? undefined,
       },
@@ -596,12 +602,13 @@ async function computeProfitSummary(
   from?: string,
   to?: string
 ) {
-  const { start, end } = parseTimestampRange(from, to);
+  const parsed = parseDateRange(from, to);
   const fallbackDays = !from && !to ? 3650 : 30;
-  const bounded = ensureBoundedRange(start, end, fallbackDays);
+  const fallbackEnd = parsed.end ?? toDhakaBusinessDate();
+  const bounded = ensureBoundedRange(parsed.start, fallbackEnd, fallbackDays);
 
-  const rangeFrom = bounded.start.toISOString();
-  const rangeTo = bounded.end.toISOString();
+  const rangeFrom = bounded.start.toISOString().slice(0, 10);
+  const rangeTo = bounded.end.toISOString().slice(0, 10);
 
   // Fetch shop type and sales/expense data in parallel (not sequential)
   const [salesData, expenseData, needsCogs] = await Promise.all([
@@ -644,7 +651,7 @@ async function computePaymentMethodReport(
   from?: string,
   to?: string
 ) {
-  const { start, end } = parseTimestampRange(from, to);
+  const { start, end } = parseDateRange(from, to);
   const useUnbounded = !from && !to;
 
   const sales = await prisma.sale.groupBy({
@@ -652,7 +659,7 @@ async function computePaymentMethodReport(
     where: {
       shopId,
       status: { not: "VOIDED" },
-      saleDate: useUnbounded
+      businessDate: useUnbounded
         ? undefined
         : {
             gte: start,
@@ -700,7 +707,7 @@ async function computeProfitTrendReport(
   from?: string,
   to?: string
 ) {
-  const { start, end } = parseTimestampRange(from, to);
+  const { start, end } = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const needsCogs = await shopNeedsCogs(shopId);
 
@@ -714,11 +721,11 @@ async function computeProfitTrendReport(
 
   if (!useUnbounded) {
     if (start) {
-      salesWhere.push(Prisma.sql` s.sale_date >= ${start}`);
+      salesWhere.push(Prisma.sql` s.business_date >= ${start}`);
       expenseWhere.push(Prisma.sql` e.expense_date >= ${start}`);
     }
     if (end) {
-      salesWhere.push(Prisma.sql` s.sale_date <= ${end}`);
+      salesWhere.push(Prisma.sql` s.business_date <= ${end}`);
       expenseWhere.push(Prisma.sql` e.expense_date <= ${end}`);
     }
   }
@@ -727,7 +734,7 @@ async function computeProfitTrendReport(
     prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
       Prisma.sql`
         SELECT
-          DATE(s.sale_date AT TIME ZONE 'Asia/Dhaka')::text AS day,
+          s.business_date::text AS day,
           SUM(COALESCE(s.total_amount, 0)) AS sum
         FROM "sales" s
         WHERE ${Prisma.join(salesWhere, " AND ")}
@@ -750,7 +757,7 @@ async function computeProfitTrendReport(
       ? prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
           Prisma.sql`
             SELECT
-              DATE(s.sale_date AT TIME ZONE 'Asia/Dhaka')::text AS day,
+              s.business_date::text AS day,
               SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS sum
             FROM "sale_items" si
             JOIN "sales" s ON s.id = si.sale_id

@@ -10,6 +10,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { publishRealtimeEvent } from "@/lib/realtime/publisher";
 import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidateReportsForCash } from "@/lib/reports/revalidate";
+import { toDhakaBusinessDate } from "@/lib/dhaka-date";
 
 type IncomingCash = {
   id?: string;
@@ -159,14 +160,18 @@ export async function POST(req: Request) {
     }
 
     if (Array.isArray(newItems) && newItems.length > 0) {
-      const data = newItems.map((item: IncomingCash) => ({
-        id: item.id,
-        shopId: item.shopId,
-        entryType: item.entryType || "IN",
-        amount: toMoney(item.amount),
-        reason: item.reason || "",
-        createdAt: toDate(item.createdAt),
-      }));
+      const data = newItems.map((item: IncomingCash) => {
+        const createdAt = toDate(item.createdAt);
+        return {
+          id: item.id,
+          shopId: item.shopId,
+          entryType: item.entryType || "IN",
+          amount: toMoney(item.amount),
+          reason: item.reason || "",
+          createdAt,
+          businessDate: toDhakaBusinessDate(createdAt),
+        };
+      });
 
       await prisma.cashEntry.createMany({
         data,

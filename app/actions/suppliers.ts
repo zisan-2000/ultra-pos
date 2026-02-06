@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
+import { parseDhakaDateOnlyRange } from "@/lib/dhaka-date";
 
 export async function createSupplier(input: {
   shopId: string;
@@ -101,17 +102,16 @@ export async function getSupplierStatement(input: {
   });
   if (!supplier) throw new Error("Supplier not found");
 
-  const fromDate = input.from ? new Date(input.from) : null;
-  const toDate = input.to ? new Date(input.to) : null;
-  const rangeFilter =
-    fromDate || toDate
-      ? {
-          entryDate: {
-            gte: fromDate || undefined,
-            lte: toDate || undefined,
-          },
-        }
-      : undefined;
+  const useRange = Boolean(input.from || input.to);
+  const { start, end } = parseDhakaDateOnlyRange(input.from, input.to, true);
+  const rangeFilter = useRange
+    ? {
+        businessDate: {
+          gte: start || undefined,
+          lte: end || undefined,
+        },
+      }
+    : undefined;
 
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const pageSize = Math.max(1, Math.min(Math.floor(input.pageSize ?? 20), 100));

@@ -9,55 +9,17 @@ import { assertShopAccess } from "@/lib/shop-access";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
 import { shopNeedsCogs } from "@/lib/accounting/cogs";
 import { jsonWithEtag } from "@/lib/http/etag";
+import { parseDhakaDateOnlyRange } from "@/lib/dhaka-date";
 
-function parseTimestampRange(from?: string, to?: string) {
-  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
-  const parse = (value?: string, mode?: "start" | "end") => {
-    if (!value) return undefined;
-    if (isDateOnly(value)) {
-      const tzOffset = "+06:00";
-      const iso =
-        mode === "end"
-          ? `${value}T23:59:59.999${tzOffset}`
-          : `${value}T00:00:00.000${tzOffset}`;
-      const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? undefined : d;
-    }
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return undefined;
-    return d;
-  };
-  return { start: parse(from, "start"), end: parse(to, "end") };
-}
-
-function parseDateOnlyRange(from?: string, to?: string) {
-  const isDateOnly = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
-  const parse = (value?: string, mode?: "start" | "end") => {
-    if (!value) return undefined;
-    if (isDateOnly(value)) {
-      const iso =
-        mode === "end"
-          ? `${value}T23:59:59.999Z`
-          : `${value}T00:00:00.000Z`;
-      const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? undefined : d;
-    }
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return undefined;
-    if (mode === "start") d.setUTCHours(0, 0, 0, 0);
-    if (mode === "end") d.setUTCHours(23, 59, 59, 999);
-    return d;
-  };
-  return { start: parse(from, "start"), end: parse(to, "end") };
-}
+const parseDateRange = (from?: string, to?: string) =>
+  parseDhakaDateOnlyRange(from, to, true);
 
 async function computeProfitTrend(
   shopId: string,
   from?: string,
   to?: string
 ) {
-  const { start, end } = parseTimestampRange(from, to);
-  const { start: expenseStart, end: expenseEnd } = parseDateOnlyRange(from, to);
+  const { start, end } = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const needsCogs = await shopNeedsCogs(shopId);
 
@@ -71,16 +33,16 @@ async function computeProfitTrend(
 
   if (!useUnbounded) {
     if (start) {
-      salesWhere.push(Prisma.sql` s.sale_date >= ${start}`);
+      salesWhere.push(Prisma.sql` s.business_date >= ${start}`);
     }
     if (end) {
-      salesWhere.push(Prisma.sql` s.sale_date <= ${end}`);
+      salesWhere.push(Prisma.sql` s.business_date <= ${end}`);
     }
-    if (expenseStart) {
-      expenseWhere.push(Prisma.sql` e.expense_date >= ${expenseStart}`);
+    if (start) {
+      expenseWhere.push(Prisma.sql` e.expense_date >= ${start}`);
     }
-    if (expenseEnd) {
-      expenseWhere.push(Prisma.sql` e.expense_date <= ${expenseEnd}`);
+    if (end) {
+      expenseWhere.push(Prisma.sql` e.expense_date <= ${end}`);
     }
   }
 
@@ -88,7 +50,7 @@ async function computeProfitTrend(
     prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
       Prisma.sql`
         SELECT
-          DATE(s.sale_date AT TIME ZONE 'Asia/Dhaka')::text AS day,
+          s.business_date::text AS day,
           SUM(COALESCE(s.total_amount, 0)) AS sum
         FROM "sales" s
         WHERE ${Prisma.join(salesWhere, " AND ")}
@@ -111,7 +73,7 @@ async function computeProfitTrend(
       ? prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
           Prisma.sql`
             SELECT
-              DATE(s.sale_date AT TIME ZONE 'Asia/Dhaka')::text AS day,
+              s.business_date::text AS day,
               SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS sum
             FROM "sale_items" si
             JOIN "sales" s ON s.id = si.sale_id

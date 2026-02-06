@@ -11,6 +11,7 @@ import { publishRealtimeEvent } from "@/lib/realtime/publisher";
 import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidatePath } from "next/cache";
 import { revalidateReportsForExpense } from "@/lib/reports/revalidate";
+import { toDhakaBusinessDate } from "@/lib/dhaka-date";
 
 type IncomingExpense = {
   id?: string;
@@ -147,11 +148,11 @@ export async function POST(req: Request) {
       ? deletedIds.map((item) => (typeof item === "string" ? { id: item } : item))
       : [];
     const deleteIds = deleteItems.map((item) => item.id);
-    let deleteTargets: Array<{ id: string; shopId: string; amount: any; updatedAt: Date }> = [];
+    let deleteTargets: Array<{ id: string; shopId: string; amount: any; updatedAt: Date; expenseDate: Date }> = [];
     if (deleteIds.length) {
       deleteTargets = await prisma.expense.findMany({
         where: { id: { in: deleteIds } },
-        select: { id: true, shopId: true, amount: true, updatedAt: true },
+        select: { id: true, shopId: true, amount: true, updatedAt: true, expenseDate: true },
       });
       deleteTargets.forEach((e) => shopIds.add(e.shopId));
     }
@@ -227,7 +228,8 @@ export async function POST(req: Request) {
             reason: `Expense: ${item.category || "Uncategorized"} (#${
               item.id || "offline"
             })`,
-            createdAt: toDate(item.expenseDate ?? item.createdAt),
+            createdAt: toDate(item.createdAt),
+            businessDate: toDhakaBusinessDate(item.expenseDate ?? item.createdAt),
           })),
         });
       }
@@ -293,6 +295,7 @@ export async function POST(req: Request) {
               entryType: delta > 0 ? "OUT" : "IN",
               amount: Math.abs(delta).toFixed(2),
               reason: `Expense adjustment #${item.id}`,
+              businessDate: toDhakaBusinessDate(item.expenseDate ?? item.createdAt),
             },
           });
         }
@@ -330,6 +333,7 @@ export async function POST(req: Request) {
             entryType: "IN",
             amount: expense.amount,
             reason: `Reversal of expense #${expense.id}`,
+            businessDate: toDhakaBusinessDate(expense.expenseDate),
           })),
         });
         await prisma.expense.deleteMany({

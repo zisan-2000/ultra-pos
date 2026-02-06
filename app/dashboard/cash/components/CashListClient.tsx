@@ -14,6 +14,10 @@ import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
 import { useRealtimeStatus } from "@/lib/realtime/status";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import {
+  computeRange as computeDhakaRange,
+  getDhakaDateString,
+} from "@/lib/reporting-range";
 
 type CashEntry = {
   id: string;
@@ -79,8 +83,8 @@ function DateFilterRow({
             onClick={() => {
               setPreset(key);
               if (online) {
-                const next = computeRange(key, customFrom, customTo);
-                const nextFrom = next.from ?? todayStr();
+                const next = computeDhakaRange(key, customFrom, customTo);
+                const nextFrom = next.from ?? getDhakaDateString();
                 const nextTo = next.to ?? nextFrom;
                 applyRangeToUrl(nextFrom, nextTo);
               }
@@ -98,37 +102,6 @@ function DateFilterRow({
       <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
     </div>
   );
-}
-
-function computeRange(preset: RangePreset, customFrom?: string, customTo?: string) {
-  const toStr = (d: Date) => d.toISOString().split("T")[0];
-  const today = new Date();
-  if (preset === "custom") return { from: customFrom, to: customTo };
-  if (preset === "today") return { from: toStr(today), to: toStr(today) };
-
-  if (preset === "yesterday") {
-    const y = new Date(today);
-    y.setDate(y.getDate() - 1);
-    return { from: toStr(y), to: toStr(y) };
-  }
-  if (preset === "7d") {
-    const start = new Date(today);
-    start.setDate(start.getDate() - 6);
-    return { from: toStr(start), to: toStr(today) };
-  }
-  if (preset === "month") {
-    const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    return { from: toStr(start), to: toStr(today) };
-  }
-  return { from: undefined, to: undefined };
-}
-
-function todayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 function formatReason(reason?: string | null) {
@@ -155,21 +128,16 @@ function resolvePreset(from?: string, to?: string): RangePreset {
   if (!from && !to) return "all";
   if (!from || !to) return "custom";
   if (from === to) {
-    const today = todayStr();
+    const today = getDhakaDateString();
     if (from === today) return "today";
-    const y = new Date();
-    y.setDate(y.getDate() - 1);
-    if (from === formatDate(y)) return "yesterday";
+    const yesterday = computeDhakaRange("yesterday");
+    if (from === yesterday.from && from === yesterday.to) return "yesterday";
     return "custom";
   }
-  const today = todayStr();
-  if (to !== today) return "custom";
-  const seven = new Date();
-  seven.setDate(seven.getDate() - 6);
-  if (from === formatDate(seven)) return "7d";
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  if (from === formatDate(monthStart)) return "month";
+  const seven = computeDhakaRange("7d");
+  if (from === seven.from && to === seven.to) return "7d";
+  const month = computeDhakaRange("month");
+  if (from === month.from && to === month.to) return "month";
   return "custom";
 }
 
@@ -411,7 +379,7 @@ export function CashListClient({
   }, [online, rows, shopId, pendingCount, syncing]);
 
   const range = useMemo(
-    () => computeRange(preset, customFrom, customTo),
+    () => computeDhakaRange(preset, customFrom, customTo),
     [preset, customFrom, customTo]
   );
 
@@ -424,7 +392,7 @@ export function CashListClient({
   const rendered = useMemo(() => {
     return sourceItems.filter((e) => {
       const d = e.createdAt ? new Date(e.createdAt as any) : null;
-      const ds = d ? d.toISOString().slice(0, 10) : undefined;
+      const ds = d ? getDhakaDateString(d) : undefined;
       if (online) return true;
       if (!range.from && !range.to) return true;
       if (!ds) return false;
@@ -483,7 +451,7 @@ export function CashListClient({
       })
       .forEach((e) => {
         const d = e.createdAt ? new Date(e.createdAt as any) : new Date();
-        const key = d.toISOString().slice(0, 10);
+        const key = getDhakaDateString(d);
         groups[key] = groups[key] || [];
         groups[key].push(e);
       });

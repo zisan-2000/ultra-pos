@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { withTracing } from "@/lib/tracing";
-import { getDhakaDateOnlyRange, getDhakaDayRange } from "@/lib/dhaka-date";
+import { getDhakaDateOnlyRange } from "@/lib/dhaka-date";
 import { jsonWithEtag } from "@/lib/http/etag";
 
 export async function GET(req: Request) {
@@ -19,23 +19,22 @@ export async function GET(req: Request) {
       const user = await requireUser();
       await assertShopAccess(shopId, user);
 
-      const { start: todayStart, end: todayEnd } = getDhakaDayRange();
-      const { start: expenseStart, end: expenseEnd } = getDhakaDateOnlyRange();
+      const { start: todayStart, end: todayEnd } = getDhakaDateOnlyRange();
 
       const salesRows = await prisma.sale.findMany({
         where: {
           shopId,
           status: { not: "VOIDED" },
-          saleDate: { gte: todayStart, lte: todayEnd },
+          businessDate: { gte: todayStart, lte: todayEnd },
         },
       });
 
       const expenseRows = await prisma.expense.findMany({
-        where: { shopId, expenseDate: { gte: expenseStart, lte: expenseEnd } },
+        where: { shopId, expenseDate: { gte: todayStart, lte: todayEnd } },
       });
 
       const cashRows = await prisma.cashEntry.findMany({
-        where: { shopId, createdAt: { gte: todayStart, lte: todayEnd } },
+        where: { shopId, businessDate: { gte: todayStart, lte: todayEnd } },
       });
 
       const salesTotal = salesRows.reduce((sum, s) => sum + Number(s.totalAmount || 0), 0);

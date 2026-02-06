@@ -3,6 +3,7 @@
 import { getExpense, updateExpense } from "@/app/actions/expenses";
 import { getShop } from "@/app/actions/shops";
 import ExpenseFormClient from "../new/ExpenseFormClient";
+import { getDhakaDateString } from "@/lib/dhaka-date";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -32,7 +33,7 @@ export default async function EditExpensePage({ params }: PageProps) {
   const shop = await getShop(expenseShopId);
   const backHref = `/dashboard/expenses?shopId=${expenseShopId}`;
   const expenseDateDefault = expense.expenseDate
-    ? new Date(expense.expenseDate).toISOString().slice(0, 10)
+    ? getDhakaDateString(new Date(expense.expenseDate as any))
     : "";
 
   async function handleUpdate(formData: FormData) {

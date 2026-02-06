@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { normalizeDhakaBusinessDate } from "@/lib/dhaka-date";
 
 function ensureBoundedRange(
   start?: Date | null,
@@ -19,7 +20,10 @@ export async function getCogsTotalRaw(
   from?: Date | null,
   to?: Date | null
 ) {
-  const { start, end } = ensureBoundedRange(from, to);
+  const startInput = from ? normalizeDhakaBusinessDate(from) : undefined;
+  const endInput = to ? normalizeDhakaBusinessDate(to) : undefined;
+  const fallbackEnd = endInput ?? normalizeDhakaBusinessDate();
+  const { start, end } = ensureBoundedRange(startInput, fallbackEnd);
 
   const rows = await prisma.$queryRaw<
     { sum: Prisma.Decimal | number | null }[]
@@ -31,8 +35,8 @@ export async function getCogsTotalRaw(
     JOIN "products" p ON p.id = si.product_id
     WHERE s.shop_id = CAST(${shopId} AS uuid)
       AND s.status <> 'VOIDED'
-      AND s.sale_date >= ${start}
-      AND s.sale_date <= ${end}
+      AND s.business_date >= ${start}
+      AND s.business_date <= ${end}
   `);
 
   const raw = rows[0]?.sum ?? 0;
