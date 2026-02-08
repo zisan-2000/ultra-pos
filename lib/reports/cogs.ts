@@ -30,8 +30,10 @@ export async function getCogsTotalRaw(
     const endInput = to ? normalizeDhakaBusinessDate(to) : undefined;
     const fallbackEnd = endInput ?? normalizeDhakaBusinessDate();
     const { start, end } = ensureBoundedRange(startInput, fallbackEnd);
-    where.push(Prisma.sql`s.business_date >= ${start}`);
-    where.push(Prisma.sql`s.business_date <= ${end}`);
+    const startDate = start.toISOString().slice(0, 10);
+    const endDate = end.toISOString().slice(0, 10);
+    where.push(Prisma.sql`s.business_date >= CAST(${startDate} AS date)`);
+    where.push(Prisma.sql`s.business_date <= CAST(${endDate} AS date)`);
   }
 
   const rows = await prisma.$queryRaw<

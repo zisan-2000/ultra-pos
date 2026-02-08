@@ -87,6 +87,8 @@ export async function getCogsByDay(
     ? normalizeDhakaBusinessDate(to)
     : normalizeDhakaBusinessDate();
   const { start, end } = ensureBoundedRange(startInput, endInput);
+  const startDate = start.toISOString().slice(0, 10);
+  const endDate = end.toISOString().slice(0, 10);
 
   const rows = await prisma.$queryRaw<
     { day: Date; sum: Prisma.Decimal | number | null }[]
@@ -99,8 +101,8 @@ export async function getCogsByDay(
     JOIN "products" p ON p.id = si.product_id
     WHERE s.shop_id = CAST(${shopId} AS uuid)
       AND s.status <> 'VOIDED'
-      AND s.business_date >= ${start}
-      AND s.business_date <= ${end}
+      AND s.business_date >= CAST(${startDate} AS date)
+      AND s.business_date <= CAST(${endDate} AS date)
     GROUP BY s.business_date
     ORDER BY s.business_date
   `);
@@ -762,6 +764,8 @@ async function computeProfitTrendReport(
   const { start, end } = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const needsCogs = await shopNeedsCogs(shopId);
+  const startDate = start ? start.toISOString().slice(0, 10) : undefined;
+  const endDate = end ? end.toISOString().slice(0, 10) : undefined;
 
   const salesWhere: Prisma.Sql[] = [
     Prisma.sql` s.shop_id = CAST(${shopId} AS uuid)`,
@@ -772,13 +776,13 @@ async function computeProfitTrendReport(
   ];
 
   if (!useUnbounded) {
-    if (start) {
-      salesWhere.push(Prisma.sql` s.business_date >= ${start}`);
-      expenseWhere.push(Prisma.sql` e.expense_date >= ${start}`);
+    if (startDate) {
+      salesWhere.push(Prisma.sql` s.business_date >= CAST(${startDate} AS date)`);
+      expenseWhere.push(Prisma.sql` e.expense_date >= CAST(${startDate} AS date)`);
     }
-    if (end) {
-      salesWhere.push(Prisma.sql` s.business_date <= ${end}`);
-      expenseWhere.push(Prisma.sql` e.expense_date <= ${end}`);
+    if (endDate) {
+      salesWhere.push(Prisma.sql` s.business_date <= CAST(${endDate} AS date)`);
+      expenseWhere.push(Prisma.sql` e.expense_date <= CAST(${endDate} AS date)`);
     }
   }
 

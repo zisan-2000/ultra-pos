@@ -26,6 +26,8 @@ async function computeProfitTrend(
   const { start, end } = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const needsCogs = await shopNeedsCogs(shopId);
+  const startDate = start ? start.toISOString().slice(0, 10) : undefined;
+  const endDate = end ? end.toISOString().slice(0, 10) : undefined;
 
   const salesWhere: Prisma.Sql[] = [
     Prisma.sql` s.shop_id = CAST(${shopId} AS uuid)`,
@@ -36,17 +38,17 @@ async function computeProfitTrend(
   ];
 
   if (!useUnbounded) {
-    if (start) {
-      salesWhere.push(Prisma.sql` s.business_date >= ${start}`);
+    if (startDate) {
+      salesWhere.push(Prisma.sql` s.business_date >= CAST(${startDate} AS date)`);
     }
-    if (end) {
-      salesWhere.push(Prisma.sql` s.business_date <= ${end}`);
+    if (endDate) {
+      salesWhere.push(Prisma.sql` s.business_date <= CAST(${endDate} AS date)`);
     }
-    if (start) {
-      expenseWhere.push(Prisma.sql` e.expense_date >= ${start}`);
+    if (startDate) {
+      expenseWhere.push(Prisma.sql` e.expense_date >= CAST(${startDate} AS date)`);
     }
-    if (end) {
-      expenseWhere.push(Prisma.sql` e.expense_date <= ${end}`);
+    if (endDate) {
+      expenseWhere.push(Prisma.sql` e.expense_date <= CAST(${endDate} AS date)`);
     }
   }
 
