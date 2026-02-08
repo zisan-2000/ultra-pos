@@ -2,11 +2,9 @@
 
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
-import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
-import { scheduleIdle } from "@/lib/schedule-idle";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
@@ -15,8 +13,6 @@ type Props = { shopId: string; from?: string; to?: string };
 
 export default function PaymentMethodReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
-  const queryClient = useQueryClient();
-  const prefetchKeyRef = useRef<string | null>(null);
 
   const buildCacheKey = useCallback(
     (rangeFrom?: string, rangeTo?: string) =>
@@ -49,12 +45,9 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
       const params = new URLSearchParams({ shopId });
       if (rangeFrom) params.append("from", rangeFrom);
       if (rangeTo) params.append("to", rangeTo);
-      params.append("fresh", "1");
-
-      const res = await fetch(
-        `/api/reports/payment-method?${params.toString()}`,
-        { cache: "no-cache" }
-      );
+      const res = await fetch(`/api/reports/payment-method?${params.toString()}`, {
+        cache: "no-store",
+      });
 
       if (res.status === 304) {
         return readCached(rangeFrom, rangeTo) ?? [];
@@ -94,50 +87,33 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
     [shopId, from, to]
   );
 
+  const initialRows = useMemo(
+    () => readCached(from, to) ?? undefined,
+    [readCached, from, to]
+  );
+  const hasInitialRows = initialRows !== undefined;
+
   const paymentQuery = useQuery({
     queryKey: paymentQueryKey,
     queryFn: () => fetchPayment(from, to),
     enabled: online,
-    initialData: () => readCached(from, to) ?? [],
-    placeholderData: keepPreviousData,
+    ...(hasInitialRows ? { initialData: initialRows } : {}),
+    ...(hasInitialRows ? { placeholderData: initialRows } : {}),
   });
 
   const data: PaymentRow[] = useMemo(
-    () => paymentQuery.data ?? [],
-    [paymentQuery.data]
+    () => paymentQuery.data ?? initialRows ?? [],
+    [paymentQuery.data, initialRows]
   );
   const loading = paymentQuery.isFetching && online;
   const hasFetched = paymentQuery.isFetchedAfterMount;
   const showEmpty = data.length === 0 && (!online || hasFetched) && !loading;
 
-  useEffect(() => {
-    if (!online || typeof window === "undefined") return;
-    if (prefetchKeyRef.current === shopId) return;
-    prefetchKeyRef.current = shopId;
-    const cancel = scheduleIdle(() => {
-      PREFETCH_PRESETS.forEach((presetKey) => {
-        const { from: rangeFrom, to: rangeTo } = computePresetRange(presetKey);
-        const queryKey = [
-          "reports",
-          "payment",
-          shopId,
-          rangeFrom ?? "all",
-          rangeTo ?? "all",
-        ];
-        if (queryClient.getQueryData(queryKey)) return;
-        queryClient.prefetchQuery({
-          queryKey,
-          queryFn: () => fetchPayment(rangeFrom, rangeTo),
-        });
-      });
-    }, 50);
-    return () => cancel();
-  }, [online, shopId, fetchPayment, queryClient]);
-
   const totalAmount = useMemo(
     () => data.reduce((sum, item) => sum + Number(item.value || 0), 0),
     [data]
   );
+  const showTotalPlaceholder = data.length === 0 && loading && !hasFetched;
 
   return (
     <div className="space-y-4">
@@ -158,7 +134,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
 
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
             <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
-              মোট: {totalAmount.toFixed(2)} ৳
+              মোট: {showTotalPlaceholder ? "লোড হচ্ছে..." : `${totalAmount.toFixed(2)} ৳`}
             </span>
           </div>
         </div>

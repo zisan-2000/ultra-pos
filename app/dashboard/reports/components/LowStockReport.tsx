@@ -64,11 +64,8 @@ export default function LowStockReport({
       shopId,
       limit: `${REPORT_ROW_LIMIT}`,
       threshold: `${threshold}`,
-      fresh: "1",
     });
-    const res = await fetch(`/api/reports/low-stock?${params.toString()}`, {
-      cache: "no-cache",
-    });
+    const res = await fetch(`/api/reports/low-stock?${params.toString()}`);
     if (res.status === 304) {
       return readCached() ?? [];
     }

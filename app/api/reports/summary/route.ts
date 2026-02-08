@@ -1,16 +1,7 @@
 import { NextResponse } from "next/server";
 import {
-  getCashSummary,
-  getExpenseSummary,
-  getProfitSummary,
-  getSalesSummary,
-  getCashSummaryFresh,
-  getExpenseSummaryFresh,
-  getProfitSummaryFresh,
-  getSalesSummaryFresh,
+  getReportSummaryBundle,
 } from "@/app/actions/reports";
-import { requireUser } from "@/lib/auth-session";
-import { assertShopAccess } from "@/lib/shop-access";
 import { reportError } from "@/lib/monitoring";
 import { withTracing } from "@/lib/tracing";
 import { jsonWithEtag } from "@/lib/http/etag";
@@ -33,23 +24,11 @@ export async function GET(req: Request) {
       }
       const validated = validateBoundedReportRange(from, to);
 
-      const user = await requireUser();
-      await assertShopAccess(shopId, user);
-
-      const [sales, expense, cash, profit] = await Promise.all(
-        fresh
-          ? [
-              getSalesSummaryFresh(shopId, validated.from, validated.to),
-              getExpenseSummaryFresh(shopId, validated.from, validated.to),
-              getCashSummaryFresh(shopId, validated.from, validated.to),
-              getProfitSummaryFresh(shopId, validated.from, validated.to),
-            ]
-          : [
-              getSalesSummary(shopId, validated.from, validated.to),
-              getExpenseSummary(shopId, validated.from, validated.to),
-              getCashSummary(shopId, validated.from, validated.to),
-              getProfitSummary(shopId, validated.from, validated.to),
-            ]
+      const { sales, expense, cash, profit } = await getReportSummaryBundle(
+        shopId,
+        validated.from,
+        validated.to,
+        { fresh }
       );
 
       return jsonWithEtag(req, { sales, expense, cash, profit }, {

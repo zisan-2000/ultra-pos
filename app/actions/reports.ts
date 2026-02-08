@@ -49,6 +49,19 @@ function ensureReportPermission(user: UserContext, permission: string) {
   throw new Error("Forbidden: missing permission " + permission);
 }
 
+const SUMMARY_REPORT_PERMISSIONS = [
+  "view_sales_report",
+  "view_expense_report",
+  "view_cashbook_report",
+  "view_profit_report",
+] as const;
+
+function ensureSummaryReportPermissions(user: UserContext) {
+  for (const permission of SUMMARY_REPORT_PERMISSIONS) {
+    ensureReportPermission(user, permission);
+  }
+}
+
 export async function getCogsTotal(
   shopId: string,
   from?: Date | null,
@@ -592,35 +605,84 @@ async function computeProfitSummary(
   from?: string,
   to?: string
 ) {
+  const [salesData, expenseData] = await Promise.all([
+    computeSalesSummary(shopId, from, to),
+    computeExpenseSummary(shopId, from, to),
+  ]);
+  return computeProfitFromTotals(
+    shopId,
+    salesData.totalAmount,
+    expenseData.totalAmount,
+    from,
+    to
+  );
+}
+
+async function computeProfitFromTotals(
+  shopId: string,
+  salesTotal: number,
+  expenseTotal: number,
+  from?: string,
+  to?: string
+) {
   const parsed = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const bounded = useUnbounded
     ? null
     : clampRange(parsed.start, parsed.end, 90);
-  const rangeFrom = bounded?.start.toISOString().slice(0, 10);
-  const rangeTo = bounded?.end.toISOString().slice(0, 10);
-
-  // Fetch shop type and sales/expense data in parallel (not sequential)
-  const [salesData, expenseData, needsCogs] = await Promise.all([
-    computeSalesSummary(shopId, rangeFrom, rangeTo),
-    computeExpenseSummary(shopId, rangeFrom, rangeTo),
-    shopNeedsCogs(shopId),
-  ]);
-
-  // Only fetch COGS if needed
+  const needsCogs = await shopNeedsCogs(shopId);
   const cogs = needsCogs
     ? await getCogsTotalRaw(shopId, bounded?.start, bounded?.end)
     : 0;
-
-  const totalExpense = expenseData.totalAmount + cogs;
-  const profit = salesData.totalAmount - totalExpense;
-
+  const totalExpense = expenseTotal + cogs;
   return {
-    salesTotal: salesData.totalAmount,
+    salesTotal,
     expenseTotal: totalExpense,
-    profit,
+    profit: salesTotal - totalExpense,
     cogs,
   };
+}
+
+async function getSummaryBundleInternal(
+  shopId: string,
+  from?: string,
+  to?: string,
+  fresh = false
+) {
+  const salesTask = fresh
+    ? computeSalesSummary(shopId, from, to)
+    : getSalesSummaryCached(shopId, from, to);
+  const expenseTask = fresh
+    ? computeExpenseSummary(shopId, from, to)
+    : getExpenseSummaryCached(shopId, from, to);
+  const cashTask = fresh
+    ? computeCashSummary(shopId, from, to)
+    : getCashSummaryCached(shopId, from, to);
+  const [sales, expense, cash] = await Promise.all([
+    salesTask,
+    expenseTask,
+    cashTask,
+  ]);
+  const profit = await computeProfitFromTotals(
+    shopId,
+    sales.totalAmount,
+    expense.totalAmount,
+    from,
+    to
+  );
+  return { sales, expense, cash, profit };
+}
+
+export async function getReportSummaryBundle(
+  shopId: string,
+  from?: string,
+  to?: string,
+  options?: { fresh?: boolean }
+) {
+  const user = await requireUser();
+  ensureSummaryReportPermissions(user);
+  await assertShopAccess(shopId, user);
+  return getSummaryBundleInternal(shopId, from, to, options?.fresh === true);
 }
 
 const getProfitSummaryCached = unstable_cache(

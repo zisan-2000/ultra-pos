@@ -43,11 +43,8 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
     const params = new URLSearchParams({
       shopId,
       limit: `${REPORT_ROW_LIMIT}`,
-      fresh: "1",
     });
-    const res = await fetch(`/api/reports/top-products?${params.toString()}`, {
-      cache: "no-cache",
-    });
+    const res = await fetch(`/api/reports/top-products?${params.toString()}`);
     if (res.status === 304) {
       return readCached() ?? [];
     }

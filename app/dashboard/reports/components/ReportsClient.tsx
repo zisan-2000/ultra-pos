@@ -8,7 +8,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,7 +23,6 @@ import {
 import { toast } from "sonner";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import {
-  PREFETCH_PRESETS,
   computeRange,
   computePresetRange,
   getDateRangeSpanDays,
@@ -62,6 +60,7 @@ type Props = {
   shopName: string;
   shops: { id: string; name: string }[];
   summary: Summary;
+  summaryRange: { from: string; to: string };
 };
 
 function ReportSkeleton() {
@@ -74,49 +73,72 @@ function ReportSkeleton() {
   );
 }
 
-function LazyReport({
-  children,
-  fallback,
-  rootMargin = "200px",
+function SummaryCards({
+  summary,
+  className = "grid grid-cols-1 sm:grid-cols-2 gap-3",
 }: {
-  children: ReactNode;
-  fallback?: ReactNode;
-  rootMargin?: string;
+  summary: Summary;
+  className?: string;
 }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [visible, setVisible] = useState(false);
+  return (
+    <div className={className}>
+      <StatCard
+        title="মোট বিক্রি"
+        value={`${summary.sales.totalAmount.toFixed(2)} ৳`}
+        subtitle={`মোট বিল: ${summary.sales.completedCount ?? 0}${
+          typeof summary.sales.voidedCount === "number"
+            ? ` · বাতিল: ${summary.sales.voidedCount}`
+            : ""
+        }`}
+        icon="🧾"
+        tone="success"
+      />
+      <StatCard
+        title="খরচ"
+        value={`${summary.expense.totalAmount.toFixed(2)} ৳`}
+        subtitle={`মোট খরচ: ${summary.expense.count ?? 0}`}
+        icon="💸"
+        tone="danger"
+      />
+      <StatCard
+        title="ক্যাশ ব্যালান্স"
+        value={`${summary.cash.balance.toFixed(2)} ৳`}
+        subtitle={`ইন: ${summary.cash.totalIn.toFixed(2)} ৳ | আউট: ${summary.cash.totalOut.toFixed(2)} ৳`}
+        icon="💵"
+        tone="warning"
+      />
+      <StatCard
+        title="লাভ"
+        value={`${summary.profit.profit.toFixed(2)} ৳`}
+        subtitle={`বিক্রি: ${summary.profit.salesTotal.toFixed(
+          2
+        )} ৳ | খরচ: ${summary.profit.expenseTotal.toFixed(2)} ৳`}
+        icon="📈"
+        tone="primary"
+      />
+    </div>
+  );
+}
 
-  const scheduleStateUpdate = useCallback((fn: () => void) => {
-    if (typeof queueMicrotask === "function") {
-      queueMicrotask(fn);
-      return;
-    }
-    Promise.resolve().then(fn);
-  }, []);
-
-  useEffect(() => {
-    if (visible) return;
-    const node = ref.current;
-    if (!node || typeof IntersectionObserver === "undefined") {
-      scheduleStateUpdate(() => setVisible(true));
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin }
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [visible, rootMargin, scheduleStateUpdate]);
-
-  return <div ref={ref}>{visible ? children : fallback}</div>;
+function SummaryCardsSkeleton({
+  className = "grid grid-cols-1 sm:grid-cols-2 gap-3",
+}: {
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      {Array.from({ length: 4 }).map((_, idx) => (
+        <div
+          key={idx}
+          className="animate-pulse rounded-2xl border border-border bg-card p-4 space-y-3"
+        >
+          <div className="h-4 w-24 rounded bg-muted" />
+          <div className="h-6 w-32 rounded bg-muted" />
+          <div className="h-3 w-36 rounded bg-muted" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const SalesReport = dynamic(() => import("./SalesReport"), {
@@ -176,14 +198,14 @@ const PREFETCH_REPORTS_BY_TAB: Record<ReportKey, ReportKey[]> = {
 };
 
 const PREFETCH_REPORT_DATA_BY_TAB: Record<ReportKey, ReportKey[]> = {
-  summary: ["sales", "expenses", "cash"],
-  sales: ["expenses", "cash"],
-  expenses: ["sales", "cash"],
-  cash: ["payment", "profit"],
-  payment: ["profit"],
-  profit: ["payment"],
-  products: ["stock"],
-  stock: ["products"],
+  summary: [],
+  sales: ["expenses"],
+  expenses: ["sales"],
+  cash: ["payment"],
+  payment: [],
+  profit: [],
+  products: [],
+  stock: [],
 };
 
 const NAV = [
@@ -209,6 +231,13 @@ const EXPORT_PAGE_LIMIT = REPORT_ROW_LIMIT;
 const EXPORT_MAX_PAGES = 250;
 const EXPORT_MAX_ROWS = 5000;
 const EXPORT_LOW_STOCK_THRESHOLD = 20;
+const SUMMARY_FRESH_MIN_INTERVAL_MS = 8000;
+const SUMMARY_PREFETCH_PRESETS: Array<Exclude<RangePreset, "custom">> = [
+  "today",
+  "yesterday",
+  "7d",
+  "month",
+];
 
 type ExportCursor = { at: string; id: string };
 
@@ -253,6 +282,7 @@ export default function ReportsClient({
   shopName,
   shops,
   summary,
+  summaryRange,
 }: Props) {
   const online = useOnlineStatus();
   const realtime = useRealtimeStatus();
@@ -271,6 +301,9 @@ export default function ReportsClient({
   const [exportingKey, setExportingKey] = useState<ExportKey | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const lastEventAtRef = useRef(0);
+  const lastSummaryFreshAtRef = useRef(0);
+  const summaryFreshInFlightRef = useRef<Promise<void> | null>(null);
+  const lastRangeKeyRef = useRef<string | null>(null);
   const wasVisibleRef = useRef(isVisible);
   const indicatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
@@ -359,6 +392,16 @@ export default function ReportsClient({
     () => computeRange(preset, effectiveCustomFrom, effectiveCustomTo),
     [preset, effectiveCustomFrom, effectiveCustomTo]
   );
+  const rangeKey = useMemo(
+    () => `${shopId}:${range.from ?? "all"}:${range.to ?? "all"}`,
+    [shopId, range.from, range.to]
+  );
+  const serverRangeKey = useMemo(
+    () =>
+      `${shopId}:${summaryRange.from ?? "all"}:${summaryRange.to ?? "all"}`,
+    [shopId, summaryRange.from, summaryRange.to]
+  );
+  const isServerRange = rangeKey === serverRangeKey;
   const presetLabel = useMemo(
     () => PRESETS.find((item) => item.key === preset)?.label ?? "",
     [preset]
@@ -402,6 +445,13 @@ export default function ReportsClient({
     [buildSummaryKey]
   );
 
+  const initialSummaryData = useMemo(() => {
+    if (isServerRange) return summary;
+    return readCachedSummary(range.from, range.to) ?? undefined;
+  }, [isServerRange, summary, range.from, range.to, readCachedSummary]);
+  const hasInitialSummary = initialSummaryData !== undefined;
+  const shouldForceFresh = lastRangeKeyRef.current !== rangeKey;
+
   const fetchSummary = useCallback(
     async (rangeFrom?: string, rangeTo?: string, fresh = false) => {
       const params = new URLSearchParams({ shopId });
@@ -438,25 +488,46 @@ export default function ReportsClient({
 
   const summaryQuery = useQuery({
     queryKey: summaryQueryKey,
-    queryFn: () => fetchSummary(range.from, range.to),
+    queryFn: () => fetchSummary(range.from, range.to, shouldForceFresh),
     enabled: online,
-    initialData: () => readCachedSummary(range.from, range.to) ?? summary,
-    placeholderData: (prev) => prev ?? summary,
+    ...(hasInitialSummary ? { initialData: initialSummaryData } : {}),
+    ...(hasInitialSummary ? { placeholderData: initialSummaryData } : {}),
+    refetchOnMount: "always",
+    staleTime: 0,
   });
 
-  const liveSummary = summaryQuery.data ?? summary;
-  const summaryLoading = summaryQuery.isFetching && online;
-  const summarySnapshot = `${liveSummary.sales.totalAmount.toFixed(1)} ৳ বিক্রি | লাভ ${liveSummary.profit.profit.toFixed(1)} ৳`;
+  const liveSummary = summaryQuery.data ?? initialSummaryData;
+  const hasSummary = Boolean(liveSummary);
+  const summaryLoading = summaryQuery.isFetching && online && hasSummary;
+  const summarySnapshot = hasSummary
+    ? `${liveSummary!.sales.totalAmount.toFixed(1)} ৳ বিক্রি | লাভ ${liveSummary!.profit.profit.toFixed(1)} ৳`
+    : "রিপোর্ট লোড হচ্ছে...";
 
-  const refreshSummaryFresh = useCallback(async () => {
+  const refreshSummaryFresh = useCallback(async (force = false) => {
     if (!online) return;
-    try {
-      const freshData = await fetchSummary(range.from, range.to, true);
-      if (freshData) {
-        queryClient.setQueryData(summaryQueryKey, freshData);
+    const now = Date.now();
+    if (!force && now - lastSummaryFreshAtRef.current < SUMMARY_FRESH_MIN_INTERVAL_MS) {
+      return;
+    }
+    if (summaryFreshInFlightRef.current) {
+      return summaryFreshInFlightRef.current;
+    }
+    const refreshTask = (async () => {
+      try {
+        const freshData = await fetchSummary(range.from, range.to, true);
+        if (freshData) {
+          queryClient.setQueryData(summaryQueryKey, freshData);
+        }
+        lastSummaryFreshAtRef.current = Date.now();
+      } catch (err) {
+        handlePermissionError(err);
       }
-    } catch (err) {
-      handlePermissionError(err);
+    })();
+    summaryFreshInFlightRef.current = refreshTask;
+    try {
+      await refreshTask;
+    } finally {
+      summaryFreshInFlightRef.current = null;
     }
   }, [online, fetchSummary, range.from, range.to, queryClient, summaryQueryKey]);
 
@@ -553,7 +624,7 @@ export default function ReportsClient({
     if (lastMutation <= lastRefresh) return;
     if (Date.now() - lastMutation > 2 * 60 * 1000) return;
 
-    refreshSummaryFresh();
+    refreshSummaryFresh(true);
     invalidateSales();
     invalidateExpenses();
     invalidateCash();
@@ -660,8 +731,11 @@ export default function ReportsClient({
 
   useEffect(() => {
     if (!online || typeof window === "undefined") return;
+    const connection = (navigator as any)?.connection;
+    if (connection?.saveData) return;
+    if (["slow-2g", "2g"].includes(connection?.effectiveType)) return;
     const cancel = scheduleIdle(() => {
-      PREFETCH_PRESETS.forEach((presetKey) => {
+      SUMMARY_PREFETCH_PRESETS.forEach((presetKey) => {
         const { from, to } = computePresetRange(presetKey);
         const queryKey = [
           "reports",
@@ -679,6 +753,10 @@ export default function ReportsClient({
     }, 50);
     return () => cancel();
   }, [online, shopId, fetchSummary, queryClient]);
+
+  useEffect(() => {
+    lastRangeKeyRef.current = rangeKey;
+  }, [rangeKey]);
 
   useEffect(() => {
     if (!online || !isVisible || !pollingEnabled) return;
@@ -714,7 +792,7 @@ export default function ReportsClient({
     if (connection?.saveData) return;
     if (["slow-2g", "2g"].includes(connection?.effectiveType)) return;
 
-    const dataTargets = PREFETCH_REPORT_DATA_BY_TAB[active] ?? [];
+    const dataTargets = (PREFETCH_REPORT_DATA_BY_TAB[active] ?? []).slice(0, 1);
     if (dataTargets.length === 0) return;
 
     const rangeFrom = range.from ?? "all";
@@ -776,7 +854,8 @@ export default function ReportsClient({
                 if (range.from) params.append("from", range.from);
                 if (range.to) params.append("to", range.to);
                 const res = await fetch(
-                  `/api/reports/sales?${params.toString()}`
+                  `/api/reports/sales?${params.toString()}`,
+                  { cache: "no-store" }
                 );
                 if (!res.ok) throw new Error("Sales prefetch failed");
                 const json = await res.json();
@@ -808,7 +887,8 @@ export default function ReportsClient({
                 if (range.from) params.append("from", range.from);
                 if (range.to) params.append("to", range.to);
                 const res = await fetch(
-                  `/api/reports/expenses?${params.toString()}`
+                  `/api/reports/expenses?${params.toString()}`,
+                  { cache: "no-store" }
                 );
                 if (!res.ok) throw new Error("Expense prefetch failed");
                 const json = await res.json();
@@ -837,7 +917,8 @@ export default function ReportsClient({
                 if (range.from) params.append("from", range.from);
                 if (range.to) params.append("to", range.to);
                 const res = await fetch(
-                  `/api/reports/cash?${params.toString()}`
+                  `/api/reports/cash?${params.toString()}`,
+                  { cache: "no-store" }
                 );
                 if (!res.ok) throw new Error("Cash prefetch failed");
                 const json = await res.json();
@@ -862,12 +943,12 @@ export default function ReportsClient({
             .prefetchQuery({
               queryKey: paymentKey,
               queryFn: async () => {
-                const params = new URLSearchParams({ shopId, fresh: "1" });
+                const params = new URLSearchParams({ shopId });
                 if (range.from) params.append("from", range.from);
                 if (range.to) params.append("to", range.to);
                 const res = await fetch(
                   `/api/reports/payment-method?${params.toString()}`,
-                  { cache: "no-cache" }
+                  { cache: "no-store" }
                 );
                 if (!res.ok) throw new Error("Payment prefetch failed");
                 const text = await res.text();
@@ -889,12 +970,12 @@ export default function ReportsClient({
             .prefetchQuery({
               queryKey: profitKey,
               queryFn: async () => {
-                const params = new URLSearchParams({ shopId, fresh: "1" });
+                const params = new URLSearchParams({ shopId });
                 if (range.from) params.append("from", range.from);
                 if (range.to) params.append("to", range.to);
                 const res = await fetch(
                   `/api/reports/profit-trend?${params.toString()}`,
-                  { cache: "no-cache" }
+                  { cache: "no-store" }
                 );
                 if (!res.ok) throw new Error("Profit prefetch failed");
                 const json = await res.json();
@@ -917,11 +998,10 @@ export default function ReportsClient({
                 const params = new URLSearchParams({
                   shopId,
                   limit: `${REPORT_ROW_LIMIT}`,
-                  fresh: "1",
                 });
                 const res = await fetch(
                   `/api/reports/top-products?${params.toString()}`,
-                  { cache: "no-cache" }
+                  { cache: "no-store" }
                 );
                 if (!res.ok) throw new Error("Top products prefetch failed");
                 const text = await res.text();
@@ -947,11 +1027,10 @@ export default function ReportsClient({
                   shopId,
                   limit: `${REPORT_ROW_LIMIT}`,
                   threshold: `${lowStockThreshold}`,
-                  fresh: "1",
                 });
                 const res = await fetch(
                   `/api/reports/low-stock?${params.toString()}`,
-                  { cache: "no-cache" }
+                  { cache: "no-store" }
                 );
                 if (!res.ok) throw new Error("Low stock prefetch failed");
                 const text = await res.text();
@@ -1249,45 +1328,10 @@ export default function ReportsClient({
   const renderReport = () => {
     switch (active) {
       case "summary":
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <StatCard
-              title="মোট বিক্রি"
-              value={`${liveSummary.sales.totalAmount.toFixed(2)} ৳`}
-              subtitle={`মোট বিল: ${liveSummary.sales.completedCount ?? 0}${
-                typeof liveSummary.sales.voidedCount === "number"
-                  ? ` · বাতিল: ${liveSummary.sales.voidedCount}`
-                  : ""
-              }`}
-              icon="🧾"
-              tone="success"
-            />
-            <StatCard
-              title="খরচ"
-              value={`${liveSummary.expense.totalAmount.toFixed(2)} ৳`}
-              subtitle={`মোট খরচ: ${liveSummary.expense.count ?? 0}`}
-              icon="💸"
-              tone="danger"
-            />
-            <StatCard
-              title="ক্যাশ ব্যালান্স"
-              value={`${liveSummary.cash.balance.toFixed(2)} ৳`}
-              subtitle={`ইন: ${liveSummary.cash.totalIn.toFixed(
-                2
-              )} ৳ | আউট: ${liveSummary.cash.totalOut.toFixed(2)} ৳`}
-              icon="💵"
-              tone="warning"
-            />
-            <StatCard
-              title="লাভ"
-              value={`${liveSummary.profit.profit.toFixed(2)} ৳`}
-              subtitle={`বিক্রি: ${liveSummary.profit.salesTotal.toFixed(
-                2
-              )} ৳ | খরচ: ${liveSummary.profit.expenseTotal.toFixed(2)} ৳`}
-              icon="📈"
-              tone="primary"
-            />
-          </div>
+        return hasSummary ? (
+          <SummaryCards summary={liveSummary!} />
+        ) : (
+          <SummaryCardsSkeleton />
         );
       case "sales":
         return <SalesReport shopId={shopId} from={range.from} to={range.to} />;
@@ -1318,6 +1362,18 @@ export default function ReportsClient({
       default:
         return null;
     }
+  };
+
+  const renderActiveDesktopReport = () => {
+    if (active === "summary") {
+      return (
+        <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
+          সারাংশ উপরে দেখানো হচ্ছে। বিস্তারিত রিপোর্ট দেখতে অন্য ট্যাব নির্বাচন
+          করুন।
+        </div>
+      );
+    }
+    return renderReport();
   };
 
   return (
@@ -1650,107 +1706,21 @@ export default function ReportsClient({
           )}
         </div>
       </div>
-      {/* Desktop grid */}
+      {/* Desktop: summary + active report */}
       <div className="hidden md:block space-y-6">
         <div className="bg-card border border-border rounded-2xl p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <StatCard
-              title="মোট বিক্রি"
-              value={`${liveSummary.sales.totalAmount.toFixed(2)} ৳`}
-              subtitle={`মোট বিল: ${liveSummary.sales.completedCount ?? 0}${
-                typeof liveSummary.sales.voidedCount === "number"
-                  ? ` · বাতিল: ${liveSummary.sales.voidedCount}`
-                  : ""
-              }`}
-              icon="🧾"
-              tone="success"
+          {hasSummary ? (
+            <SummaryCards
+              summary={liveSummary!}
+              className="grid grid-cols-1 md:grid-cols-2 gap-3"
             />
-            <StatCard
-              title="খরচ"
-              value={`${liveSummary.expense.totalAmount.toFixed(2)} ৳`}
-              subtitle={`মোট খরচ: ${liveSummary.expense.count ?? 0}`}
-              icon="💸"
-              tone="danger"
-            />
-            <StatCard
-              title="ক্যাশ ব্যালান্স"
-              value={`${liveSummary.cash.balance.toFixed(2)} ৳`}
-              subtitle={`ইন: ${liveSummary.cash.totalIn.toFixed(
-                2
-              )} ৳ | আউট: ${liveSummary.cash.totalOut.toFixed(2)} ৳`}
-              icon="💵"
-              tone="warning"
-            />
-            <StatCard
-              title="লাভ"
-              value={`${liveSummary.profit.profit.toFixed(2)} ৳`}
-              subtitle={`বিক্রি: ${liveSummary.profit.salesTotal.toFixed(
-                2
-              )} ৳ | খরচ: ${liveSummary.profit.expenseTotal.toFixed(2)} ৳`}
-              icon="📈"
-              tone="primary"
-            />
-          </div>
+          ) : (
+            <SummaryCardsSkeleton className="grid grid-cols-1 md:grid-cols-2 gap-3" />
+          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-            <LazyReport fallback={<ReportSkeleton />}>
-              <SalesReport shopId={shopId} from={range.from} to={range.to} />
-            </LazyReport>
-          </div>
-
-          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-            <LazyReport fallback={<ReportSkeleton />}>
-              <ExpenseReport shopId={shopId} from={range.from} to={range.to} />
-            </LazyReport>
-          </div>
-
-          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-            <LazyReport fallback={<ReportSkeleton />}>
-              <CashbookReport shopId={shopId} from={range.from} to={range.to} />
-            </LazyReport>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-            <LazyReport fallback={<ReportSkeleton />}>
-              <PaymentMethodReport
-                shopId={shopId}
-                from={range.from}
-                to={range.to}
-              />
-            </LazyReport>
-          </div>
-
-          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-            <LazyReport fallback={<ReportSkeleton />}>
-              <ProfitTrendReport
-                shopId={shopId}
-                from={range.from}
-                to={range.to}
-              />
-            </LazyReport>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-            <LazyReport fallback={<ReportSkeleton />}>
-              <TopProductsReport shopId={shopId} />
-            </LazyReport>
-          </div>
-
-          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-            <LazyReport fallback={<ReportSkeleton />}>
-              <LowStockReport
-                shopId={shopId}
-                threshold={lowStockThreshold}
-                onThresholdChange={setLowStockThreshold}
-              />
-            </LazyReport>
-          </div>
+        <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+          {renderActiveDesktopReport()}
         </div>
       </div>
 

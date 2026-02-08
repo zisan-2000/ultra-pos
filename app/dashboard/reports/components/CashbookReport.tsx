@@ -3,12 +3,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
-import { PREFETCH_PRESETS, computePresetRange } from "@/lib/reporting-range";
-import { scheduleIdle } from "@/lib/schedule-idle";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
@@ -34,10 +32,8 @@ function scheduleStateUpdate(fn: () => void) {
 
 export default function CashbookReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
-  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [cursorList, setCursorList] = useState<ReportCursor[]>([]);
-  const prefetchKeyRef = useRef<string | null>(null);
 
   const currentCursor = page > 1 ? cursorList[page - 2] ?? null : null;
 
@@ -96,7 +92,9 @@ export default function CashbookReport({ shopId, from, to }: Props) {
         params.append("cursorId", cursor.id);
       }
 
-      const res = await fetch(`/api/reports/cash?${params.toString()}`);
+      const res = await fetch(`/api/reports/cash?${params.toString()}`, {
+        cache: "no-store",
+      });
       if (res.status === 304) {
         const cached = readCached(rangeFrom, rangeTo);
         if (cached && !cursor) {
@@ -198,33 +196,6 @@ export default function CashbookReport({ shopId, from, to }: Props) {
       cancelled = true;
     };
   }, [page, currentCursor]);
-
-  useEffect(() => {
-    if (!online || typeof window === "undefined") return;
-    if (prefetchKeyRef.current === shopId) return;
-    prefetchKeyRef.current = shopId;
-    const cancel = scheduleIdle(() => {
-      PREFETCH_PRESETS.forEach((presetKey) => {
-        const { from: rangeFrom, to: rangeTo } = computePresetRange(presetKey);
-        const queryKey = [
-          "reports",
-          "cash",
-          shopId,
-          rangeFrom ?? "all",
-          rangeTo ?? "all",
-          1,
-          "start",
-          "start",
-        ];
-        if (queryClient.getQueryData(queryKey)) return;
-        queryClient.prefetchQuery({
-          queryKey,
-          queryFn: () => fetchCash(rangeFrom, rangeTo, null, true),
-        });
-      });
-    }, 50);
-    return () => cancel();
-  }, [online, shopId, fetchCash, queryClient]);
 
   const totals = useMemo(() => {
     const inbound = rows

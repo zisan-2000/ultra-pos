@@ -50,8 +50,12 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     day: "2-digit",
   }).format(new Date());
   const useDefaultRange = !resolvedSearch?.from && !resolvedSearch?.to;
-  const rangeFrom = useDefaultRange ? dhakaDate : resolvedSearch?.from;
-  const rangeTo = useDefaultRange ? dhakaDate : resolvedSearch?.to;
+  const rangeFrom = useDefaultRange
+    ? dhakaDate
+    : resolvedSearch?.from ?? dhakaDate;
+  const rangeTo = useDefaultRange
+    ? dhakaDate
+    : resolvedSearch?.to ?? dhakaDate;
 
   const [salesSummary, expenseSummary, cashSummary, profitSummary] =
     await Promise.all([
@@ -66,6 +70,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         shopId={selectedShopId}
         shopName={selectedShop.name}
         shops={shops}
+        summaryRange={{ from: rangeFrom, to: rangeTo }}
         summary={{
           sales: salesSummary,
           expense: expenseSummary,
