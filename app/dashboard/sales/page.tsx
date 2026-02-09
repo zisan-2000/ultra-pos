@@ -317,6 +317,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     itemCount: (s as any).itemCount ?? 0,
     itemPreview: (s as any).itemPreview ?? "",
     customerName: (s as any).customerName ?? null,
+    invoiceNo: (s as any).invoiceNo ?? null,
   }));
 
   const summaryTotalDisplay = formatCurrency(summary.totalAmount);

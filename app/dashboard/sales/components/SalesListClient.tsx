@@ -19,6 +19,7 @@ type SaleSummary = {
   id: string;
   totalAmount: string;
   paymentMethod: string;
+  invoiceNo?: string | null;
   status?: string | null;
   voidReason?: string | null;
   createdAt: string; // ISO string
@@ -231,6 +232,7 @@ export default function SalesListClient({
             id: (r as any).id || r.tempId,
             totalAmount: r.totalAmount,
             paymentMethod: payment,
+            invoiceNo: (r as any).invoiceNo ?? null,
             status: (r as any).status ?? "COMPLETED",
             voidReason: (r as any).voidReason ?? null,
             createdAt: created,
@@ -270,6 +272,7 @@ export default function SalesListClient({
         shopId,
         items: [],
         paymentMethod: s.paymentMethod,
+        invoiceNo: s.invoiceNo ?? null,
         customerId: null,
         note: "",
         totalAmount: s.totalAmount,
@@ -387,6 +390,11 @@ export default function SalesListClient({
                   <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-foreground border border-border">
                     {paymentText}
                   </span>
+                  {s.invoiceNo && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary border border-primary/30">
+                      ইনভয়েস: {s.invoiceNo}
+                    </span>
+                  )}
                   {s.customerName && (
                     <span className="text-xs text-muted-foreground">
                       👤 {s.customerName}
@@ -410,6 +418,14 @@ export default function SalesListClient({
 
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 bg-muted/40 px-3 py-1.5 sm:px-4 sm:py-2">
                 <div className="flex flex-wrap items-center gap-2">
+                  {online && s.invoiceNo ? (
+                    <Link
+                      href={`/dashboard/sales/${s.id}/invoice`}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary border border-primary/30 hover:bg-primary/15"
+                    >
+                      ইনভয়েস দেখুন
+                    </Link>
+                  ) : null}
                   {!online && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning border border-warning/30">
                       বাতিল করা যাবে না (Offline)

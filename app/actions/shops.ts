@@ -6,7 +6,9 @@ import { type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
+import { requirePermission } from "@/lib/rbac";
 import { BILLING_CONFIG, DEFAULT_PLAN, addDays, addMonths } from "@/lib/billing";
+import { sanitizeSalesInvoicePrefix } from "@/lib/sales-invoice";
 
 async function getCurrentUser() {
   return requireUser();
@@ -78,6 +80,8 @@ export async function createShop(data: {
   phone?: string;
   businessType?: string;
   ownerId?: string;
+  salesInvoiceEnabled?: boolean;
+  salesInvoicePrefix?: string | null;
 }) {
   const user = await getCurrentUser();
   const isSuperAdmin = user.roles?.includes("super_admin") ?? false;
@@ -116,6 +120,12 @@ export async function createShop(data: {
 
   const targetOwnerId = isSuperAdmin ? requestedOwnerId ?? user.id : user.id;
 
+  const wantsInvoiceFeatureChange =
+    data.salesInvoiceEnabled !== undefined || data.salesInvoicePrefix !== undefined;
+  if (wantsInvoiceFeatureChange) {
+    requirePermission(user, "manage_shop_invoice_feature");
+  }
+
   await prisma.$transaction(async (tx) => {
     const shop = await tx.shop.create({
       data: {
@@ -124,6 +134,12 @@ export async function createShop(data: {
         address: data.address || "",
         phone: data.phone || "",
         businessType: data.businessType || "tea_stall",
+        ...(data.salesInvoiceEnabled !== undefined
+          ? { salesInvoiceEnabled: Boolean(data.salesInvoiceEnabled) }
+          : {}),
+        ...(data.salesInvoicePrefix !== undefined
+          ? { salesInvoicePrefix: sanitizeSalesInvoicePrefix(data.salesInvoicePrefix) }
+          : {}),
       },
     });
 
@@ -188,9 +204,32 @@ export async function updateShop(id: string, data: any) {
   if (shop.ownerId !== user.id) {
     throw new Error("Unauthorized");
   }
+
+  const updateData: Prisma.ShopUpdateInput = {
+    ...(data.name !== undefined ? { name: data.name } : {}),
+    ...(data.address !== undefined ? { address: data.address } : {}),
+    ...(data.phone !== undefined ? { phone: data.phone } : {}),
+    ...(data.businessType !== undefined ? { businessType: data.businessType } : {}),
+    ...(data.closingTime !== undefined ? { closingTime: data.closingTime } : {}),
+  };
+
+  const wantsInvoiceFeatureChange =
+    data.salesInvoiceEnabled !== undefined || data.salesInvoicePrefix !== undefined;
+  if (wantsInvoiceFeatureChange) {
+    requirePermission(user, "manage_shop_invoice_feature");
+    if (data.salesInvoiceEnabled !== undefined) {
+      updateData.salesInvoiceEnabled = Boolean(data.salesInvoiceEnabled);
+    }
+    if (data.salesInvoicePrefix !== undefined) {
+      updateData.salesInvoicePrefix = sanitizeSalesInvoicePrefix(
+        data.salesInvoicePrefix
+      );
+    }
+  }
+
   await prisma.shop.update({
     where: { id },
-    data,
+    data: updateData,
   });
   return { success: true };
 }

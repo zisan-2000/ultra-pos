@@ -32,6 +32,7 @@ export type LocalSale = {
   shopId: string;
   items: any[];
   paymentMethod: string;
+  invoiceNo?: string | null;
   customerId?: string | null;
   note: string;
   totalAmount: string;

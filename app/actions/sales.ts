@@ -14,6 +14,11 @@ import { revalidateReportsForSale } from "@/lib/reports/revalidate";
 import { shopNeedsCogs } from "@/lib/accounting/cogs";
 import { parseDhakaDateOnlyRange, toDhakaBusinessDate } from "@/lib/dhaka-date";
 import { validateBoundedReportRange } from "@/lib/reporting-config";
+import {
+  allocateSalesInvoiceNumber,
+  canIssueSalesInvoice,
+  canViewSalesInvoice,
+} from "@/lib/sales-invoice";
 
 const logPerf = (...args: unknown[]) => {
   if (process.env.NODE_ENV !== "production") {
@@ -47,6 +52,7 @@ type SaleRow = {
   saleDate: Date;
   totalAmount: Prisma.Decimal | string;
   paymentMethod: string;
+  invoiceNo?: string | null;
   status?: string | null;
   voidReason?: string | null;
   customerId?: string | null;
@@ -79,6 +85,7 @@ async function attachSaleSummaries(
     select: {
       saleId: true,
       quantity: true,
+      productNameSnapshot: true,
       product: {
         select: { name: true },
       },
@@ -93,9 +100,10 @@ async function attachSaleSummaries(
   for (const it of items) {
     const entry = itemSummaryMap[it.saleId] || { count: 0, names: [] };
     entry.count += 1;
-    if (entry.names.length < 3 && it.product?.name) {
+    const itemName = it.productNameSnapshot || it.product?.name;
+    if (entry.names.length < 3 && itemName) {
       entry.names.push(
-        `${it.product.name} x${Number(it.quantity || 0)}`
+        `${itemName} x${Number(it.quantity || 0)}`
       );
     }
     itemSummaryMap[it.saleId] = entry;
@@ -148,7 +156,11 @@ export async function createSale(input: CreateSaleInput) {
 
   const user = await requireUser();
   requirePermission(user, "create_sale");
-  await assertShopAccess(input.shopId, user);
+  const shop = await assertShopAccess(input.shopId, user);
+  const shouldIssueSalesInvoice = canIssueSalesInvoice(
+    user,
+    (shop as any).salesInvoiceEnabled
+  );
   const needsCogs = await shopNeedsCogs(input.shopId);
 
   const authTime = Date.now();
@@ -242,7 +254,7 @@ export async function createSale(input: CreateSaleInput) {
       : null;
   const saleTimestamp = new Date();
 
-  const saleId = await prisma.$transaction(async (tx) => {
+  const createdSale = await prisma.$transaction(async (tx) => {
     const transactionStart = Date.now();
     logPerf(`🔄 [PERF] Transaction started at: ${new Date().toISOString()}`);
 
@@ -253,6 +265,10 @@ export async function createSale(input: CreateSaleInput) {
       stockMap.set(item.productId, current + item.qty);
     });
 
+    const issuedInvoice = shouldIssueSalesInvoice
+      ? await allocateSalesInvoiceNumber(tx, input.shopId, saleTimestamp)
+      : null;
+
     // Create sale first
     const inserted = await tx.sale.create({
       data: {
@@ -261,10 +277,12 @@ export async function createSale(input: CreateSaleInput) {
         totalAmount: totalStr,
         paymentMethod: input.paymentMethod || "cash",
         note: input.note || null,
+        invoiceNo: issuedInvoice?.invoiceNo ?? null,
+        invoiceIssuedAt: issuedInvoice?.issuedAt ?? null,
         saleDate: saleTimestamp,
         businessDate: toDhakaBusinessDate(saleTimestamp),
       },
-      select: { id: true },
+      select: { id: true, invoiceNo: true },
     });
 
     const cashCollected =
@@ -281,6 +299,7 @@ export async function createSale(input: CreateSaleInput) {
       return {
         saleId: inserted.id,
         productId: item.productId,
+        productNameSnapshot: item.name || product?.name || null,
         quantity: item.qty.toString(),
         unitPrice: item.unitPrice.toFixed(2),
         costAtSale,
@@ -383,7 +402,10 @@ export async function createSale(input: CreateSaleInput) {
       `⏱️ [PERF] Transaction completed in: ${transactionEnd - transactionStart}ms`
     );
 
-    return inserted.id;
+    return {
+      saleId: inserted.id,
+      invoiceNo: inserted.invoiceNo ?? null,
+    };
   });
 
   // Move revalidate outside transaction for better performance
@@ -406,9 +428,10 @@ export async function createSale(input: CreateSaleInput) {
   const publishTasks: Promise<void>[] = [];
   publishTasks.push(
     publishRealtimeEvent(REALTIME_EVENTS.saleCommitted, input.shopId, {
-      saleId,
+      saleId: createdSale.saleId,
       totalAmount: totalNum,
       paymentMethod: normalizedPaymentMethod,
+      invoiceNo: createdSale.invoiceNo,
     })
   );
 
@@ -442,7 +465,11 @@ export async function createSale(input: CreateSaleInput) {
 
   await Promise.all(publishTasks);
 
-  return { success: true, saleId };
+  return {
+    success: true,
+    saleId: createdSale.saleId,
+    invoiceNo: createdSale.invoiceNo,
+  };
 }
 
 // ------------------------------
@@ -451,6 +478,7 @@ export async function createSale(input: CreateSaleInput) {
 export async function getSalesByShop(shopId: string) {
   const user = await requireUser();
   requirePermission(user, "view_sales");
+  const showInvoiceNo = canViewSalesInvoice(user);
   await assertShopAccess(shopId, user);
 
   const rows = await prisma.sale.findMany({
@@ -463,6 +491,7 @@ export async function getSalesByShop(shopId: string) {
       status: true,
       voidReason: true,
       customerId: true,
+      ...(showInvoiceNo ? { invoiceNo: true } : {}),
     },
     orderBy: [{ saleDate: "desc" }, { id: "desc" }],
   });
@@ -482,6 +511,7 @@ export async function getSalesByShopPaginated({
 }: GetSalesByShopPaginatedInput) {
   const user = await requireUser();
   requirePermission(user, "view_sales");
+  const showInvoiceNo = canViewSalesInvoice(user);
   await assertShopAccess(shopId, user);
 
   const safeLimit = Math.max(1, Math.min(limit, 100));
@@ -519,6 +549,7 @@ export async function getSalesByShopPaginated({
       status: true,
       voidReason: true,
       customerId: true,
+      ...(showInvoiceNo ? { invoiceNo: true } : {}),
     },
     orderBy: [{ saleDate: "desc" }, { id: "desc" }],
     take: safeLimit + 1,
@@ -538,6 +569,140 @@ export async function getSalesByShopPaginated({
     items,
     nextCursor,
     hasMore,
+  };
+}
+
+type SaleInvoiceItem = {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: string;
+  unitPrice: string;
+  lineTotal: string;
+};
+
+type SaleInvoiceDetails = {
+  saleId: string;
+  shopId: string;
+  shopName: string;
+  shopAddress: string | null;
+  shopPhone: string | null;
+  invoiceNo: string;
+  invoiceIssuedAt: string;
+  saleDate: string;
+  businessDate: string | null;
+  paymentMethod: string;
+  note: string | null;
+  totalAmount: string;
+  status: string;
+  voidReason: string | null;
+  customer: {
+    id: string;
+    name: string;
+    phone: string | null;
+    address: string | null;
+  } | null;
+  items: SaleInvoiceItem[];
+};
+
+export async function getSaleInvoiceDetails(
+  saleId: string
+): Promise<SaleInvoiceDetails> {
+  const user = await requireUser();
+  if (!canViewSalesInvoice(user)) {
+    throw new Error("Forbidden: missing permission view_sales_invoice");
+  }
+
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    select: {
+      id: true,
+      shopId: true,
+      saleDate: true,
+      businessDate: true,
+      totalAmount: true,
+      paymentMethod: true,
+      note: true,
+      status: true,
+      voidReason: true,
+      invoiceNo: true,
+      invoiceIssuedAt: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          address: true,
+        },
+      },
+      shop: {
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          phone: true,
+        },
+      },
+      saleItems: {
+        orderBy: { id: "asc" },
+        select: {
+          id: true,
+          productId: true,
+          productNameSnapshot: true,
+          quantity: true,
+          unitPrice: true,
+          lineTotal: true,
+          product: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!sale) {
+    throw new Error("Sale not found");
+  }
+  await assertShopAccess(sale.shopId, user);
+
+  if (!sale.invoiceNo) {
+    throw new Error("Invoice not issued for this sale");
+  }
+
+  return {
+    saleId: sale.id,
+    shopId: sale.shopId,
+    shopName: sale.shop.name,
+    shopAddress: sale.shop.address ?? null,
+    shopPhone: sale.shop.phone ?? null,
+    invoiceNo: sale.invoiceNo,
+    invoiceIssuedAt: (sale.invoiceIssuedAt ?? sale.saleDate).toISOString(),
+    saleDate: sale.saleDate.toISOString(),
+    businessDate: sale.businessDate ? sale.businessDate.toISOString() : null,
+    paymentMethod: sale.paymentMethod,
+    note: sale.note ?? null,
+    totalAmount: sale.totalAmount.toString(),
+    status: sale.status,
+    voidReason: sale.voidReason ?? null,
+    customer: sale.customer
+      ? {
+          id: sale.customer.id,
+          name: sale.customer.name,
+          phone: sale.customer.phone ?? null,
+          address: sale.customer.address ?? null,
+        }
+      : null,
+    items: sale.saleItems.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      productName:
+        item.productNameSnapshot || item.product?.name || "Unnamed product",
+      quantity: item.quantity.toString(),
+      unitPrice: item.unitPrice.toString(),
+      lineTotal: item.lineTotal.toString(),
+    })),
   };
 }
 

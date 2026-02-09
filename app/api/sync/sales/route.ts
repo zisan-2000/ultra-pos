@@ -16,6 +16,10 @@ import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidateReportsForSale } from "@/lib/reports/revalidate";
 import { shopNeedsCogs } from "@/lib/accounting/cogs";
 import { toDhakaBusinessDate } from "@/lib/dhaka-date";
+import {
+  allocateSalesInvoiceNumber,
+  canIssueSalesInvoice,
+} from "@/lib/sales-invoice";
 
 type IncomingSaleItem = {
   productId: string;
@@ -138,8 +142,10 @@ export async function POST(req: Request) {
       if (shopIds.size === 0) {
         return NextResponse.json({ success: false, error: "shopId is required" }, { status: 400 });
       }
+      const shopById = new Map<string, Awaited<ReturnType<typeof assertShopAccess>>>();
       for (const shopId of shopIds) {
-        await assertShopAccess(shopId, user);
+        const shop = await assertShopAccess(shopId, user);
+        shopById.set(shopId, shop);
       }
 
       const insertedSaleIds: string[] = [];
@@ -157,6 +163,14 @@ export async function POST(req: Request) {
         if (!shopId) {
           throw new Error("shopId is required");
         }
+        const shop = shopById.get(shopId);
+        if (!shop) {
+          throw new Error("Shop not found");
+        }
+        const shouldIssueSalesInvoice = canIssueSalesInvoice(
+          user,
+          (shop as any).salesInvoiceEnabled
+        );
 
         if (clientSaleId) {
           const existingSale = await prisma.sale.findUnique({
@@ -260,6 +274,10 @@ export async function POST(req: Request) {
             }
           }
 
+          const issuedInvoice = shouldIssueSalesInvoice
+            ? await allocateSalesInvoiceNumber(tx, shopId, createdAt)
+            : null;
+
           const sale = await tx.sale.create({
             data: {
               id: clientSaleId ?? undefined,
@@ -268,11 +286,13 @@ export async function POST(req: Request) {
               totalAmount,
               paymentMethod,
               note,
+              invoiceNo: issuedInvoice?.invoiceNo ?? null,
+              invoiceIssuedAt: issuedInvoice?.issuedAt ?? null,
               saleDate: createdAt,
               businessDate,
               createdAt: createdAt,
             },
-            select: { id: true },
+            select: { id: true, invoiceNo: true },
           });
 
           if (paymentMethod === "cash") {
@@ -311,6 +331,7 @@ export async function POST(req: Request) {
             return {
               saleId: sale.id,
               productId: item.productId,
+              productNameSnapshot: item.name || product?.name || null,
               quantity: qtyStr,
               unitPrice: unitPriceStr,
               costAtSale,
@@ -379,16 +400,20 @@ export async function POST(req: Request) {
             });
           }
 
-          return sale.id;
+          return {
+            saleId: sale.id,
+            invoiceNo: sale.invoiceNo ?? null,
+          };
         });
 
-        insertedSaleIds.push(inserted);
+        insertedSaleIds.push(inserted.saleId);
         const publishTasks: Promise<void>[] = [];
         publishTasks.push(
           publishRealtimeEvent(REALTIME_EVENTS.saleCommitted, shopId, {
-            saleId: inserted,
+            saleId: inserted.saleId,
             totalAmount: totalNum,
             paymentMethod,
+            invoiceNo: inserted.invoiceNo,
           })
         );
 

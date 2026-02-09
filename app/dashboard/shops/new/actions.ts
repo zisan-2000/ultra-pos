@@ -5,12 +5,23 @@ import { createShop } from "@/app/actions/shops";
 import { redirect } from "next/navigation";
 
 export async function handleCreateShop(formData: FormData) {
+  const hasInvoiceSettings =
+    formData.has("salesInvoiceEnabled") || formData.has("salesInvoicePrefix");
+
   await createShop({
     name: formData.get("name") as string,
     address: formData.get("address") as string,
     phone: formData.get("phone") as string,
     businessType: (formData.get("businessType") as any) || "tea_stall",
     ownerId: (formData.get("ownerId") as string) || undefined,
+    ...(hasInvoiceSettings
+      ? {
+          salesInvoiceEnabled: formData.get("salesInvoiceEnabled") === "1",
+          salesInvoicePrefix:
+            ((formData.get("salesInvoicePrefix") as string) || "").trim() ||
+            null,
+        }
+      : {}),
   });
 
   redirect("/dashboard/shops");

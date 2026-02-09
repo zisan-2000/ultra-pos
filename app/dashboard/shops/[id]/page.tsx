@@ -12,6 +12,11 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function EditShop({ params }: PageProps) {
   const { id } = await params;
   const user = await getCurrentUser();
+  const canManageSalesInvoice = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_invoice_feature"))
+  );
   let shop: Awaited<ReturnType<typeof getShop>> | null = null;
   try {
     shop = await getShop(id);
@@ -42,6 +47,14 @@ export default async function EditShop({ params }: PageProps) {
       address: formData.get("address"),
       phone: formData.get("phone"),
       businessType: (formData.get("businessType") as any) || "tea_stall",
+      ...(canManageSalesInvoice
+        ? {
+            salesInvoiceEnabled: formData.get("salesInvoiceEnabled") === "1",
+            salesInvoicePrefix:
+              ((formData.get("salesInvoicePrefix") as string) || "").trim() ||
+              null,
+          }
+        : {}),
     });
 
     redirect("/dashboard/shops");
@@ -64,9 +77,12 @@ export default async function EditShop({ params }: PageProps) {
           address: shop.address || "",
           phone: shop.phone || "",
           businessType: (shop.businessType as any) || "tea_stall",
+          salesInvoiceEnabled: Boolean((shop as any).salesInvoiceEnabled),
+          salesInvoicePrefix: (shop as any).salesInvoicePrefix || "INV",
         }}
         submitLabel="সংরক্ষণ করুন"
         businessTypeOptions={businessTypeOptions}
+        showSalesInvoiceSettings={canManageSalesInvoice}
       />
     </div>
   );

@@ -59,7 +59,11 @@ type PosPageClientProps = {
   }[];
   shopName: string;
   shopId: string;
-  submitSale: (formData: FormData) => Promise<{ success: boolean; saleId: string }>;
+  submitSale: (formData: FormData) => Promise<{
+    success: boolean;
+    saleId: string;
+    invoiceNo?: string | null;
+  }>;
 };
 
 export function PosPageClient({
@@ -112,7 +116,10 @@ export function PosPageClient({
   const [customerId, setCustomerId] = useState<string>("");
   const [paidNow, setPaidNow] = useState<string>("");
   const [note, setNote] = useState("");
-  const [success, setSuccess] = useState<{ saleId?: string } | null>(null);
+  const [success, setSuccess] = useState<{
+    saleId?: string;
+    invoiceNo?: string | null;
+  } | null>(null);
   const [productsRefreshing, setProductsRefreshing] = useState(false);
   const online = useOnlineStatus();
   const realtime = useRealtimeStatus();
@@ -514,7 +521,7 @@ export function PosPageClient({
         setPaidNow("");
         setNote("");
         setCustomerId("");
-        setSuccess({ saleId: res?.saleId });
+        setSuccess({ saleId: res?.saleId, invoiceNo: res?.invoiceNo ?? null });
         toast.success("বিল সম্পন্ন হয়েছে।");
         const updateId = reportSale(totalVal);
         if (updateId) {
@@ -986,6 +993,14 @@ export function PosPageClient({
               >
                 বিক্রি দেখুন
               </Link>
+              {success.saleId && success.invoiceNo ? (
+                <Link
+                  href={`/dashboard/sales/${success.saleId}/invoice`}
+                  className="text-xs font-semibold underline underline-offset-2"
+                >
+                  ইনভয়েস দেখুন
+                </Link>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setSuccess(null)}

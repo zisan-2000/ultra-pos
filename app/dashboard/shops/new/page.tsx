@@ -13,6 +13,11 @@ export default async function NewShopPage() {
   const user = await getCurrentUser();
   const isSuperAdmin = user?.roles?.includes("super_admin") ?? false;
   const isOwner = user?.roles?.includes("owner") ?? false;
+  const canManageSalesInvoice = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_invoice_feature"))
+  );
   const shops = isSuperAdmin ? [] : await getShopsByUser();
   const canOwnerCreateFirstShop = isOwner && shops.length === 0;
 
@@ -55,6 +60,7 @@ export default async function NewShopPage() {
         cacheUserId={user?.id ?? "anon"}
         ownerOptions={ownerOptions}
         businessTypeOptions={mergedBusinessTypes}
+        showSalesInvoiceSettings={canManageSalesInvoice}
       />
     </div>
   );

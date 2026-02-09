@@ -113,6 +113,8 @@ const shopCreateSchema = z.object({
   address: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
   businessType: z.string().optional(),
+  salesInvoiceEnabled: z.boolean().optional(),
+  salesInvoicePrefix: z.string().optional().nullable(),
   ownerId: z.string().optional().nullable(),
 });
 
@@ -123,6 +125,8 @@ const shopUpdateSchema = z.object({
   phone: z.string().optional().nullable(),
   businessType: z.string().optional(),
   closingTime: z.string().optional().nullable(),
+  salesInvoiceEnabled: z.boolean().optional(),
+  salesInvoicePrefix: z.string().optional().nullable(),
 });
 
 const shopDeleteSchema = z.object({
@@ -291,6 +295,8 @@ export async function POST(req: Request) {
                 address: input.address ?? "",
                 phone: input.phone ?? "",
                 businessType: input.businessType ?? "tea_stall",
+                salesInvoiceEnabled: input.salesInvoiceEnabled,
+                salesInvoicePrefix: input.salesInvoicePrefix ?? undefined,
                 ownerId: input.ownerId ?? undefined,
               });
               break;
@@ -304,6 +310,15 @@ export async function POST(req: Request) {
                 ...(data.phone !== undefined ? { phone: data.phone } : {}),
                 ...(data.businessType !== undefined
                   ? { businessType: data.businessType }
+                  : {}),
+                ...(data.closingTime !== undefined
+                  ? { closingTime: data.closingTime }
+                  : {}),
+                ...(data.salesInvoiceEnabled !== undefined
+                  ? { salesInvoiceEnabled: data.salesInvoiceEnabled }
+                  : {}),
+                ...(data.salesInvoicePrefix !== undefined
+                  ? { salesInvoicePrefix: data.salesInvoicePrefix }
                   : {}),
               });
               break;

@@ -44,10 +44,13 @@ type Props = {
     address?: string;
     phone?: string;
     businessType?: string;
+    salesInvoiceEnabled?: boolean;
+    salesInvoicePrefix?: string | null;
   };
   submitLabel?: string;
   ownerOptions?: Array<{ id: string; name: string | null; email: string | null }>;
   businessTypeOptions?: Array<{ id: string; label: string }>;
+  showSalesInvoiceSettings?: boolean;
 };
 
 const SHOP_TEMPLATE_KEY = "shopTemplates:v1";
@@ -105,6 +108,7 @@ export default function ShopFormClient({
   submitLabel = "+ নতুন দোকান তৈরি করুন",
   ownerOptions,
   businessTypeOptions,
+  showSalesInvoiceSettings = false,
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -121,6 +125,12 @@ export default function ShopFormClient({
   const availableBusinessTypes = businessTypeOptions?.length ? businessTypeOptions : businessOptions;
   const [businessType, setBusinessType] = useState<string>(
     initial?.businessType || availableBusinessTypes[0]?.id || "tea_stall"
+  );
+  const [salesInvoiceEnabled, setSalesInvoiceEnabled] = useState<boolean>(
+    Boolean(initial?.salesInvoiceEnabled ?? false)
+  );
+  const [salesInvoicePrefix, setSalesInvoicePrefix] = useState<string>(
+    initial?.salesInvoicePrefix || "INV"
   );
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const hasOwnerOptions = Boolean(ownerOptions && ownerOptions.length > 0);
@@ -364,11 +374,20 @@ export default function ShopFormClient({
     const payloadAddress = ((form.get("address") as string) || address).trim();
     const payloadPhone = ((form.get("phone") as string) || phone).trim();
     const payloadBusinessType = (form.get("businessType") as string) || businessType;
+    const payloadSalesInvoiceEnabled = Boolean(salesInvoiceEnabled);
+    const payloadSalesInvoicePrefix = salesInvoicePrefix
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 12);
 
     form.set("name", payloadName);
     form.set("address", payloadAddress);
     form.set("phone", payloadPhone);
     form.set("businessType", payloadBusinessType);
+    if (showSalesInvoiceSettings) {
+      form.set("salesInvoiceEnabled", payloadSalesInvoiceEnabled ? "1" : "0");
+      form.set("salesInvoicePrefix", payloadSalesInvoicePrefix);
+    }
     if (ownerOptions) {
       form.set("ownerId", selectedOwnerId);
     }
@@ -390,6 +409,12 @@ export default function ShopFormClient({
           address: payloadAddress || null,
           phone: payloadPhone || null,
           businessType: payloadBusinessType,
+          ...(showSalesInvoiceSettings
+            ? {
+                salesInvoiceEnabled: payloadSalesInvoiceEnabled,
+                salesInvoicePrefix: payloadSalesInvoicePrefix || null,
+              }
+            : {}),
           ownerId: ownerOptions ? selectedOwnerId || null : null,
         };
 
@@ -613,6 +638,48 @@ export default function ShopFormClient({
         </select>
         <p className="text-sm text-muted-foreground">সর্বশেষ ব্যবহারকৃত টাইপগুলো উপরে দেখাচ্ছে</p>
       </div>
+
+      {showSalesInvoiceSettings ? (
+        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
+          <div className="space-y-1">
+            <label className="block text-sm font-semibold text-foreground">
+              বিক্রির ইনভয়েস ফিচার
+            </label>
+            <p className="text-xs text-muted-foreground">
+              এই দোকানে ফিচার চালু থাকলে এবং ইউজারের পারমিশন থাকলে sales invoice issue হবে।
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={salesInvoiceEnabled}
+              onChange={(e) => setSalesInvoiceEnabled(e.target.checked)}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
+            />
+            এই দোকানে Sales Invoice চালু
+          </label>
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-muted-foreground">
+              ইনভয়েস প্রিফিক্স
+            </label>
+            <input
+              value={salesInvoicePrefix}
+              onChange={(e) =>
+                setSalesInvoicePrefix(
+                  e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12)
+                )
+              }
+              className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              placeholder="INV"
+              maxLength={12}
+              disabled={!salesInvoiceEnabled}
+            />
+            <p className="text-xs text-muted-foreground">
+              উদাহরণ: `INV` হলে নম্বর হবে `INV-YYMM-000001`
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {/* Recent Templates */}
       {recentTemplates.length > 0 && (

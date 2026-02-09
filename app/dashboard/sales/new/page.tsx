@@ -58,7 +58,6 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
     const paidNowStr = formData.get("paidNow") as string;
     const note = (formData.get("note") as string) || "";
     const cartJson = formData.get("cart") as string;
-    const totalAmountStr = (formData.get("totalAmount") as string) || "0";
 
     if (!cartJson) {
       throw new Error("Cart is empty");
