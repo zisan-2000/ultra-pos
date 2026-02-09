@@ -305,6 +305,44 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
+@media print {
+  @page {
+    margin: 10mm;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #sales-invoice-print-root,
+  #sales-invoice-print-root * {
+    visibility: visible !important;
+  }
+
+  #sales-invoice-print-root {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  #sales-invoice-print-root .print-card {
+    border-radius: 0 !important;
+    border-color: #d1d5db !important;
+    box-shadow: none !important;
+  }
+
+  #sales-invoice-print-root .print-no-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+
 /* Bangla Typography */
 h1 {
   font-size: 28px;

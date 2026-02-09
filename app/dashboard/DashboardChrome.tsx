@@ -562,20 +562,20 @@ export function DashboardShell({
       : "grid-cols-1";
 
   return (
-    <div className="h-screen overflow-x-hidden bg-background">
+    <div className="h-screen overflow-x-hidden bg-background print:h-auto print:overflow-visible print:bg-white">
       {/* Overlay for drawer on mobile */}
       {drawerOpen && (
         <button
           aria-label="Close navigation"
-          className="fixed inset-0 bg-foreground/30 z-30 lg:hidden"
+          className="fixed inset-0 bg-foreground/30 z-30 lg:hidden print:hidden"
           onClick={() => setDrawerOpen(false)}
         />
       )}
 
-      <div className="flex h-full">
+      <div className="flex h-full print:block print:h-auto">
         {/* Sidebar / Drawer */}
         <aside
-          className={`fixed z-40 inset-y-0 left-0 bg-sidebar backdrop-blur border-r border-sidebar-border transform transition-[transform,width] duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:h-dvh lg:shadow-none ${
+          className={`fixed z-40 inset-y-0 left-0 bg-sidebar backdrop-blur border-r border-sidebar-border transform transition-[transform,width] duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:h-dvh lg:shadow-none print:hidden ${
             drawerOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
           } ${sidebarCollapsed ? "lg:w-20 w-72" : "w-72"}`}
         >
@@ -1030,8 +1030,8 @@ export function DashboardShell({
         </aside>
 
         {/* Main content */}
-        <div className="flex-1 flex flex-col h-full lg:pl-0 overflow-hidden">
-          <header className="sticky top-0 z-20 bg-card/90 backdrop-blur border-b border-border/70 shadow-[0_1px_0_rgba(15,23,42,0.08)] relative">
+        <div className="flex-1 flex flex-col h-full lg:pl-0 overflow-hidden print:h-auto print:overflow-visible">
+          <header className="sticky top-0 z-20 bg-card/90 backdrop-blur border-b border-border/70 shadow-[0_1px_0_rgba(15,23,42,0.08)] relative print:hidden">
             {isNavigating && (
               <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/20">
                 <div className="h-full w-1/3 bg-primary animate-pulse" />
@@ -1163,7 +1163,7 @@ export function DashboardShell({
           </header>
 
           <main
-            className="relative flex-1 pb-28 lg:pb-10 overflow-y-auto"
+            className="relative flex-1 pb-28 lg:pb-10 overflow-y-auto print:pb-0 print:overflow-visible"
             aria-busy={isNavigating}
           >
             {showNavSkeleton && (
@@ -1174,7 +1174,7 @@ export function DashboardShell({
               </div>
             )}
             <div
-              className={`px-4 sm:px-6 lg:px-8 py-6 ${
+              className={`px-4 sm:px-6 lg:px-8 py-6 print:p-0 ${
                 showNavSkeleton ? "opacity-0" : ""
               }`}
             >
@@ -1185,7 +1185,7 @@ export function DashboardShell({
       </div>
 
       {/* Bottom nav for mobile */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 lg:hidden px-3 pb-3">
+      <nav className="fixed bottom-0 inset-x-0 z-30 lg:hidden px-3 pb-3 print:hidden">
         <div
           className={`relative grid ${bottomGridClass} rounded-t-2xl bg-card/90 backdrop-blur-sm border border-border shadow-[0_-4px_18px_rgba(15,23,42,0.12)] px-3 pt-4 pb-3`}
         >
@@ -1256,6 +1256,7 @@ export function DashboardShell({
       bg-[#0D9488] text-[#ECFEFF] hover:bg-[#0B877B]
       shadow-[0_10px_24px_rgba(13,148,136,0.35)]
       active:scale-[0.97]
+      print:hidden
       transition-all duration-200
       ${showFabLabel ? "px-5 py-3 gap-2" : "h-14 w-14"}
     `}
