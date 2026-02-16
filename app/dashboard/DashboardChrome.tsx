@@ -43,6 +43,7 @@ import {
   Settings,
   ShoppingCart,
   Store,
+  Ticket,
   User,
   Users,
   X,
@@ -61,6 +62,7 @@ type Shop = {
   name: string;
   closingTime?: string | null;
   businessType?: string | null;
+  queueTokenEnabled?: boolean | null;
 };
 
 type RbacUser = {
@@ -106,6 +108,7 @@ const navItems: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/dashboard/purchases", label: "পণ্য ক্রয়", Icon: PackagePlus },
   { href: "/dashboard/suppliers", label: "সরবরাহকারী", Icon: Users },
   { href: "/dashboard/sales", label: "বিক্রি", Icon: ShoppingCart },
+  { href: "/dashboard/queue", label: "টোকেন", Icon: Ticket },
   { href: "/dashboard/expenses", label: "খরচ", Icon: Receipt },
   { href: "/dashboard/due", label: "ধার / পাওনা", Icon: HandCoins },
   { href: "/dashboard/cash", label: "নগদ খাতা", Icon: NotebookText },
@@ -118,6 +121,7 @@ const navItems: { href: string; label: string; Icon: LucideIcon }[] = [
 const bottomNav: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/dashboard", label: "ড্যাশ", Icon: LayoutDashboard },
   { href: "/dashboard/sales", label: "বিক্রি", Icon: ShoppingCart },
+  { href: "/dashboard/queue", label: "টোকেন", Icon: Ticket },
   { href: "/dashboard/products", label: "পণ্য", Icon: Package },
   { href: "/dashboard/expenses", label: "খরচ", Icon: Receipt },
   { href: "/dashboard/reports", label: "রিপোর্ট", Icon: BarChart3 },
@@ -140,6 +144,13 @@ const bottomNavTone: Record<
     iconActive:
       "bg-gradient-to-br from-emerald-500/40 via-emerald-400/25 to-emerald-600/40 text-emerald-700",
     itemActive: "text-emerald-700 bg-emerald-500/10",
+  },
+  "/dashboard/queue": {
+    icon:
+      "bg-gradient-to-br from-cyan-400/25 via-cyan-300/10 to-cyan-600/25 text-cyan-600",
+    iconActive:
+      "bg-gradient-to-br from-cyan-500/40 via-cyan-400/25 to-cyan-600/40 text-cyan-700",
+    itemActive: "text-cyan-700 bg-cyan-500/10",
   },
   "/dashboard/products": {
     icon:
@@ -234,6 +245,11 @@ export function DashboardShell({
   const hasInventory = Boolean(
     currentBusinessType && SHOP_TYPES_WITH_COGS.has(currentBusinessType)
   );
+
+  const currentQueueTokenEnabled = useMemo(() => {
+    if (!safeShopId) return false;
+    return Boolean(shops.find((s) => s.id === safeShopId)?.queueTokenEnabled);
+  }, [safeShopId, shops]);
 
   // Sync URL ?shopId with global shop store & cookie
   useEffect(() => {
@@ -403,6 +419,7 @@ export function DashboardShell({
     "/dashboard/purchases": "view_purchases",
     "/dashboard/suppliers": "view_suppliers",
     "/dashboard/sales": "view_sales",
+    "/dashboard/queue": "view_queue_board",
     "/dashboard/expenses": "view_expenses",
     "/dashboard/due": "view_due_summary",
     "/dashboard/cash": "view_cashbook",
@@ -422,9 +439,10 @@ export function DashboardShell({
       navItems.filter((item) => {
         if (item.href === "/dashboard/purchases") return hasInventory;
         if (item.href === "/dashboard/suppliers") return hasInventory;
+        if (item.href === "/dashboard/queue") return currentQueueTokenEnabled;
         return true;
       }),
-    [hasInventory]
+    [hasInventory, currentQueueTokenEnabled]
   );
 
   const navGroupClass = sidebarCollapsed
@@ -457,6 +475,7 @@ export function DashboardShell({
     "/dashboard/purchases": { accent: "bg-violet-500/15", ring: "ring-violet-300/60", icon: "text-violet-700" },
     "/dashboard/suppliers": { accent: "bg-cyan-500/15", ring: "ring-cyan-300/60", icon: "text-cyan-700" },
     "/dashboard/sales": { accent: "bg-amber-500/15", ring: "ring-amber-300/60", icon: "text-amber-700" },
+    "/dashboard/queue": { accent: "bg-cyan-500/15", ring: "ring-cyan-300/60", icon: "text-cyan-700" },
     "/dashboard/expenses": { accent: "bg-rose-500/15", ring: "ring-rose-300/60", icon: "text-rose-700" },
     "/dashboard/due": { accent: "bg-orange-500/15", ring: "ring-orange-300/60", icon: "text-orange-700" },
     "/dashboard/cash": { accent: "bg-teal-500/15", ring: "ring-teal-300/60", icon: "text-teal-700" },
@@ -544,9 +563,12 @@ export function DashboardShell({
       ? null
       : baseFabConfig;
 
-  const mobileNavItems = bottomNav.filter((item) =>
-    hasPermission(routePermissionMap[item.href])
-  );
+  const mobileNavItems = bottomNav.filter((item) => {
+    if (item.href === "/dashboard/queue" && !currentQueueTokenEnabled) {
+      return false;
+    }
+    return hasPermission(routePermissionMap[item.href]);
+  });
 
   const bottomGridClass =
     mobileNavItems.length >= 6

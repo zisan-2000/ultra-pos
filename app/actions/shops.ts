@@ -9,6 +9,7 @@ import { assertShopAccess } from "@/lib/shop-access";
 import { requirePermission } from "@/lib/rbac";
 import { BILLING_CONFIG, DEFAULT_PLAN, addDays, addMonths } from "@/lib/billing";
 import { sanitizeSalesInvoicePrefix } from "@/lib/sales-invoice";
+import { sanitizeQueueTokenPrefix } from "@/lib/queue-token";
 
 async function getCurrentUser() {
   return requireUser();
@@ -82,6 +83,8 @@ export async function createShop(data: {
   ownerId?: string;
   salesInvoiceEnabled?: boolean;
   salesInvoicePrefix?: string | null;
+  queueTokenEnabled?: boolean;
+  queueTokenPrefix?: string | null;
 }) {
   const user = await getCurrentUser();
   const isSuperAdmin = user.roles?.includes("super_admin") ?? false;
@@ -125,6 +128,11 @@ export async function createShop(data: {
   if (wantsInvoiceFeatureChange) {
     requirePermission(user, "manage_shop_invoice_feature");
   }
+  const wantsQueueFeatureChange =
+    data.queueTokenEnabled !== undefined || data.queueTokenPrefix !== undefined;
+  if (wantsQueueFeatureChange) {
+    requirePermission(user, "manage_shop_queue_feature");
+  }
 
   await prisma.$transaction(async (tx) => {
     const shop = await tx.shop.create({
@@ -139,6 +147,12 @@ export async function createShop(data: {
           : {}),
         ...(data.salesInvoicePrefix !== undefined
           ? { salesInvoicePrefix: sanitizeSalesInvoicePrefix(data.salesInvoicePrefix) }
+          : {}),
+        ...(data.queueTokenEnabled !== undefined
+          ? { queueTokenEnabled: Boolean(data.queueTokenEnabled) }
+          : {}),
+        ...(data.queueTokenPrefix !== undefined
+          ? { queueTokenPrefix: sanitizeQueueTokenPrefix(data.queueTokenPrefix) }
           : {}),
       },
     });
@@ -226,6 +240,19 @@ export async function updateShop(id: string, data: any) {
       );
     }
   }
+  const wantsQueueFeatureChange =
+    data.queueTokenEnabled !== undefined || data.queueTokenPrefix !== undefined;
+  if (wantsQueueFeatureChange) {
+    requirePermission(user, "manage_shop_queue_feature");
+    if (data.queueTokenEnabled !== undefined) {
+      updateData.queueTokenEnabled = Boolean(data.queueTokenEnabled);
+    }
+    if (data.queueTokenPrefix !== undefined) {
+      updateData.queueTokenPrefix = sanitizeQueueTokenPrefix(
+        data.queueTokenPrefix
+      );
+    }
+  }
 
   await prisma.shop.update({
     where: { id },
@@ -270,6 +297,10 @@ export async function deleteShop(id: string) {
     }
 
     await tx.customerLedger.deleteMany({ where: { shopId: id } });
+    await tx.queueTokenItem.deleteMany({
+      where: { token: { shopId: id } },
+    });
+    await tx.queueToken.deleteMany({ where: { shopId: id } });
     await tx.expense.deleteMany({ where: { shopId: id } });
     await tx.cashEntry.deleteMany({ where: { shopId: id } });
     await tx.sale.deleteMany({ where: { shopId: id } });

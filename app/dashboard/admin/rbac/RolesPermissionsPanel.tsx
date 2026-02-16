@@ -32,6 +32,7 @@ export type ModuleKey =
   | "purchases"
   | "suppliers"
   | "sales"
+  | "queue"
   | "customers"
   | "expenses"
   | "cash"
@@ -49,6 +50,7 @@ export const moduleLabels: Record<ModuleKey, string> = {
   purchases: "পণ্য ক্রয়",
   suppliers: "সরবরাহকারী",
   sales: "বিক্রি",
+  queue: "টোকেন কিউ",
   customers: "কাস্টমার / বকেয়া",
   expenses: "খরচ",
   cash: "ক্যাশ",
@@ -79,6 +81,10 @@ export const permissionMeta: Record<string, PermissionMeta> = {
     label: "দোকান ইনভয়েস ফিচার ম্যানেজ",
     module: "shops",
   },
+  manage_shop_queue_feature: {
+    label: "দোকান টোকেন ফিচার ম্যানেজ",
+    module: "shops",
+  },
   delete_shop: { label: "দোকান মুছে ফেলা", module: "shops", critical: true },
   switch_shop: { label: "শপ সুইচ", module: "shops" },
   view_products: { label: "পণ্য দেখা", module: "products" },
@@ -99,6 +105,10 @@ export const permissionMeta: Record<string, PermissionMeta> = {
   view_sales_invoice: { label: "বিক্রির ইনভয়েস দেখা", module: "sales" },
   create_sale: { label: "নতুন বিক্রি", module: "sales" },
   issue_sales_invoice: { label: "বিক্রির ইনভয়েস ইস্যু", module: "sales" },
+  view_queue_board: { label: "টোকেন বোর্ড দেখা", module: "queue" },
+  create_queue_token: { label: "টোকেন তৈরি", module: "queue" },
+  update_queue_token_status: { label: "টোকেন স্ট্যাটাস আপডেট", module: "queue" },
+  print_queue_token: { label: "টোকেন প্রিন্ট", module: "queue" },
   update_sale: { label: "বিক্রি সম্পাদনা", module: "sales" },
   cancel_sale: { label: "বিক্রি বাতিল", module: "sales", critical: true },
   create_due_sale: { label: "ধার বিক্রি", module: "sales" },

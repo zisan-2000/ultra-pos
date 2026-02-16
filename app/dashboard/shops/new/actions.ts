@@ -7,6 +7,8 @@ import { redirect } from "next/navigation";
 export async function handleCreateShop(formData: FormData) {
   const hasInvoiceSettings =
     formData.has("salesInvoiceEnabled") || formData.has("salesInvoicePrefix");
+  const hasQueueSettings =
+    formData.has("queueTokenEnabled") || formData.has("queueTokenPrefix");
 
   await createShop({
     name: formData.get("name") as string,
@@ -19,6 +21,14 @@ export async function handleCreateShop(formData: FormData) {
           salesInvoiceEnabled: formData.get("salesInvoiceEnabled") === "1",
           salesInvoicePrefix:
             ((formData.get("salesInvoicePrefix") as string) || "").trim() ||
+            null,
+        }
+      : {}),
+    ...(hasQueueSettings
+      ? {
+          queueTokenEnabled: formData.get("queueTokenEnabled") === "1",
+          queueTokenPrefix:
+            ((formData.get("queueTokenPrefix") as string) || "").trim() ||
             null,
         }
       : {}),

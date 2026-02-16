@@ -318,12 +318,12 @@ body {
     visibility: hidden !important;
   }
 
-  #sales-invoice-print-root,
-  #sales-invoice-print-root * {
+  [data-print-root],
+  [data-print-root] * {
     visibility: visible !important;
   }
 
-  #sales-invoice-print-root {
+  [data-print-root] {
     position: absolute;
     inset: 0 auto auto 0;
     width: 100%;
@@ -331,13 +331,13 @@ body {
     padding: 0;
   }
 
-  #sales-invoice-print-root .print-card {
+  [data-print-root] .print-card {
     border-radius: 0 !important;
     border-color: #d1d5db !important;
     box-shadow: none !important;
   }
 
-  #sales-invoice-print-root .print-no-break {
+  [data-print-root] .print-no-break {
     page-break-inside: avoid;
     break-inside: avoid;
   }

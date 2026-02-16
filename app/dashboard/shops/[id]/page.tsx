@@ -17,6 +17,11 @@ export default async function EditShop({ params }: PageProps) {
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_invoice_feature"))
   );
+  const canManageQueueToken = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_queue_feature"))
+  );
   let shop: Awaited<ReturnType<typeof getShop>> | null = null;
   try {
     shop = await getShop(id);
@@ -55,6 +60,14 @@ export default async function EditShop({ params }: PageProps) {
               null,
           }
         : {}),
+      ...(canManageQueueToken
+        ? {
+            queueTokenEnabled: formData.get("queueTokenEnabled") === "1",
+            queueTokenPrefix:
+              ((formData.get("queueTokenPrefix") as string) || "").trim() ||
+              null,
+          }
+        : {}),
     });
 
     redirect("/dashboard/shops");
@@ -79,10 +92,13 @@ export default async function EditShop({ params }: PageProps) {
           businessType: (shop.businessType as any) || "tea_stall",
           salesInvoiceEnabled: Boolean((shop as any).salesInvoiceEnabled),
           salesInvoicePrefix: (shop as any).salesInvoicePrefix || "INV",
+          queueTokenEnabled: Boolean((shop as any).queueTokenEnabled),
+          queueTokenPrefix: (shop as any).queueTokenPrefix || "TK",
         }}
         submitLabel="সংরক্ষণ করুন"
         businessTypeOptions={businessTypeOptions}
         showSalesInvoiceSettings={canManageSalesInvoice}
+        showQueueTokenSettings={canManageQueueToken}
       />
     </div>
   );

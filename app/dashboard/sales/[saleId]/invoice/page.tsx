@@ -73,7 +73,7 @@ export default async function SalesInvoicePage({ params }: PageProps) {
         <PrintInvoiceButton />
       </div>
 
-      <div id="sales-invoice-print-root">
+      <div id="sales-invoice-print-root" data-print-root>
         <article className="print-card overflow-hidden rounded-3xl border border-border bg-card shadow-[0_16px_38px_rgba(15,23,42,0.1)] print:rounded-none print:shadow-none">
           <header className="print-no-break border-b border-border bg-gradient-to-br from-muted/65 via-card to-card px-4 py-5 sm:px-6">
             <div className="flex flex-wrap items-start justify-between gap-4">

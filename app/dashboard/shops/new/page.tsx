@@ -18,6 +18,11 @@ export default async function NewShopPage() {
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_invoice_feature"))
   );
+  const canManageQueueToken = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_queue_feature"))
+  );
   const shops = isSuperAdmin ? [] : await getShopsByUser();
   const canOwnerCreateFirstShop = isOwner && shops.length === 0;
 
@@ -61,6 +66,7 @@ export default async function NewShopPage() {
         ownerOptions={ownerOptions}
         businessTypeOptions={mergedBusinessTypes}
         showSalesInvoiceSettings={canManageSalesInvoice}
+        showQueueTokenSettings={canManageQueueToken}
       />
     </div>
   );

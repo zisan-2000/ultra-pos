@@ -46,11 +46,14 @@ type Props = {
     businessType?: string;
     salesInvoiceEnabled?: boolean;
     salesInvoicePrefix?: string | null;
+    queueTokenEnabled?: boolean;
+    queueTokenPrefix?: string | null;
   };
   submitLabel?: string;
   ownerOptions?: Array<{ id: string; name: string | null; email: string | null }>;
   businessTypeOptions?: Array<{ id: string; label: string }>;
   showSalesInvoiceSettings?: boolean;
+  showQueueTokenSettings?: boolean;
 };
 
 const SHOP_TEMPLATE_KEY = "shopTemplates:v1";
@@ -109,6 +112,7 @@ export default function ShopFormClient({
   ownerOptions,
   businessTypeOptions,
   showSalesInvoiceSettings = false,
+  showQueueTokenSettings = false,
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -131,6 +135,12 @@ export default function ShopFormClient({
   );
   const [salesInvoicePrefix, setSalesInvoicePrefix] = useState<string>(
     initial?.salesInvoicePrefix || "INV"
+  );
+  const [queueTokenEnabled, setQueueTokenEnabled] = useState<boolean>(
+    Boolean(initial?.queueTokenEnabled ?? false)
+  );
+  const [queueTokenPrefix, setQueueTokenPrefix] = useState<string>(
+    initial?.queueTokenPrefix || "TK"
   );
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const hasOwnerOptions = Boolean(ownerOptions && ownerOptions.length > 0);
@@ -379,6 +389,11 @@ export default function ShopFormClient({
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, "")
       .slice(0, 12);
+    const payloadQueueTokenEnabled = Boolean(queueTokenEnabled);
+    const payloadQueueTokenPrefix = queueTokenPrefix
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 12);
 
     form.set("name", payloadName);
     form.set("address", payloadAddress);
@@ -387,6 +402,10 @@ export default function ShopFormClient({
     if (showSalesInvoiceSettings) {
       form.set("salesInvoiceEnabled", payloadSalesInvoiceEnabled ? "1" : "0");
       form.set("salesInvoicePrefix", payloadSalesInvoicePrefix);
+    }
+    if (showQueueTokenSettings) {
+      form.set("queueTokenEnabled", payloadQueueTokenEnabled ? "1" : "0");
+      form.set("queueTokenPrefix", payloadQueueTokenPrefix);
     }
     if (ownerOptions) {
       form.set("ownerId", selectedOwnerId);
@@ -413,6 +432,12 @@ export default function ShopFormClient({
             ? {
                 salesInvoiceEnabled: payloadSalesInvoiceEnabled,
                 salesInvoicePrefix: payloadSalesInvoicePrefix || null,
+              }
+            : {}),
+          ...(showQueueTokenSettings
+            ? {
+                queueTokenEnabled: payloadQueueTokenEnabled,
+                queueTokenPrefix: payloadQueueTokenPrefix || null,
               }
             : {}),
           ownerId: ownerOptions ? selectedOwnerId || null : null,
@@ -676,6 +701,48 @@ export default function ShopFormClient({
             />
             <p className="text-xs text-muted-foreground">
               উদাহরণ: `INV` হলে নম্বর হবে `INV-YYMM-000001`
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {showQueueTokenSettings ? (
+        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
+          <div className="space-y-1">
+            <label className="block text-sm font-semibold text-foreground">
+              রেস্টুরেন্ট টোকেন ফিচার
+            </label>
+            <p className="text-xs text-muted-foreground">
+              এই দোকানে চালু থাকলে token queue board থেকে serial token issue করা যাবে।
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={queueTokenEnabled}
+              onChange={(e) => setQueueTokenEnabled(e.target.checked)}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
+            />
+            এই দোকানে Queue Token চালু
+          </label>
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-muted-foreground">
+              টোকেন প্রিফিক্স
+            </label>
+            <input
+              value={queueTokenPrefix}
+              onChange={(e) =>
+                setQueueTokenPrefix(
+                  e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12)
+                )
+              }
+              className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              placeholder="TK"
+              maxLength={12}
+              disabled={!queueTokenEnabled}
+            />
+            <p className="text-xs text-muted-foreground">
+              উদাহরণ: `TK` হলে টোকেন হবে `TK-0001`
             </p>
           </div>
         </div>

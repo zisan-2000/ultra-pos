@@ -115,6 +115,8 @@ const shopCreateSchema = z.object({
   businessType: z.string().optional(),
   salesInvoiceEnabled: z.boolean().optional(),
   salesInvoicePrefix: z.string().optional().nullable(),
+  queueTokenEnabled: z.boolean().optional(),
+  queueTokenPrefix: z.string().optional().nullable(),
   ownerId: z.string().optional().nullable(),
 });
 
@@ -127,6 +129,8 @@ const shopUpdateSchema = z.object({
   closingTime: z.string().optional().nullable(),
   salesInvoiceEnabled: z.boolean().optional(),
   salesInvoicePrefix: z.string().optional().nullable(),
+  queueTokenEnabled: z.boolean().optional(),
+  queueTokenPrefix: z.string().optional().nullable(),
 });
 
 const shopDeleteSchema = z.object({
@@ -297,6 +301,8 @@ export async function POST(req: Request) {
                 businessType: input.businessType ?? "tea_stall",
                 salesInvoiceEnabled: input.salesInvoiceEnabled,
                 salesInvoicePrefix: input.salesInvoicePrefix ?? undefined,
+                queueTokenEnabled: input.queueTokenEnabled,
+                queueTokenPrefix: input.queueTokenPrefix ?? undefined,
                 ownerId: input.ownerId ?? undefined,
               });
               break;
@@ -319,6 +325,12 @@ export async function POST(req: Request) {
                   : {}),
                 ...(data.salesInvoicePrefix !== undefined
                   ? { salesInvoicePrefix: data.salesInvoicePrefix }
+                  : {}),
+                ...(data.queueTokenEnabled !== undefined
+                  ? { queueTokenEnabled: data.queueTokenEnabled }
+                  : {}),
+                ...(data.queueTokenPrefix !== undefined
+                  ? { queueTokenPrefix: data.queueTokenPrefix }
                   : {}),
               });
               break;
