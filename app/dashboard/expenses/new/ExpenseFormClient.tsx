@@ -34,6 +34,13 @@ type ExpenseTemplate = {
   lastUsed: number;
 };
 
+type QuickCategoryOption = {
+  category: string;
+  amount: string;
+  count: number;
+  lastUsed: number;
+};
+
 type Props = {
   shopId: string;
   backHref: string;
@@ -52,8 +59,16 @@ type Props = {
 };
 
 const TEMPLATE_LIMIT = 40;
+const QUICK_CATEGORY_LIMIT = 6;
 
-const CATEGORY_SUGGESTIONS = ["ভাড়া", "বিদ্যুৎ", "কাঁচা বাজার", "বেতন", "পরিবহন", "অন্যান্য"];
+const CATEGORY_SUGGESTIONS = [
+  "পরিবহন",
+  "চা-নাশতা",
+  "প্যাকেট/ব্যাগ/স্টেশনারি",
+  "বিদ্যুৎ/ইন্টারনেট",
+  "দৈনিক শ্রম/হেল্পার",
+  "অন্যান্য",
+];
 
 function mergeTemplates(existing: ExpenseTemplate[], incoming: ExpenseTemplate) {
   const idx = existing.findIndex((t) => t.category === incoming.category && t.amount === incoming.amount);
@@ -115,6 +130,7 @@ export default function ExpenseFormClient({
   const realtime = useRealtimeStatus();
   const router = useRouter();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const amountInputRef = useRef<HTMLInputElement | null>(null);
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -193,6 +209,47 @@ export default function ExpenseFormClient({
     [recentTemplates, frequentTemplates]
   );
 
+  const quickCategoryOptions = useMemo<QuickCategoryOption[]>(() => {
+    const categoryMap = new Map<string, QuickCategoryOption>();
+
+    templates.forEach((t) => {
+      const categoryKey = t.category.trim();
+      if (!categoryKey) return;
+
+      const existing = categoryMap.get(categoryKey);
+      if (!existing) {
+        categoryMap.set(categoryKey, {
+          category: categoryKey,
+          amount: t.amount || "",
+          count: Math.max(1, t.count || 1),
+          lastUsed: t.lastUsed || 0,
+        });
+        return;
+      }
+
+      const isLatest = (t.lastUsed || 0) >= existing.lastUsed;
+      categoryMap.set(categoryKey, {
+        category: categoryKey,
+        amount: isLatest ? t.amount || "" : existing.amount,
+        count: existing.count + Math.max(1, t.count || 1),
+        lastUsed: Math.max(existing.lastUsed, t.lastUsed || 0),
+      });
+    });
+
+    const ranked = Array.from(categoryMap.values()).sort(
+      (a, b) => b.count - a.count || b.lastUsed - a.lastUsed || a.category.localeCompare(b.category)
+    );
+    const used = new Set(ranked.map((item) => item.category));
+    const fallback = CATEGORY_SUGGESTIONS.filter((cat) => !used.has(cat)).map((cat) => ({
+      category: cat,
+      amount: "",
+      count: 0,
+      lastUsed: 0,
+    }));
+
+    return [...ranked, ...fallback].slice(0, QUICK_CATEGORY_LIMIT);
+  }, [templates]);
+
   const headerTitle = title || (id ? "খরচ সম্পাদনা করুন" : "নতুন খরচ যোগ করুন");
   const headerSubtitle =
     subtitle ||
@@ -221,6 +278,26 @@ export default function ExpenseFormClient({
     setCategory(t.category);
     setAmount(t.amount);
     setNote(t.note || "");
+  }
+
+  function focusAmountInput() {
+    const runner = () => {
+      amountInputRef.current?.focus();
+      amountInputRef.current?.select();
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(runner);
+      return;
+    }
+    setTimeout(runner, 0);
+  }
+
+  function handleQuickCategorySelect(option: QuickCategoryOption) {
+    setCategory(option.category);
+    if (option.amount) {
+      setAmount(option.amount);
+    }
+    focusAmountInput();
   }
 
   function startVoice(field: "amount" | "note") {
@@ -473,6 +550,52 @@ export default function ExpenseFormClient({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Category */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
+          <label className="block text-base font-medium text-foreground">
+            খরচের ক্যাটাগরি *
+          </label>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">দ্রুত ক্যাটাগরি (ট্যাপ করলে অটো-ফিল)</p>
+            <div className="flex flex-wrap gap-2">
+              {quickCategoryOptions.map((item) => (
+                <button
+                  key={item.category}
+                  type="button"
+                  onClick={() => handleQuickCategorySelect(item)}
+                  className={`h-9 px-3 rounded-full border text-xs font-semibold transition-colors ${
+                    category === item.category
+                      ? "bg-primary-soft border-primary/40 text-primary"
+                      : "bg-card border-border text-foreground hover:border-primary/30"
+                  }`}
+                >
+                  {item.category}
+                  {item.amount ? (
+                    <span className="ml-1 text-[11px] text-muted-foreground">৳{item.amount}</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
+          <input
+            name="category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            list="expense-category-options"
+            className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="যেমন: বিদ্যুৎ"
+            required
+          />
+          <datalist id="expense-category-options">
+            {categoryOptions.map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+          <p className="text-xs text-muted-foreground">
+            বেশি ব্যবহৃত ক্যাটাগরি উপরে দেখাচ্ছে
+          </p>
+        </div>
+
         {/* Amount */}
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
           <div className="flex items-center justify-between gap-2">
@@ -483,6 +606,7 @@ export default function ExpenseFormClient({
           </div>
           <div className="relative">
             <input
+              ref={amountInputRef}
               name="amount"
               type="number"
               step="0.01"
@@ -527,40 +651,6 @@ export default function ExpenseFormClient({
               ))}
             </div>
           )}
-        </div>
-
-        {/* Category */}
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
-          <label className="block text-base font-medium text-foreground">
-            খরচের ক্যাটাগরি *
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {categoryOptions.slice(0, 8).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCategory(c)}
-                className={`h-9 px-3 rounded-full border text-xs font-semibold ${
-                  category === c
-                    ? "bg-primary-soft border-primary/40 text-primary"
-                    : "bg-card border-border text-foreground hover:border-primary/30"
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-          <input
-            name="category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="যেমন: বিদ্যুৎ"
-            required
-          />
-          <p className="text-xs text-muted-foreground">
-            বেশি ব্যবহৃত ক্যাটাগরি উপরে দেখাচ্ছে
-          </p>
         </div>
 
         {/* Date + Note */}
