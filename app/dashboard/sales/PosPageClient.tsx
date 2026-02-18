@@ -677,6 +677,7 @@ export function PosPageClient({
   );
 
   const scrollToCart = () => {
+    setDrawerOpen(false);
     if (cartPanelRef.current) {
       cartPanelRef.current.scrollIntoView({
         behavior: "smooth",
@@ -947,7 +948,7 @@ export function PosPageClient({
                   type="button"
                   aria-label="বিল বিস্তারিত দেখুন"
                   className="text-muted-foreground hover:text-foreground"
-                  onClick={scrollToCart}
+                  onClick={() => setDrawerOpen(true)}
                 >
                   ▼
                 </button>
