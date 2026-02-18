@@ -66,6 +66,8 @@ export default async function EditShop({ params }: PageProps) {
             queueTokenPrefix:
               ((formData.get("queueTokenPrefix") as string) || "").trim() ||
               null,
+            queueWorkflow:
+              ((formData.get("queueWorkflow") as string) || "").trim() || null,
           }
         : {}),
     });
@@ -94,6 +96,7 @@ export default async function EditShop({ params }: PageProps) {
           salesInvoicePrefix: (shop as any).salesInvoicePrefix || "INV",
           queueTokenEnabled: Boolean((shop as any).queueTokenEnabled),
           queueTokenPrefix: (shop as any).queueTokenPrefix || "TK",
+          queueWorkflow: (shop as any).queueWorkflow || null,
         }}
         submitLabel="সংরক্ষণ করুন"
         businessTypeOptions={businessTypeOptions}

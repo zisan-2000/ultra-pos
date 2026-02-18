@@ -166,6 +166,7 @@ model Shop {
   nextSalesInvoiceSeq Int     @map("next_sales_invoice_seq") @default(1)
   queueTokenEnabled Boolean @map("queue_token_enabled") @default(false)
   queueTokenPrefix  String? @map("queue_token_prefix")
+  queueWorkflow     String? @map("queue_workflow")
   nextQueueTokenSeq Int     @map("next_queue_token_seq") @default(1)
   createdAt    DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
 

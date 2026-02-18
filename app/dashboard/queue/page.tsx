@@ -14,6 +14,14 @@ import {
   updateQueueTokenStatus,
 } from "@/app/actions/queue-tokens";
 import { resolveQueueTokenPrefix } from "@/lib/queue-token";
+import {
+  getQueueNextAction,
+  getQueueOrderTypeLabel,
+  getQueueOrderTypeOptions,
+  getQueueStatusLabel,
+  isQueueTerminalStatus,
+  resolveQueueWorkflowProfile,
+} from "@/lib/queue-workflow";
 import QueueShopSelectorClient from "./ShopSelectorClient";
 import CreateQueueTokenForm from "./CreateQueueTokenForm";
 
@@ -21,35 +29,12 @@ type QueuePageProps = {
   searchParams?: Promise<{ shopId?: string } | undefined>;
 };
 
-type QueueTokenStatus =
-  | "WAITING"
-  | "CALLED"
-  | "IN_KITCHEN"
-  | "READY"
-  | "SERVED"
-  | "CANCELLED";
-
-const STATUS_LABELS: Record<string, string> = {
-  WAITING: "অপেক্ষায়",
-  CALLED: "ডাকা হয়েছে",
-  IN_KITCHEN: "কিচেনে",
-  READY: "রেডি",
-  SERVED: "সার্ভড",
-  CANCELLED: "বাতিল",
-};
-
-const ORDER_TYPE_LABELS: Record<string, string> = {
-  dine_in: "ডাইন-ইন",
-  takeaway: "টেকঅ্যাওয়ে",
-  delivery: "ডেলিভারি",
-};
-
 const STATUS_BADGE_CLASS: Record<string, string> = {
   WAITING: "border-border bg-muted text-muted-foreground",
   CALLED: "border-primary/30 bg-primary-soft text-primary",
-  IN_KITCHEN: "border-warning/30 bg-warning-soft text-warning",
+  IN_PROGRESS: "border-warning/30 bg-warning-soft text-warning",
   READY: "border-success/30 bg-success-soft text-success",
-  SERVED: "border-success/30 bg-success-soft text-success",
+  DONE: "border-success/30 bg-success-soft text-success",
   CANCELLED: "border-danger/30 bg-danger-soft text-danger",
 };
 
@@ -80,24 +65,6 @@ function formatTokenAge(value: Date, nowMs: number) {
   const hours = Math.floor(diffMinutes / 60);
   const minutes = diffMinutes % 60;
   return minutes > 0 ? `${hours} ঘ ${minutes} মি` : `${hours} ঘ`;
-}
-
-function getNextStatusAction(status: string) {
-  switch (status) {
-    case "WAITING":
-      return { status: "CALLED" as QueueTokenStatus, label: "কল করুন" };
-    case "CALLED":
-      return {
-        status: "IN_KITCHEN" as QueueTokenStatus,
-        label: "কিচেনে পাঠান",
-      };
-    case "IN_KITCHEN":
-      return { status: "READY" as QueueTokenStatus, label: "রেডি" };
-    case "READY":
-      return { status: "SERVED" as QueueTokenStatus, label: "সার্ভড" };
-    default:
-      return null;
-  }
 }
 
 function parseTokenItemsFromForm(formData: FormData) {
@@ -183,6 +150,11 @@ export default async function QueuePage({ searchParams }: QueuePageProps) {
     snapshot.shop.queueTokenEnabled && canCreateToken
       ? await getQueueProductOptions(selectedShopId)
       : [];
+  const workflowProfile = resolveQueueWorkflowProfile({
+    queueWorkflow: snapshot.shop.queueWorkflow,
+    businessType: snapshot.shop.businessType,
+  });
+  const orderTypeOptions = getQueueOrderTypeOptions(workflowProfile);
   const hasTokenEligibleProduct = productOptions.some(
     (product) => !product.trackStock || Number(product.availableStock || 0) > 0
   );
@@ -253,9 +225,7 @@ export default async function QueuePage({ searchParams }: QueuePageProps) {
   }
 
   const waitingCount = snapshot.tokens.filter((token) => token.status === "WAITING").length;
-  const activeCount = snapshot.tokens.filter(
-    (token) => token.status !== "SERVED" && token.status !== "CANCELLED"
-  ).length;
+  const activeCount = snapshot.tokens.filter((token) => !isQueueTerminalStatus(token.status)).length;
   const nextWaitingToken = snapshot.tokens.find((token) => token.status === "WAITING");
   const pendingTokens = snapshot.tokens.filter(
     (token) => token.status !== "CANCELLED" && !token.settledSaleId
@@ -363,6 +333,7 @@ export default async function QueuePage({ searchParams }: QueuePageProps) {
             <CreateQueueTokenForm
               shopId={selectedShopId}
               products={productOptions}
+              orderTypeOptions={orderTypeOptions}
               action={createTokenAction}
             />
           )}
@@ -449,7 +420,7 @@ export default async function QueuePage({ searchParams }: QueuePageProps) {
                   <div key={token.id} className="grid grid-cols-12 px-3 py-2 text-xs">
                     <span className="col-span-3 font-mono text-foreground">{token.tokenLabel}</span>
                     <span className="col-span-3 text-muted-foreground">
-                      {STATUS_LABELS[token.status] || token.status}
+                      {getQueueStatusLabel(token.status, workflowProfile)}
                     </span>
                     <span className="col-span-3 text-right font-semibold text-foreground">
                       ৳ {formatMoney(token.totalAmount)}
@@ -494,8 +465,8 @@ export default async function QueuePage({ searchParams }: QueuePageProps) {
         ) : (
           <div className="divide-y divide-border">
             {snapshot.tokens.map((token) => {
-              const nextAction = getNextStatusAction(token.status);
-              const isCompleted = token.status === "SERVED" || token.status === "CANCELLED";
+              const nextAction = getQueueNextAction(token.status, workflowProfile);
+              const isCompleted = isQueueTerminalStatus(token.status);
               const isSettled = Boolean(token.settledSaleId);
               const canSettleNow = canSettleToken && !isSettled && token.status !== "CANCELLED";
 
@@ -510,10 +481,10 @@ export default async function QueuePage({ searchParams }: QueuePageProps) {
                           "border-border bg-muted text-muted-foreground"
                         }`}
                       >
-                        {STATUS_LABELS[token.status] || token.status}
+                        {getQueueStatusLabel(token.status, workflowProfile)}
                       </span>
                       <span className="inline-flex h-7 items-center rounded-full border border-border bg-card px-3 text-xs font-semibold text-muted-foreground">
-                        {ORDER_TYPE_LABELS[token.orderType] || token.orderType}
+                        {getQueueOrderTypeLabel(token.orderType, workflowProfile)}
                       </span>
                       {isSettled ? (
                         <span className="inline-flex h-7 items-center rounded-full border border-success/30 bg-success-soft px-3 text-xs font-semibold text-success">

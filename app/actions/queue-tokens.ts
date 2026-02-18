@@ -9,6 +9,14 @@ import {
   allocateQueueTokenNumber,
   canPrintQueueToken,
 } from "@/lib/queue-token";
+import {
+  getQueueNextAction,
+  normalizeQueueOrderType,
+  getQueueStatusSortRank,
+  normalizeQueueStatus,
+  resolveQueueWorkflowProfile,
+  type QueueCoreStatus,
+} from "@/lib/queue-workflow";
 import { createSale } from "@/app/actions/sales";
 import {
   getDhakaDateString,
@@ -16,18 +24,6 @@ import {
   toDhakaBusinessDate,
 } from "@/lib/dhaka-date";
 
-const QUEUE_ORDER_TYPES = ["dine_in", "takeaway", "delivery"] as const;
-type QueueOrderType = (typeof QUEUE_ORDER_TYPES)[number];
-
-const QUEUE_TOKEN_STATUSES = [
-  "WAITING",
-  "CALLED",
-  "IN_KITCHEN",
-  "READY",
-  "SERVED",
-  "CANCELLED",
-] as const;
-type QueueTokenStatus = (typeof QUEUE_TOKEN_STATUSES)[number];
 type QueueProductOption = {
   id: string;
   name: string;
@@ -41,36 +37,11 @@ type QueueTokenItemInput = {
   quantity: number;
 };
 
-const ACTIVE_STATUS_RANK: Record<QueueTokenStatus, number> = {
-  WAITING: 0,
-  CALLED: 1,
-  IN_KITCHEN: 2,
-  READY: 3,
-  SERVED: 4,
-  CANCELLED: 5,
-};
-
 function normalizeBusinessDateInput(value?: string | null) {
   if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return value;
   }
   return getDhakaDateString();
-}
-
-function normalizeOrderType(value?: string | null): QueueOrderType {
-  const normalized = (value || "").toLowerCase();
-  if ((QUEUE_ORDER_TYPES as readonly string[]).includes(normalized)) {
-    return normalized as QueueOrderType;
-  }
-  return "dine_in";
-}
-
-function normalizeStatus(value?: string | null): QueueTokenStatus {
-  const status = (value || "").toUpperCase();
-  if ((QUEUE_TOKEN_STATUSES as readonly string[]).includes(status)) {
-    return status as QueueTokenStatus;
-  }
-  throw new Error("Invalid queue token status");
 }
 
 function cleanOptionalText(value?: string | null, maxLength = 120) {
@@ -135,15 +106,15 @@ async function getReservedQuantityByProduct(
   );
 }
 
-function buildStatusTimestampPatch(status: QueueTokenStatus, now: Date) {
+function buildStatusTimestampPatch(status: QueueCoreStatus, now: Date) {
   switch (status) {
     case "CALLED":
       return { calledAt: now };
-    case "IN_KITCHEN":
+    case "IN_PROGRESS":
       return { inKitchenAt: now };
     case "READY":
       return { readyAt: now };
-    case "SERVED":
+    case "DONE":
       return { servedAt: now };
     case "CANCELLED":
       return { cancelledAt: now };
@@ -156,6 +127,8 @@ type QueueBoardSnapshot = {
   shop: {
     id: string;
     name: string;
+    businessType: string | null;
+    queueWorkflow: string | null;
     queueTokenEnabled: boolean;
     queueTokenPrefix: string | null;
   };
@@ -286,10 +259,10 @@ export async function getQueueBoardSnapshot(
   });
 
   const sortedTokens = tokens.sort((a, b) => {
-    const aStatus = normalizeStatus(a.status);
-    const bStatus = normalizeStatus(b.status);
-    if (ACTIVE_STATUS_RANK[aStatus] !== ACTIVE_STATUS_RANK[bStatus]) {
-      return ACTIVE_STATUS_RANK[aStatus] - ACTIVE_STATUS_RANK[bStatus];
+    const aRank = getQueueStatusSortRank(a.status);
+    const bRank = getQueueStatusSortRank(b.status);
+    if (aRank !== bRank) {
+      return aRank - bRank;
     }
     return a.tokenNo - b.tokenNo;
   });
@@ -298,6 +271,8 @@ export async function getQueueBoardSnapshot(
     shop: {
       id: shop.id,
       name: shop.name,
+      businessType: (shop as any).businessType ?? null,
+      queueWorkflow: (shop as any).queueWorkflow ?? null,
       queueTokenEnabled: Boolean((shop as any).queueTokenEnabled),
       queueTokenPrefix: (shop as any).queueTokenPrefix ?? null,
     },
@@ -311,7 +286,7 @@ export async function getQueueBoardSnapshot(
       customerPhone: token.customerPhone ?? null,
       note: token.note ?? null,
       totalAmount: token.totalAmount.toString(),
-      status: token.status,
+      status: normalizeQueueStatus(token.status),
       settledSaleId: token.settledSaleId ?? null,
       settledAt: token.settledAt ?? null,
       calledAt: token.calledAt ?? null,
@@ -350,8 +325,12 @@ export async function createQueueToken(input: {
     throw new Error("Queue token feature is disabled for this shop");
   }
 
+  const workflowProfile = resolveQueueWorkflowProfile({
+    queueWorkflow: (shop as any).queueWorkflow,
+    businessType: (shop as any).businessType,
+  });
   const now = new Date();
-  const orderType = normalizeOrderType(input.orderType);
+  const orderType = normalizeQueueOrderType(input.orderType, workflowProfile);
   const customerName = cleanOptionalText(input.customerName, 80);
   const customerPhone = cleanPhone(input.customerPhone);
   const note = cleanOptionalText(input.note, 200);
@@ -521,14 +500,20 @@ export async function updateQueueTokenStatus(input: {
 }) {
   const user = await requireUser();
   requirePermission(user, "update_queue_token_status");
-  const status = normalizeStatus(input.status);
+  const status = normalizeQueueStatus(input.status);
 
   const existing = await prisma.queueToken.findUnique({
     where: { id: input.tokenId },
     select: {
       id: true,
       shopId: true,
+      status: true,
       settledSaleId: true,
+      shop: {
+        select: {
+          businessType: true,
+        },
+      },
     },
   });
 
@@ -539,6 +524,19 @@ export async function updateQueueTokenStatus(input: {
   await assertShopAccess(existing.shopId, user);
   if (existing.settledSaleId) {
     throw new Error("এই টোকেনের Sale ইতিমধ্যে সম্পন্ন হয়েছে");
+  }
+  const currentStatus = normalizeQueueStatus(existing.status);
+  const workflow = resolveQueueWorkflowProfile({
+    businessType: existing.shop.businessType,
+  });
+  const nextAction = getQueueNextAction(currentStatus, workflow);
+
+  if (status === "CANCELLED") {
+    if (currentStatus === "DONE" || currentStatus === "CANCELLED") {
+      throw new Error("এই টোকেন আর বাতিল করা যাবে না");
+    }
+  } else if (!nextAction || nextAction.status !== status) {
+    throw new Error("এই workflow-এ এই status change অনুমোদিত নয়");
   }
   const now = new Date();
 
@@ -627,7 +625,7 @@ export async function settleQueueTokenAsCashSale(input: {
     data: {
       settledSaleId: sale.saleId,
       settledAt: now,
-      status: "SERVED",
+      status: "DONE",
       servedAt: now,
     },
   });
@@ -770,6 +768,8 @@ export async function getQueueTokenPrintData(tokenId: string) {
           name: true,
           address: true,
           phone: true,
+          businessType: true,
+          queueWorkflow: true,
         },
       },
     },
@@ -783,6 +783,7 @@ export async function getQueueTokenPrintData(tokenId: string) {
 
   return {
     ...token,
+    status: normalizeQueueStatus(token.status),
     customerName: token.customerName ?? null,
     customerPhone: token.customerPhone ?? null,
     note: token.note ?? null,

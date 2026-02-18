@@ -48,6 +48,7 @@ type Props = {
     salesInvoicePrefix?: string | null;
     queueTokenEnabled?: boolean;
     queueTokenPrefix?: string | null;
+    queueWorkflow?: string | null;
   };
   submitLabel?: string;
   ownerOptions?: Array<{ id: string; name: string | null; email: string | null }>;
@@ -141,6 +142,9 @@ export default function ShopFormClient({
   );
   const [queueTokenPrefix, setQueueTokenPrefix] = useState<string>(
     initial?.queueTokenPrefix || "TK"
+  );
+  const [queueWorkflow, setQueueWorkflow] = useState<string>(
+    initial?.queueWorkflow || ""
   );
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const hasOwnerOptions = Boolean(ownerOptions && ownerOptions.length > 0);
@@ -394,6 +398,7 @@ export default function ShopFormClient({
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, "")
       .slice(0, 12);
+    const payloadQueueWorkflow = (queueWorkflow || "").trim().toLowerCase();
 
     form.set("name", payloadName);
     form.set("address", payloadAddress);
@@ -406,6 +411,7 @@ export default function ShopFormClient({
     if (showQueueTokenSettings) {
       form.set("queueTokenEnabled", payloadQueueTokenEnabled ? "1" : "0");
       form.set("queueTokenPrefix", payloadQueueTokenPrefix);
+      form.set("queueWorkflow", payloadQueueWorkflow);
     }
     if (ownerOptions) {
       form.set("ownerId", selectedOwnerId);
@@ -438,6 +444,7 @@ export default function ShopFormClient({
             ? {
                 queueTokenEnabled: payloadQueueTokenEnabled,
                 queueTokenPrefix: payloadQueueTokenPrefix || null,
+                queueWorkflow: payloadQueueWorkflow || null,
               }
             : {}),
           ownerId: ownerOptions ? selectedOwnerId || null : null,
@@ -710,10 +717,10 @@ export default function ShopFormClient({
         <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
           <div className="space-y-1">
             <label className="block text-sm font-semibold text-foreground">
-              রেস্টুরেন্ট টোকেন ফিচার
+              Queue টোকেন ফিচার
             </label>
             <p className="text-xs text-muted-foreground">
-              এই দোকানে চালু থাকলে token queue board থেকে serial token issue করা যাবে।
+              চালু থাকলে queue board থেকে serial token issue করা যাবে।
             </p>
           </div>
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
@@ -743,6 +750,25 @@ export default function ShopFormClient({
             />
             <p className="text-xs text-muted-foreground">
               উদাহরণ: `TK` হলে টোকেন হবে `TK-0001`
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-muted-foreground">
+              টোকেন ওয়ার্কফ্লো প্রোফাইল
+            </label>
+            <select
+              value={queueWorkflow}
+              onChange={(e) => setQueueWorkflow(e.target.value)}
+              className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              disabled={!queueTokenEnabled}
+            >
+              <option value="">Auto (Business Type থেকে)</option>
+              <option value="restaurant">Restaurant</option>
+              <option value="salon">Salon</option>
+              <option value="generic">Generic</option>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Auto দিলে ব্যবসার ধরন দেখে status label/flow ঠিক হবে।
             </p>
           </div>
         </div>

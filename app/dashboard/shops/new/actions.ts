@@ -8,7 +8,9 @@ export async function handleCreateShop(formData: FormData) {
   const hasInvoiceSettings =
     formData.has("salesInvoiceEnabled") || formData.has("salesInvoicePrefix");
   const hasQueueSettings =
-    formData.has("queueTokenEnabled") || formData.has("queueTokenPrefix");
+    formData.has("queueTokenEnabled") ||
+    formData.has("queueTokenPrefix") ||
+    formData.has("queueWorkflow");
 
   await createShop({
     name: formData.get("name") as string,
@@ -30,6 +32,8 @@ export async function handleCreateShop(formData: FormData) {
           queueTokenPrefix:
             ((formData.get("queueTokenPrefix") as string) || "").trim() ||
             null,
+          queueWorkflow:
+            ((formData.get("queueWorkflow") as string) || "").trim() || null,
         }
       : {}),
   });

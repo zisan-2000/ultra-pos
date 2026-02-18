@@ -10,6 +10,7 @@ import { requirePermission } from "@/lib/rbac";
 import { BILLING_CONFIG, DEFAULT_PLAN, addDays, addMonths } from "@/lib/billing";
 import { sanitizeSalesInvoicePrefix } from "@/lib/sales-invoice";
 import { sanitizeQueueTokenPrefix } from "@/lib/queue-token";
+import { sanitizeQueueWorkflow } from "@/lib/queue-workflow";
 
 async function getCurrentUser() {
   return requireUser();
@@ -85,6 +86,7 @@ export async function createShop(data: {
   salesInvoicePrefix?: string | null;
   queueTokenEnabled?: boolean;
   queueTokenPrefix?: string | null;
+  queueWorkflow?: string | null;
 }) {
   const user = await getCurrentUser();
   const isSuperAdmin = user.roles?.includes("super_admin") ?? false;
@@ -129,7 +131,9 @@ export async function createShop(data: {
     requirePermission(user, "manage_shop_invoice_feature");
   }
   const wantsQueueFeatureChange =
-    data.queueTokenEnabled !== undefined || data.queueTokenPrefix !== undefined;
+    data.queueTokenEnabled !== undefined ||
+    data.queueTokenPrefix !== undefined ||
+    data.queueWorkflow !== undefined;
   if (wantsQueueFeatureChange) {
     requirePermission(user, "manage_shop_queue_feature");
   }
@@ -153,6 +157,9 @@ export async function createShop(data: {
           : {}),
         ...(data.queueTokenPrefix !== undefined
           ? { queueTokenPrefix: sanitizeQueueTokenPrefix(data.queueTokenPrefix) }
+          : {}),
+        ...(data.queueWorkflow !== undefined
+          ? { queueWorkflow: sanitizeQueueWorkflow(data.queueWorkflow) }
           : {}),
       },
     });
@@ -241,7 +248,9 @@ export async function updateShop(id: string, data: any) {
     }
   }
   const wantsQueueFeatureChange =
-    data.queueTokenEnabled !== undefined || data.queueTokenPrefix !== undefined;
+    data.queueTokenEnabled !== undefined ||
+    data.queueTokenPrefix !== undefined ||
+    data.queueWorkflow !== undefined;
   if (wantsQueueFeatureChange) {
     requirePermission(user, "manage_shop_queue_feature");
     if (data.queueTokenEnabled !== undefined) {
@@ -251,6 +260,9 @@ export async function updateShop(id: string, data: any) {
       updateData.queueTokenPrefix = sanitizeQueueTokenPrefix(
         data.queueTokenPrefix
       );
+    }
+    if (data.queueWorkflow !== undefined) {
+      (updateData as any).queueWorkflow = sanitizeQueueWorkflow(data.queueWorkflow);
     }
   }
 

@@ -1,25 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getQueueTokenPrintData } from "@/app/actions/queue-tokens";
+import {
+  getQueueOrderTypeLabel,
+  getQueueStatusLabel,
+  resolveQueueWorkflowProfile,
+} from "@/lib/queue-workflow";
 import PrintQueueTokenButton from "./PrintQueueTokenButton";
 
 type PageProps = {
   params: Promise<{ tokenId: string }>;
-};
-
-const ORDER_TYPE_LABELS: Record<string, string> = {
-  dine_in: "ডাইন-ইন",
-  takeaway: "টেকঅ্যাওয়ে",
-  delivery: "ডেলিভারি",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  WAITING: "অপেক্ষায়",
-  CALLED: "ডাকা হয়েছে",
-  IN_KITCHEN: "কিচেনে",
-  READY: "রেডি",
-  SERVED: "সার্ভড",
-  CANCELLED: "বাতিল",
 };
 
 function formatDateTime(date: Date | null) {
@@ -66,6 +56,19 @@ export default async function QueueTokenPrintPage({ params }: PageProps) {
     throw error;
   }
 
+  const workflowProfile = resolveQueueWorkflowProfile({
+    queueWorkflow: (data.shop as any).queueWorkflow,
+    businessType: data.shop.businessType,
+  });
+  const progressLabel =
+    workflowProfile === "restaurant"
+      ? "In Kitchen At"
+      : workflowProfile === "salon"
+      ? "In Service At"
+      : "In Progress At";
+  const doneLabel =
+    workflowProfile === "restaurant" ? "Served At" : "Completed At";
+
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
@@ -111,10 +114,10 @@ export default async function QueueTokenPrintPage({ params }: PageProps) {
             <div className="rounded-xl border border-border bg-muted/35 p-3 sm:p-4">
               <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">অর্ডার</p>
               <p className="mt-1.5 text-base font-bold text-foreground">
-                {ORDER_TYPE_LABELS[data.orderType] || data.orderType}
+                {getQueueOrderTypeLabel(data.orderType, workflowProfile)}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Status: {STATUS_LABELS[data.status] || data.status}
+                Status: {getQueueStatusLabel(data.status, workflowProfile)}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">Date: {formatDateOnly(data.businessDate)}</p>
             </div>
@@ -178,7 +181,7 @@ export default async function QueueTokenPrintPage({ params }: PageProps) {
               <p className="mt-1 font-medium text-foreground">{formatDateTime(data.calledAt)}</p>
             </div>
             <div className="rounded-xl border border-border bg-muted/35 p-3 text-sm">
-              <p className="text-xs font-semibold text-muted-foreground">In Kitchen At</p>
+              <p className="text-xs font-semibold text-muted-foreground">{progressLabel}</p>
               <p className="mt-1 font-medium text-foreground">{formatDateTime(data.inKitchenAt)}</p>
             </div>
             <div className="rounded-xl border border-border bg-muted/35 p-3 text-sm">
@@ -186,7 +189,7 @@ export default async function QueueTokenPrintPage({ params }: PageProps) {
               <p className="mt-1 font-medium text-foreground">{formatDateTime(data.readyAt)}</p>
             </div>
             <div className="rounded-xl border border-border bg-muted/35 p-3 text-sm">
-              <p className="text-xs font-semibold text-muted-foreground">Served At</p>
+              <p className="text-xs font-semibold text-muted-foreground">{doneLabel}</p>
               <p className="mt-1 font-medium text-foreground">{formatDateTime(data.servedAt)}</p>
             </div>
           </section>

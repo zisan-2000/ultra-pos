@@ -20,6 +20,7 @@ type ItemDraft = {
 type Props = {
   shopId: string;
   products: QueueProductOption[];
+  orderTypeOptions: Array<{ value: string; label: string }>;
   action: (formData: FormData) => Promise<void>;
 };
 
@@ -68,7 +69,12 @@ function SubmitButton() {
   );
 }
 
-export default function CreateQueueTokenForm({ shopId, products, action }: Props) {
+export default function CreateQueueTokenForm({
+  shopId,
+  products,
+  orderTypeOptions,
+  action,
+}: Props) {
   const defaultProductId =
     products.find((product) => isSelectableProduct(product))?.id ??
     products[0]?.id ??
@@ -142,11 +148,13 @@ export default function CreateQueueTokenForm({ shopId, products, action }: Props
         <select
           name="orderType"
           className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-          defaultValue="dine_in"
+          defaultValue={orderTypeOptions[0]?.value || ""}
         >
-          <option value="dine_in">ডাইন-ইন</option>
-          <option value="takeaway">টেকঅ্যাওয়ে</option>
-          <option value="delivery">ডেলিভারি</option>
+          {orderTypeOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
       </div>
 
