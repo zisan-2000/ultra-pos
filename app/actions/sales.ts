@@ -324,21 +324,29 @@ export async function createSale(input: CreateSaleInput) {
       });
     }
 
-    // Update stock - SEQUENTIAL but optimized
+    // Update stock atomically with non-negative guard
     logPerf(`📊 [DEBUG] Starting stock updates for ${dbProducts.length} products`);
     let stockUpdateCount = 0;
     
     for (const p of dbProducts) {
       const soldQty = stockMap.get(p.id) || 0;
       if (soldQty > 0 && p.trackStock !== false) {
-        const currentStock = Number(p.stockQty || "0");
-        const newStock = currentStock - soldQty;
+        const soldQtyDecimal = new Prisma.Decimal(soldQty.toFixed(2));
         
         const singleUpdateStart = Date.now();
-        await tx.product.update({
-          where: { id: p.id },
-          data: { stockQty: newStock.toFixed(2) },
+        const updated = await tx.product.updateMany({
+          where: {
+            id: p.id,
+            trackStock: true,
+            stockQty: { gte: soldQtyDecimal },
+          },
+          data: {
+            stockQty: { decrement: soldQtyDecimal },
+          },
         });
+        if (updated.count !== 1) {
+          throw new Error(`Insufficient stock for product "${p.name}"`);
+        }
         const singleUpdateEnd = Date.now();
         
         stockUpdateCount++;
@@ -779,9 +787,26 @@ export async function voidSale(saleId: string, reason?: string | null) {
 
   const isCashSale = (sale.paymentMethod || "").toLowerCase() === "cash";
   const voidTimestamp = new Date();
-  let affectedProductIds: string[] = [];
+  const txResult = await prisma.$transaction(async (tx) => {
+    // Idempotency + race guard: claim void once.
+    const claimed = await tx.sale.updateMany({
+      where: {
+        id: saleId,
+        status: { not: "VOIDED" },
+      },
+      data: {
+        status: "VOIDED",
+        voidReason: reason || null,
+        voidAt: voidTimestamp,
+        voidByUserId: user.id,
+      } as any,
+    });
+    if (claimed.count !== 1) {
+      return { alreadyVoided: true as const, affectedProductIds: [] as string[] };
+    }
 
-  await prisma.$transaction(async (tx) => {
+    let affectedProductIds: string[] = [];
+
     // Restore stock for tracked products
     const saleItems = await tx.saleItem.findMany({
       where: { saleId },
@@ -797,25 +822,15 @@ export async function voidSale(saleId: string, reason?: string | null) {
 
       const qty = Number(it.quantity || 0);
       if (!Number.isFinite(qty) || qty === 0) continue;
-
-      const currentStock = Number(p.stockQty || 0);
-      const newStock = currentStock + qty;
+      const qtyDecimal = new Prisma.Decimal(qty.toFixed(2));
 
       await tx.product.update({
         where: { id: p.id },
-        data: { stockQty: newStock.toFixed(2) },
+        data: {
+          stockQty: { increment: qtyDecimal },
+        },
       });
     }
-
-    await tx.sale.update({
-      where: { id: saleId },
-      data: {
-        status: "VOIDED",
-        voidReason: reason || null,
-        voidAt: new Date(),
-        voidByUserId: user.id,
-      } as any,
-    });
 
     if (isCashSale) {
       await tx.cashEntry.create({
@@ -828,7 +843,13 @@ export async function voidSale(saleId: string, reason?: string | null) {
         },
       });
     }
+
+    return { alreadyVoided: false as const, affectedProductIds };
   });
+  if (txResult.alreadyVoided) {
+    return { success: true, alreadyVoided: true };
+  }
+  const affectedProductIds = txResult.affectedProductIds;
 
   const voidTasks: Promise<void>[] = [];
   voidTasks.push(

@@ -341,20 +341,27 @@ export async function POST(req: Request) {
 
           await tx.saleItem.createMany({ data: saleItemRows });
 
-          // Update stock for tracked products
+          // Update stock atomically for tracked products with non-negative guard
           for (const p of dbProducts) {
             if (p.trackStock === false) continue;
             const soldQty = items
               .filter((i) => i.productId === p.id)
               .reduce((sum, i) => sum + Number(i.qty || 0), 0);
             if (!Number.isFinite(soldQty) || soldQty === 0) continue;
-
-            const currentStock = Number(p.stockQty || 0);
-            const newStock = currentStock - soldQty;
-            await tx.product.update({
-              where: { id: p.id },
-              data: { stockQty: toMoneyString(newStock, "stockQty") },
+            const soldQtyDecimal = new Prisma.Decimal(soldQty.toFixed(2));
+            const updated = await tx.product.updateMany({
+              where: {
+                id: p.id,
+                trackStock: true,
+                stockQty: { gte: soldQtyDecimal },
+              },
+              data: {
+                stockQty: { decrement: soldQtyDecimal },
+              },
             });
+            if (updated.count !== 1) {
+              throw new Error(`Insufficient stock for product "${p.name}"`);
+            }
           }
 
           if (isDue && customerId) {
