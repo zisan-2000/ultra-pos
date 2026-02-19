@@ -6,6 +6,8 @@ import { getShopsByUser } from "@/app/actions/shops";
 import { getPurchasesByShopPaginated } from "@/app/actions/purchases";
 import { getSuppliersByShop } from "@/app/actions/suppliers";
 import PurchasePaymentClient from "./purchase-payment-client";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 
 type PurchasePayPageProps = {
   searchParams?: Promise<{
@@ -18,8 +20,52 @@ type PurchasePayPageProps = {
 export default async function PurchasePayPage({
   searchParams,
 }: PurchasePayPageProps) {
-  const shops = await getShopsByUser();
-  const resolvedSearch = await searchParams;
+  const [user, shops, resolvedSearch] = await Promise.all([
+    requireUser(),
+    getShopsByUser(),
+    searchParams,
+  ]);
+  const canViewPurchases = hasPermission(user, "view_purchases");
+  const canViewSuppliers = hasPermission(user, "view_suppliers");
+  const canCreatePurchasePayment = hasPermission(user, "create_purchase_payment");
+  const canCreatePurchase = hasPermission(user, "create_purchase");
+
+  if (!canViewPurchases || !canViewSuppliers) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">বাকি পরিশোধ</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          এই পেজ ব্যবহারের জন্য <code>view_purchases</code> ও <code>view_suppliers</code>{" "}
+          permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard/purchases"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ক্রয় তালিকায় ফিরুন
+        </Link>
+      </div>
+    );
+  }
+
+  if (!canCreatePurchasePayment) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">বাকি পরিশোধ</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          পেমেন্ট রেকর্ড করতে <code>create_purchase_payment</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard/purchases"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ক্রয় তালিকায় ফিরুন
+        </Link>
+      </div>
+    );
+  }
 
   if (!shops || shops.length === 0) {
     return (
@@ -76,12 +122,14 @@ export default async function PurchasePayPage({
       <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_26px_rgba(15,23,42,0.08)]">
         <p className="text-xs font-semibold text-muted-foreground">দ্রুত কাজ</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link
-            href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
-            className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
-          >
-            ➕ নতুন ক্রয়
-          </Link>
+          {canCreatePurchase ? (
+            <Link
+              href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
+              className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
+            >
+              ➕ নতুন ক্রয়
+            </Link>
+          ) : null}
           <Link
             href={`/dashboard/purchases?shopId=${selectedShopId}`}
             className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"

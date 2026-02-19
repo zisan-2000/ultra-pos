@@ -18,6 +18,8 @@ type Props = {
   from: string;
   to: string;
   statement: StatementData;
+  canCreatePurchase: boolean;
+  canCreatePurchasePayment: boolean;
 };
 
 export default function SupplierStatementClient({
@@ -27,6 +29,8 @@ export default function SupplierStatementClient({
   from,
   to,
   statement,
+  canCreatePurchase,
+  canCreatePurchasePayment,
 }: Props) {
   return (
     <div className="space-y-4">
@@ -123,18 +127,22 @@ export default function SupplierStatementClient({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <a
-                href={`/dashboard/purchases/pay?shopId=${shopId}&supplierId=${supplierId}`}
-                className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
-              >
-                বাকি পরিশোধ
-              </a>
-              <a
-                href={`/dashboard/purchases/new?shopId=${shopId}`}
-                className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
-              >
-                নতুন ক্রয়
-              </a>
+              {canCreatePurchasePayment ? (
+                <a
+                  href={`/dashboard/purchases/pay?shopId=${shopId}&supplierId=${supplierId}`}
+                  className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
+                >
+                  বাকি পরিশোধ
+                </a>
+              ) : null}
+              {canCreatePurchase ? (
+                <a
+                  href={`/dashboard/purchases/new?shopId=${shopId}`}
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
+                >
+                  নতুন ক্রয়
+                </a>
+              ) : null}
               <a
                 href={`/dashboard/purchases?shopId=${shopId}`}
                 className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"

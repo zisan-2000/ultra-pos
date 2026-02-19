@@ -71,6 +71,8 @@ type Props = {
   businessLabel: string;
   templateProducts: TemplateProduct[];
   canCreateProducts: boolean;
+  canUpdateProducts: boolean;
+  canDeleteProducts: boolean;
   serverProducts: Product[];
   page: number;
   totalCount: number;
@@ -113,6 +115,8 @@ export default function ProductsListClient({
   businessLabel,
   templateProducts,
   canCreateProducts,
+  canUpdateProducts,
+  canDeleteProducts,
   serverProducts,
   page,
   totalCount,
@@ -650,6 +654,10 @@ export default function ProductsListClient({
 
   const handleDelete = useCallback(
     async (id: string) => {
+      if (!canDeleteProducts) {
+        alert("You do not have permission to delete products.");
+        return;
+      }
       if (deletingId) return;
       triggerHaptic("medium");
 
@@ -743,7 +751,7 @@ export default function ProductsListClient({
         setDeletingId(null);
       }
     },
-    [activeShopId, deletingId, online, router]
+    [activeShopId, canDeleteProducts, deletingId, online, router]
   );
 
   useEffect(() => {
@@ -1232,37 +1240,53 @@ export default function ProductsListClient({
                 </div>
 
                 {/* Action Buttons */}
-                <div className="grid grid-cols-2 gap-2">
-                  <Link
-                    href={`/dashboard/products/${product.id}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerHaptic("medium");
-                    }}
-                    className="flex items-center justify-center gap-2 h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 font-semibold text-sm shadow-sm hover:bg-primary/15 hover:border-primary/40 active:scale-95 transition"
-                  >
-                    <span>✏️</span>
-                    <span>এডিট</span>
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmDelete({ id: product.id, name: product.name });
-                    }}
-                    disabled={deletingId === product.id}
-                    className={`flex items-center justify-center gap-2 h-10 rounded-xl border font-semibold text-sm shadow-sm transition ${
-                      deletingId === product.id
-                        ? "bg-danger-soft border-danger/30 text-danger/60 cursor-not-allowed"
-                        : "bg-danger-soft border-danger/30 text-danger hover:bg-danger-soft/80 active:scale-95"
+                {canUpdateProducts || canDeleteProducts ? (
+                  <div
+                    className={`grid gap-2 ${
+                      canUpdateProducts && canDeleteProducts
+                        ? "grid-cols-2"
+                        : "grid-cols-1"
                     }`}
                   >
-                    <span>{deletingId === product.id ? "⏳" : "🗑️"}</span>
-                    <span>
-                      {deletingId === product.id ? "মুছছে..." : "ডিলিট"}
-                    </span>
-                  </button>
-                </div>
+                    {canUpdateProducts ? (
+                      <Link
+                        href={`/dashboard/products/${product.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic("medium");
+                        }}
+                        className="flex items-center justify-center gap-2 h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 font-semibold text-sm shadow-sm hover:bg-primary/15 hover:border-primary/40 active:scale-95 transition"
+                      >
+                        <span>✏️</span>
+                        <span>এডিট</span>
+                      </Link>
+                    ) : null}
+                    {canDeleteProducts ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmDelete({ id: product.id, name: product.name });
+                        }}
+                        disabled={deletingId === product.id}
+                        className={`flex items-center justify-center gap-2 h-10 rounded-xl border font-semibold text-sm shadow-sm transition ${
+                          deletingId === product.id
+                            ? "bg-danger-soft border-danger/30 text-danger/60 cursor-not-allowed"
+                            : "bg-danger-soft border-danger/30 text-danger hover:bg-danger-soft/80 active:scale-95"
+                        }`}
+                      >
+                        <span>{deletingId === product.id ? "⏳" : "🗑️"}</span>
+                        <span>
+                          {deletingId === product.id ? "মুছছে..." : "ডিলিট"}
+                        </span>
+                      </button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    এডিট/ডিলিট অনুমতি নেই।
+                  </p>
+                )}
               </div>
             </div>
           );
@@ -1387,43 +1411,59 @@ export default function ProductsListClient({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <Link
-                  href={`/dashboard/products/${selectedProduct.id}`}
-                  className="flex items-center justify-center gap-2 h-12 bg-primary-soft text-primary border border-primary/30 rounded-xl font-semibold hover:bg-primary/15 hover:border-primary/40 active:scale-95 transition-all"
-                  onClick={() => triggerHaptic("medium")}
-                >
-                  <span>✏️</span>
-                  <span>এডিট করুন</span>
-                </Link>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setConfirmDelete({
-                      id: selectedProduct.id,
-                      name: selectedProduct.name,
-                    })
-                  }
-                  disabled={deletingId === selectedProduct.id}
-                  className={`flex items-center justify-center gap-2 h-12 rounded-xl font-semibold transition-all ${
-                    deletingId === selectedProduct.id
-                      ? "bg-danger-soft text-danger/60 cursor-not-allowed"
-                      : "bg-danger text-primary-foreground hover:bg-danger/90 active:scale-95"
+              {canUpdateProducts || canDeleteProducts ? (
+                <div
+                  className={`grid gap-3 pt-2 ${
+                    canUpdateProducts && canDeleteProducts
+                      ? "grid-cols-2"
+                      : "grid-cols-1"
                   }`}
                 >
-                  <span>🗑️</span>
-                  <span>
-                    {deletingId === selectedProduct.id ? "মুছছে..." : "ডিলিট"}
-                  </span>
-                </button>
-              </div>
+                  {canUpdateProducts ? (
+                    <Link
+                      href={`/dashboard/products/${selectedProduct.id}`}
+                      className="flex items-center justify-center gap-2 h-12 bg-primary-soft text-primary border border-primary/30 rounded-xl font-semibold hover:bg-primary/15 hover:border-primary/40 active:scale-95 transition-all"
+                      onClick={() => triggerHaptic("medium")}
+                    >
+                      <span>✏️</span>
+                      <span>এডিট করুন</span>
+                    </Link>
+                  ) : null}
+                  {canDeleteProducts ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setConfirmDelete({
+                          id: selectedProduct.id,
+                          name: selectedProduct.name,
+                        })
+                      }
+                      disabled={deletingId === selectedProduct.id}
+                      className={`flex items-center justify-center gap-2 h-12 rounded-xl font-semibold transition-all ${
+                        deletingId === selectedProduct.id
+                          ? "bg-danger-soft text-danger/60 cursor-not-allowed"
+                          : "bg-danger text-primary-foreground hover:bg-danger/90 active:scale-95"
+                      }`}
+                    >
+                      <span>🗑️</span>
+                      <span>
+                        {deletingId === selectedProduct.id ? "মুছছে..." : "ডিলিট"}
+                      </span>
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="pt-2 text-xs text-muted-foreground">
+                  এডিট/ডিলিট অনুমতি নেই।
+                </p>
+              )}
             </div>
           </div>
         </div>
       )}
 
       <Dialog
-        open={Boolean(confirmDelete)}
+        open={Boolean(confirmDelete) && canDeleteProducts}
         onOpenChange={(open) => {
           if (!open) setConfirmDelete(null);
         }}

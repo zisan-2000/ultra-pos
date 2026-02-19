@@ -13,6 +13,8 @@ import {
 } from "@/app/actions/sales";
 import { getDhakaDateString } from "@/lib/dhaka-date";
 import { validateBoundedReportRange } from "@/lib/reporting-config";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 import ShopSelectorClient from "./ShopSelectorClient";
 import SalesListClient from "./components/SalesListClient";
 import DateFilterClient from "./components/DateFilterClient";
@@ -151,8 +153,31 @@ async function voidSaleAction(formData: FormData) {
 }
 
 export default async function SalesPage({ searchParams }: SalesPageProps) {
-  const shops = await getShopsByUser();
-  const resolvedSearch = await searchParams;
+  const [user, shops, resolvedSearch] = await Promise.all([
+    requireUser(),
+    getShopsByUser(),
+    searchParams,
+  ]);
+  const canViewSales = hasPermission(user, "view_sales");
+  const canCreateSale = hasPermission(user, "create_sale");
+
+  if (!canViewSales) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">বিক্রি তালিকা</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          এই পেজ ব্যবহারের জন্য <code>view_sales</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ড্যাশবোর্ডে ফিরুন
+        </Link>
+      </div>
+    );
+  }
 
   if (!shops || shops.length === 0) {
     return (
@@ -373,12 +398,14 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                   to={toStr}
                 />
               </div>
-              <Link
-                href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-                className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-3 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
-              >
-                ➕ নতুন বিক্রি
-              </Link>
+              {canCreateSale ? (
+                <Link
+                  href={`/dashboard/sales/new?shopId=${selectedShopId}`}
+                  className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-3 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
+                >
+                  ➕ নতুন বিক্রি
+                </Link>
+              ) : null}
             </div>
           </div>
         </div>
@@ -391,6 +418,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
         prevHref={prevHref}
         nextHref={nextHref}
         hasMore={Boolean(hasMore)}
+        canVoidSale={canCreateSale}
         voidSaleAction={voidSaleAction}
       />
     </div>

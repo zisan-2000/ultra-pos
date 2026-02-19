@@ -49,7 +49,33 @@ function normalizeStatus(value?: string) {
 }
 
 export default async function ProductsPage({ searchParams }: PageProps) {
-  const shops = await getShopsByUser();
+  const [user, shops, resolvedParams] = await Promise.all([
+    requireUser(),
+    getShopsByUser(),
+    searchParams,
+  ]);
+  const canViewProducts = hasPermission(user, "view_products");
+  const canCreateProducts = hasPermission(user, "create_product");
+  const canUpdateProducts = hasPermission(user, "update_product");
+  const canDeleteProducts = hasPermission(user, "delete_product");
+
+  if (!canViewProducts) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">পণ্য তালিকা</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          এই পেজ ব্যবহারের জন্য <code>view_products</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ড্যাশবোর্ডে ফিরুন
+        </Link>
+      </div>
+    );
+  }
 
   if (!shops || shops.length === 0) {
     return (
@@ -66,7 +92,6 @@ export default async function ProductsPage({ searchParams }: PageProps) {
     );
   }
 
-  const resolvedParams = await searchParams;
   const requestedShopId = resolvedParams?.shopId;
 
   const cookieStore = await cookies();
@@ -172,8 +197,6 @@ export default async function ProductsPage({ searchParams }: PageProps) {
     : null;
 
   const templateProducts = await listActiveBusinessProductTemplates(businessType).catch(() => []);
-  const user = await requireUser();
-  const canCreateProducts = hasPermission(user, "create_product");
 
   return (
     <div className="space-y-4 sm:space-y-5 section-gap">
@@ -183,6 +206,8 @@ export default async function ProductsPage({ searchParams }: PageProps) {
         businessLabel={businessLabel}
         templateProducts={templateProducts}
         canCreateProducts={canCreateProducts}
+        canUpdateProducts={canUpdateProducts}
+        canDeleteProducts={canDeleteProducts}
         serverProducts={items}
         page={normalized.page}
         prevHref={prevHref}

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { getPurchaseWithPayments } from "@/app/actions/purchases";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 
 type PurchaseDetailPageProps = {
   params: Promise<{ purchaseId: string }>;
@@ -12,8 +14,32 @@ export default async function PurchaseDetailPage({
   params,
   searchParams,
 }: PurchaseDetailPageProps) {
-  const { purchaseId } = await params;
-  const resolvedSearch = await searchParams;
+  const [user, { purchaseId }, resolvedSearch] = await Promise.all([
+    requireUser(),
+    params,
+    searchParams,
+  ]);
+  const canViewPurchases = hasPermission(user, "view_purchases");
+  const canCreatePurchasePayment = hasPermission(user, "create_purchase_payment");
+
+  if (!canViewPurchases) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">ক্রয় বিস্তারিত</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          এই পেজ ব্যবহারের জন্য <code>view_purchases</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard/purchases"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ক্রয় তালিকায় ফিরুন
+        </Link>
+      </div>
+    );
+  }
+
   const shopId = resolvedSearch?.shopId ?? "";
   const page = Number(resolvedSearch?.page ?? 1);
   const purchase = await getPurchaseWithPayments(purchaseId, {
@@ -48,7 +74,7 @@ export default async function PurchaseDetailPage({
         >
           ← ক্রয় তালিকায় ফিরুন
         </Link>
-        {dueAmount > 0 ? (
+        {dueAmount > 0 && canCreatePurchasePayment ? (
           <Link
             href={`/dashboard/purchases/pay?shopId=${shopId}&purchaseId=${purchaseId}${
               purchase.supplierId ? `&supplierId=${purchase.supplierId}` : ""

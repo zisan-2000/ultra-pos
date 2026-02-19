@@ -6,6 +6,8 @@ import { getShopsByUser } from "@/app/actions/shops";
 import { getSuppliersByShop, getSupplierStatement } from "@/app/actions/suppliers";
 import SupplierStatementClient from "./statement-client";
 import { getDhakaDateString } from "@/lib/dhaka-date";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 
 type SupplierStatementPageProps = {
   searchParams?: Promise<{
@@ -20,8 +22,32 @@ type SupplierStatementPageProps = {
 export default async function SupplierStatementPage({
   searchParams,
 }: SupplierStatementPageProps) {
-  const shops = await getShopsByUser();
-  const resolvedSearch = await searchParams;
+  const [user, shops, resolvedSearch] = await Promise.all([
+    requireUser(),
+    getShopsByUser(),
+    searchParams,
+  ]);
+  const canViewSuppliers = hasPermission(user, "view_suppliers");
+  const canCreatePurchase = hasPermission(user, "create_purchase");
+  const canCreatePurchasePayment = hasPermission(user, "create_purchase_payment");
+
+  if (!canViewSuppliers) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">সরবরাহকারী স্টেটমেন্ট</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          এই পেজ ব্যবহারের জন্য <code>view_suppliers</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ড্যাশবোর্ডে ফিরুন
+        </Link>
+      </div>
+    );
+  }
 
   if (!shops || shops.length === 0) {
     return (
@@ -94,6 +120,8 @@ export default async function SupplierStatementPage({
         from={from}
         to={to}
         statement={statement}
+        canCreatePurchase={canCreatePurchase}
+        canCreatePurchasePayment={canCreatePurchasePayment}
       />
     </div>
   );

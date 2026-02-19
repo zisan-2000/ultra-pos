@@ -9,6 +9,8 @@ import {
 } from "@/app/actions/purchases";
 import ShopSelectorClient from "./ShopSelectorClient";
 import { getDhakaDateString } from "@/lib/dhaka-date";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 
 type PurchasePageProps = {
   searchParams?: Promise<{
@@ -28,8 +30,32 @@ function parsePositiveInt(value?: string) {
 }
 
 export default async function PurchasesPage({ searchParams }: PurchasePageProps) {
-  const shops = await getShopsByUser();
-  const resolvedSearch = await searchParams;
+  const [user, shops, resolvedSearch] = await Promise.all([
+    requireUser(),
+    getShopsByUser(),
+    searchParams,
+  ]);
+  const canViewPurchases = hasPermission(user, "view_purchases");
+  const canCreatePurchase = hasPermission(user, "create_purchase");
+  const canCreatePurchasePayment = hasPermission(user, "create_purchase_payment");
+
+  if (!canViewPurchases) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">পণ্য ক্রয়</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          এই পেজ ব্যবহারের জন্য <code>view_purchases</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ড্যাশবোর্ডে ফিরুন
+        </Link>
+      </div>
+    );
+  }
 
   if (!shops || shops.length === 0) {
     return (
@@ -122,12 +148,14 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
               </p>
             </div>
 
-            <Link
-              href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
-              className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-            >
-              ➕ নতুন ক্রয়
-            </Link>
+            {canCreatePurchase ? (
+              <Link
+                href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
+                className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+              >
+                ➕ নতুন ক্রয়
+              </Link>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -137,12 +165,14 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
                 selectedShopId={selectedShopId}
               />
             </div>
-            <Link
-              href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
-              className="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-            >
-              ➕ নতুন ক্রয় যোগ করুন
-            </Link>
+            {canCreatePurchase ? (
+              <Link
+                href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
+                className="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+              >
+                ➕ নতুন ক্রয় যোগ করুন
+              </Link>
+            ) : null}
           </div>
 
           <form
@@ -212,18 +242,22 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link
-            href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
-            className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-          >
-            ➕ নতুন ক্রয়
-          </Link>
-          <Link
-            href={`/dashboard/purchases/pay?shopId=${selectedShopId}`}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
-          >
-            বাকি পরিশোধ
-          </Link>
+          {canCreatePurchase ? (
+            <Link
+              href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
+              className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+            >
+              ➕ নতুন ক্রয়
+            </Link>
+          ) : null}
+          {canCreatePurchasePayment ? (
+            <Link
+              href={`/dashboard/purchases/pay?shopId=${selectedShopId}`}
+              className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
+            >
+              বাকি পরিশোধ
+            </Link>
+          ) : null}
           <Link
             href={`/dashboard/suppliers?shopId=${selectedShopId}`}
             className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
@@ -236,12 +270,14 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
       {items.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground space-y-3">
           <p>কোনো ক্রয় পাওয়া যায়নি।</p>
-          <Link
-            href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
-            className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
-          >
-            প্রথম ক্রয় যোগ করুন
-          </Link>
+          {canCreatePurchase ? (
+            <Link
+              href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
+              className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
+            >
+              প্রথম ক্রয় যোগ করুন
+            </Link>
+          ) : null}
         </div>
       ) : (
         <div className="space-y-3">
@@ -319,7 +355,7 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
                   >
                     পেমেন্ট ইতিহাস
                   </Link>
-                  {Number(purchase.dueAmount) > 0 ? (
+                  {Number(purchase.dueAmount) > 0 && canCreatePurchasePayment ? (
                     <Link
                       href={`/dashboard/purchases/pay?shopId=${selectedShopId}&purchaseId=${purchase.id}${
                         purchase.supplierId ? `&supplierId=${purchase.supplierId}` : ""

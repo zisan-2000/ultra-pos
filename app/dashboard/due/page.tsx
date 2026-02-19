@@ -6,14 +6,22 @@ import { getShopsByUser } from "@/app/actions/shops";
 import { getCustomersByShop } from "@/app/actions/customers";
 import DuePageClient from "./DuePageClient";
 import DueShopSelector from "./ShopSelector";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 
 type DuePageProps = {
   searchParams?: Promise<{ shopId?: string } | undefined>;
 };
 
 export default async function DuePage({ searchParams }: DuePageProps) {
-  const shops = await getShopsByUser();
-  const resolvedSearch = await searchParams;
+  const [user, shops, resolvedSearch] = await Promise.all([
+    requireUser(),
+    getShopsByUser(),
+    searchParams,
+  ]);
+  const canViewCustomers = hasPermission(user, "view_customers");
+  const canCreateCustomer = hasPermission(user, "create_customer");
+  const canTakeDuePayment = hasPermission(user, "take_due_payment");
 
   if (!shops || shops.length === 0) {
     return (
@@ -44,6 +52,24 @@ export default async function DuePage({ searchParams }: DuePageProps) {
       : cookieSelectedShopId ?? shops[0].id;
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
+
+  if (!canViewCustomers) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">ধার / বাকি</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          এই পেজ ব্যবহারের জন্য <code>view_customers</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ড্যাশবোর্ডে ফিরুন
+        </Link>
+      </div>
+    );
+  }
 
   const customers = await getCustomersByShop(selectedShopId);
 
@@ -97,6 +123,8 @@ export default async function DuePage({ searchParams }: DuePageProps) {
         shopId={selectedShopId}
         shopName={selectedShop.name}
         initialCustomers={customers as any}
+        canCreateCustomer={canCreateCustomer}
+        canTakeDuePayment={canTakeDuePayment}
       />
     </div>
   );

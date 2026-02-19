@@ -36,6 +36,7 @@ type Props = {
   prevHref: string | null;
   nextHref: string | null;
   hasMore: boolean;
+  canVoidSale: boolean;
   voidSaleAction: (formData: FormData) => Promise<void>;
 };
 
@@ -81,6 +82,7 @@ export default function SalesListClient({
   prevHref,
   nextHref,
   hasMore,
+  canVoidSale,
   voidSaleAction,
 }: Props) {
   const router = useRouter();
@@ -442,7 +444,7 @@ export default function SalesListClient({
                     </span>
                   )}
                 </div>
-                {online && !isDueSale ? (
+                {online && !isDueSale && canVoidSale ? (
                   <div className="flex flex-wrap items-center gap-2">
                     <form id={formId} action={voidSaleAction} />
                     <VoidSaleControls

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createPurchase } from "@/app/actions/purchases";
+import { apiErrorResponse } from "@/lib/http/api-errors";
 
 const itemSchema = z.object({
   productId: z.string().min(1),
@@ -14,7 +15,7 @@ const bodySchema = z.object({
   purchaseDate: z.string().optional(),
   supplierId: z.string().optional().nullable(),
   supplierName: z.string().optional().nullable(),
-  paymentMethod: z.enum(["cash", "due"]).optional(),
+  paymentMethod: z.enum(["cash", "bkash", "bank", "due"]).optional(),
   paidNow: z.union([z.string(), z.number()]).optional().nullable(),
   note: z.string().optional().nullable(),
 });
@@ -32,10 +33,7 @@ export async function POST(req: Request) {
 
     const result = await createPurchase(parsed.data);
     return NextResponse.json(result);
-  } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: err?.message || "Failed to create purchase" },
-      { status: 500 }
-    );
+  } catch (error) {
+    return apiErrorResponse(error);
   }
 }

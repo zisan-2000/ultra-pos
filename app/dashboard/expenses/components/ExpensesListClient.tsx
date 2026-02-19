@@ -43,6 +43,9 @@ type Props = {
   hasMore?: boolean;
   summaryTotal?: string;
   summaryCount?: number;
+  canCreateExpense?: boolean;
+  canUpdateExpense?: boolean;
+  canDeleteExpense?: boolean;
 };
 
 type RangePreset = "today" | "yesterday" | "7d" | "month" | "custom";
@@ -217,6 +220,9 @@ export function ExpensesListClient({
   hasMore,
   summaryTotal,
   summaryCount,
+  canCreateExpense = false,
+  canUpdateExpense = false,
+  canDeleteExpense = false,
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -576,12 +582,14 @@ export function ExpensesListClient({
                     : filteredItems.length} খরচ
                 </p>
               </div>
-              <Link
-                href={`/dashboard/expenses/new?shopId=${shopId}`}
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm"
-              >
-                + নতুন খরচ
-              </Link>
+              {canCreateExpense ? (
+                <Link
+                  href={`/dashboard/expenses/new?shopId=${shopId}`}
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm"
+                >
+                  + নতুন খরচ
+                </Link>
+              ) : null}
             </div>
             <div className="rounded-xl border border-border/70 bg-background/80 p-2 space-y-2">
               <div className="flex items-center justify-between">
@@ -628,12 +636,14 @@ export function ExpensesListClient({
                   : filteredItems.length} খরচ
               </p>
             </div>
-            <Link
-              href={`/dashboard/expenses/new?shopId=${shopId}`}
-              className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
-            >
-              + নতুন খরচ
-            </Link>
+            {canCreateExpense ? (
+              <Link
+                href={`/dashboard/expenses/new?shopId=${shopId}`}
+                className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
+              >
+                + নতুন খরচ
+              </Link>
+            ) : null}
           </div>
           <div className="rounded-xl border border-border/70 bg-background/80 p-3 space-y-2">
             <div className="flex items-center justify-between">
@@ -736,26 +746,32 @@ export function ExpensesListClient({
                       )}
                     </div>
                     <div className="mt-2 grid w-full grid-cols-2 gap-2 sm:justify-end">
-                      {online ? (
+                      {online && canUpdateExpense ? (
                         <Link
                           href={`/dashboard/expenses/${e.id}`}
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary text-sm font-semibold border border-primary/30 shadow-sm hover:bg-primary/15 hover:border-primary/40 w-full"
                         >
                           👁️ দেখুন
                         </Link>
+                      ) : online ? (
+                        <span className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-muted text-muted-foreground text-xs font-semibold border border-border w-full">
+                          Edit নিষ্ক্রিয়
+                        </span>
                       ) : (
                         <span className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-warning-soft text-warning text-xs font-semibold border border-warning/30 w-full">
                           📡 Offline
                         </span>
                       )}
-                      <ExpensesDeleteButton
-                        id={e.id}
-                        shopId={shopId}
-                        amount={amountNum}
-                        syncStatus={e.syncStatus}
-                        onDeleted={handleOptimisticDelete}
-                        className="h-10 rounded-xl text-sm"
-                      />
+                      {canDeleteExpense ? (
+                        <ExpensesDeleteButton
+                          id={e.id}
+                          shopId={shopId}
+                          amount={amountNum}
+                          syncStatus={e.syncStatus}
+                          onDeleted={handleOptimisticDelete}
+                          className="h-10 rounded-xl text-sm"
+                        />
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -768,12 +784,14 @@ export function ExpensesListClient({
           <p className="text-lg font-semibold text-foreground">এখনো কোনো খরচ নেই</p>
           <p className="text-sm text-muted-foreground">প্রথম খরচ যোগ করুন</p>
 
-          <Link
-            href={`/dashboard/expenses/new?shopId=${shopId}`}
-            className="inline-flex items-center justify-center h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
-          >
-            + নতুন খরচ
-          </Link>
+          {canCreateExpense ? (
+            <Link
+              href={`/dashboard/expenses/new?shopId=${shopId}`}
+              className="inline-flex items-center justify-center h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
+            >
+              + নতুন খরচ
+            </Link>
+          ) : null}
         </div>
       )}
 

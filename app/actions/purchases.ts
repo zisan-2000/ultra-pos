@@ -26,7 +26,7 @@ type CreatePurchaseInput = {
   purchaseDate?: string;
   supplierId?: string | null;
   supplierName?: string | null;
-  paymentMethod?: "cash" | "due";
+  paymentMethod?: "cash" | "bkash" | "bank" | "due";
   paidNow?: number | string | null;
   note?: string | null;
 };

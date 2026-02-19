@@ -44,6 +44,9 @@ type Props = {
   summaryOut?: number;
   summaryNet?: number;
   summaryCount?: number;
+  canCreateCashEntry?: boolean;
+  canUpdateCashEntry?: boolean;
+  canDeleteCashEntry?: boolean;
 };
 
 type RangePreset = "today" | "yesterday" | "7d" | "month" | "custom";
@@ -156,6 +159,9 @@ export function CashListClient({
   summaryOut,
   summaryNet,
   summaryCount,
+  canCreateCashEntry = false,
+  canUpdateCashEntry = false,
+  canDeleteCashEntry = false,
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -575,12 +581,14 @@ export function CashListClient({
                   : rendered.length} এন্ট্রি
               </p>
             </div>
-            <Link
-              href={`/dashboard/cash/new?shopId=${shopId}`}
-              className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
-            >
-              + নতুন এন্ট্রি
-            </Link>
+            {canCreateCashEntry ? (
+              <Link
+                href={`/dashboard/cash/new?shopId=${shopId}`}
+                className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
+              >
+                + নতুন এন্ট্রি
+              </Link>
+            ) : null}
           </div>
           <div className="rounded-xl border border-border/70 bg-background/80 p-3 space-y-2">
             <div className="flex items-center justify-between">
@@ -776,42 +784,54 @@ export function CashListClient({
                                 {reasonLabel || "নোট নেই"}
                               </p>
                               <div className="flex flex-wrap items-center gap-2 sm:hidden">
-                                {online ? (
+                                {online && canUpdateCashEntry ? (
                                   <Link
                                     href={`/dashboard/cash/${e.id}`}
                                     className="inline-flex h-9 items-center justify-center rounded-full bg-primary-soft text-primary text-xs font-semibold border border-primary/30 px-3 shadow-sm hover:bg-primary/15 hover:border-primary/40"
                                   >
                                     এডিট
                                   </Link>
+                                ) : online ? (
+                                  <span className="inline-flex h-9 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs font-semibold border border-border px-3">
+                                    Edit নিষ্ক্রিয়
+                                  </span>
                                 ) : (
                                   <span className="inline-flex h-9 items-center justify-center rounded-full bg-warning-soft text-warning text-xs font-semibold border border-warning/30 px-3">
                                     Offline
                                   </span>
                                 )}
-                                <CashDeleteButton
-                                  id={e.id}
-                                  onDeleted={handleOptimisticDelete}
-                                />
+                                {canDeleteCashEntry ? (
+                                  <CashDeleteButton
+                                    id={e.id}
+                                    onDeleted={handleOptimisticDelete}
+                                  />
+                                ) : null}
                               </div>
                             </div>
                             <div className="hidden sm:flex sm:flex-col sm:items-end sm:gap-2 sm:min-w-[140px]">
-                              {online ? (
+                              {online && canUpdateCashEntry ? (
                                 <Link
                                   href={`/dashboard/cash/${e.id}`}
                                   className="inline-flex h-10 items-center justify-center rounded-xl bg-primary-soft text-primary text-sm font-semibold border border-primary/30 shadow-sm hover:bg-primary/15 hover:border-primary/40 px-4"
                                 >
                                   এডিট
                                 </Link>
+                              ) : online ? (
+                                <span className="inline-flex h-10 items-center justify-center rounded-xl bg-muted text-muted-foreground text-xs font-semibold border border-border px-4">
+                                  Edit নিষ্ক্রিয়
+                                </span>
                               ) : (
                                 <span className="inline-flex h-10 items-center justify-center rounded-xl bg-warning-soft text-warning text-xs font-semibold border border-warning/30 px-4">
                                   Offline
                                 </span>
                               )}
-                              <CashDeleteButton
-                                id={e.id}
-                                onDeleted={handleOptimisticDelete}
-                                className="h-10 rounded-xl px-4 text-sm"
-                              />
+                              {canDeleteCashEntry ? (
+                                <CashDeleteButton
+                                  id={e.id}
+                                  onDeleted={handleOptimisticDelete}
+                                  className="h-10 rounded-xl px-4 text-sm"
+                                />
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -828,7 +848,7 @@ export function CashListClient({
           <p className="text-sm text-muted-foreground">
             {online ? "প্রথম ক্যাশ এন্ট্রি যোগ করুন" : "Offline: ক্যাশ এন্ট্রি ক্যাশে নেই"}
           </p>
-          {online ? (
+          {online && canCreateCashEntry ? (
             <Link
               href={`/dashboard/cash/new?shopId=${shopId}`}
               className="inline-flex items-center justify-center h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"

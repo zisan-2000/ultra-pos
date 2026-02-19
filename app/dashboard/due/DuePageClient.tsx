@@ -185,12 +185,16 @@ type Props = {
   shopId: string;
   shopName: string;
   initialCustomers: Customer[];
+  canCreateCustomer: boolean;
+  canTakeDuePayment: boolean;
 };
 
 export default function DuePageClient({
   shopId,
   shopName,
   initialCustomers,
+  canCreateCustomer,
+  canTakeDuePayment,
 }: Props) {
   const online = useOnlineStatus();
   const realtime = useRealtimeStatus();
@@ -658,6 +662,10 @@ export default function DuePageClient({
 
   async function handleAddCustomer(e: FormEvent) {
     e.preventDefault();
+    if (!canCreateCustomer) {
+      alert("গ্রাহক যোগ করার অনুমতি নেই।");
+      return;
+    }
     if (!newCustomer.name.trim()) return;
     if (!online) {
       const now = Date.now();
@@ -738,6 +746,10 @@ export default function DuePageClient({
 
   async function handlePayment(e: FormEvent) {
     e.preventDefault();
+    if (!canTakeDuePayment) {
+      alert("পেমেন্ট রেকর্ড করার অনুমতি নেই।");
+      return;
+    }
     if (!paymentForm.customerId || !paymentForm.amount) return;
 
     const amountValue = Number(paymentForm.amount);
@@ -975,11 +987,32 @@ export default function DuePageClient({
     setSelectedCustomerId(customerId);
   };
 
+  const openAddTab = () => {
+    if (!canCreateCustomer) {
+      alert("গ্রাহক যোগ করার অনুমতি নেই।");
+      return;
+    }
+    setActiveTab("add");
+  };
+
   const openPaymentFor = (customerId: string) => {
+    if (!canTakeDuePayment) {
+      alert("পেমেন্ট নেওয়ার অনুমতি নেই।");
+      return;
+    }
     setActiveTab("payment");
     setSelectedCustomerId(customerId);
     setPaymentForm((prev) => ({ ...prev, customerId }));
   };
+
+  useEffect(() => {
+    if (activeTab === "add" && !canCreateCustomer) {
+      setActiveTab("summary");
+    }
+    if (activeTab === "payment" && !canTakeDuePayment) {
+      setActiveTab("summary");
+    }
+  }, [activeTab, canCreateCustomer, canTakeDuePayment]);
 
   function startVoice(field: VoiceField) {
     if (listeningField === field) return;
@@ -1051,10 +1084,10 @@ export default function DuePageClient({
   }
 
   const tabs = [
-    { id: "summary", label: "সারাংশ" },
-    { id: "add", label: "গ্রাহক যোগ" },
-    { id: "payment", label: "পেমেন্ট নিন" },
-    { id: "list", label: "স্টেটমেন্ট" },
+    { id: "summary", label: "সারাংশ", enabled: true },
+    { id: "add", label: "গ্রাহক যোগ", enabled: canCreateCustomer },
+    { id: "payment", label: "পেমেন্ট নিন", enabled: canTakeDuePayment },
+    { id: "list", label: "স্টেটমেন্ট", enabled: true },
   ] as const;
 
   const topDueName = summary.topDue?.[0]?.name || "";
@@ -1090,7 +1123,8 @@ export default function DuePageClient({
             </div>
             <button
               type="button"
-              onClick={() => setActiveTab("add")}
+              onClick={openAddTab}
+              disabled={!canCreateCustomer}
               className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
             >
               ➕ নতুন গ্রাহক
@@ -1134,7 +1168,9 @@ export default function DuePageClient({
       <div className="sticky top-0 z-20 bg-card/95 backdrop-blur border-b border-border/70">
         <div className="px-2 py-2">
           <div className="flex gap-2 overflow-x-auto no-scrollbar rounded-full bg-muted/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-            {tabs.map((tab) => (
+            {tabs
+              .filter((tab) => tab.enabled)
+              .map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
@@ -1171,7 +1207,8 @@ export default function DuePageClient({
                   </p>
                   <button
                     type="button"
-                    onClick={() => setActiveTab("add")}
+                    onClick={openAddTab}
+                    disabled={!canCreateCustomer}
                     className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
                   >
                     ➕ প্রথম গ্রাহক যোগ করুন
@@ -1232,13 +1269,15 @@ export default function DuePageClient({
                           >
                             স্টেটমেন্ট দেখুন
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => openPaymentFor(c.id)}
-                            className="h-9 rounded-full border border-success/30 bg-success-soft px-3 text-xs font-semibold text-success hover:border-success/40 transition-colors"
-                          >
-                            পেমেন্ট নিন
-                          </button>
+                          {canTakeDuePayment ? (
+                            <button
+                              type="button"
+                              onClick={() => openPaymentFor(c.id)}
+                              className="h-9 rounded-full border border-success/30 bg-success-soft px-3 text-xs font-semibold text-success hover:border-success/40 transition-colors"
+                            >
+                              পেমেন্ট নিন
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -1249,7 +1288,7 @@ export default function DuePageClient({
           )}
 
           {/* Add Customer Tab */}
-          {activeTab === "add" && (
+          {activeTab === "add" && canCreateCustomer && (
             <form onSubmit={handleAddCustomer} className="space-y-5 max-w-xl">
               <h3 className="text-lg font-bold text-foreground">
                 নতুন গ্রাহক যোগ করুন
@@ -1406,9 +1445,14 @@ export default function DuePageClient({
               </button>
             </form>
           )}
+          {activeTab === "add" && !canCreateCustomer && (
+            <div className="rounded-2xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">
+              গ্রাহক যোগ করার জন্য <code>create_customer</code> permission লাগবে।
+            </div>
+          )}
 
           {/* Payment Tab */}
-          {activeTab === "payment" && (
+          {activeTab === "payment" && canTakeDuePayment && (
             <form onSubmit={handlePayment} className="space-y-5 max-w-xl">
               <h3 className="text-lg font-bold text-foreground">পেমেন্ট নিন</h3>
               {customers.length === 0 ? (
@@ -1416,7 +1460,8 @@ export default function DuePageClient({
                   কোনো গ্রাহক নেই। আগে গ্রাহক যোগ করুন।
                   <button
                     type="button"
-                    onClick={() => setActiveTab("add")}
+                    onClick={openAddTab}
+                    disabled={!canCreateCustomer}
                     className="mt-3 inline-flex h-9 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-xs font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
                   >
                     ➕ গ্রাহক যোগ করুন
@@ -1617,13 +1662,19 @@ export default function DuePageClient({
                 disabled={
                   !paymentForm.customerId ||
                   !paymentForm.amount ||
-                  savingPayment
+                  savingPayment ||
+                  !canTakeDuePayment
                 }
                 className="w-full h-12 bg-success hover:bg-success/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground font-bold px-6 rounded-xl text-lg transition-colors"
               >
                 {savingPayment ? "সংরক্ষণ করছে..." : "✓ পেমেন্ট রেকর্ড করুন"}
               </button>
             </form>
+          )}
+          {activeTab === "payment" && !canTakeDuePayment && (
+            <div className="rounded-2xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">
+              পেমেন্ট নেওয়ার জন্য <code>take_due_payment</code> permission লাগবে।
+            </div>
           )}
 
           {/* Customer List Tab */}

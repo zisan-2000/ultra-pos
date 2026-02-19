@@ -4,10 +4,32 @@ import { getExpense, updateExpense } from "@/app/actions/expenses";
 import { getShop } from "@/app/actions/shops";
 import ExpenseFormClient from "../new/ExpenseFormClient";
 import { getDhakaDateString } from "@/lib/dhaka-date";
+import Link from "next/link";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 
 type PageProps = { params: Promise<{ id: string }> };
 
 export default async function EditExpensePage({ params }: PageProps) {
+  const user = await requireUser();
+  const canUpdateExpense = hasPermission(user, "update_expense");
+  if (!canUpdateExpense) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">খরচ সম্পাদনা</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          খরচ সম্পাদনা করতে <code>update_expense</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard/expenses"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          খরচ তালিকায় ফিরুন
+        </Link>
+      </div>
+    );
+  }
   const { id } = await params;
   let expense: Awaited<ReturnType<typeof getExpense>> | null = null;
   try {

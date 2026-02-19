@@ -199,6 +199,14 @@ const fabByRoute: Record<string, { href: string; label: string } | null> = {
   },
 };
 
+const fabPermissionMap: Record<string, string> = {
+  "/dashboard/sales/new": "create_sale",
+  "/dashboard/products/new": "create_product",
+  "/dashboard/purchases/new": "create_purchase",
+  "/dashboard/expenses/new": "create_expense",
+  "/dashboard/cash/new": "create_cash_entry",
+};
+
 export function DashboardShell({
   shops,
   initialUser,
@@ -557,9 +565,15 @@ export function DashboardShell({
     fabByRoute[
       bottomNav.find((item) => pathname.startsWith(item.href))?.href || pathname
     ] || null;
+  const canUseFab =
+    !baseFabConfig ||
+    hasPermission(
+      baseFabConfig.href ? fabPermissionMap[baseFabConfig.href] : undefined
+    );
   const fabConfig =
     pathname.startsWith("/dashboard/sales/new") ||
-    (!hasInventory && baseFabConfig?.href.startsWith("/dashboard/purchases"))
+    (!hasInventory && baseFabConfig?.href.startsWith("/dashboard/purchases")) ||
+    !canUseFab
       ? null
       : baseFabConfig;
 

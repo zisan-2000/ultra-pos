@@ -6,6 +6,8 @@ import { getShopsByUser } from "@/app/actions/shops";
 import { getProductsByShop } from "@/app/actions/products";
 import { getSuppliersByShop } from "@/app/actions/suppliers";
 import PurchaseFormClient from "./PurchaseFormClient";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 
 type PurchaseNewPageProps = {
   searchParams?: Promise<{ shopId?: string }>;
@@ -14,8 +16,51 @@ type PurchaseNewPageProps = {
 export default async function PurchaseNewPage({
   searchParams,
 }: PurchaseNewPageProps) {
-  const shops = await getShopsByUser();
-  const resolvedSearch = await searchParams;
+  const [user, shops, resolvedSearch] = await Promise.all([
+    requireUser(),
+    getShopsByUser(),
+    searchParams,
+  ]);
+  const canCreatePurchase = hasPermission(user, "create_purchase");
+  const canViewProducts = hasPermission(user, "view_products");
+  const canViewSuppliers = hasPermission(user, "view_suppliers");
+
+  if (!canCreatePurchase) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">নতুন পণ্য ক্রয়</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          নতুন ক্রয় যোগ করতে <code>create_purchase</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard/purchases"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ক্রয় তালিকায় ফিরুন
+        </Link>
+      </div>
+    );
+  }
+
+  if (!canViewProducts || !canViewSuppliers) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">নতুন পণ্য ক্রয়</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস অসম্পূর্ণ</p>
+        <p className="mb-6 text-muted-foreground">
+          এই ফর্ম ব্যবহার করতে <code>view_products</code> এবং <code>view_suppliers</code>{" "}
+          permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard/purchases"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ক্রয় তালিকায় ফিরুন
+        </Link>
+      </div>
+    );
+  }
 
   if (!shops || shops.length === 0) {
     return (

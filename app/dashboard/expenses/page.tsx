@@ -8,6 +8,8 @@ import {
   getExpensesByShopCursorPaginated,
 } from "@/app/actions/expenses";
 import { getDhakaDateString } from "@/lib/dhaka-date";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 
 import ShopSelectorClient from "./ShopSelectorClient";
 import { ExpensesListClient } from "./components/ExpensesListClient";
@@ -43,8 +45,33 @@ function parsePositiveInt(value?: string) {
 export default async function ExpensesPage({
   searchParams,
 }: ExpensePageProps) {
-  const shops = await getShopsByUser();
-  const resolvedSearch = await searchParams;
+  const [user, shops, resolvedSearch] = await Promise.all([
+    requireUser(),
+    getShopsByUser(),
+    searchParams,
+  ]);
+  const canViewExpenses = hasPermission(user, "view_expenses");
+  const canCreateExpense = hasPermission(user, "create_expense");
+  const canUpdateExpense = hasPermission(user, "update_expense");
+  const canDeleteExpense = hasPermission(user, "delete_expense");
+
+  if (!canViewExpenses) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">খরচের তালিকা</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          এই পেজ ব্যবহারের জন্য <code>view_expenses</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ড্যাশবোর্ডে ফিরুন
+        </Link>
+      </div>
+    );
+  }
 
   if (!shops || shops.length === 0) {
     return (
@@ -180,24 +207,28 @@ export default async function ExpensesPage({
               </p>
             </div>
 
-            <Link
-              href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
-              className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-            >
-              ➕ নতুন খরচ
-            </Link>
+            {canCreateExpense ? (
+              <Link
+                href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
+                className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+              >
+                ➕ নতুন খরচ
+              </Link>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="w-full sm:w-auto">
               <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
             </div>
-            <Link
-              href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
-              className="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-            >
-              ➕ নতুন খরচ যোগ করুন
-            </Link>
+            {canCreateExpense ? (
+              <Link
+                href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
+                className="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+              >
+                ➕ নতুন খরচ যোগ করুন
+              </Link>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3 text-xs">
@@ -225,6 +256,9 @@ export default async function ExpensesPage({
         hasMore={Boolean(hasMore)}
         summaryTotal={summary.totalAmount}
         summaryCount={summary.count}
+        canCreateExpense={canCreateExpense}
+        canUpdateExpense={canUpdateExpense}
+        canDeleteExpense={canDeleteExpense}
       />
     </div>
   );

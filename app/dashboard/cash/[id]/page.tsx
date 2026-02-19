@@ -4,10 +4,32 @@ import { getCashEntry, updateCashEntry } from "@/app/actions/cash";
 import { getShop } from "@/app/actions/shops";
 import { redirect } from "next/navigation";
 import CashFormClient from "../new/CashFormClient";
+import Link from "next/link";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 
 type PageProps = { params: Promise<{ id: string }> };
 
 export default async function EditCashPage({ params }: PageProps) {
+  const user = await requireUser();
+  const canUpdateCashEntry = hasPermission(user, "update_cash_entry");
+  if (!canUpdateCashEntry) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">ক্যাশ এন্ট্রি সম্পাদনা</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          এন্ট্রি সম্পাদনা করতে <code>update_cash_entry</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard/cash"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          ক্যাশ তালিকায় ফিরুন
+        </Link>
+      </div>
+    );
+  }
   const { id } = await params;
   let entry: Awaited<ReturnType<typeof getCashEntry>> | null = null;
   try {

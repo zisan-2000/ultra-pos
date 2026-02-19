@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { recordPurchasePayment } from "@/app/actions/purchases";
+import { apiErrorResponse } from "@/lib/http/api-errors";
 
 const bodySchema = z.object({
   shopId: z.string().min(1),
@@ -23,10 +24,7 @@ export async function POST(req: Request) {
     }
     const result = await recordPurchasePayment(parsed.data);
     return NextResponse.json(result);
-  } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: err?.message || "Failed to record payment" },
-      { status: 500 }
-    );
+  } catch (error) {
+    return apiErrorResponse(error);
   }
 }

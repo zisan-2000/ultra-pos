@@ -6,16 +6,43 @@ import { getActiveProductsByShop } from "@/app/actions/products";
 import { createSale } from "@/app/actions/sales";
 import Link from "next/link";
 import { PosPageClient } from "../PosPageClient";
+import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 
 type NewSalePageProps = {
   searchParams?: Promise<{ shopId?: string } | undefined>;
 };
 
 export default async function NewSalePage({ searchParams }: NewSalePageProps) {
-  const [shops, resolvedSearch] = await Promise.all([
+  const [user, shops, resolvedSearch] = await Promise.all([
+    requireUser(),
     getShopsByUser(),
     searchParams,
   ]);
+
+  const canViewProducts = hasPermission(user, "view_products");
+  const canCreateSale = hasPermission(user, "create_sale");
+  const canCreateDueSale = hasPermission(user, "create_due_sale");
+  const canViewCustomers = hasPermission(user, "view_customers");
+  const canViewDuePage = hasPermission(user, "view_due_summary");
+
+  if (!canViewProducts) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">নতুন বিক্রি</h1>
+        <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+        <p className="mb-6 text-muted-foreground">
+          এই পেজ ব্যবহারের জন্য <code>view_products</code> permission লাগবে।
+        </p>
+        <Link
+          href="/dashboard/sales"
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          বিক্রির তালিকায় ফিরুন
+        </Link>
+      </div>
+    );
+  }
 
   if (!shops || shops.length === 0) {
     return (
@@ -89,6 +116,10 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       customers={[] as any}
       shopName={selectedShop.name}
       shopId={selectedShopId}
+      canCreateSale={canCreateSale}
+      canCreateDueSale={canCreateDueSale}
+      canViewCustomers={canViewCustomers}
+      canViewDuePage={canViewDuePage}
       submitSale={submitSale}
     />
   );

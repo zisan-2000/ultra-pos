@@ -59,6 +59,10 @@ type PosPageClientProps = {
   }[];
   shopName: string;
   shopId: string;
+  canCreateSale: boolean;
+  canCreateDueSale: boolean;
+  canViewCustomers: boolean;
+  canViewDuePage: boolean;
   submitSale: (formData: FormData) => Promise<{
     success: boolean;
     saleId: string;
@@ -71,6 +75,10 @@ export function PosPageClient({
   customers,
   shopName,
   shopId,
+  canCreateSale,
+  canCreateDueSale,
+  canViewCustomers,
+  canViewDuePage,
   submitSale,
 }: PosPageClientProps) {
   const router = useRouter();
@@ -147,19 +155,29 @@ export function PosPageClient({
   const wasVisibleRef = useRef(isVisible);
   const pollIntervalMs = realtime.connected ? 60_000 : 15_000;
   const pollingEnabled = !realtime.connected;
+  const canUseDueSale = canCreateDueSale && canViewCustomers;
   const isDue = paymentMethod === "due";
   const paymentOptions = useMemo(
-    () => [
-      { value: "cash", label: "ক্যাশ" },
-      { value: "bkash", label: "বিকাশ" },
-      { value: "nagad", label: "নগদ" },
-      { value: "card", label: "কার্ড" },
-      { value: "bank_transfer", label: "ব্যাংক ট্রান্সফার" },
-      { value: "due", label: "ধার" },
-    ],
-    []
+    () => {
+      const options = [
+        { value: "cash", label: "ক্যাশ" },
+        { value: "bkash", label: "বিকাশ" },
+        { value: "nagad", label: "নগদ" },
+        { value: "card", label: "কার্ড" },
+        { value: "bank_transfer", label: "ব্যাংক ট্রান্সফার" },
+      ];
+      if (canUseDueSale) {
+        options.push({ value: "due", label: "ধার" });
+      }
+      return options;
+    },
+    [canUseDueSale]
   );
   const loadCustomersFromDexie = useCallback(async () => {
+    if (!canViewCustomers) {
+      setCustomerList([]);
+      return [] as typeof customers;
+    }
     try {
       const rows = await db.dueCustomers
         .where("shopId")
@@ -180,7 +198,7 @@ export function PosPageClient({
       console.warn("Load due customers cache failed", err);
       return [] as typeof customers;
     }
-  }, [shopId]);
+  }, [canViewCustomers, shopId]);
 
   const dueCustomerQueryKey = useMemo(
     () => ["due", "customers", shopId],
@@ -188,6 +206,10 @@ export function PosPageClient({
   );
 
   const fetchDueCustomers = useCallback(async () => {
+    if (!canViewCustomers) {
+      setCustomerList([]);
+      return [] as typeof customers;
+    }
     try {
       const res = await fetch(`/api/due/customers?shopId=${shopId}`);
       if (res.status === 304) {
@@ -229,20 +251,23 @@ export function PosPageClient({
       console.error("Load due customers failed", err);
       return loadCustomersFromDexie();
     }
-  }, [shopId, loadCustomersFromDexie]);
+  }, [canViewCustomers, shopId, loadCustomersFromDexie]);
 
   const dueCustomersQuery = useQuery({
     queryKey: dueCustomerQueryKey,
     queryFn: fetchDueCustomers,
-    enabled: online && isDue,
+    enabled: online && isDue && canViewCustomers,
     staleTime: 15_000,
     refetchInterval:
-      online && isDue && isVisible && pollingEnabled ? pollIntervalMs : false,
-    initialData: () => customers ?? [],
+      online && isDue && isVisible && pollingEnabled && canViewCustomers
+        ? pollIntervalMs
+        : false,
+    initialData: () => (canViewCustomers ? customers ?? [] : []),
     placeholderData: (prev) => prev ?? [],
   });
 
-  const customersLoading = dueCustomersQuery.isFetching && online && isDue;
+  const customersLoading =
+    dueCustomersQuery.isFetching && online && isDue && canViewCustomers;
 
   useEffect(() => {
     if (!isDue) return;
@@ -369,6 +394,14 @@ export function PosPageClient({
   }, [online, isVisible, router, syncing, pendingCount]);
 
   useEffect(() => {
+    if (!canUseDueSale && paymentMethod === "due") {
+      setPaymentMethod("cash");
+      setCustomerId("");
+      setPaidNow("");
+    }
+  }, [canUseDueSale, paymentMethod]);
+
+  useEffect(() => {
     if (!isDue) return;
     loadCustomersFromDexie();
   }, [isDue, loadCustomersFromDexie]);
@@ -379,6 +412,7 @@ export function PosPageClient({
   }, [isDue, online, loadCustomersFromDexie]);
 
   useEffect(() => {
+    if (!canViewCustomers) return;
     return subscribeDueCustomersEvent((detail) => {
       if (detail.shopId !== shopId) return;
       lastEventAtRef.current = Date.now();
@@ -390,7 +424,14 @@ export function PosPageClient({
         });
       }
     });
-  }, [loadCustomersFromDexie, shopId, online, queryClient, dueCustomerQueryKey]);
+  }, [
+    canViewCustomers,
+    loadCustomersFromDexie,
+    shopId,
+    online,
+    queryClient,
+    dueCustomerQueryKey,
+  ]);
 
   useEffect(() => {
     return subscribeProductEvent((detail) => {
@@ -487,6 +528,17 @@ export function PosPageClient({
     e.preventDefault();
 
     if (items.length === 0) return;
+
+    if (!canCreateSale) {
+      toast.error("আপনার বিক্রি সম্পন্ন করার অনুমতি নেই।");
+      return;
+    }
+
+    if (paymentMethod === "due" && !canUseDueSale) {
+      toast.error("বাকিতে বিক্রির অনুমতি নেই।");
+      setPaymentMethod("cash");
+      return;
+    }
 
     if (paymentMethod === "due" && !customerId) {
       toast.warning("বাকিতে বিক্রির জন্য কাস্টমার নির্বাচন করুন।");
@@ -699,6 +751,10 @@ export function PosPageClient({
   };
 
   const handleSellFromBar = () => {
+    if (!canCreateSale) {
+      toast.error("আপনার বিক্রি সম্পন্ন করার অনুমতি নেই।");
+      return;
+    }
     submitButtonRef.current?.click();
   };
 
@@ -748,6 +804,16 @@ export function PosPageClient({
               {pendingCount > 0 ? (
                 <span className="inline-flex h-7 items-center rounded-full border border-warning/30 bg-warning-soft px-3 text-warning">
                   পেন্ডিং {pendingCount} টি
+                </span>
+              ) : null}
+              {!canCreateSale ? (
+                <span className="inline-flex h-7 items-center rounded-full border border-danger/30 bg-danger-soft px-3 text-danger">
+                  বিক্রি করা নিষ্ক্রিয়
+                </span>
+              ) : null}
+              {canCreateSale && !canUseDueSale ? (
+                <span className="inline-flex h-7 items-center rounded-full border border-warning/30 bg-warning-soft px-3 text-warning">
+                  বাকির বিক্রি নিষ্ক্রিয়
                 </span>
               ) : null}
               <button
@@ -835,7 +901,7 @@ export function PosPageClient({
           </div>
 
           {/* Customer Selection for Due */}
-          {isDue && (
+          {isDue && canUseDueSale && (
             <div className="rounded-xl border border-warning/30 bg-warning-soft/40 p-3 space-y-2">
               <label className="text-base font-medium text-foreground">
                 গ্রাহক নির্বাচন করুন
@@ -858,17 +924,23 @@ export function PosPageClient({
                 ) : null}
                 {customerOptions}
               </select>
-              <a
-                className="text-sm text-primary hover:underline"
-                href={`/dashboard/due?shopId=${shopId}`}
-              >
-                নতুন গ্রাহক যোগ করুন
-              </a>
+              {canViewDuePage ? (
+                <a
+                  className="text-sm text-primary hover:underline"
+                  href={`/dashboard/due?shopId=${shopId}`}
+                >
+                  নতুন গ্রাহক যোগ করুন
+                </a>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  কাস্টমার যোগ করতে Due page access প্রয়োজন।
+                </p>
+              )}
             </div>
           )}
 
           {/* Partial payment - only for due */}
-          {isDue && (
+          {isDue && canUseDueSale && (
             <div className="rounded-xl border border-warning/30 bg-warning-soft/40 p-3 space-y-2">
               <label className="text-base font-medium text-foreground">
                 এখন পরিশোধ (আংশিক হলে)
@@ -909,7 +981,7 @@ export function PosPageClient({
         <form onSubmit={handleSubmit} className="mt-6 space-y-3">
           <button
             type="submit"
-            disabled={items.length === 0 || isSubmitting}
+            disabled={items.length === 0 || isSubmitting || !canCreateSale}
             ref={submitButtonRef}
             className="w-full h-14 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
@@ -967,7 +1039,7 @@ export function PosPageClient({
             <button
               type="button"
               onClick={handleSellFromBar}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !canCreateSale}
               className="px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold min-w-[140px] flex items-center justify-center gap-1 shadow-[0_10px_18px_rgba(22,163,74,0.28)] disabled:opacity-60"
             >
               {isSubmitting ? (
