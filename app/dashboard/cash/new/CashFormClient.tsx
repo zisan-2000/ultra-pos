@@ -30,6 +30,13 @@ type CashTemplate = {
   lastUsed: number;
 };
 
+type QuickReasonOption = {
+  reason: string;
+  amount: string;
+  count: number;
+  lastUsed: number;
+};
+
 type Props = {
   shopId: string;
   backHref: string;
@@ -47,6 +54,15 @@ type Props = {
 };
 
 const TEMPLATE_LIMIT = 40;
+const QUICK_REASON_LIMIT = 6;
+const IN_REASON_SUGGESTIONS = ["বিক্রয়", "ক্যাশ আনা", "জমা", "অন্যান্য"];
+const OUT_REASON_SUGGESTIONS = [
+  "ক্যাশ নেওয়া",
+  "রিকশা",
+  "পে",
+  "মাল খরচ",
+  "অন্যান্য",
+];
 
 function mergeTemplates(existing: CashTemplate[], incoming: CashTemplate) {
   const idx = existing.findIndex(
@@ -103,6 +119,7 @@ export default function CashFormClient({
   
   const online = useOnlineStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const amountInputRef = useRef<HTMLInputElement | null>(null);
   const [listeningField, setListeningField] = useState<"amount" | "reason" | null>(null);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -163,24 +180,70 @@ export default function CashFormClient({
     [templates]
   );
 
+  const defaultReasonSuggestions = useMemo(
+    () => (entryType === "IN" ? IN_REASON_SUGGESTIONS : OUT_REASON_SUGGESTIONS),
+    [entryType]
+  );
+
   const reasonOptions = useMemo(
     () =>
       dedupe([
-        ...frequentTemplates.map((t) => t.reason || ""),
-        ...recentTemplates.map((t) => t.reason || ""),
-        "বিক্রয়",
-        "ক্যাশ আনা",
-        "ক্যাশ নেওয়া",
-        "পে",
-        "রিকশা",
+        ...frequentTemplates
+          .filter((t) => t.entryType === entryType)
+          .map((t) => t.reason || ""),
+        ...recentTemplates
+          .filter((t) => t.entryType === entryType)
+          .map((t) => t.reason || ""),
+        ...defaultReasonSuggestions,
       ]),
-    [frequentTemplates, recentTemplates]
+    [frequentTemplates, recentTemplates, defaultReasonSuggestions, entryType]
   );
 
   const amountOptions = useMemo(
     () => dedupe(recentTemplates.map((t) => t.amount).concat(frequentTemplates.map((t) => t.amount))),
     [recentTemplates, frequentTemplates]
   );
+
+  const quickReasonOptions = useMemo<QuickReasonOption[]>(() => {
+    const reasonMap = new Map<string, QuickReasonOption>();
+
+    templates
+      .filter((t) => t.entryType === entryType)
+      .forEach((t) => {
+        const key = (t.reason || "").trim();
+        if (!key) return;
+
+        const existing = reasonMap.get(key);
+        if (!existing) {
+          reasonMap.set(key, {
+            reason: key,
+            amount: t.amount || "",
+            count: Math.max(1, t.count || 1),
+            lastUsed: t.lastUsed || 0,
+          });
+          return;
+        }
+
+        const isLatest = (t.lastUsed || 0) >= existing.lastUsed;
+        reasonMap.set(key, {
+          reason: key,
+          amount: isLatest ? t.amount || "" : existing.amount,
+          count: existing.count + Math.max(1, t.count || 1),
+          lastUsed: Math.max(existing.lastUsed, t.lastUsed || 0),
+        });
+      });
+
+    const ranked = Array.from(reasonMap.values()).sort(
+      (a, b) =>
+        b.count - a.count || b.lastUsed - a.lastUsed || a.reason.localeCompare(b.reason)
+    );
+    const used = new Set(ranked.map((item) => item.reason));
+    const fallback = defaultReasonSuggestions
+      .filter((r) => !used.has(r))
+      .map((r) => ({ reason: r, amount: "", count: 0, lastUsed: 0 }));
+
+    return [...ranked, ...fallback].slice(0, QUICK_REASON_LIMIT);
+  }, [templates, entryType, defaultReasonSuggestions]);
 
   const headerTitle = title || (id ? "ক্যাশ এন্ট্রি সম্পাদনা" : "নতুন ক্যাশ এন্ট্রি");
   const headerSubtitle =
@@ -212,6 +275,26 @@ export default function CashFormClient({
     setEntryType(t.entryType);
     setAmount(t.amount);
     setReason(t.reason || "");
+  }
+
+  function focusAmountInput() {
+    const runner = () => {
+      amountInputRef.current?.focus();
+      amountInputRef.current?.select();
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(runner);
+      return;
+    }
+    setTimeout(runner, 0);
+  }
+
+  function handleQuickReasonSelect(option: QuickReasonOption) {
+    setReason(option.reason);
+    if (option.amount) {
+      setAmount(option.amount);
+    }
+    focusAmountInput();
   }
 
   function startVoice(field: "amount" | "reason") {
@@ -435,6 +518,74 @@ export default function CashFormClient({
           </p>
         </div>
 
+        {/* Reason */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
+          <label className="block text-base font-medium text-foreground">
+            কারণ (ঐচ্ছিক)
+          </label>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              দ্রুত কারণ (ট্যাপ করলে amount অটো-ফিল হবে)
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {quickReasonOptions.map((item) => (
+                <button
+                  key={item.reason}
+                  type="button"
+                  onClick={() => handleQuickReasonSelect(item)}
+                  className={`h-9 px-3 rounded-full border text-xs font-semibold transition-colors ${
+                    reason === item.reason
+                      ? "bg-primary-soft border-primary/40 text-primary"
+                      : "bg-card border-border text-foreground hover:border-primary/30"
+                  }`}
+                >
+                  {item.reason}
+                  {item.amount ? (
+                    <span className="ml-1 text-[11px] text-muted-foreground">৳{item.amount}</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="relative">
+            <input
+              name="reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              list="cash-reason-options"
+              className="w-full h-12 border border-border rounded-xl px-4 pr-16 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="যেমন: বিক্রয় টাকা, মালিককে ক্যাশ"
+            />
+            <button
+              type="button"
+              onClick={isListeningReason ? stopVoice : () => startVoice("reason")}
+              disabled={!voiceReady}
+              aria-label={isListeningReason ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
+              className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+                isListeningReason
+                  ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                  : "bg-primary-soft text-primary border-primary/30 active:scale-95"
+              } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+            >
+              {isListeningReason ? "🔴" : "🎤"}
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {reasonVoiceHint}{" "}
+            {voiceErrorText ? (
+              <span className="text-danger">{voiceErrorText}</span>
+            ) : null}
+          </p>
+          <datalist id="cash-reason-options">
+            {reasonOptions.map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+          <p className="text-xs text-muted-foreground">
+            বেশি ব্যবহৃত কারণগুলো এক ট্যাপে পাওয়া যাবে
+          </p>
+        </div>
+
         {/* Amount */}
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
           <div className="flex items-center justify-between gap-2">
@@ -445,6 +596,7 @@ export default function CashFormClient({
           </div>
           <div className="relative">
             <input
+              ref={amountInputRef}
               name="amount"
               type="number"
               step="0.01"
@@ -489,56 +641,6 @@ export default function CashFormClient({
               ))}
             </div>
           )}
-        </div>
-
-        {/* Reason */}
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
-          <label className="block text-base font-medium text-foreground">
-            কারণ (ঐচ্ছিক)
-          </label>
-          <div className="relative">
-            <input
-              name="reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="w-full h-12 border border-border rounded-xl px-4 pr-16 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="যেমন: বিক্রয় টাকা, মালিককে ক্যাশ"
-            />
-            <button
-              type="button"
-              onClick={isListeningReason ? stopVoice : () => startVoice("reason")}
-              disabled={!voiceReady}
-              aria-label={isListeningReason ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
-              className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
-                isListeningReason
-                  ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
-                  : "bg-primary-soft text-primary border-primary/30 active:scale-95"
-              } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
-            >
-              {isListeningReason ? "🔴" : "🎤"}
-            </button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {reasonVoiceHint}{" "}
-            {voiceErrorText ? (
-              <span className="text-danger">{voiceErrorText}</span>
-            ) : null}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {reasonOptions.slice(0, 6).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setReason(r)}
-                className="h-9 px-3 rounded-full border border-border bg-card text-xs font-semibold text-foreground hover:border-primary/30"
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            বেশি ব্যবহৃত কারণগুলো এক ট্যাপে পাওয়া যাবে
-          </p>
         </div>
 
         {/* Recent templates */}
