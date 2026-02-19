@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { updateStaffPermissions } from "@/app/actions/user-management";
 import { useOnlineStatus } from "@/lib/sync/net-status";
@@ -245,7 +245,7 @@ function AccessControlInner({
     setFeedback(null);
   };
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (readOnly || saving) return;
     setFeedback(null);
     startSaving(async () => {
@@ -261,10 +261,40 @@ function AccessControlInner({
         });
       }
     });
-  };
+  }, [enabledIds, readOnly, saving, startSaving, user.id]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isSaveShortcut =
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === "s";
+      if (!isSaveShortcut) return;
+      if (readOnly || !hasChanges || saving) return;
+      event.preventDefault();
+      handleSave();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [handleSave, hasChanges, readOnly, saving]);
+
+  useEffect(() => {
+    if (!hasChanges) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [hasChanges]);
 
   return (
-    <div className="space-y-6">
+    <div className={cn("space-y-6", hasChanges && "pb-24 sm:pb-28")}>
       <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -548,6 +578,54 @@ function AccessControlInner({
           )}
         </div>
       </div>
+
+      {hasChanges ? (
+        <div className="fixed inset-x-0 bottom-3 z-40 px-3 sm:px-6">
+          <div className="mx-auto max-w-5xl rounded-2xl border border-border bg-card/95 p-3 shadow-[0_12px_30px_rgba(15,23,42,0.18)] backdrop-blur">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-foreground">
+                  {changedCount}টি পরিবর্তন এখনও সংরক্ষণ হয়নি
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  শর্টকাট: <code>Ctrl/Cmd + S</code>
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  disabled={readOnly || saving || !hasChanges}
+                  className={cn(
+                    "rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted",
+                    (readOnly || saving || !hasChanges) &&
+                      "opacity-60 cursor-not-allowed",
+                  )}
+                >
+                  Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={readOnly || saving || !hasChanges}
+                  className={cn(
+                    "rounded-lg bg-primary-soft text-primary border border-primary/30 px-4 py-1.5 text-xs font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40",
+                    (readOnly || saving || !hasChanges) &&
+                      "opacity-60 cursor-not-allowed",
+                  )}
+                >
+                  {saving ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন"}
+                </button>
+              </div>
+            </div>
+            {readOnly ? (
+              <p className="mt-2 text-[11px] font-semibold text-warning">
+                অফলাইন: অনলাইনে গেলে সংরক্ষণ করুন।
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

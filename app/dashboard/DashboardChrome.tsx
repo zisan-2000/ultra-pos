@@ -561,10 +561,19 @@ export function DashboardShell({
 
   const showFabLabel = pathname === "/dashboard";
 
-  const baseFabConfig =
-    fabByRoute[
-      bottomNav.find((item) => pathname.startsWith(item.href))?.href || pathname
-    ] || null;
+  const matchedFabRoute = useMemo(() => {
+    const matches = Object.keys(fabByRoute)
+      .filter((route) => {
+        if (route === "/dashboard") {
+          return pathname === route;
+        }
+        return pathname === route || pathname.startsWith(`${route}/`);
+      })
+      .sort((a, b) => b.length - a.length);
+    return matches[0] ?? null;
+  }, [pathname]);
+
+  const baseFabConfig = matchedFabRoute ? fabByRoute[matchedFabRoute] : null;
   const canUseFab =
     !baseFabConfig ||
     hasPermission(
