@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getQueueTokenPrintData } from "@/app/actions/queue-tokens";
+import { requireUser } from "@/lib/auth-session";
+import { canPrintQueueToken } from "@/lib/queue-token";
 import {
   getQueueOrderTypeLabel,
   getQueueStatusLabel,
@@ -41,17 +43,54 @@ function formatDateOnly(date: Date | null) {
 }
 
 export default async function QueueTokenPrintPage({ params }: PageProps) {
+  const user = await requireUser();
+  if (!canPrintQueueToken(user)) {
+    return (
+      <div className="mx-auto max-w-2xl p-4 sm:p-6">
+        <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+          <h1 className="text-2xl font-bold text-foreground">Queue Token Print</h1>
+          <p className="mt-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            এই পেজ ব্যবহারের জন্য <code>print_queue_token</code> permission লাগবে।
+          </p>
+          <Link
+            href="/dashboard/queue"
+            className="inline-flex mt-5 h-10 items-center rounded-full border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/15 hover:border-primary/40"
+          >
+            টোকেন বোর্ডে ফিরুন
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const { tokenId } = await params;
 
   let data: Awaited<ReturnType<typeof getQueueTokenPrintData>>;
   try {
     data = await getQueueTokenPrintData(tokenId);
   } catch (error) {
-    if (
-      error instanceof Error &&
-      /(not found|forbidden|unauthorized)/i.test(error.message)
-    ) {
+    if (error instanceof Error && /not found/i.test(error.message)) {
       notFound();
+    }
+    if (error instanceof Error && /(forbidden|unauthorized)/i.test(error.message)) {
+      return (
+        <div className="mx-auto max-w-2xl p-4 sm:p-6">
+          <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            <h1 className="text-2xl font-bold text-foreground">Queue Token Print</h1>
+            <p className="mt-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              এই টোকেন প্রিন্ট করার অনুমতি আপনার নেই।
+            </p>
+            <Link
+              href="/dashboard/queue"
+              className="inline-flex mt-5 h-10 items-center rounded-full border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/15 hover:border-primary/40"
+            >
+              টোকেন বোর্ডে ফিরুন
+            </Link>
+          </div>
+        </div>
+      );
     }
     throw error;
   }

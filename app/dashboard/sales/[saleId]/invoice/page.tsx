@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSaleInvoiceDetails } from "@/app/actions/sales";
+import { requireUser } from "@/lib/auth-session";
+import { canViewSalesInvoice } from "@/lib/sales-invoice";
 import PrintInvoiceButton from "./PrintInvoiceButton";
 
 type PageProps = {
@@ -38,17 +40,54 @@ const paymentLabel: Record<string, string> = {
 };
 
 export default async function SalesInvoicePage({ params }: PageProps) {
+  const user = await requireUser();
+  if (!canViewSalesInvoice(user)) {
+    return (
+      <div className="mx-auto max-w-2xl p-4 sm:p-6">
+        <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+          <h1 className="text-2xl font-bold text-foreground">Sales Invoice</h1>
+          <p className="mt-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            এই পেজ ব্যবহারের জন্য <code>view_sales_invoice</code> permission লাগবে।
+          </p>
+          <Link
+            href="/dashboard/sales"
+            className="inline-flex mt-5 h-10 items-center rounded-full border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/15 hover:border-primary/40"
+          >
+            বিক্রি তালিকায় ফিরুন
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const { saleId } = await params;
 
   let data: Awaited<ReturnType<typeof getSaleInvoiceDetails>>;
   try {
     data = await getSaleInvoiceDetails(saleId);
   } catch (error) {
-    if (
-      error instanceof Error &&
-      /(not found|not issued|forbidden|unauthorized)/i.test(error.message)
-    ) {
+    if (error instanceof Error && /(not found|not issued)/i.test(error.message)) {
       notFound();
+    }
+    if (error instanceof Error && /(forbidden|unauthorized)/i.test(error.message)) {
+      return (
+        <div className="mx-auto max-w-2xl p-4 sm:p-6">
+          <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            <h1 className="text-2xl font-bold text-foreground">Sales Invoice</h1>
+            <p className="mt-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              এই ইনভয়েস দেখার অনুমতি আপনার নেই।
+            </p>
+            <Link
+              href="/dashboard/sales"
+              className="inline-flex mt-5 h-10 items-center rounded-full border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/15 hover:border-primary/40"
+            >
+              বিক্রি তালিকায় ফিরুন
+            </Link>
+          </div>
+        </div>
+      );
     }
     throw error;
   }
