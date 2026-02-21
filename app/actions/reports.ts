@@ -341,6 +341,7 @@ export async function getCashWithFilterPaginated({
       amount: true,
       reason: true,
       createdAt: true,
+      businessDate: true,
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: safeLimit + 1,
@@ -427,7 +428,7 @@ const getSalesSummaryCached = unstable_cache(
     computeSalesSummary(shopId, from, to),
   ["reports-sales-summary"],
   {
-    revalidate: 30,
+    revalidate: 60,
     tags: [REPORTS_CACHE_TAGS.salesSummary, REPORTS_CACHE_TAGS.summary],
   }
 );
@@ -548,7 +549,7 @@ const getExpenseSummaryCached = unstable_cache(
     computeExpenseSummary(shopId, from, to),
   ["reports-expense-summary"],
   {
-    revalidate: 30,
+    revalidate: 60,
     tags: [REPORTS_CACHE_TAGS.expenseSummary, REPORTS_CACHE_TAGS.summary],
   }
 );
@@ -563,32 +564,35 @@ async function computeCashSummary(
   const { start, end } = useUnbounded
     ? { start: undefined, end: undefined }
     : clampRange(parsed.start, parsed.end, 90);
-  const grouped = await prisma.cashEntry.groupBy({
-    by: ["entryType"],
-    where: {
-      shopId,
-      businessDate: {
-        gte: start ?? undefined,
-        lte: end ?? undefined,
-      },
-    },
-    _sum: { amount: true },
-  });
 
-  const totals = grouped.reduce(
-    (acc, row) => {
-      const amount = Number(row._sum.amount ?? 0);
-      if (row.entryType === "IN") acc.in += amount;
-      else acc.out += amount;
-      return acc;
-    },
-    { in: 0, out: 0 }
-  );
+  const startDate = start ? start.toISOString().slice(0, 10) : undefined;
+  const endDate = end ? end.toISOString().slice(0, 10) : undefined;
+
+  // Use raw SQL for better performance
+  const result = await prisma.$queryRaw<
+    { totalIn: Prisma.Decimal | number; totalOut: Prisma.Decimal | number }[]
+  >(Prisma.sql`
+    SELECT
+      COALESCE(SUM(CASE WHEN entry_type = 'IN' THEN amount ELSE 0 END), 0) AS "totalIn",
+      COALESCE(SUM(CASE WHEN entry_type = 'OUT' THEN amount ELSE 0 END), 0) AS "totalOut"
+    FROM "cash_entries"
+    WHERE shop_id = CAST(${shopId} AS uuid)
+    ${
+      useUnbounded
+        ? Prisma.empty
+        : Prisma.sql`AND business_date >= CAST(${startDate} AS date)
+        AND business_date <= CAST(${endDate} AS date)`
+    }
+  `);
+
+  const row = result[0];
+  const totalIn = Number(row?.totalIn ?? 0);
+  const totalOut = Number(row?.totalOut ?? 0);
 
   return {
-    totalIn: totals.in,
-    totalOut: totals.out,
-    balance: totals.in - totals.out,
+    totalIn,
+    totalOut,
+    balance: totalIn - totalOut,
   };
 }
 
@@ -597,7 +601,7 @@ const getCashSummaryCached = unstable_cache(
     computeCashSummary(shopId, from, to),
   ["reports-cash-summary"],
   {
-    revalidate: 30,
+    revalidate: 60,
     tags: [REPORTS_CACHE_TAGS.cashSummary, REPORTS_CACHE_TAGS.summary],
   }
 );
@@ -692,7 +696,7 @@ const getProfitSummaryCached = unstable_cache(
     computeProfitSummary(shopId, from, to),
   ["reports-profit-summary"],
   {
-    revalidate: 30,
+    revalidate: 60,
     tags: [REPORTS_CACHE_TAGS.profitSummary, REPORTS_CACHE_TAGS.summary],
   }
 );
@@ -786,74 +790,58 @@ async function computeProfitTrendReport(
     }
   }
 
-  const [salesRows, expenseRows, cogsRows] = await Promise.all([
-    prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
-      Prisma.sql`
+  // Use a single combined query with CTEs for better performance
+  const combined = await prisma.$queryRaw<
+    { day: string; sales: Prisma.Decimal | number | null; expense: Prisma.Decimal | number | null; cogs: Prisma.Decimal | number | null }[]
+  >(
+    Prisma.sql`
+      WITH sales_daily AS (
         SELECT
           s.business_date::text AS day,
-          SUM(COALESCE(s.total_amount, 0)) AS sum
+          SUM(COALESCE(s.total_amount, 0)) AS sales_sum
         FROM "sales" s
         WHERE ${Prisma.join(salesWhere, " AND ")}
-        GROUP BY day
-        ORDER BY day
-      `
-    ),
-    prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
-      Prisma.sql`
+        GROUP BY s.business_date
+      ),
+      expense_daily AS (
         SELECT
           e.expense_date::text AS day,
-          SUM(COALESCE(e.amount, 0)) AS sum
+          SUM(COALESCE(e.amount, 0)) AS expense_sum
         FROM "expenses" e
         WHERE ${Prisma.join(expenseWhere, " AND ")}
-        GROUP BY day
-        ORDER BY day
-      `
-    ),
-    needsCogs
-      ? prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
-          Prisma.sql`
-            SELECT
-              s.business_date::text AS day,
-              SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS sum
-            FROM "sale_items" si
-            JOIN "sales" s ON s.id = si.sale_id
-            LEFT JOIN "products" p ON p.id = si.product_id
-            WHERE ${Prisma.join(salesWhere, " AND ")}
-            GROUP BY day
-            ORDER BY day
-          `
-        )
-      : Promise.resolve([]),
-  ]);
+        GROUP BY e.expense_date
+      )
+      ${
+        needsCogs
+          ? Prisma.sql`, cogs_daily AS (
+        SELECT
+          s.business_date::text AS day,
+          SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS cogs_sum
+        FROM "sale_items" si
+        JOIN "sales" s ON s.id = si.sale_id
+        LEFT JOIN "products" p ON p.id = si.product_id
+        WHERE ${Prisma.join(salesWhere, " AND ")}
+        GROUP BY s.business_date
+      )`
+          : Prisma.empty
+      }
+      SELECT
+        COALESCE(sd.day, ed.day${needsCogs ? ", cd.day" : ""}) AS day,
+        sd.sales_sum AS sales,
+        ed.expense_sum AS expense
+        ${needsCogs ? ", cd.cogs_sum AS cogs" : ""}
+      FROM sales_daily sd
+      FULL OUTER JOIN expense_daily ed ON sd.day = ed.day
+      ${needsCogs ? "FULL OUTER JOIN cogs_daily cd ON sd.day = cd.day" : ""}
+      ORDER BY day
+    `
+  );
 
-  const salesByDate = new Map<string, number>();
-  salesRows.forEach((row) => {
-    salesByDate.set(row.day, Number(row.sum ?? 0));
-  });
-
-  const expensesByDate = new Map<string, number>();
-  expenseRows.forEach((row) => {
-    expensesByDate.set(row.day, Number(row.sum ?? 0));
-  });
-
-  const cogsByDate = new Map<string, number>();
-  cogsRows.forEach((row) => {
-    cogsByDate.set(row.day, Number(row.sum ?? 0));
-  });
-
-  const allDates = new Set<string>([
-    ...salesByDate.keys(),
-    ...expensesByDate.keys(),
-    ...cogsByDate.keys(),
-  ]);
-
-  return Array.from(allDates)
-    .sort()
-    .map((date) => ({
-      date,
-      sales: salesByDate.get(date) || 0,
-      expense: (expensesByDate.get(date) || 0) + (cogsByDate.get(date) || 0),
-    }));
+  return combined.map((row) => ({
+    date: row.day,
+    sales: Number(row.sales ?? 0),
+    expense: Number(row.expense ?? 0) + Number(row.cogs ?? 0),
+  }));
 }
 
 const getProfitTrendCached = unstable_cache(
@@ -878,12 +866,20 @@ export async function getProfitTrendReport(
    TOP PRODUCTS REPORT
 -------------------------------------------------- */
 async function computeTopProductsReport(shopId: string, limit: number) {
+  // Only look at sales from the last 30 days by default to avoid loading all history
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const startDate = thirtyDaysAgo.toISOString().slice(0, 10);
+
   const topProducts = await prisma.saleItem.groupBy({
     by: ["productId"],
     where: {
       sale: {
         shopId,
         status: { not: "VOIDED" },
+        businessDate: {
+          gte: thirtyDaysAgo,
+        },
       },
     },
     _sum: {

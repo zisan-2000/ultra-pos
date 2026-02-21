@@ -19,8 +19,8 @@ model Role {
 }
 
 model Permission {
-  id              String           @id @default(cuid())
-  name            String           @unique
+  id              String                   @id @default(cuid())
+  name            String                   @unique
   description     String?
   rolePermissions RolePermission[]
   userOverrides   UserPermissionOverride[]
@@ -30,8 +30,8 @@ model RolePermission {
   roleId       String
   permissionId String
 
-  role         Role       @relation(fields: [roleId], references: [id])
-  permission   Permission @relation(fields: [permissionId], references: [id])
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
 
   @@id([roleId, permissionId])
 }
@@ -40,7 +40,7 @@ model UserPermissionOverride {
   userId       String
   permissionId String
   allowed      Boolean  @default(true)
-  createdAt    DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user       User       @relation(fields: [userId], references: [id])
   permission Permission @relation(fields: [permissionId], references: [id])
@@ -50,40 +50,39 @@ model UserPermissionOverride {
   @@map("user_permission_overrides")
 }
 
-
 // -----------------------
 // BetterAuth core models
 // -----------------------
 model User {
-  id            String    @id @default(cuid())
-  email         String?   @unique
-  emailVerified Boolean   @default(false)
-  passwordHash  String?   @map("password_hash")
+  id            String   @id @default(cuid())
+  email         String?  @unique
+  emailVerified Boolean  @default(false)
+  passwordHash  String?  @map("password_hash")
   name          String?
   image         String?
-  createdAt     DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime  @map("updated_at") @updatedAt @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  accounts      Account[]
-  sessions      Session[]
-  verifications Verification[]
+  accounts         Account[]
+  sessions         Session[]
+  verifications    Verification[]
   adminSyncActions AdminSyncAction[]
 
-  roles         Role[]    @relation("UserRoles")
+  roles               Role[]                   @relation("UserRoles")
   permissionOverrides UserPermissionOverride[]
-  ownedSubscriptions ShopSubscription[] @relation("OwnerSubscriptions")
-  ownedInvoices Invoice[] @relation("OwnerInvoices")
-  paymentRequests BillingPaymentRequest[] @relation("OwnerPaymentRequests")
-  shops Shop[] @relation("OwnerShops")
+  ownedSubscriptions  ShopSubscription[]       @relation("OwnerSubscriptions")
+  ownedInvoices       Invoice[]                @relation("OwnerInvoices")
+  paymentRequests     BillingPaymentRequest[]  @relation("OwnerPaymentRequests")
+  shops               Shop[]                   @relation("OwnerShops")
 
   // User hierarchy: who created this user
-  createdBy     String?   @map("created_by")
-  createdByUser User?     @relation("CreatedUsers", fields: [createdBy], references: [id])
-  createdUsers  User[]    @relation("CreatedUsers")
+  createdBy     String? @map("created_by")
+  createdByUser User?   @relation("CreatedUsers", fields: [createdBy], references: [id])
+  createdUsers  User[]  @relation("CreatedUsers")
 
   // Staff belongs to exactly one shop (optional for non-staff users)
-  staffShopId   String?   @map("staff_shop_id") @db.Uuid
-  staffShop     Shop?     @relation("StaffShop", fields: [staffShopId], references: [id])
+  staffShopId String? @map("staff_shop_id") @db.Uuid
+  staffShop   Shop?   @relation("StaffShop", fields: [staffShopId], references: [id])
 
   @@map("users")
 }
@@ -92,7 +91,7 @@ model Account {
   id             String    @id @default(cuid())
   accountId      String?   @map("account_id")
   providerId     String    @map("provider_id")
-  providerUserId String    @map("provider_user_id") @default("")
+  providerUserId String    @default("") @map("provider_user_id")
   userId         String    @map("user_id")
   accessToken    String?   @map("access_token")
   refreshToken   String?   @map("refresh_token")
@@ -101,8 +100,8 @@ model Account {
   scope          String?
   password       String?
   profile        Json?
-  createdAt      DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime  @map("updated_at") @updatedAt @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id])
 
@@ -111,15 +110,15 @@ model Account {
 }
 
 model Session {
-  id            String   @id @default(cuid())
-  token         String   @unique
-  userId        String   @map("user_id")
-  expiresAt     DateTime @map("expires_at") @db.Timestamptz(6)
-  ipAddress     String?  @map("ip_address")
-  userAgent     String?  @map("user_agent")
-  impersonatedBy String? @map("impersonated_by")
-  createdAt     DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime @map("updated_at") @updatedAt @db.Timestamptz(6)
+  id             String   @id @default(cuid())
+  token          String   @unique
+  userId         String   @map("user_id")
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(6)
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  impersonatedBy String?  @map("impersonated_by")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id])
 
@@ -133,8 +132,8 @@ model Verification {
   identifier String
   expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
   type       String
-  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime @map("updated_at") @updatedAt @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user User? @relation(fields: [userId], references: [id])
 
@@ -142,50 +141,50 @@ model Verification {
 }
 
 model Jwks {
-  id         String   @id @default(cuid())
-  publicKey  String   @map("public_key")
-  privateKey String   @map("private_key")
-  alg        String?  @map("alg")
-  crv        String?  @map("crv")
-  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  id         String    @id @default(cuid())
+  publicKey  String    @map("public_key")
+  privateKey String    @map("private_key")
+  alg        String?   @map("alg")
+  crv        String?   @map("crv")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
 
   @@map("jwks")
 }
 
 model Shop {
-  id           String   @id @default(uuid()) @db.Uuid
-  ownerId      String   @map("owner_id")
-  name         String
-  address      String?
-  phone        String?
-  businessType String   @map("business_type") @default("tea_stall")
-  closingTime  String?  @map("closing_time")
-  salesInvoiceEnabled Boolean @map("sales_invoice_enabled") @default(false)
-  salesInvoicePrefix  String? @map("sales_invoice_prefix")
-  nextSalesInvoiceSeq Int     @map("next_sales_invoice_seq") @default(1)
-  queueTokenEnabled Boolean @map("queue_token_enabled") @default(false)
-  queueTokenPrefix  String? @map("queue_token_prefix")
-  queueWorkflow     String? @map("queue_workflow")
-  nextQueueTokenSeq Int     @map("next_queue_token_seq") @default(1)
-  createdAt    DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  id                  String   @id @default(uuid()) @db.Uuid
+  ownerId             String   @map("owner_id")
+  name                String
+  address             String?
+  phone               String?
+  businessType        String   @default("tea_stall") @map("business_type")
+  closingTime         String?  @map("closing_time")
+  salesInvoiceEnabled Boolean  @default(false) @map("sales_invoice_enabled")
+  salesInvoicePrefix  String?  @map("sales_invoice_prefix")
+  nextSalesInvoiceSeq Int      @default(1) @map("next_sales_invoice_seq")
+  queueTokenEnabled   Boolean  @default(false) @map("queue_token_enabled")
+  queueTokenPrefix    String?  @map("queue_token_prefix")
+  queueWorkflow       String?  @map("queue_workflow")
+  nextQueueTokenSeq   Int      @default(1) @map("next_queue_token_seq")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  owner          User             @relation("OwnerShops", fields: [ownerId], references: [id])
-  products       Product[]
-  queueTokens    QueueToken[]
-  sales          Sale[]
-  purchases      Purchase[]
-  suppliers      Supplier[]
-  supplierLedger SupplierLedger[]
+  owner            User                    @relation("OwnerShops", fields: [ownerId], references: [id])
+  products         Product[]
+  queueTokens      QueueToken[]
+  sales            Sale[]
+  purchases        Purchase[]
+  suppliers        Supplier[]
+  supplierLedger   SupplierLedger[]
   purchasePayments PurchasePayment[]
-  expenses       Expense[]
-  cashEntries    CashEntry[]
-  customers      Customer[]
-  customerLedger CustomerLedger[]
-  staffMembers   User[]   @relation("StaffShop")
-  subscription   ShopSubscription?
-  invoices       Invoice[]
-  paymentRequests BillingPaymentRequest[]
+  expenses         Expense[]
+  cashEntries      CashEntry[]
+  customers        Customer[]
+  customerLedger   CustomerLedger[]
+  staffMembers     User[]                  @relation("StaffShop")
+  subscription     ShopSubscription?
+  invoices         Invoice[]
+  paymentRequests  BillingPaymentRequest[]
 
   @@index([ownerId], map: "idx_shops_owner_id")
   @@map("shops")
@@ -217,10 +216,10 @@ model SubscriptionPlan {
   key            String   @unique
   name           String
   amount         Decimal  @db.Decimal(12, 2)
-  intervalMonths Int      @map("interval_months") @default(1)
-  isActive       Boolean  @map("is_active") @default(true)
-  createdAt      DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime @map("updated_at") @updatedAt @db.Timestamptz(6)
+  intervalMonths Int      @default(1) @map("interval_months")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   subscriptions ShopSubscription[]
 
@@ -239,8 +238,8 @@ model ShopSubscription {
   trialEndsAt        DateTime?          @map("trial_ends_at") @db.Timestamptz(6)
   graceEndsAt        DateTime?          @map("grace_ends_at") @db.Timestamptz(6)
   canceledAt         DateTime?          @map("canceled_at") @db.Timestamptz(6)
-  createdAt          DateTime           @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt          DateTime           @map("updated_at") @updatedAt @db.Timestamptz(6)
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   shop     Shop             @relation(fields: [shopId], references: [id])
   owner    User             @relation("OwnerSubscriptions", fields: [ownerId], references: [id])
@@ -263,13 +262,13 @@ model Invoice {
   status         InvoiceStatus @default(open)
   dueDate        DateTime      @map("due_date") @db.Timestamptz(6)
   paidAt         DateTime?     @map("paid_at") @db.Timestamptz(6)
-  createdAt      DateTime      @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime      @map("updated_at") @updatedAt @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  subscription ShopSubscription @relation(fields: [subscriptionId], references: [id])
-  shop         Shop             @relation(fields: [shopId], references: [id])
-  owner        User             @relation("OwnerInvoices", fields: [ownerId], references: [id])
-  payments     InvoicePayment[]
+  subscription    ShopSubscription        @relation(fields: [subscriptionId], references: [id])
+  shop            Shop                    @relation(fields: [shopId], references: [id])
+  owner           User                    @relation("OwnerInvoices", fields: [ownerId], references: [id])
+  payments        InvoicePayment[]
   paymentRequests BillingPaymentRequest[]
 
   @@unique([subscriptionId, periodStart, periodEnd], map: "uq_billing_invoices_period")
@@ -287,7 +286,7 @@ model InvoicePayment {
   method    String
   reference String?
   paidAt    DateTime @map("paid_at") @db.Timestamptz(6)
-  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
 
@@ -296,16 +295,16 @@ model InvoicePayment {
 }
 
 model BillingPaymentRequest {
-  id        String                     @id @default(uuid()) @db.Uuid
-  invoiceId String                     @map("invoice_id") @db.Uuid
-  ownerId   String                     @map("owner_id")
-  shopId    String                     @map("shop_id") @db.Uuid
+  id        String                      @id @default(uuid()) @db.Uuid
+  invoiceId String                      @map("invoice_id") @db.Uuid
+  ownerId   String                      @map("owner_id")
+  shopId    String                      @map("shop_id") @db.Uuid
   method    String
   reference String?
   note      String?
   status    BillingPaymentRequestStatus @default(pending)
-  createdAt DateTime                   @map("created_at") @default(now()) @db.Timestamptz(6)
-  decidedAt DateTime?                  @map("decided_at") @db.Timestamptz(6)
+  createdAt DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  decidedAt DateTime?                   @map("decided_at") @db.Timestamptz(6)
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
   owner   User    @relation("OwnerPaymentRequests", fields: [ownerId], references: [id])
@@ -321,12 +320,12 @@ model BusinessType {
   id         String   @id @default(uuid()) @db.Uuid
   key        String   @unique
   label      String
-  isActive   Boolean  @map("is_active") @default(true)
+  isActive   Boolean  @default(true) @map("is_active")
   fieldRules Json     @map("field_rules")
   stockRules Json     @map("stock_rules")
   unitRules  Json     @map("unit_rules")
-  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime @map("updated_at") @updatedAt @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("business_types")
 }
@@ -337,13 +336,13 @@ model BusinessProductTemplate {
   name             String
   category         String?
   defaultSellPrice Decimal? @map("default_sell_price") @db.Decimal(12, 2)
-  isActive         Boolean  @map("is_active") @default(true)
-  createdAt        DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime @map("updated_at") @updatedAt @db.Timestamptz(6)
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  @@unique([businessType, name], map: "uq_business_product_templates_type_name")
   @@index([businessType], map: "idx_business_product_templates_type")
   @@index([businessType, isActive], map: "idx_business_product_templates_active")
-  @@unique([businessType, name], map: "uq_business_product_templates_type_name")
   @@map("business_product_templates")
 }
 
@@ -354,15 +353,15 @@ model Product {
   category   String   @default("Uncategorized")
   buyPrice   Decimal? @map("buy_price") @db.Decimal(12, 2)
   sellPrice  Decimal  @map("sell_price") @db.Decimal(12, 2)
-  stockQty   Decimal  @map("stock_qty") @default("0") @db.Decimal(12, 2)
-  trackStock Boolean  @map("track_stock") @default(false)
-  isActive   Boolean  @map("is_active") @default(true)
-  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
+  stockQty   Decimal  @default("0") @map("stock_qty") @db.Decimal(12, 2)
+  trackStock Boolean  @default(false) @map("track_stock")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  shop      Shop      @relation(fields: [shopId], references: [id])
-  saleItems SaleItem[]
-  purchaseItems PurchaseItem[]
+  shop            Shop             @relation(fields: [shopId], references: [id])
+  saleItems       SaleItem[]
+  purchaseItems   PurchaseItem[]
   queueTokenItems QueueTokenItem[]
 
   @@index([shopId], map: "idx_products_shop")
@@ -377,16 +376,16 @@ model Purchase {
   supplierId    String?  @map("supplier_id") @db.Uuid
   supplierName  String?  @map("supplier_name")
   purchaseDate  DateTime @map("purchase_date") @db.Date
-  paymentMethod String   @map("payment_method") @default("cash")
+  paymentMethod String   @default("cash") @map("payment_method")
   totalAmount   Decimal  @map("total_amount") @db.Decimal(12, 2)
   paidAmount    Decimal  @map("paid_amount") @db.Decimal(12, 2)
   dueAmount     Decimal  @map("due_amount") @db.Decimal(12, 2)
   note          String?
-  createdAt     DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  shop  Shop           @relation(fields: [shopId], references: [id])
-  supplier Supplier?   @relation(fields: [supplierId], references: [id])
-  items PurchaseItem[]
+  shop     Shop              @relation(fields: [shopId], references: [id])
+  supplier Supplier?         @relation(fields: [supplierId], references: [id])
+  items    PurchaseItem[]
   payments PurchasePayment[]
 
   @@index([shopId, purchaseDate], map: "idx_purchases_shop_date")
@@ -395,13 +394,13 @@ model Purchase {
 }
 
 model PurchaseItem {
-  id          String   @id @default(uuid()) @db.Uuid
-  purchaseId  String   @map("purchase_id") @db.Uuid
-  productId   String   @map("product_id") @db.Uuid
-  quantity    Decimal  @db.Decimal(12, 2)
-  unitCost    Decimal  @map("unit_cost") @db.Decimal(12, 2)
-  lineTotal   Decimal  @map("line_total") @db.Decimal(12, 2)
-  createdAt   DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  id         String   @id @default(uuid()) @db.Uuid
+  purchaseId String   @map("purchase_id") @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  quantity   Decimal  @db.Decimal(12, 2)
+  unitCost   Decimal  @map("unit_cost") @db.Decimal(12, 2)
+  lineTotal  Decimal  @map("line_total") @db.Decimal(12, 2)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   purchase Purchase @relation(fields: [purchaseId], references: [id])
   product  Product  @relation(fields: [productId], references: [id])
@@ -412,20 +411,20 @@ model PurchaseItem {
 }
 
 model PurchasePayment {
-  id         String   @id @default(uuid()) @db.Uuid
-  shopId     String   @map("shop_id") @db.Uuid
-  purchaseId String   @map("purchase_id") @db.Uuid
-  supplierId String   @map("supplier_id") @db.Uuid
-  amount     Decimal  @db.Decimal(12, 2)
-  method     String   @map("payment_method") @default("cash")
-  paidAt     DateTime @map("paid_at") @db.Timestamptz(6)
+  id           String    @id @default(uuid()) @db.Uuid
+  shopId       String    @map("shop_id") @db.Uuid
+  purchaseId   String    @map("purchase_id") @db.Uuid
+  supplierId   String    @map("supplier_id") @db.Uuid
+  amount       Decimal   @db.Decimal(12, 2)
+  method       String    @default("cash") @map("payment_method")
+  paidAt       DateTime  @map("paid_at") @db.Timestamptz(6)
   businessDate DateTime? @map("business_date") @db.Date
-  note       String?
-  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  note         String?
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   purchase Purchase @relation(fields: [purchaseId], references: [id])
   supplier Supplier @relation(fields: [supplierId], references: [id])
-  shop      Shop     @relation(fields: [shopId], references: [id])
+  shop     Shop     @relation(fields: [shopId], references: [id])
 
   @@index([shopId, paidAt], map: "idx_purchase_payments_shop_date")
   @@index([purchaseId], map: "idx_purchase_payments_purchase")
@@ -440,9 +439,9 @@ model Supplier {
   name      String
   phone     String?
   address   String?
-  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  shop      Shop             @relation(fields: [shopId], references: [id])
+  shop      Shop              @relation(fields: [shopId], references: [id])
   purchases Purchase[]
   ledger    SupplierLedger[]
   payments  PurchasePayment[]
@@ -453,15 +452,15 @@ model Supplier {
 }
 
 model SupplierLedger {
-  id         String   @id @default(uuid()) @db.Uuid
-  shopId     String   @map("shop_id") @db.Uuid
-  supplierId String   @map("supplier_id") @db.Uuid
-  entryType  String   @map("entry_type")
-  amount     Decimal  @db.Decimal(12, 2)
-  note       String?
-  entryDate  DateTime @map("entry_date") @db.Timestamptz(6)
+  id           String    @id @default(uuid()) @db.Uuid
+  shopId       String    @map("shop_id") @db.Uuid
+  supplierId   String    @map("supplier_id") @db.Uuid
+  entryType    String    @map("entry_type")
+  amount       Decimal   @db.Decimal(12, 2)
+  note         String?
+  entryDate    DateTime  @map("entry_date") @db.Timestamptz(6)
   businessDate DateTime? @map("business_date") @db.Date
-  createdAt  DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   shop     Shop     @relation(fields: [shopId], references: [id])
   supplier Supplier @relation(fields: [supplierId], references: [id])
@@ -474,27 +473,28 @@ model SupplierLedger {
 }
 
 model Sale {
-  id           String    @id @default(uuid()) @db.Uuid
-  shopId       String    @map("shop_id") @db.Uuid
-  customerId   String?   @map("customer_id") @db.Uuid
+  id               String      @id @default(uuid()) @db.Uuid
+  shopId           String      @map("shop_id") @db.Uuid
+  customerId       String?     @map("customer_id") @db.Uuid
   queueTokenSource QueueToken? @relation("QueueTokenSale")
-  invoiceNo    String?   @map("invoice_no")
-  invoiceIssuedAt DateTime? @map("invoice_issued_at") @db.Timestamptz(6)
-  saleDate     DateTime  @map("sale_date") @default(now()) @db.Timestamptz(6)
-  businessDate DateTime? @map("business_date") @db.Date
-  totalAmount  Decimal   @map("total_amount") @db.Decimal(12, 2)
-  paymentMethod String   @map("payment_method") @default("cash")
-  note         String?
-  createdAt    DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
-  status       String    @default("COMPLETED")
-  voidReason   String?   @map("void_reason")
-  voidAt       DateTime? @map("void_at") @db.Timestamptz(6)
-  voidByUserId String?   @map("void_by_user_id")
+  invoiceNo        String?     @map("invoice_no")
+  invoiceIssuedAt  DateTime?   @map("invoice_issued_at") @db.Timestamptz(6)
+  saleDate         DateTime    @default(now()) @map("sale_date") @db.Timestamptz(6)
+  businessDate     DateTime?   @map("business_date") @db.Date
+  totalAmount      Decimal     @map("total_amount") @db.Decimal(12, 2)
+  paymentMethod    String      @default("cash") @map("payment_method")
+  note             String?
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  status           String      @default("COMPLETED")
+  voidReason       String?     @map("void_reason")
+  voidAt           DateTime?   @map("void_at") @db.Timestamptz(6)
+  voidByUserId     String?     @map("void_by_user_id")
 
-  shop      Shop      @relation(fields: [shopId], references: [id])
-  customer  Customer? @relation(fields: [customerId], references: [id])
+  shop      Shop       @relation(fields: [shopId], references: [id])
+  customer  Customer?  @relation(fields: [customerId], references: [id])
   saleItems SaleItem[]
 
+  @@unique([shopId, invoiceNo], map: "uq_sales_shop_invoice_no")
   @@index([shopId], map: "idx_sales_shop")
   @@index([shopId, invoiceNo], map: "idx_sales_shop_invoice")
   @@index([shopId, createdAt, id], map: "idx_sales_shop_created_id")
@@ -502,42 +502,43 @@ model Sale {
   @@index([shopId, saleDate], map: "idx_sales_shop_sale_date")
   @@index([shopId, status, saleDate], map: "idx_sales_shop_status_sale_date")
   @@index([shopId, businessDate], map: "idx_sales_shop_business_date")
+  @@index([shopId, status, businessDate], map: "idx_sales_shop_status_business_date")
   @@index([customerId], map: "idx_sales_customer")
-  @@unique([shopId, invoiceNo], map: "uq_sales_shop_invoice_no")
   @@map("sales")
 }
 
 model SaleItem {
-  id        String   @id @default(uuid()) @db.Uuid
-  saleId    String   @map("sale_id") @db.Uuid
-  productId String   @map("product_id") @db.Uuid
-  productNameSnapshot String? @map("product_name_snapshot")
-  quantity  Decimal  @db.Decimal(12, 2)
-  unitPrice Decimal  @map("unit_price") @db.Decimal(12, 2)
-  costAtSale Decimal? @map("cost_at_sale") @db.Decimal(12, 2)
+  id                  String   @id @default(uuid()) @db.Uuid
+  saleId              String   @map("sale_id") @db.Uuid
+  productId           String   @map("product_id") @db.Uuid
+  productNameSnapshot String?  @map("product_name_snapshot")
+  quantity            Decimal  @db.Decimal(12, 2)
+  unitPrice           Decimal  @map("unit_price") @db.Decimal(12, 2)
+  costAtSale          Decimal? @map("cost_at_sale") @db.Decimal(12, 2)
   // Prisma doesn't have a first-class generated column annotation; we'll add
   // the `generated always as (quantity * unit_price) stored` via SQL migration.
-// FIXED: Removed dbgenerated default (Neon/Postgres does not allow column refs in DEFAULT)
-  lineTotal Decimal  @map("line_total") @db.Decimal(12, 2)
-  
+  // FIXED: Removed dbgenerated default (Neon/Postgres does not allow column refs in DEFAULT)
+  lineTotal           Decimal  @map("line_total") @db.Decimal(12, 2)
+
   sale    Sale    @relation(fields: [saleId], references: [id])
   product Product @relation(fields: [productId], references: [id])
 
   @@index([saleId], map: "idx_sale_items_sale")
   @@index([productId], map: "idx_sale_items_product")
+  @@index([saleId, productId], map: "idx_sale_items_sale_product")
   @@map("sale_items")
 }
 
 model QueueToken {
-  id           String    @id @default(uuid()) @db.Uuid
+  id            String    @id @default(uuid()) @db.Uuid
   shopId        String    @map("shop_id") @db.Uuid
   tokenNo       Int       @map("token_no")
   tokenLabel    String    @map("token_label")
-  orderType     String    @map("order_type") @default("dine_in")
+  orderType     String    @default("dine_in") @map("order_type")
   customerName  String?   @map("customer_name")
   customerPhone String?   @map("customer_phone")
   note          String?
-  totalAmount   Decimal   @map("total_amount") @default("0") @db.Decimal(12, 2)
+  totalAmount   Decimal   @default("0") @map("total_amount") @db.Decimal(12, 2)
   status        String    @default("WAITING")
   calledAt      DateTime? @map("called_at") @db.Timestamptz(6)
   inKitchenAt   DateTime? @map("in_kitchen_at") @db.Timestamptz(6)
@@ -547,12 +548,12 @@ model QueueToken {
   settledSaleId String?   @map("settled_sale_id") @db.Uuid
   settledAt     DateTime? @map("settled_at") @db.Timestamptz(6)
   businessDate  DateTime? @map("business_date") @db.Date
-  createdAt     DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime  @map("updated_at") @updatedAt @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  shop Shop @relation(fields: [shopId], references: [id])
-  settledSale Sale? @relation("QueueTokenSale", fields: [settledSaleId], references: [id])
-  items QueueTokenItem[]
+  shop        Shop             @relation(fields: [shopId], references: [id])
+  settledSale Sale?            @relation("QueueTokenSale", fields: [settledSaleId], references: [id])
+  items       QueueTokenItem[]
 
   @@unique([shopId, tokenNo], map: "uq_queue_tokens_shop_token_no")
   @@unique([settledSaleId], map: "uq_queue_tokens_settled_sale_id")
@@ -562,14 +563,14 @@ model QueueToken {
 }
 
 model QueueTokenItem {
-  id                   String   @id @default(uuid()) @db.Uuid
-  tokenId              String   @map("token_id") @db.Uuid
-  productId            String   @map("product_id") @db.Uuid
-  productNameSnapshot  String?  @map("product_name_snapshot")
-  quantity             Decimal  @db.Decimal(12, 2)
-  unitPrice            Decimal  @map("unit_price") @db.Decimal(12, 2)
-  lineTotal            Decimal  @map("line_total") @db.Decimal(12, 2)
-  createdAt            DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  id                  String   @id @default(uuid()) @db.Uuid
+  tokenId             String   @map("token_id") @db.Uuid
+  productId           String   @map("product_id") @db.Uuid
+  productNameSnapshot String?  @map("product_name_snapshot")
+  quantity            Decimal  @db.Decimal(12, 2)
+  unitPrice           Decimal  @map("unit_price") @db.Decimal(12, 2)
+  lineTotal           Decimal  @map("line_total") @db.Decimal(12, 2)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   token   QueueToken @relation(fields: [tokenId], references: [id])
   product Product    @relation(fields: [productId], references: [id])
@@ -580,30 +581,31 @@ model QueueTokenItem {
 }
 
 model Expense {
-  id          String    @id @default(uuid()) @db.Uuid
-  shopId      String    @map("shop_id") @db.Uuid
-  amount      Decimal   @db.Decimal(12, 2)
+  id          String   @id @default(uuid()) @db.Uuid
+  shopId      String   @map("shop_id") @db.Uuid
+  amount      Decimal  @db.Decimal(12, 2)
   category    String
-  expenseDate DateTime  @map("expense_date") @default(now()) @db.Date
+  expenseDate DateTime @default(now()) @map("expense_date") @db.Date
   note        String?
-  createdAt   DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime  @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   shop Shop @relation(fields: [shopId], references: [id])
 
   @@index([shopId, expenseDate], map: "idx_expenses_shop_date")
+  @@index([shopId], map: "idx_expenses_shop")
   @@map("expenses")
 }
 
 model CashEntry {
-  id        String   @id @default(uuid()) @db.Uuid
-  shopId    String   @map("shop_id") @db.Uuid
-  entryType String   @map("entry_type")
-  amount    Decimal  @db.Decimal(12, 2)
-  reason    String?
+  id           String    @id @default(uuid()) @db.Uuid
+  shopId       String    @map("shop_id") @db.Uuid
+  entryType    String    @map("entry_type")
+  amount       Decimal   @db.Decimal(12, 2)
+  reason       String?
   businessDate DateTime? @map("business_date") @db.Date
-  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   shop Shop @relation(fields: [shopId], references: [id])
 
@@ -614,18 +616,18 @@ model CashEntry {
 }
 
 model Customer {
-  id           String    @id @default(uuid()) @db.Uuid
-  shopId       String    @map("shop_id") @db.Uuid
-  name         String
-  phone        String?
-  address      String?
-  totalDue     Decimal   @map("total_due") @default("0") @db.Decimal(12, 2)
+  id            String    @id @default(uuid()) @db.Uuid
+  shopId        String    @map("shop_id") @db.Uuid
+  name          String
+  phone         String?
+  address       String?
+  totalDue      Decimal   @default("0") @map("total_due") @db.Decimal(12, 2)
   lastPaymentAt DateTime? @map("last_payment_at") @db.Timestamptz(6)
-  createdAt    DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  shop      Shop      @relation(fields: [shopId], references: [id])
-  sales     Sale[]
-  ledger    CustomerLedger[]
+  shop   Shop             @relation(fields: [shopId], references: [id])
+  sales  Sale[]
+  ledger CustomerLedger[]
 
   @@index([shopId], map: "idx_customers_shop")
   @@index([phone], map: "idx_customers_phone")
@@ -633,15 +635,15 @@ model Customer {
 }
 
 model CustomerLedger {
-  id          String   @id @default(uuid()) @db.Uuid
-  shopId      String   @map("shop_id") @db.Uuid
-  customerId  String   @map("customer_id") @db.Uuid
-  entryType   String   @map("entry_type")
-  amount      Decimal  @db.Decimal(12, 2)
-  description String?
-  entryDate   DateTime @map("entry_date") @default(now()) @db.Timestamptz(6)
+  id           String    @id @default(uuid()) @db.Uuid
+  shopId       String    @map("shop_id") @db.Uuid
+  customerId   String    @map("customer_id") @db.Uuid
+  entryType    String    @map("entry_type")
+  amount       Decimal   @db.Decimal(12, 2)
+  description  String?
+  entryDate    DateTime  @default(now()) @map("entry_date") @db.Timestamptz(6)
   businessDate DateTime? @map("business_date") @db.Date
-  createdAt   DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   shop     Shop     @relation(fields: [shopId], references: [id])
   customer Customer @relation(fields: [customerId], references: [id])
@@ -659,7 +661,7 @@ model SystemSetting {
   supportPhone    String?  @map("support_phone")
   supportWhatsapp String?  @map("support_whatsapp")
   updatedBy       String?  @map("updated_by")
-  updatedAt       DateTime @map("updated_at") @updatedAt @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("system_settings")
 }
@@ -668,7 +670,7 @@ model AdminSyncAction {
   id        String   @id @db.Uuid
   userId    String   @map("user_id")
   action    String
-  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id])
 
