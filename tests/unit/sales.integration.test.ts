@@ -112,6 +112,7 @@ export async function runSalesIntegrationScaffoldTests() {
           productId = product.id;
 
           const result = await syncOfflineSalesBatch({
+            db: prisma,
             user: {
               id: user.id,
               roles: [role.name],

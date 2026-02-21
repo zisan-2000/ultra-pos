@@ -1,5 +1,4 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "../prisma.ts";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 export type IncomingSaleItem = {
   productId: string;
@@ -148,8 +147,12 @@ async function allocateSalesInvoiceNumber(
   };
 }
 
-async function assertShopAccess(shopId: string, user: SalesFlowUser) {
-  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
+async function assertShopAccess(
+  db: PrismaClient,
+  shopId: string,
+  user: SalesFlowUser
+) {
+  const shop = await db.shop.findUnique({ where: { id: shopId } });
   if (!shop) {
     throw new Error("Shop not found");
   }
@@ -165,8 +168,8 @@ async function assertShopAccess(shopId: string, user: SalesFlowUser) {
   return shop;
 }
 
-async function shopNeedsCogs(shopId: string) {
-  const shop = await prisma.shop.findUnique({
+async function shopNeedsCogs(db: PrismaClient, shopId: string) {
+  const shop = await db.shop.findUnique({
     where: { id: shopId },
     select: { businessType: true },
   });
@@ -177,9 +180,11 @@ async function shopNeedsCogs(shopId: string) {
 export async function syncOfflineSalesBatch({
   newItems,
   user,
+  db,
 }: {
   newItems: IncomingSale[];
   user: SalesFlowUser;
+  db: PrismaClient;
 }): Promise<SyncOfflineSalesResult> {
   if (!hasPermission(user, "sync_offline_data")) {
     throw new Error("Forbidden");
@@ -211,7 +216,7 @@ export async function syncOfflineSalesBatch({
 
   const shopById = new Map<string, Awaited<ReturnType<typeof assertShopAccess>>>();
   for (const shopId of shopIds) {
-    const shop = await assertShopAccess(shopId, user);
+    const shop = await assertShopAccess(db, shopId, user);
     shopById.set(shopId, shop);
   }
 
@@ -242,7 +247,7 @@ export async function syncOfflineSalesBatch({
     );
 
     if (clientSaleId) {
-      const existingSale = await prisma.sale.findUnique({
+      const existingSale = await db.sale.findUnique({
         where: { id: clientSaleId },
         select: { id: true, shopId: true },
       });
@@ -269,7 +274,7 @@ export async function syncOfflineSalesBatch({
       throw new Error("Every item must include productId");
     }
 
-    const dbProducts = await prisma.product.findMany({
+    const dbProducts = await db.product.findMany({
       where: { id: { in: productIds } },
     });
     if (dbProducts.length !== productIds.length) {
@@ -285,7 +290,7 @@ export async function syncOfflineSalesBatch({
       }
     }
 
-    const needsCogs = await shopNeedsCogs(shopId);
+    const needsCogs = await shopNeedsCogs(db, shopId);
     if (needsCogs) {
       const missing = dbProducts.filter((product) => product.buyPrice == null);
       if (missing.length > 0) {
@@ -324,7 +329,7 @@ export async function syncOfflineSalesBatch({
       totalNum
     );
 
-    const inserted = await prisma.$transaction(async (tx) => {
+    const inserted = await db.$transaction(async (tx) => {
       if (isDue && customerId) {
         const existingCustomer = await tx.customer.findUnique({
           where: { id: customerId },

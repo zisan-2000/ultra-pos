@@ -8,6 +8,7 @@ import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { withTracing } from "@/lib/tracing";
 import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
 import { publishRealtimeEvent } from "@/lib/realtime/publisher";
 import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidateReportsForSale } from "@/lib/reports/revalidate";
@@ -100,6 +101,7 @@ export async function POST(req: Request) {
       const result = await syncOfflineSalesBatch({
         newItems: newItems as IncomingSale[],
         user,
+        db: prisma,
       });
       const insertedSaleIds = result.saleIds;
 
