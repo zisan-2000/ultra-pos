@@ -132,8 +132,11 @@ const ProductButton = memo(function ProductButton({
   isRecentlyAdded: boolean;
   isCooldown: boolean;
 }) {
+  const tracksStock = product.trackStock === true;
   const stock = toNumber(product.stockQty);
-  const stockStyle = getStockToneClasses(stock).badge;
+  const stockStyle = tracksStock
+    ? getStockToneClasses(stock).badge
+    : "bg-muted text-muted-foreground border border-border/60";
 
   return (
     <button
@@ -141,7 +144,7 @@ const ProductButton = memo(function ProductButton({
       type="button"
       className={`relative w-full h-full min-h-[150px] text-left rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 shadow-[0_8px_20px_rgba(15,23,42,0.08)] hover:border-primary/40 hover:shadow-[0_12px_26px_rgba(15,23,42,0.12)] transition-all p-3.5 pressable active:scale-[0.98] active:translate-y-[1px] ${
         isRecentlyAdded ? "ring-2 ring-success/30" : ""
-      } ${stock <= 0 ? "opacity-80" : ""} ${
+      } ${tracksStock && stock <= 0 ? "opacity-80" : ""} ${
         isCooldown ? "opacity-95 shadow-inner border-success/30" : ""
       }`}
       onClick={() => onAdd(product)}
@@ -153,7 +156,7 @@ const ProductButton = memo(function ProductButton({
         <span
           className={`inline-flex items-center justify-center px-2.5 py-1 min-w-[44px] rounded-full text-[11px] font-semibold shadow-sm ${stockStyle}`}
         >
-          {stock.toFixed(0)}
+          {tracksStock ? stock.toFixed(0) : "N/A"}
         </span>
         {isRecentlyAdded && (
           <span className="absolute -top-1 -right-1 bg-success text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
