@@ -121,6 +121,17 @@ function buildQuickSlots(
   return slots;
 }
 
+function areSlotIdsEqual(
+  a: Array<string | null>,
+  b: Array<string | null>
+): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 const ProductButton = memo(function ProductButton({
   product,
   onAdd,
@@ -202,6 +213,10 @@ export const PosProductSearch = memo(function PosProductSearch({
   const [cooldownProductId, setCooldownProductId] = useState<string | null>(
     null
   );
+  const [quickSlotIds, setQuickSlotIds] = useState<Array<string | null>>(
+    () => Array(QUICK_LIMIT).fill(null)
+  );
+  const [quickSlotsReady, setQuickSlotsReady] = useState(false);
   const [stockConfirm, setStockConfirm] = useState<{
     product: EnrichedProduct;
     message: string;
@@ -215,7 +230,14 @@ export const PosProductSearch = memo(function PosProductSearch({
     null
   );
   const cooldownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sessionUsageSnapshot] = useState<Record<string, UsageEntry>>(
+    () => usage
+  );
   const storageKey = useMemo(() => `pos-usage-${shopId}`, [shopId]);
+  const quickSlotStorageKey = useMemo(
+    () => `pos-quick-slots-${shopId}`,
+    [shopId]
+  );
   const [renderCount, setRenderCount] = useState(INITIAL_RENDER);
 
   const deferredQuery = useDeferredValue(query);
@@ -271,9 +293,91 @@ export const PosProductSearch = memo(function PosProductSearch({
     [products]
   );
 
+  const productById = useMemo(() => {
+    const byId = new Map<string, EnrichedProduct>();
+    productsWithCategory.forEach((p) => {
+      byId.set(p.id, p);
+    });
+    return byId;
+  }, [productsWithCategory]);
+
+  useEffect(() => {
+    const availableIds = new Set(productsWithCategory.map((p) => p.id));
+    const taken = new Set<string>();
+    let seedIds: Array<string | null> = [];
+
+    if (typeof window !== "undefined") {
+      try {
+        const stored = window.sessionStorage.getItem(quickSlotStorageKey);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            seedIds = parsed.map((value) =>
+              typeof value === "string" ? value : null
+            );
+          }
+        }
+      } catch {
+        // ignore malformed session cache
+      }
+    }
+
+    if (seedIds.length === 0) {
+      seedIds = quickSlotIds;
+    }
+
+    const normalized: Array<string | null> = Array(QUICK_LIMIT).fill(null);
+    for (let i = 0; i < QUICK_LIMIT; i += 1) {
+      const id = seedIds[i];
+      if (!id || taken.has(id) || !availableIds.has(id)) continue;
+      normalized[i] = id;
+      taken.add(id);
+    }
+
+    const fallbackIds = (buildQuickSlots(
+      productsWithCategory,
+      sessionUsageSnapshot
+    ).filter(Boolean) as EnrichedProduct[])
+      .map((p) => p.id)
+      .filter((id) => !taken.has(id));
+
+    let fallbackIndex = 0;
+    for (let i = 0; i < QUICK_LIMIT; i += 1) {
+      if (normalized[i]) continue;
+      if (fallbackIndex >= fallbackIds.length) break;
+      normalized[i] = fallbackIds[fallbackIndex];
+      taken.add(fallbackIds[fallbackIndex]);
+      fallbackIndex += 1;
+    }
+
+    // Session seed/calculation is intentional here to keep quick slots fixed after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuickSlotIds((prev) =>
+      areSlotIdsEqual(prev, normalized) ? prev : normalized
+    );
+    setQuickSlotsReady(true);
+  }, [
+    productsWithCategory,
+    quickSlotStorageKey,
+    quickSlotIds,
+    sessionUsageSnapshot,
+  ]);
+
+  useEffect(() => {
+    if (!quickSlotsReady || typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(
+        quickSlotStorageKey,
+        JSON.stringify(quickSlotIds)
+      );
+    } catch {
+      // ignore session storage failures
+    }
+  }, [quickSlotIds, quickSlotStorageKey, quickSlotsReady]);
+
   const quickSlots = useMemo(
-    () => buildQuickSlots(productsWithCategory, usage),
-    [productsWithCategory, usage]
+    () => quickSlotIds.map((id) => (id ? productById.get(id) ?? null : null)),
+    [quickSlotIds, productById]
   );
 
   const availableCategories = useMemo(() => {
@@ -526,6 +630,19 @@ export const PosProductSearch = memo(function PosProductSearch({
     />
   );
 
+  const renderQuickSlot = (slot: QuickSlot, index: number) => {
+    if (!slot) return renderPlaceholderSlot(index);
+    return (
+      <ProductButton
+        key={`quick-slot-${index}`}
+        product={slot}
+        onAdd={handleAddToCart}
+        isRecentlyAdded={recentlyAdded === slot.id}
+        isCooldown={cooldownProductId === slot.id}
+      />
+    );
+  };
+
   const renderPlaceholderSlot = (index: number) => (
     <div
       key={`slot-${index}`}
@@ -598,9 +715,7 @@ export const PosProductSearch = memo(function PosProductSearch({
             </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-3.5 px-1 pb-1">
-            {quickSlots.map((slot, idx) =>
-              slot ? renderProductButton(slot) : renderPlaceholderSlot(idx)
-            )}
+            {quickSlots.map((slot, idx) => renderQuickSlot(slot, idx))}
           </div>
         </div>
       )}
