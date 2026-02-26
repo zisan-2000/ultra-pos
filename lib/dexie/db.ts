@@ -46,6 +46,13 @@ export type LocalSale = {
   customerName?: string | null;
   status?: string | null;
   voidReason?: string | null;
+  returnCount?: number;
+  refundCount?: number;
+  exchangeCount?: number;
+  returnNetAmount?: string | null;
+  lastReturnAt?: string | null;
+  latestReturnedPreview?: string | null;
+  latestExchangePreview?: string | null;
 };
 
 export type LocalExpense = {

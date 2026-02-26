@@ -1,8 +1,36 @@
--- DropForeignKey
-ALTER TABLE "queue_token_items" DROP CONSTRAINT "queue_token_items_token_id_fkey";
+-- Guard against replay order issues in shadow DB.
+DO $$
+BEGIN
+  IF to_regclass('public.queue_token_items') IS NOT NULL THEN
+    ALTER TABLE "queue_token_items"
+      DROP CONSTRAINT IF EXISTS "queue_token_items_token_id_fkey";
+  END IF;
+END
+$$;
 
--- AlterTable
-ALTER TABLE "queue_tokens" ALTER COLUMN "updated_at" DROP DEFAULT;
+-- AlterTable (only when queue_tokens table exists)
+DO $$
+BEGIN
+  IF to_regclass('public.queue_tokens') IS NOT NULL THEN
+    ALTER TABLE "queue_tokens" ALTER COLUMN "updated_at" DROP DEFAULT;
+  END IF;
+END
+$$;
 
--- AddForeignKey
-ALTER TABLE "queue_token_items" ADD CONSTRAINT "queue_token_items_token_id_fkey" FOREIGN KEY ("token_id") REFERENCES "queue_tokens"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+-- AddForeignKey (only when table exists and constraint is missing)
+DO $$
+BEGIN
+  IF to_regclass('public.queue_token_items') IS NOT NULL
+     AND to_regclass('public.queue_tokens') IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1
+       FROM pg_constraint
+       WHERE conname = 'queue_token_items_token_id_fkey'
+     ) THEN
+    ALTER TABLE "queue_token_items"
+      ADD CONSTRAINT "queue_token_items_token_id_fkey"
+      FOREIGN KEY ("token_id") REFERENCES "queue_tokens"("id")
+      ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END
+$$;

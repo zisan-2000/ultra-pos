@@ -107,16 +107,97 @@ export async function getCogsByDay(
     ORDER BY s.business_date
   `);
 
-  const byDay: Record<string, number> = {};
+  const returnedRows = await prisma.$queryRaw<
+    { day: Date; sum: Prisma.Decimal | number | null }[]
+  >(Prisma.sql`
+    SELECT
+      sr.business_date AS day,
+      SUM(CAST(sri.quantity AS numeric) * COALESCE(sri.cost_at_return, p.buy_price, 0)) AS sum
+    FROM "sale_return_items" sri
+    JOIN "sale_returns" sr ON sr.id = sri.sale_return_id
+    JOIN "products" p ON p.id = sri.product_id
+    WHERE sr.shop_id = CAST(${shopId} AS uuid)
+      AND sr.status = 'completed'
+      AND sr.business_date >= CAST(${startDate} AS date)
+      AND sr.business_date <= CAST(${endDate} AS date)
+    GROUP BY sr.business_date
+    ORDER BY sr.business_date
+  `);
+
+  const exchangeRows = await prisma.$queryRaw<
+    { day: Date; sum: Prisma.Decimal | number | null }[]
+  >(Prisma.sql`
+    SELECT
+      sr.business_date AS day,
+      SUM(CAST(srei.quantity AS numeric) * COALESCE(srei.cost_at_return, p.buy_price, 0)) AS sum
+    FROM "sale_return_exchange_items" srei
+    JOIN "sale_returns" sr ON sr.id = srei.sale_return_id
+    JOIN "products" p ON p.id = srei.product_id
+    WHERE sr.shop_id = CAST(${shopId} AS uuid)
+      AND sr.status = 'completed'
+      AND sr.business_date >= CAST(${startDate} AS date)
+      AND sr.business_date <= CAST(${endDate} AS date)
+    GROUP BY sr.business_date
+    ORDER BY sr.business_date
+  `);
+
+  const salesByDay: Record<string, number> = {};
+  const returnedByDay: Record<string, number> = {};
+  const exchangeByDay: Record<string, number> = {};
+
   rows.forEach((r) => {
     const day = getDhakaDateString(new Date(r.day));
-    byDay[day] = Number(r.sum ?? 0);
+    salesByDay[day] = Number(r.sum ?? 0);
   });
+  returnedRows.forEach((r) => {
+    const day = getDhakaDateString(new Date(r.day));
+    returnedByDay[day] = Number(r.sum ?? 0);
+  });
+  exchangeRows.forEach((r) => {
+    const day = getDhakaDateString(new Date(r.day));
+    exchangeByDay[day] = Number(r.sum ?? 0);
+  });
+
+  const allDays = new Set<string>([
+    ...Object.keys(salesByDay),
+    ...Object.keys(returnedByDay),
+    ...Object.keys(exchangeByDay),
+  ]);
+
+  const byDay: Record<string, number> = {};
+  for (const day of allDays) {
+    byDay[day] =
+      Number(salesByDay[day] ?? 0) -
+      Number(returnedByDay[day] ?? 0) +
+      Number(exchangeByDay[day] ?? 0);
+  }
   return byDay;
 }
 
 const parseDateRange = (from?: string, to?: string) =>
   parseDhakaDateOnlyRange(from, to, true);
+
+async function computeSaleReturnNetAmount(
+  shopId: string,
+  start?: Date,
+  end?: Date
+) {
+  const where: Prisma.SaleReturnWhereInput = {
+    shopId,
+    status: "completed",
+    businessDate: {
+      gte: start ?? undefined,
+      lte: end ?? undefined,
+    },
+  };
+
+  const agg = await prisma.saleReturn.aggregate({
+    where,
+    _sum: { netAmount: true },
+  });
+
+  return Number(agg._sum.netAmount ?? 0);
+}
 
 function normalizeLimit(
   limit?: number | null,
@@ -393,7 +474,7 @@ async function computeSalesSummary(
     },
   };
 
-  const [agg, voided] = await Promise.all([
+  const [agg, voided, returnNet] = await Promise.all([
     prisma.sale.aggregate({
       where,
       _sum: { totalAmount: true },
@@ -409,9 +490,10 @@ async function computeSalesSummary(
         },
       },
     }),
+    computeSaleReturnNetAmount(shopId, start, end),
   ]);
 
-  const totalAmount = Number(agg._sum.totalAmount ?? 0);
+  const totalAmount = Number(agg._sum.totalAmount ?? 0) + returnNet;
   const completedCount = agg._count._all ?? 0;
   const voidedCount = voided ?? 0;
 
@@ -712,31 +794,63 @@ async function computePaymentMethodReport(
   const { start, end } = parseDateRange(from, to);
   const useUnbounded = !from && !to;
 
-  const sales = await prisma.sale.groupBy({
-    by: ["paymentMethod"],
-    where: {
-      shopId,
-      status: { not: "VOIDED" },
-      businessDate: useUnbounded
-        ? undefined
-        : {
-            gte: start,
-            lte: end,
-          },
-    },
-    _sum: {
-      totalAmount: true,
-    },
-    _count: {
-      id: true,
-    },
-  });
+  const [sales, returnAgg] = await Promise.all([
+    prisma.sale.groupBy({
+      by: ["paymentMethod"],
+      where: {
+        shopId,
+        status: { not: "VOIDED" },
+        businessDate: useUnbounded
+          ? undefined
+          : {
+              gte: start,
+              lte: end,
+            },
+      },
+      _sum: {
+        totalAmount: true,
+      },
+      _count: {
+        id: true,
+      },
+    }),
+    prisma.saleReturn.aggregate({
+      where: {
+        shopId,
+        status: "completed",
+        businessDate: useUnbounded
+          ? undefined
+          : {
+              gte: start,
+              lte: end,
+            },
+      },
+      _sum: {
+        netAmount: true,
+      },
+      _count: {
+        _all: true,
+      },
+    }),
+  ]);
 
-  return sales.map((s) => ({
+  const rows = sales.map((s) => ({
     name: s.paymentMethod || "Unknown",
     value: Number(s._sum.totalAmount || 0),
     count: s._count.id,
   }));
+
+  const returnNet = Number(returnAgg._sum.netAmount ?? 0);
+  const returnCount = Number(returnAgg._count._all ?? 0);
+  if (returnCount > 0 && returnNet !== 0) {
+    rows.push({
+      name: "return_adjustment",
+      value: returnNet,
+      count: returnCount,
+    });
+  }
+
+  return rows;
 }
 
 const getPaymentMethodCached = unstable_cache(
@@ -778,70 +892,164 @@ async function computeProfitTrendReport(
   const expenseWhere: Prisma.Sql[] = [
     Prisma.sql` e.shop_id = CAST(${shopId} AS uuid)`,
   ];
+  const returnWhere: Prisma.Sql[] = [
+    Prisma.sql` sr.shop_id = CAST(${shopId} AS uuid)`,
+    Prisma.sql` sr.status = 'completed'`,
+  ];
 
   if (!useUnbounded) {
     if (startDate) {
       salesWhere.push(Prisma.sql` s.business_date >= CAST(${startDate} AS date)`);
       expenseWhere.push(Prisma.sql` e.expense_date >= CAST(${startDate} AS date)`);
+      returnWhere.push(Prisma.sql` sr.business_date >= CAST(${startDate} AS date)`);
     }
     if (endDate) {
       salesWhere.push(Prisma.sql` s.business_date <= CAST(${endDate} AS date)`);
       expenseWhere.push(Prisma.sql` e.expense_date <= CAST(${endDate} AS date)`);
+      returnWhere.push(Prisma.sql` sr.business_date <= CAST(${endDate} AS date)`);
     }
   }
 
-  // Use a single combined query with CTEs for better performance
-  const combined = await prisma.$queryRaw<
-    { day: string; sales: Prisma.Decimal | number | null; expense: Prisma.Decimal | number | null; cogs: Prisma.Decimal | number | null }[]
-  >(
-    Prisma.sql`
-      WITH sales_daily AS (
+  const [
+    salesRows,
+    returnNetRows,
+    expenseRows,
+    cogsRows,
+    returnedCogsRows,
+    exchangeCogsRows,
+  ] = await Promise.all([
+    prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+      Prisma.sql`
         SELECT
           s.business_date::text AS day,
-          SUM(COALESCE(s.total_amount, 0)) AS sales_sum
+          SUM(COALESCE(s.total_amount, 0)) AS sum
         FROM "sales" s
         WHERE ${Prisma.join(salesWhere, " AND ")}
         GROUP BY s.business_date
-      ),
-      expense_daily AS (
+        ORDER BY s.business_date
+      `
+    ),
+    prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+      Prisma.sql`
+        SELECT
+          sr.business_date::text AS day,
+          SUM(COALESCE(sr.net_amount, 0)) AS sum
+        FROM "sale_returns" sr
+        WHERE ${Prisma.join(returnWhere, " AND ")}
+        GROUP BY sr.business_date
+        ORDER BY sr.business_date
+      `
+    ),
+    prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+      Prisma.sql`
         SELECT
           e.expense_date::text AS day,
-          SUM(COALESCE(e.amount, 0)) AS expense_sum
+          SUM(COALESCE(e.amount, 0)) AS sum
         FROM "expenses" e
         WHERE ${Prisma.join(expenseWhere, " AND ")}
         GROUP BY e.expense_date
-      )
-      ${
-        needsCogs
-          ? Prisma.sql`, cogs_daily AS (
-        SELECT
-          s.business_date::text AS day,
-          SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS cogs_sum
-        FROM "sale_items" si
-        JOIN "sales" s ON s.id = si.sale_id
-        LEFT JOIN "products" p ON p.id = si.product_id
-        WHERE ${Prisma.join(salesWhere, " AND ")}
-        GROUP BY s.business_date
-      )`
-          : Prisma.empty
-      }
-      SELECT
-        COALESCE(sd.day, ed.day${needsCogs ? ", cd.day" : ""}) AS day,
-        sd.sales_sum AS sales,
-        ed.expense_sum AS expense
-        ${needsCogs ? ", cd.cogs_sum AS cogs" : ""}
-      FROM sales_daily sd
-      FULL OUTER JOIN expense_daily ed ON sd.day = ed.day
-      ${needsCogs ? "FULL OUTER JOIN cogs_daily cd ON sd.day = cd.day" : ""}
-      ORDER BY day
-    `
-  );
+        ORDER BY e.expense_date
+      `
+    ),
+    needsCogs
+      ? prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+          Prisma.sql`
+            SELECT
+              s.business_date::text AS day,
+              SUM(CAST(si.quantity AS numeric) * COALESCE(si.cost_at_sale, p.buy_price, 0)) AS sum
+            FROM "sale_items" si
+            JOIN "sales" s ON s.id = si.sale_id
+            LEFT JOIN "products" p ON p.id = si.product_id
+            WHERE ${Prisma.join(salesWhere, " AND ")}
+            GROUP BY s.business_date
+            ORDER BY s.business_date
+          `
+        )
+      : Promise.resolve([]),
+    needsCogs
+      ? prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+          Prisma.sql`
+            SELECT
+              sr.business_date::text AS day,
+              SUM(CAST(sri.quantity AS numeric) * COALESCE(sri.cost_at_return, p.buy_price, 0)) AS sum
+            FROM "sale_return_items" sri
+            JOIN "sale_returns" sr ON sr.id = sri.sale_return_id
+            LEFT JOIN "products" p ON p.id = sri.product_id
+            WHERE ${Prisma.join(returnWhere, " AND ")}
+            GROUP BY sr.business_date
+            ORDER BY sr.business_date
+          `
+        )
+      : Promise.resolve([]),
+    needsCogs
+      ? prisma.$queryRaw<{ day: string; sum: Prisma.Decimal | number | null }[]>(
+          Prisma.sql`
+            SELECT
+              sr.business_date::text AS day,
+              SUM(CAST(srei.quantity AS numeric) * COALESCE(srei.cost_at_return, p.buy_price, 0)) AS sum
+            FROM "sale_return_exchange_items" srei
+            JOIN "sale_returns" sr ON sr.id = srei.sale_return_id
+            LEFT JOIN "products" p ON p.id = srei.product_id
+            WHERE ${Prisma.join(returnWhere, " AND ")}
+            GROUP BY sr.business_date
+            ORDER BY sr.business_date
+          `
+        )
+      : Promise.resolve([]),
+  ]);
 
-  return combined.map((row) => ({
-    date: row.day,
-    sales: Number(row.sales ?? 0),
-    expense: Number(row.expense ?? 0) + Number(row.cogs ?? 0),
-  }));
+  const salesByDate = new Map<string, number>();
+  const returnNetByDate = new Map<string, number>();
+  const expenseByDate = new Map<string, number>();
+  const salesCogsByDate = new Map<string, number>();
+  const returnCogsByDate = new Map<string, number>();
+  const exchangeCogsByDate = new Map<string, number>();
+
+  for (const row of salesRows) {
+    salesByDate.set(row.day, Number(row.sum ?? 0));
+  }
+  for (const row of returnNetRows) {
+    returnNetByDate.set(row.day, Number(row.sum ?? 0));
+  }
+  for (const row of expenseRows) {
+    expenseByDate.set(row.day, Number(row.sum ?? 0));
+  }
+  for (const row of cogsRows) {
+    salesCogsByDate.set(row.day, Number(row.sum ?? 0));
+  }
+  for (const row of returnedCogsRows) {
+    returnCogsByDate.set(row.day, Number(row.sum ?? 0));
+  }
+  for (const row of exchangeCogsRows) {
+    exchangeCogsByDate.set(row.day, Number(row.sum ?? 0));
+  }
+
+  const allDates = new Set<string>([
+    ...salesByDate.keys(),
+    ...returnNetByDate.keys(),
+    ...expenseByDate.keys(),
+    ...salesCogsByDate.keys(),
+    ...returnCogsByDate.keys(),
+    ...exchangeCogsByDate.keys(),
+  ]);
+
+  return Array.from(allDates)
+    .sort()
+    .map((date) => {
+      const salesNet =
+        Number(salesByDate.get(date) ?? 0) + Number(returnNetByDate.get(date) ?? 0);
+      const cogsNet = needsCogs
+        ? Number(salesCogsByDate.get(date) ?? 0) -
+          Number(returnCogsByDate.get(date) ?? 0) +
+          Number(exchangeCogsByDate.get(date) ?? 0)
+        : 0;
+      const expenseNet = Number(expenseByDate.get(date) ?? 0) + cogsNet;
+      return {
+        date,
+        sales: salesNet,
+        expense: expenseNet,
+      };
+    });
 }
 
 const getProfitTrendCached = unstable_cache(
@@ -871,30 +1079,66 @@ async function computeTopProductsReport(shopId: string, limit: number) {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const startDate = thirtyDaysAgo.toISOString().slice(0, 10);
 
-  const topProducts = await prisma.saleItem.groupBy({
-    by: ["productId"],
-    where: {
-      sale: {
-        shopId,
-        status: { not: "VOIDED" },
-        businessDate: {
-          gte: thirtyDaysAgo,
-        },
-      },
-    },
-    _sum: {
-      quantity: true,
-      lineTotal: true,
-    },
-    orderBy: {
-      _sum: {
-        lineTotal: "desc",
-      },
-    },
-    take: limit,
-  });
+  const topProducts = await prisma.$queryRaw<
+    {
+      product_id: string;
+      qty: Prisma.Decimal | number | null;
+      revenue: Prisma.Decimal | number | null;
+    }[]
+  >(
+    Prisma.sql`
+      WITH sales_lines AS (
+        SELECT
+          si.product_id AS product_id,
+          CAST(si.quantity AS numeric) AS qty_delta,
+          CAST(si.line_total AS numeric) AS revenue_delta
+        FROM "sale_items" si
+        JOIN "sales" s ON s.id = si.sale_id
+        WHERE s.shop_id = CAST(${shopId} AS uuid)
+          AND s.status <> 'VOIDED'
+          AND s.business_date >= CAST(${startDate} AS date)
+      ),
+      return_lines AS (
+        SELECT
+          sri.product_id AS product_id,
+          -CAST(sri.quantity AS numeric) AS qty_delta,
+          -CAST(sri.line_total AS numeric) AS revenue_delta
+        FROM "sale_return_items" sri
+        JOIN "sale_returns" sr ON sr.id = sri.sale_return_id
+        WHERE sr.shop_id = CAST(${shopId} AS uuid)
+          AND sr.status = 'completed'
+          AND sr.business_date >= CAST(${startDate} AS date)
+      ),
+      exchange_lines AS (
+        SELECT
+          srei.product_id AS product_id,
+          CAST(srei.quantity AS numeric) AS qty_delta,
+          CAST(srei.line_total AS numeric) AS revenue_delta
+        FROM "sale_return_exchange_items" srei
+        JOIN "sale_returns" sr ON sr.id = srei.sale_return_id
+        WHERE sr.shop_id = CAST(${shopId} AS uuid)
+          AND sr.status = 'completed'
+          AND sr.business_date >= CAST(${startDate} AS date)
+      ),
+      merged AS (
+        SELECT * FROM sales_lines
+        UNION ALL
+        SELECT * FROM return_lines
+        UNION ALL
+        SELECT * FROM exchange_lines
+      )
+      SELECT
+        product_id,
+        SUM(qty_delta) AS qty,
+        SUM(revenue_delta) AS revenue
+      FROM merged
+      GROUP BY product_id
+      ORDER BY revenue DESC
+      LIMIT ${limit}
+    `
+  );
 
-  const productIds = topProducts.map((p) => p.productId);
+  const productIds = topProducts.map((p) => p.product_id);
   const products = await prisma.product.findMany({
     where: {
       id: { in: productIds },
@@ -908,9 +1152,9 @@ async function computeTopProductsReport(shopId: string, limit: number) {
   const productMap = new Map(products.map((p) => [p.id, p.name]));
 
   return topProducts.map((item) => ({
-    name: productMap.get(item.productId) || "Unknown",
-    qty: Number(item._sum.quantity || 0),
-    revenue: Number(item._sum.lineTotal || 0),
+    name: productMap.get(item.product_id) || "Unknown",
+    qty: Number(item.qty || 0),
+    revenue: Number(item.revenue || 0),
   }));
 }
 

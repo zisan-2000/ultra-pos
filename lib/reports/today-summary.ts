@@ -20,7 +20,7 @@ async function computeTodaySummary(
 ): Promise<TodaySummary> {
   const { start: todayStart, end: todayEnd } = getDhakaDateOnlyRange();
 
-  const [resolvedShopType, salesAgg, expenseAgg, cashAgg] = await Promise.all([
+  const [resolvedShopType, salesAgg, saleReturnAgg, expenseAgg, cashAgg] = await Promise.all([
     businessType
       ? Promise.resolve(businessType)
       : prisma.shop
@@ -37,6 +37,14 @@ async function computeTodaySummary(
       },
       _sum: { totalAmount: true },
       _count: { _all: true },
+    }),
+    prisma.saleReturn.aggregate({
+      where: {
+        shopId,
+        status: "completed",
+        businessDate: { gte: todayStart, lte: todayEnd },
+      },
+      _sum: { netAmount: true },
     }),
     prisma.expense.aggregate({
       where: { shopId, expenseDate: { gte: todayStart, lte: todayEnd } },
@@ -55,7 +63,9 @@ async function computeTodaySummary(
     ? SHOP_TYPES_WITH_COGS.has(resolvedShopType)
     : false;
 
-  const salesTotal = Number(salesAgg._sum.totalAmount ?? 0);
+  const salesTotal =
+    Number(salesAgg._sum.totalAmount ?? 0) +
+    Number(saleReturnAgg._sum.netAmount ?? 0);
   const salesCount = Number(salesAgg._count?._all ?? 0);
 
   const expenseTotalRaw = Number(expenseAgg._sum.amount ?? 0);

@@ -103,12 +103,22 @@ export default async function SalesInvoicePage({ params }: PageProps) {
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
-        <Link
-          href="/dashboard/sales"
-          className="inline-flex h-10 items-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
-        >
-          বিক্রিতে ফিরে যান
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/sales"
+            className="inline-flex h-10 items-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
+          >
+            বিক্রিতে ফিরে যান
+          </Link>
+          {!isVoided ? (
+            <Link
+              href={`/dashboard/sales/${data.saleId}/return`}
+              className="inline-flex h-10 items-center rounded-full border border-warning/30 bg-warning-soft px-4 text-sm font-semibold text-warning hover:bg-warning/15"
+            >
+              রিটার্ন / এক্সচেঞ্জ
+            </Link>
+          ) : null}
+        </div>
         <PrintInvoiceButton />
       </div>
 

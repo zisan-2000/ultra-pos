@@ -19,6 +19,11 @@ import {
   canIssueSalesInvoice,
   canViewSalesInvoice,
 } from "@/lib/sales-invoice";
+import {
+  allocateSaleReturnNumber,
+  canManageSaleReturn,
+  canViewSaleReturn,
+} from "@/lib/sales-return";
 
 const logPerf = (...args: unknown[]) => {
   if (process.env.NODE_ENV !== "production") {
@@ -62,6 +67,13 @@ type SaleWithSummary = SaleRow & {
   itemCount: number;
   itemPreview: string;
   customerName: string | null;
+  returnCount: number;
+  refundCount: number;
+  exchangeCount: number;
+  returnNetAmount: string;
+  lastReturnAt: string | null;
+  latestReturnedPreview: string | null;
+  latestExchangePreview: string | null;
 };
 
 type GetSalesByShopPaginatedInput = {
@@ -71,6 +83,141 @@ type GetSalesByShopPaginatedInput = {
   from?: string;
   to?: string;
 };
+
+type SaleReturnRowInput = {
+  saleItemId: string;
+  qty: number;
+};
+
+type SaleExchangeRowInput = {
+  productId: string;
+  qty: number;
+  unitPrice?: number | null;
+};
+
+type SaleReturnSettlementMode = "cash" | "due";
+
+type ProcessSaleReturnInput = {
+  saleId: string;
+  type: "refund" | "exchange";
+  returnedItems: SaleReturnRowInput[];
+  exchangeItems?: SaleExchangeRowInput[];
+  settlementMode?: SaleReturnSettlementMode;
+  reason?: string | null;
+  note?: string | null;
+};
+
+type SaleReturnHistoryItem = {
+  id: string;
+  returnNo: string;
+  type: "refund" | "exchange";
+  status: "completed" | "canceled";
+  reason: string | null;
+  note: string | null;
+  subtotal: string;
+  exchangeSubtotal: string;
+  netAmount: string;
+  refundAmount: string;
+  additionalCashInAmount: string;
+  dueAdjustmentAmount: string;
+  additionalDueAmount: string;
+  createdAt: string;
+  items: {
+    id: string;
+    saleItemId: string;
+    productId: string;
+    productName: string;
+    quantity: string;
+    unitPrice: string;
+    lineTotal: string;
+  }[];
+  exchangeItems: {
+    id: string;
+    productId: string;
+    productName: string;
+    quantity: string;
+    unitPrice: string;
+    lineTotal: string;
+  }[];
+};
+
+export type SaleReturnDraft = {
+  sale: {
+    id: string;
+    shopId: string;
+    saleDate: string;
+    invoiceNo: string | null;
+    paymentMethod: string;
+    status: string;
+    totalAmount: string;
+    note: string | null;
+    customer: { id: string; name: string; totalDue: string } | null;
+  };
+  returnableItems: {
+    saleItemId: string;
+    productId: string;
+    productName: string;
+    soldQty: string;
+    returnedQty: string;
+    maxReturnQty: string;
+    unitPrice: string;
+    lineTotal: string;
+  }[];
+  exchangeProducts: {
+    id: string;
+    name: string;
+    sellPrice: string;
+    stockQty: string;
+    trackStock: boolean;
+    isActive: boolean;
+  }[];
+  existingReturns: SaleReturnHistoryItem[];
+  canManage: boolean;
+};
+
+function toMoney(value: number) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "0.00";
+  return num.toFixed(2);
+}
+
+function formatQtyCompact(value: unknown) {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return "0";
+  if (Math.abs(n - Math.round(n)) < 0.000001) return `${Math.round(n)}`;
+  return n.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function summarizePreviewLines(lines: string[], limit = 2) {
+  const normalized = lines.filter(Boolean);
+  if (normalized.length === 0) return null;
+  if (normalized.length <= limit) return normalized.join(", ");
+  return `${normalized.slice(0, limit).join(", ")} +${normalized.length - limit}`;
+}
+
+function toSafePositiveNumber(value: unknown) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n;
+}
+
+function roundMoney(value: number) {
+  return Number(toMoney(value));
+}
+
+function assertSaleReturnPermission(user: Awaited<ReturnType<typeof requireUser>>) {
+  if (!canManageSaleReturn(user)) {
+    throw new Error("Forbidden: missing permission create_sale_return");
+  }
+}
+
+function assertViewSaleReturnPermission(
+  user: Awaited<ReturnType<typeof requireUser>>
+) {
+  if (!canViewSaleReturn(user)) {
+    throw new Error("Forbidden: missing permission view_sale_return");
+  }
+}
 
 async function attachSaleSummaries(
   rows: SaleRow[],
@@ -122,15 +269,319 @@ async function attachSaleSummaries(
     customerMap = Object.fromEntries(cs.map((c) => [c.id, c.name || ""]));
   }
 
+  const returnAggRows = await prisma.saleReturn.groupBy({
+    by: ["saleId"],
+    where: {
+      saleId: { in: saleIds },
+      status: "completed",
+    },
+    _sum: { netAmount: true },
+    _count: { _all: true },
+    _max: { createdAt: true },
+  });
+
+  const returnTypeAggRows = await prisma.saleReturn.groupBy({
+    by: ["saleId", "type"],
+    where: {
+      saleId: { in: saleIds },
+      status: "completed",
+    },
+    _count: { _all: true },
+  });
+
+  const completedReturns = await prisma.saleReturn.findMany({
+    where: {
+      saleId: { in: saleIds },
+      status: "completed",
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: {
+      saleId: true,
+      items: {
+        select: {
+          quantity: true,
+          productNameSnapshot: true,
+          product: { select: { name: true } },
+        },
+      },
+      exchangeItems: {
+        select: {
+          quantity: true,
+          productNameSnapshot: true,
+          product: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  const returnSummaryBySaleId = new Map<
+    string,
+    { count: number; netAmount: string; lastReturnAt: string | null }
+  >();
+  const returnTypeSummaryBySaleId = new Map<
+    string,
+    { refundCount: number; exchangeCount: number }
+  >();
+  const latestReturnPreviewBySaleId = new Map<
+    string,
+    { returnedPreview: string | null; exchangePreview: string | null }
+  >();
+
+  for (const row of returnAggRows) {
+    returnSummaryBySaleId.set(row.saleId, {
+      count: Number(row._count._all ?? 0),
+      netAmount: toMoney(Number(row._sum.netAmount ?? 0)),
+      lastReturnAt: row._max.createdAt?.toISOString() ?? null,
+    });
+  }
+
+  for (const row of returnTypeAggRows) {
+    const current = returnTypeSummaryBySaleId.get(row.saleId) ?? {
+      refundCount: 0,
+      exchangeCount: 0,
+    };
+    const count = Number(row._count._all ?? 0);
+    if (row.type === "refund") {
+      current.refundCount += count;
+    } else if (row.type === "exchange") {
+      current.exchangeCount += count;
+    }
+    returnTypeSummaryBySaleId.set(row.saleId, current);
+  }
+
+  for (const row of completedReturns) {
+    if (latestReturnPreviewBySaleId.has(row.saleId)) continue;
+    const returnedLines = row.items.map((it) => {
+      const name = it.productNameSnapshot || it.product?.name || "Unnamed";
+      return `${name} x${formatQtyCompact(it.quantity)}`;
+    });
+    const exchangeLines = row.exchangeItems.map((it) => {
+      const name = it.productNameSnapshot || it.product?.name || "Unnamed";
+      return `${name} x${formatQtyCompact(it.quantity)}`;
+    });
+    latestReturnPreviewBySaleId.set(row.saleId, {
+      returnedPreview: summarizePreviewLines(returnedLines),
+      exchangePreview: summarizePreviewLines(exchangeLines),
+    });
+  }
+
   return rows.map((r) => {
     const summary = itemSummaryMap[r.id] || { count: 0, names: [] };
+    const returnSummary = returnSummaryBySaleId.get(r.id);
+    const returnTypeSummary = returnTypeSummaryBySaleId.get(r.id);
+    const latestReturnPreview = latestReturnPreviewBySaleId.get(r.id);
     return {
       ...r,
       itemCount: summary.count,
       itemPreview: summary.names.join(", "),
       customerName: r.customerId ? customerMap[r.customerId] : null,
+      returnCount: returnSummary?.count ?? 0,
+      refundCount: returnTypeSummary?.refundCount ?? 0,
+      exchangeCount: returnTypeSummary?.exchangeCount ?? 0,
+      returnNetAmount: returnSummary?.netAmount ?? "0.00",
+      lastReturnAt: returnSummary?.lastReturnAt ?? null,
+      latestReturnedPreview: latestReturnPreview?.returnedPreview ?? null,
+      latestExchangePreview: latestReturnPreview?.exchangePreview ?? null,
     };
   });
+}
+
+async function getReturnedQtyBySaleItemId(
+  saleId: string,
+  tx?: Prisma.TransactionClient
+) {
+  const db = tx ?? prisma;
+  const rows = await db.saleReturnItem.findMany({
+    where: {
+      saleReturn: {
+        saleId,
+        status: "completed",
+      },
+    },
+    select: {
+      saleItemId: true,
+      quantity: true,
+    },
+  });
+
+  const returnedBySaleItem = new Map<string, number>();
+  for (const row of rows) {
+    const qty = Number(row.quantity ?? 0);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    returnedBySaleItem.set(
+      row.saleItemId,
+      (returnedBySaleItem.get(row.saleItemId) ?? 0) + qty
+    );
+  }
+  return returnedBySaleItem;
+}
+
+async function getSaleReturnHistoryBySale(
+  saleId: string
+): Promise<SaleReturnHistoryItem[]> {
+  const rows = await prisma.saleReturn.findMany({
+    where: { saleId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    include: {
+      items: {
+        orderBy: { id: "asc" },
+        include: {
+          product: { select: { name: true } },
+        },
+      },
+      exchangeItems: {
+        orderBy: { id: "asc" },
+        include: {
+          product: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    returnNo: row.returnNo,
+    type: row.type,
+    status: row.status,
+    reason: row.reason ?? null,
+    note: row.note ?? null,
+    subtotal: row.subtotal.toString(),
+    exchangeSubtotal: row.exchangeSubtotal.toString(),
+    netAmount: row.netAmount.toString(),
+    refundAmount: row.refundAmount.toString(),
+    additionalCashInAmount: row.additionalCashInAmount.toString(),
+    dueAdjustmentAmount: row.dueAdjustmentAmount.toString(),
+    additionalDueAmount: row.additionalDueAmount.toString(),
+    createdAt: row.createdAt.toISOString(),
+    items: row.items.map((item) => ({
+      id: item.id,
+      saleItemId: item.saleItemId,
+      productId: item.productId,
+      productName: item.productNameSnapshot || item.product?.name || "Unnamed",
+      quantity: item.quantity.toString(),
+      unitPrice: item.unitPrice.toString(),
+      lineTotal: item.lineTotal.toString(),
+    })),
+    exchangeItems: row.exchangeItems.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      productName: item.productNameSnapshot || item.product?.name || "Unnamed",
+      quantity: item.quantity.toString(),
+      unitPrice: item.unitPrice.toString(),
+      lineTotal: item.lineTotal.toString(),
+    })),
+  }));
+}
+
+export async function getSaleReturnDraft(
+  saleId: string
+): Promise<SaleReturnDraft> {
+  const user = await requireUser();
+  assertViewSaleReturnPermission(user);
+
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    select: {
+      id: true,
+      shopId: true,
+      saleDate: true,
+      invoiceNo: true,
+      paymentMethod: true,
+      status: true,
+      totalAmount: true,
+      note: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          totalDue: true,
+        },
+      },
+      saleItems: {
+        orderBy: { id: "asc" },
+        select: {
+          id: true,
+          productId: true,
+          productNameSnapshot: true,
+          quantity: true,
+          unitPrice: true,
+          lineTotal: true,
+          product: {
+            select: { name: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!sale) {
+    throw new Error("Sale not found");
+  }
+  await assertShopAccess(sale.shopId, user);
+
+  const [returnedMap, exchangeProducts, existingReturns] = await Promise.all([
+    getReturnedQtyBySaleItemId(sale.id),
+    prisma.product.findMany({
+      where: { shopId: sale.shopId, isActive: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        sellPrice: true,
+        stockQty: true,
+        trackStock: true,
+        isActive: true,
+      },
+      take: 300,
+    }),
+    getSaleReturnHistoryBySale(sale.id),
+  ]);
+
+  return {
+    sale: {
+      id: sale.id,
+      shopId: sale.shopId,
+      saleDate: sale.saleDate.toISOString(),
+      invoiceNo: sale.invoiceNo ?? null,
+      paymentMethod: sale.paymentMethod,
+      status: sale.status,
+      totalAmount: sale.totalAmount.toString(),
+      note: sale.note ?? null,
+      customer: sale.customer
+        ? {
+            id: sale.customer.id,
+            name: sale.customer.name,
+            totalDue: sale.customer.totalDue.toString(),
+          }
+        : null,
+    },
+    returnableItems: sale.saleItems.map((item) => {
+      const soldQty = Number(item.quantity ?? 0);
+      const returnedQty = returnedMap.get(item.id) ?? 0;
+      const maxReturnQty = Math.max(0, soldQty - returnedQty);
+      return {
+        saleItemId: item.id,
+        productId: item.productId,
+        productName:
+          item.productNameSnapshot || item.product?.name || "Unnamed product",
+        soldQty: toMoney(soldQty),
+        returnedQty: toMoney(returnedQty),
+        maxReturnQty: toMoney(maxReturnQty),
+        unitPrice: item.unitPrice.toString(),
+        lineTotal: item.lineTotal.toString(),
+      };
+    }),
+    exchangeProducts: exchangeProducts.map((row) => ({
+      id: row.id,
+      name: row.name,
+      sellPrice: row.sellPrice.toString(),
+      stockQty: row.stockQty.toString(),
+      trackStock: row.trackStock,
+      isActive: row.isActive,
+    })),
+    existingReturns,
+    canManage: canManageSaleReturn(user),
+  };
 }
 
 // ------------------------------
@@ -480,6 +931,546 @@ export async function createSale(input: CreateSaleInput) {
   };
 }
 
+export async function getSaleReturnHistory(saleId: string) {
+  const user = await requireUser();
+  assertViewSaleReturnPermission(user);
+
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    select: { id: true, shopId: true },
+  });
+
+  if (!sale) {
+    throw new Error("Sale not found");
+  }
+  await assertShopAccess(sale.shopId, user);
+  return getSaleReturnHistoryBySale(saleId);
+}
+
+export async function processSaleReturn(input: ProcessSaleReturnInput) {
+  const user = await requireUser();
+  assertSaleReturnPermission(user);
+
+  const saleScope = await prisma.sale.findUnique({
+    where: { id: input.saleId },
+    select: { id: true, shopId: true },
+  });
+  if (!saleScope) {
+    throw new Error("Sale not found");
+  }
+  await assertShopAccess(saleScope.shopId, user);
+
+  const normalizedType = input.type === "exchange" ? "exchange" : "refund";
+  const reason = (input.reason || "").toString().trim() || null;
+  const note = (input.note || "").toString().trim() || null;
+
+  const returnRequestMap = new Map<string, number>();
+  for (const row of input.returnedItems || []) {
+    const saleItemId = (row?.saleItemId || "").toString().trim();
+    const qty = toSafePositiveNumber(row?.qty);
+    if (!saleItemId || qty <= 0) continue;
+    returnRequestMap.set(saleItemId, (returnRequestMap.get(saleItemId) ?? 0) + qty);
+  }
+  if (returnRequestMap.size === 0) {
+    throw new Error("At least one returned item quantity is required");
+  }
+
+  const exchangeRequestMap = new Map<
+    string,
+    { qty: number; unitPrice: number | null }
+  >();
+  for (const row of input.exchangeItems || []) {
+    const productId = (row?.productId || "").toString().trim();
+    const qty = toSafePositiveNumber(row?.qty);
+    if (!productId || qty <= 0) continue;
+
+    const unitPriceRaw = row?.unitPrice;
+    const unitPrice =
+      unitPriceRaw === null || unitPriceRaw === undefined
+        ? null
+        : Number(unitPriceRaw);
+    const normalizedPrice =
+      unitPrice !== null && Number.isFinite(unitPrice) && unitPrice >= 0
+        ? roundMoney(unitPrice)
+        : null;
+
+    const current = exchangeRequestMap.get(productId);
+    if (!current) {
+      exchangeRequestMap.set(productId, { qty, unitPrice: normalizedPrice });
+      continue;
+    }
+    if (
+      current.unitPrice !== null &&
+      normalizedPrice !== null &&
+      current.unitPrice !== normalizedPrice
+    ) {
+      throw new Error("Exchange item unit price must be consistent per product");
+    }
+    exchangeRequestMap.set(productId, {
+      qty: current.qty + qty,
+      unitPrice: current.unitPrice ?? normalizedPrice,
+    });
+  }
+
+  if (normalizedType === "refund" && exchangeRequestMap.size > 0) {
+    throw new Error("Refund cannot include exchange products");
+  }
+  if (normalizedType === "exchange" && exchangeRequestMap.size === 0) {
+    throw new Error("Exchange requires at least one replacement product");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const businessDate = toDhakaBusinessDate(now);
+    const sale = await tx.sale.findUnique({
+      where: { id: input.saleId },
+      select: {
+        id: true,
+        shopId: true,
+        customerId: true,
+        paymentMethod: true,
+        status: true,
+        saleItems: {
+          select: {
+            id: true,
+            productId: true,
+            productNameSnapshot: true,
+            quantity: true,
+            unitPrice: true,
+            costAtSale: true,
+            product: {
+              select: {
+                id: true,
+                name: true,
+                buyPrice: true,
+                stockQty: true,
+                trackStock: true,
+                isActive: true,
+              },
+            },
+          },
+        },
+        customer: {
+          select: {
+            id: true,
+            totalDue: true,
+          },
+        },
+      },
+    });
+
+    if (!sale) {
+      throw new Error("Sale not found");
+    }
+    if ((sale.status || "").toUpperCase() === "VOIDED") {
+      throw new Error("Voided sale cannot be returned");
+    }
+
+    const previouslyReturnedByItem = await getReturnedQtyBySaleItemId(sale.id, tx);
+    const saleItemsById = new Map(sale.saleItems.map((row) => [row.id, row]));
+
+    const returnRows: Array<{
+      saleItemId: string;
+      productId: string;
+      productNameSnapshot: string | null;
+      quantity: string;
+      unitPrice: string;
+      lineTotal: string;
+      costAtReturn: string | null;
+    }> = [];
+
+    const returnStockByProduct = new Map<string, number>();
+    let returnedSubtotal = 0;
+
+    for (const [saleItemId, qty] of returnRequestMap.entries()) {
+      const saleItem = saleItemsById.get(saleItemId);
+      if (!saleItem) {
+        throw new Error("Invalid sale item in return request");
+      }
+      const soldQty = Number(saleItem.quantity ?? 0);
+      const alreadyReturned = previouslyReturnedByItem.get(saleItemId) ?? 0;
+      const maxReturnQty = Math.max(0, soldQty - alreadyReturned);
+      if (qty > maxReturnQty + 1e-9) {
+        throw new Error(
+          `Return qty exceeds remaining quantity for ${
+            saleItem.productNameSnapshot || saleItem.product?.name || saleItemId
+          }`
+        );
+      }
+
+      const unitPrice = Number(saleItem.unitPrice ?? 0);
+      const lineTotal = roundMoney(unitPrice * qty);
+      returnedSubtotal += lineTotal;
+
+      const costAtReturnRaw =
+        saleItem.costAtSale ?? saleItem.product?.buyPrice ?? null;
+      returnRows.push({
+        saleItemId,
+        productId: saleItem.productId,
+        productNameSnapshot:
+          saleItem.productNameSnapshot || saleItem.product?.name || null,
+        quantity: toMoney(qty),
+        unitPrice: toMoney(unitPrice),
+        lineTotal: toMoney(lineTotal),
+        costAtReturn:
+          costAtReturnRaw === null || costAtReturnRaw === undefined
+            ? null
+            : toMoney(Number(costAtReturnRaw)),
+      });
+
+      if (saleItem.product?.trackStock) {
+        returnStockByProduct.set(
+          saleItem.productId,
+          (returnStockByProduct.get(saleItem.productId) ?? 0) + qty
+        );
+      }
+    }
+
+    if (returnRows.length === 0) {
+      throw new Error("No valid return rows found");
+    }
+
+    const exchangeProducts = exchangeRequestMap.size
+      ? await tx.product.findMany({
+          where: { id: { in: Array.from(exchangeRequestMap.keys()) } },
+          select: {
+            id: true,
+            shopId: true,
+            name: true,
+            sellPrice: true,
+            buyPrice: true,
+            stockQty: true,
+            trackStock: true,
+            isActive: true,
+          },
+        })
+      : [];
+    const exchangeProductById = new Map(exchangeProducts.map((row) => [row.id, row]));
+
+    const exchangeRows: Array<{
+      productId: string;
+      productNameSnapshot: string | null;
+      quantity: string;
+      unitPrice: string;
+      lineTotal: string;
+      costAtReturn: string | null;
+    }> = [];
+    const exchangeStockByProduct = new Map<string, number>();
+    let exchangeSubtotal = 0;
+
+    for (const [productId, requested] of exchangeRequestMap.entries()) {
+      const product = exchangeProductById.get(productId);
+      if (!product) {
+        throw new Error("Invalid exchange product");
+      }
+      if (product.shopId !== sale.shopId) {
+        throw new Error("Exchange product does not belong to this shop");
+      }
+      if (!product.isActive) {
+        throw new Error(`Inactive exchange product: ${product.name}`);
+      }
+
+      const unitPrice =
+        requested.unitPrice !== null ? requested.unitPrice : Number(product.sellPrice ?? 0);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+        throw new Error(`Invalid exchange unit price for ${product.name}`);
+      }
+      const lineTotal = roundMoney(unitPrice * requested.qty);
+      exchangeSubtotal += lineTotal;
+
+      exchangeRows.push({
+        productId,
+        productNameSnapshot: product.name || null,
+        quantity: toMoney(requested.qty),
+        unitPrice: toMoney(unitPrice),
+        lineTotal: toMoney(lineTotal),
+        costAtReturn:
+          product.buyPrice === null || product.buyPrice === undefined
+            ? null
+            : toMoney(Number(product.buyPrice)),
+      });
+
+      if (product.trackStock) {
+        exchangeStockByProduct.set(
+          productId,
+          (exchangeStockByProduct.get(productId) ?? 0) + requested.qty
+        );
+      }
+    }
+
+    const subtotalRounded = roundMoney(returnedSubtotal);
+    const exchangeRounded = roundMoney(exchangeSubtotal);
+    const netAmount = roundMoney(exchangeRounded - subtotalRounded);
+
+    let refundAmount = 0;
+    let additionalCashInAmount = 0;
+    let dueAdjustmentAmount = 0;
+    let additionalDueAmount = 0;
+
+    if (netAmount < 0) {
+      const refundNeeded = roundMoney(Math.abs(netAmount));
+      if (sale.customerId && sale.customer) {
+        const currentDue = Number(sale.customer.totalDue ?? 0);
+        dueAdjustmentAmount = roundMoney(Math.min(currentDue, refundNeeded));
+        refundAmount = roundMoney(refundNeeded - dueAdjustmentAmount);
+      } else {
+        refundAmount = refundNeeded;
+      }
+    } else if (netAmount > 0) {
+      const wantsDueSettlement = input.settlementMode === "due";
+      const isDueSale = (sale.paymentMethod || "").toLowerCase() === "due";
+      if (wantsDueSettlement && !sale.customerId) {
+        throw new Error("Due settlement requires a customer-linked sale");
+      }
+
+      if ((wantsDueSettlement || isDueSale) && sale.customerId) {
+        additionalDueAmount = roundMoney(netAmount);
+      } else {
+        additionalCashInAmount = roundMoney(netAmount);
+      }
+    }
+
+    const numbering = await allocateSaleReturnNumber(tx, sale.shopId, now);
+
+    const createdReturn = await tx.saleReturn.create({
+      data: {
+        shopId: sale.shopId,
+        saleId: sale.id,
+        returnNo: numbering.returnNo,
+        type: normalizedType,
+        status: "completed",
+        reason,
+        note,
+        subtotal: toMoney(subtotalRounded),
+        exchangeSubtotal: toMoney(exchangeRounded),
+        netAmount: toMoney(netAmount),
+        refundAmount: toMoney(refundAmount),
+        additionalCashInAmount: toMoney(additionalCashInAmount),
+        dueAdjustmentAmount: toMoney(dueAdjustmentAmount),
+        additionalDueAmount: toMoney(additionalDueAmount),
+        businessDate,
+        createdByUserId: user.id,
+      },
+      select: {
+        id: true,
+        returnNo: true,
+      },
+    });
+
+    await tx.saleReturnItem.createMany({
+      data: returnRows.map((row) => ({
+        saleReturnId: createdReturn.id,
+        saleItemId: row.saleItemId,
+        productId: row.productId,
+        productNameSnapshot: row.productNameSnapshot,
+        quantity: row.quantity,
+        unitPrice: row.unitPrice,
+        lineTotal: row.lineTotal,
+        costAtReturn: row.costAtReturn,
+      })),
+    });
+
+    if (exchangeRows.length > 0) {
+      await tx.saleReturnExchangeItem.createMany({
+        data: exchangeRows.map((row) => ({
+          saleReturnId: createdReturn.id,
+          productId: row.productId,
+          productNameSnapshot: row.productNameSnapshot,
+          quantity: row.quantity,
+          unitPrice: row.unitPrice,
+          lineTotal: row.lineTotal,
+          costAtReturn: row.costAtReturn,
+        })),
+      });
+    }
+
+    for (const [productId, qty] of returnStockByProduct.entries()) {
+      await tx.product.updateMany({
+        where: { id: productId, trackStock: true },
+        data: {
+          stockQty: { increment: new Prisma.Decimal(toMoney(qty)) },
+        },
+      });
+    }
+
+    for (const [productId, qty] of exchangeStockByProduct.entries()) {
+      const updated = await tx.product.updateMany({
+        where: {
+          id: productId,
+          trackStock: true,
+          stockQty: { gte: new Prisma.Decimal(toMoney(qty)) },
+        },
+        data: {
+          stockQty: { decrement: new Prisma.Decimal(toMoney(qty)) },
+        },
+      });
+      if (updated.count !== 1) {
+        const productName = exchangeProductById.get(productId)?.name || productId;
+        throw new Error(`Insufficient stock for exchange product "${productName}"`);
+      }
+    }
+
+    if (refundAmount > 0) {
+      await tx.cashEntry.create({
+        data: {
+          shopId: sale.shopId,
+          entryType: "OUT",
+          amount: toMoney(refundAmount),
+          reason: `Sale return ${createdReturn.returnNo} refund`,
+          businessDate,
+        },
+      });
+    }
+
+    if (additionalCashInAmount > 0) {
+      await tx.cashEntry.create({
+        data: {
+          shopId: sale.shopId,
+          entryType: "IN",
+          amount: toMoney(additionalCashInAmount),
+          reason: `Sale exchange ${createdReturn.returnNo} adjustment`,
+          businessDate,
+        },
+      });
+    }
+
+    if (sale.customerId && (dueAdjustmentAmount > 0 || additionalDueAmount > 0)) {
+      const customer = await tx.customer.findUnique({
+        where: { id: sale.customerId },
+        select: { id: true, totalDue: true },
+      });
+      if (!customer) {
+        throw new Error("Customer not found for due adjustment");
+      }
+
+      if (dueAdjustmentAmount > 0) {
+        await tx.customerLedger.create({
+          data: {
+            shopId: sale.shopId,
+            customerId: customer.id,
+            entryType: "PAYMENT",
+            amount: toMoney(dueAdjustmentAmount),
+            description: `Sale return ${createdReturn.returnNo} adjustment`,
+            entryDate: now,
+            businessDate,
+          },
+        });
+      }
+
+      if (additionalDueAmount > 0) {
+        await tx.customerLedger.create({
+          data: {
+            shopId: sale.shopId,
+            customerId: customer.id,
+            entryType: "SALE",
+            amount: toMoney(additionalDueAmount),
+            description: `Sale exchange ${createdReturn.returnNo} additional due`,
+            entryDate: now,
+            businessDate,
+          },
+        });
+      }
+
+      const currentDue = Number(customer.totalDue ?? 0);
+      const nextDue = Math.max(
+        0,
+        roundMoney(currentDue - dueAdjustmentAmount + additionalDueAmount)
+      );
+
+      await tx.customer.update({
+        where: { id: customer.id },
+        data: {
+          totalDue: toMoney(nextDue),
+          ...(dueAdjustmentAmount > 0 ? { lastPaymentAt: now } : {}),
+        },
+      });
+    }
+
+    const affectedProductIds = Array.from(
+      new Set([
+        ...returnRows.map((row) => row.productId),
+        ...exchangeRows.map((row) => row.productId),
+      ])
+    );
+
+    return {
+      id: createdReturn.id,
+      returnNo: createdReturn.returnNo,
+      shopId: sale.shopId,
+      saleId: sale.id,
+      customerId: sale.customerId,
+      subtotal: subtotalRounded,
+      exchangeSubtotal: exchangeRounded,
+      netAmount,
+      refundAmount,
+      additionalCashInAmount,
+      dueAdjustmentAmount,
+      additionalDueAmount,
+      affectedProductIds,
+    };
+  });
+
+  await Promise.all([
+    publishRealtimeEvent(REALTIME_EVENTS.saleReturned, result.shopId, {
+      saleId: result.saleId,
+      returnId: result.id,
+      returnNo: result.returnNo,
+      netAmount: result.netAmount,
+    }),
+    ...(result.refundAmount > 0
+      ? [
+          publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, result.shopId, {
+            amount: result.refundAmount,
+            entryType: "OUT",
+          }),
+        ]
+      : []),
+    ...(result.additionalCashInAmount > 0
+      ? [
+          publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, result.shopId, {
+            amount: result.additionalCashInAmount,
+            entryType: "IN",
+          }),
+        ]
+      : []),
+    ...(result.affectedProductIds.length > 0
+      ? [
+          publishRealtimeEvent(REALTIME_EVENTS.stockUpdated, result.shopId, {
+            productIds: result.affectedProductIds,
+          }),
+        ]
+      : []),
+    ...(result.customerId
+      ? [
+          publishRealtimeEvent(REALTIME_EVENTS.ledgerUpdated, result.shopId, {
+            customerId: result.customerId,
+          }),
+        ]
+      : []),
+  ]);
+
+  revalidateReportsForSale();
+  revalidatePath("/dashboard/sales");
+  revalidatePath(`/dashboard/sales/${result.saleId}/invoice`);
+  revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard/cash");
+  revalidatePath("/dashboard/due");
+  revalidatePath("/dashboard/products");
+
+  return {
+    success: true,
+    returnId: result.id,
+    returnNo: result.returnNo,
+    subtotal: toMoney(result.subtotal),
+    exchangeSubtotal: toMoney(result.exchangeSubtotal),
+    netAmount: toMoney(result.netAmount),
+    refundAmount: toMoney(result.refundAmount),
+    additionalCashInAmount: toMoney(result.additionalCashInAmount),
+    dueAdjustmentAmount: toMoney(result.dueAdjustmentAmount),
+    additionalDueAmount: toMoney(result.additionalDueAmount),
+  };
+}
+
 // ------------------------------
 // GET SALES BY SHOP
 // ------------------------------
@@ -752,8 +1743,22 @@ export async function getSalesSummary({
     _count: { _all: true },
   });
 
+  const returnAgg = await prisma.saleReturn.aggregate({
+    where: {
+      shopId,
+      status: "completed",
+      businessDate: {
+        ...(start ? { gte: start } : {}),
+        ...(end ? { lte: end } : {}),
+      },
+    },
+    _sum: { netAmount: true },
+  });
+
   return {
-    totalAmount: agg._sum.totalAmount?.toString() ?? "0",
+    totalAmount: (
+      Number(agg._sum.totalAmount ?? 0) + Number(returnAgg._sum.netAmount ?? 0)
+    ).toFixed(2),
     count: agg._count._all ?? 0,
   };
 }

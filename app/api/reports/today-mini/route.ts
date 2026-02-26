@@ -21,24 +21,38 @@ export async function GET(req: Request) {
 
       const { start: todayStart, end: todayEnd } = getDhakaDateOnlyRange();
 
-      const salesRows = await prisma.sale.findMany({
-        where: {
-          shopId,
-          status: { not: "VOIDED" },
-          businessDate: { gte: todayStart, lte: todayEnd },
-        },
-      });
+      const [salesAgg, saleReturnAgg, expenseAgg, cashRows] = await Promise.all([
+        prisma.sale.aggregate({
+          where: {
+            shopId,
+            status: { not: "VOIDED" },
+            businessDate: { gte: todayStart, lte: todayEnd },
+          },
+          _sum: { totalAmount: true },
+          _count: { _all: true },
+        }),
+        prisma.saleReturn.aggregate({
+          where: {
+            shopId,
+            status: "completed",
+            businessDate: { gte: todayStart, lte: todayEnd },
+          },
+          _sum: { netAmount: true },
+        }),
+        prisma.expense.aggregate({
+          where: { shopId, expenseDate: { gte: todayStart, lte: todayEnd } },
+          _sum: { amount: true },
+          _count: { _all: true },
+        }),
+        prisma.cashEntry.findMany({
+          where: { shopId, businessDate: { gte: todayStart, lte: todayEnd } },
+        }),
+      ]);
 
-      const expenseRows = await prisma.expense.findMany({
-        where: { shopId, expenseDate: { gte: todayStart, lte: todayEnd } },
-      });
-
-      const cashRows = await prisma.cashEntry.findMany({
-        where: { shopId, businessDate: { gte: todayStart, lte: todayEnd } },
-      });
-
-      const salesTotal = salesRows.reduce((sum, s) => sum + Number(s.totalAmount || 0), 0);
-      const expenseTotal = expenseRows.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const salesTotal =
+        Number(salesAgg._sum.totalAmount ?? 0) +
+        Number(saleReturnAgg._sum.netAmount ?? 0);
+      const expenseTotal = Number(expenseAgg._sum.amount ?? 0);
       const cashIn = cashRows
         .filter((c) => c.entryType === "IN")
         .reduce((sum, c) => sum + Number(c.amount || 0), 0);
@@ -48,11 +62,11 @@ export async function GET(req: Request) {
 
       return jsonWithEtag(req, {
         sales: {
-          count: salesRows.length,
+          count: salesAgg._count._all ?? 0,
           totalAmount: Number(salesTotal.toFixed(2)),
         },
         expenses: {
-          count: expenseRows.length,
+          count: expenseAgg._count._all ?? 0,
           totalAmount: Number(expenseTotal.toFixed(2)),
         },
         cash: {

@@ -160,6 +160,8 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   ]);
   const canViewSales = hasPermission(user, "view_sales");
   const canCreateSale = hasPermission(user, "create_sale");
+  const canReturnSale =
+    hasPermission(user, "create_sale_return") || hasPermission(user, "create_sale");
 
   if (!canViewSales) {
     return (
@@ -343,6 +345,13 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     itemPreview: (s as any).itemPreview ?? "",
     customerName: (s as any).customerName ?? null,
     invoiceNo: (s as any).invoiceNo ?? null,
+    returnCount: Number((s as any).returnCount ?? 0),
+    refundCount: Number((s as any).refundCount ?? 0),
+    exchangeCount: Number((s as any).exchangeCount ?? 0),
+    returnNetAmount: (s as any).returnNetAmount ?? "0.00",
+    lastReturnAt: (s as any).lastReturnAt ?? null,
+    latestReturnedPreview: (s as any).latestReturnedPreview ?? null,
+    latestExchangePreview: (s as any).latestExchangePreview ?? null,
   }));
 
   const summaryTotalDisplay = formatCurrency(summary.totalAmount);
@@ -419,6 +428,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
         nextHref={nextHref}
         hasMore={Boolean(hasMore)}
         canVoidSale={canCreateSale}
+        canReturnSale={canReturnSale}
         voidSaleAction={voidSaleAction}
       />
     </div>

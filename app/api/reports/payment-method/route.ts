@@ -24,31 +24,63 @@ async function computePaymentMethodReport(
   const { start, end } = parseDateRange(from, to);
   const useUnbounded = !from && !to;
 
-  const sales = await prisma.sale.groupBy({
-    by: ["paymentMethod"],
-    where: {
-      shopId,
-      status: { not: "VOIDED" },
-      businessDate: useUnbounded
-        ? undefined
-        : {
-            gte: start,
-            lte: end,
-          },
-    },
-    _sum: {
-      totalAmount: true,
-    },
-    _count: {
-      id: true,
-    },
-  });
+  const [sales, returnAgg] = await Promise.all([
+    prisma.sale.groupBy({
+      by: ["paymentMethod"],
+      where: {
+        shopId,
+        status: { not: "VOIDED" },
+        businessDate: useUnbounded
+          ? undefined
+          : {
+              gte: start,
+              lte: end,
+            },
+      },
+      _sum: {
+        totalAmount: true,
+      },
+      _count: {
+        id: true,
+      },
+    }),
+    prisma.saleReturn.aggregate({
+      where: {
+        shopId,
+        status: "completed",
+        businessDate: useUnbounded
+          ? undefined
+          : {
+              gte: start,
+              lte: end,
+            },
+      },
+      _sum: {
+        netAmount: true,
+      },
+      _count: {
+        _all: true,
+      },
+    }),
+  ]);
 
-  return sales.map((s) => ({
+  const rows = sales.map((s) => ({
     name: s.paymentMethod || "Unknown",
     value: Number(s._sum.totalAmount || 0),
     count: s._count.id,
   }));
+
+  const returnNet = Number(returnAgg._sum.netAmount ?? 0);
+  const returnCount = Number(returnAgg._count._all ?? 0);
+  if (returnCount > 0 && returnNet !== 0) {
+    rows.push({
+      name: "return_adjustment",
+      value: returnNet,
+      count: returnCount,
+    });
+  }
+
+  return rows;
 }
 
 const getPaymentMethodCached = unstable_cache(

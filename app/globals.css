@@ -421,6 +421,23 @@ button {
   line-height: 1.5;
 }
 
+.bn-typography {
+  font-family: var(--font-bengali), var(--font-sans);
+  letter-spacing: 0;
+  line-height: 1.62;
+  text-rendering: optimizeLegibility;
+}
+
+.bn-typography h1,
+.bn-typography h2,
+.bn-typography h3,
+.bn-typography h4,
+.bn-typography h5,
+.bn-typography h6 {
+  letter-spacing: 0;
+  line-height: 1.42;
+}
+
 /* Button Styles - ICONIC POS Palette */
 .btn-primary {
   @apply px-6 py-3 bg-primary-soft text-primary border border-primary/30 font-medium rounded-lg hover:bg-primary/15 hover:border-primary/40 transition-colors text-base;

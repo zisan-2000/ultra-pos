@@ -8,6 +8,7 @@ import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
 import { Prisma } from "@prisma/client";
 import { revalidateReportsForProduct } from "@/lib/reports/revalidate";
+import { getDhakaBusinessDate } from "@/lib/dhaka-date";
 
 import { type CursorToken } from "@/lib/cursor-pagination";
 
@@ -53,6 +54,47 @@ type ProductListRow = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  metrics?: ProductCardMetrics;
+};
+
+export type ProductCardMetrics = {
+  soldQtyToday: string;
+  returnedQtyToday: string;
+  exchangeQtyToday: string;
+  netQtyToday: string;
+  soldQty30d: string;
+  returnedQty30d: string;
+  returnRate30d: string;
+  lastReturnAt: string | null;
+};
+
+export type ProductReturnInsightEvent = {
+  id: string;
+  returnId: string;
+  returnNo: string;
+  kind: "returned" | "exchange_out";
+  saleId: string;
+  saleInvoiceNo: string | null;
+  businessDate: string | null;
+  createdAt: string;
+  quantity: string;
+  unitPrice: string;
+  lineTotal: string;
+  reason: string | null;
+  note: string | null;
+};
+
+export type ProductReturnInsight = {
+  productId: string;
+  metrics: ProductCardMetrics;
+  totals: {
+    returnedQty: string;
+    exchangeQty: string;
+    netQty: string;
+    returnedAmount: string;
+    exchangeAmount: string;
+  };
+  events: ProductReturnInsightEvent[];
 };
 
 type ProductStatusFilter = "all" | "active" | "inactive";
@@ -102,6 +144,182 @@ function normalizeNumberInput(
   }
 
   return parsed.toString();
+}
+
+function toSafeNumber(value: unknown) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function toFixedDecimal(value: number, digits = 2) {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return (0).toFixed(digits);
+  return n.toFixed(digits);
+}
+
+function emptyProductCardMetrics(): ProductCardMetrics {
+  return {
+    soldQtyToday: "0.00",
+    returnedQtyToday: "0.00",
+    exchangeQtyToday: "0.00",
+    netQtyToday: "0.00",
+    soldQty30d: "0.00",
+    returnedQty30d: "0.00",
+    returnRate30d: "0.0",
+    lastReturnAt: null,
+  };
+}
+
+async function buildProductCardMetrics(
+  shopId: string,
+  productIds: string[]
+): Promise<Map<string, ProductCardMetrics>> {
+  const metricsByProduct = new Map<string, ProductCardMetrics>();
+  if (productIds.length === 0) return metricsByProduct;
+
+  const today = getDhakaBusinessDate();
+  const start30d = new Date(today);
+  start30d.setUTCDate(start30d.getUTCDate() - 29);
+
+  const [
+    salesTodayRows,
+    returnTodayRows,
+    exchangeTodayRows,
+    sales30Rows,
+    return30Rows,
+    lastReturnItemRows,
+    lastExchangeRows,
+  ] = await Promise.all([
+    prisma.saleItem.groupBy({
+      by: ["productId"],
+      where: {
+        productId: { in: productIds },
+        sale: {
+          shopId,
+          status: { not: "VOIDED" },
+          businessDate: { gte: today, lte: today },
+        },
+      },
+      _sum: { quantity: true },
+    }),
+    prisma.saleReturnItem.groupBy({
+      by: ["productId"],
+      where: {
+        productId: { in: productIds },
+        saleReturn: {
+          shopId,
+          status: "completed",
+          businessDate: { gte: today, lte: today },
+        },
+      },
+      _sum: { quantity: true },
+    }),
+    prisma.saleReturnExchangeItem.groupBy({
+      by: ["productId"],
+      where: {
+        productId: { in: productIds },
+        saleReturn: {
+          shopId,
+          status: "completed",
+          businessDate: { gte: today, lte: today },
+        },
+      },
+      _sum: { quantity: true },
+    }),
+    prisma.saleItem.groupBy({
+      by: ["productId"],
+      where: {
+        productId: { in: productIds },
+        sale: {
+          shopId,
+          status: { not: "VOIDED" },
+          businessDate: { gte: start30d, lte: today },
+        },
+      },
+      _sum: { quantity: true },
+    }),
+    prisma.saleReturnItem.groupBy({
+      by: ["productId"],
+      where: {
+        productId: { in: productIds },
+        saleReturn: {
+          shopId,
+          status: "completed",
+          businessDate: { gte: start30d, lte: today },
+        },
+      },
+      _sum: { quantity: true },
+    }),
+    prisma.saleReturnItem.groupBy({
+      by: ["productId"],
+      where: {
+        productId: { in: productIds },
+        saleReturn: { shopId, status: "completed" },
+      },
+      _max: { createdAt: true },
+    }),
+    prisma.saleReturnExchangeItem.groupBy({
+      by: ["productId"],
+      where: {
+        productId: { in: productIds },
+        saleReturn: { shopId, status: "completed" },
+      },
+      _max: { createdAt: true },
+    }),
+  ]);
+
+  const salesToday = new Map(
+    salesTodayRows.map((row) => [row.productId, toSafeNumber(row._sum.quantity)])
+  );
+  const returnToday = new Map(
+    returnTodayRows.map((row) => [row.productId, toSafeNumber(row._sum.quantity)])
+  );
+  const exchangeToday = new Map(
+    exchangeTodayRows.map((row) => [row.productId, toSafeNumber(row._sum.quantity)])
+  );
+  const sales30 = new Map(
+    sales30Rows.map((row) => [row.productId, toSafeNumber(row._sum.quantity)])
+  );
+  const returns30 = new Map(
+    return30Rows.map((row) => [row.productId, toSafeNumber(row._sum.quantity)])
+  );
+
+  const lastReturnAt = new Map<string, Date>();
+  for (const row of lastReturnItemRows) {
+    if (!row._max.createdAt) continue;
+    lastReturnAt.set(row.productId, row._max.createdAt);
+  }
+  for (const row of lastExchangeRows) {
+    if (!row._max.createdAt) continue;
+    const prev = lastReturnAt.get(row.productId);
+    if (!prev || row._max.createdAt.getTime() > prev.getTime()) {
+      lastReturnAt.set(row.productId, row._max.createdAt);
+    }
+  }
+
+  for (const productId of productIds) {
+    const soldQtyToday = salesToday.get(productId) ?? 0;
+    const returnedQtyToday = returnToday.get(productId) ?? 0;
+    const exchangeQtyToday = exchangeToday.get(productId) ?? 0;
+    const soldQty30d = sales30.get(productId) ?? 0;
+    const returnedQty30d = returns30.get(productId) ?? 0;
+    const netQtyToday = soldQtyToday - returnedQtyToday + exchangeQtyToday;
+    const returnRate30d =
+      soldQty30d > 0 ? (returnedQty30d / soldQty30d) * 100 : 0;
+
+    metricsByProduct.set(productId, {
+      soldQtyToday: toFixedDecimal(soldQtyToday, 2),
+      returnedQtyToday: toFixedDecimal(returnedQtyToday, 2),
+      exchangeQtyToday: toFixedDecimal(exchangeQtyToday, 2),
+      netQtyToday: toFixedDecimal(netQtyToday, 2),
+      soldQty30d: toFixedDecimal(soldQty30d, 2),
+      returnedQty30d: toFixedDecimal(returnedQty30d, 2),
+      returnRate30d: toFixedDecimal(returnRate30d, 1),
+      lastReturnAt: lastReturnAt.get(productId)?.toISOString() ?? null,
+    });
+  }
+
+  return metricsByProduct;
 }
 
 function normalizeUnitCreate(input: {
@@ -374,6 +592,10 @@ export async function getProductsByShopCursorPaginated({
 
   const hasMore = rows.length > safeLimit;
   const pageRows = rows.slice(0, safeLimit);
+  const metricsByProduct = await buildProductCardMetrics(
+    shopId,
+    pageRows.map((row) => row.id)
+  );
 
   const items: ProductListRow[] = pageRows.map((p) => ({
     id: p.id,
@@ -386,6 +608,7 @@ export async function getProductsByShopCursorPaginated({
     isActive: p.isActive,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
+    metrics: metricsByProduct.get(p.id) ?? emptyProductCardMetrics(),
   }));
 
   const last = pageRows[pageRows.length - 1];
@@ -395,6 +618,155 @@ export async function getProductsByShopCursorPaginated({
       : null;
 
   return { items, totalCount, nextCursor, hasMore };
+}
+
+// ---------------------------------
+// PRODUCT RETURN / EXCHANGE INSIGHTS
+// ---------------------------------
+export async function getProductReturnInsights(
+  productId: string,
+  limit = 12
+): Promise<ProductReturnInsight> {
+  const user = await requireUser();
+  requirePermission(user, "view_products");
+
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { id: true, shopId: true },
+  });
+
+  if (!product) {
+    throw new Error("Product not found");
+  }
+
+  await assertShopAccess(product.shopId, user);
+
+  const safeLimit = Math.max(1, Math.min(Math.floor(limit), 50));
+  const metricsMap = await buildProductCardMetrics(product.shopId, [product.id]);
+  const metrics = metricsMap.get(product.id) ?? emptyProductCardMetrics();
+
+  const rows = await prisma.saleReturn.findMany({
+    where: {
+      shopId: product.shopId,
+      status: "completed",
+      OR: [
+        { items: { some: { productId: product.id } } },
+        { exchangeItems: { some: { productId: product.id } } },
+      ],
+    },
+    select: {
+      id: true,
+      returnNo: true,
+      saleId: true,
+      businessDate: true,
+      createdAt: true,
+      reason: true,
+      note: true,
+      sale: {
+        select: {
+          invoiceNo: true,
+        },
+      },
+      items: {
+        where: { productId: product.id },
+        select: {
+          id: true,
+          quantity: true,
+          unitPrice: true,
+          lineTotal: true,
+        },
+      },
+      exchangeItems: {
+        where: { productId: product.id },
+        select: {
+          id: true,
+          quantity: true,
+          unitPrice: true,
+          lineTotal: true,
+        },
+      },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: safeLimit * 3,
+  });
+
+  const events: ProductReturnInsightEvent[] = [];
+  for (const row of rows) {
+    for (const item of row.items) {
+      events.push({
+        id: `${row.id}:returned:${item.id}`,
+        returnId: row.id,
+        returnNo: row.returnNo,
+        kind: "returned",
+        saleId: row.saleId,
+        saleInvoiceNo: row.sale?.invoiceNo ?? null,
+        businessDate: row.businessDate?.toISOString() ?? null,
+        createdAt: row.createdAt.toISOString(),
+        quantity: item.quantity.toString(),
+        unitPrice: item.unitPrice.toString(),
+        lineTotal: item.lineTotal.toString(),
+        reason: row.reason ?? null,
+        note: row.note ?? null,
+      });
+    }
+
+    for (const item of row.exchangeItems) {
+      events.push({
+        id: `${row.id}:exchange:${item.id}`,
+        returnId: row.id,
+        returnNo: row.returnNo,
+        kind: "exchange_out",
+        saleId: row.saleId,
+        saleInvoiceNo: row.sale?.invoiceNo ?? null,
+        businessDate: row.businessDate?.toISOString() ?? null,
+        createdAt: row.createdAt.toISOString(),
+        quantity: item.quantity.toString(),
+        unitPrice: item.unitPrice.toString(),
+        lineTotal: item.lineTotal.toString(),
+        reason: row.reason ?? null,
+        note: row.note ?? null,
+      });
+    }
+  }
+
+  events.sort((a, b) => {
+    const byDate =
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (byDate !== 0) return byDate;
+    return b.id.localeCompare(a.id);
+  });
+
+  const limitedEvents = events.slice(0, safeLimit);
+
+  let returnedQty = 0;
+  let exchangeQty = 0;
+  let returnedAmount = 0;
+  let exchangeAmount = 0;
+
+  for (const event of limitedEvents) {
+    const qty = toSafeNumber(event.quantity);
+    const amount = toSafeNumber(event.lineTotal);
+    if (event.kind === "returned") {
+      returnedQty += qty;
+      returnedAmount += amount;
+    } else {
+      exchangeQty += qty;
+      exchangeAmount += amount;
+    }
+  }
+
+  return {
+    productId: product.id,
+    metrics,
+    totals: {
+      returnedQty: toFixedDecimal(returnedQty, 2),
+      exchangeQty: toFixedDecimal(exchangeQty, 2),
+      netQty: toFixedDecimal(exchangeQty - returnedQty, 2),
+      returnedAmount: toFixedDecimal(returnedAmount, 2),
+      exchangeAmount: toFixedDecimal(exchangeAmount, 2),
+    },
+    events: limitedEvents,
+  };
 }
 
 // ---------------------------------

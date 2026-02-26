@@ -26,7 +26,12 @@ import { getStockToneClasses } from "@/lib/stock-level";
 import { ShopSwitcherClient } from "../shop-switcher-client";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { addBusinessProductTemplatesToShop } from "@/app/actions/business-product-templates";
-import { deleteProduct } from "@/app/actions/products";
+import {
+  deleteProduct,
+  getProductReturnInsights,
+  type ProductCardMetrics,
+  type ProductReturnInsight,
+} from "@/app/actions/products";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { subscribeProductEvent } from "@/lib/products/product-events";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
@@ -43,6 +48,7 @@ type Product = {
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+  metrics?: ProductCardMetrics | null;
 };
 
 type TemplateProduct = {
@@ -114,6 +120,59 @@ function triggerHaptic(type: "light" | "medium" | "heavy" = "light") {
   }
 }
 
+function toSafeNumber(value: unknown) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatQty(value: unknown) {
+  return toSafeNumber(value).toLocaleString("bn-BD", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatPercent(value: unknown) {
+  return toSafeNumber(value).toLocaleString("bn-BD", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "N/A";
+  return date.toLocaleString("bn-BD", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function emptyMetrics(): ProductCardMetrics {
+  return {
+    soldQtyToday: "0.00",
+    returnedQtyToday: "0.00",
+    exchangeQtyToday: "0.00",
+    netQtyToday: "0.00",
+    soldQty30d: "0.00",
+    returnedQty30d: "0.00",
+    returnRate30d: "0.0",
+    lastReturnAt: null,
+  };
+}
+
+function getProductMetrics(product?: Product | null): ProductCardMetrics {
+  if (!product?.metrics) return emptyMetrics();
+  return {
+    ...emptyMetrics(),
+    ...product.metrics,
+  };
+}
+
 export default function ProductsListClient({
   shops,
   activeShopId,
@@ -149,6 +208,16 @@ export default function ProductsListClient({
   const [offlinePage, setOfflinePage] = useState(page);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [expandedKpiByProductId, setExpandedKpiByProductId] = useState<
+    Record<string, boolean>
+  >({});
+  const [productInsights, setProductInsights] = useState<
+    Record<string, ProductReturnInsight>
+  >({});
+  const [insightLoadingProductId, setInsightLoadingProductId] = useState<
+    string | null
+  >(null);
+  const [insightError, setInsightError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{
     id: string;
     name: string;
@@ -185,6 +254,14 @@ export default function ProductsListClient({
   useEffect(() => {
     setTemplateSelections({});
   }, [activeShopId, templateProducts]);
+
+  useEffect(() => {
+    setSelectedProduct(null);
+    setExpandedKpiByProductId({});
+    setProductInsights({});
+    setInsightLoadingProductId(null);
+    setInsightError(null);
+  }, [activeShopId]);
 
   useEffect(() => {
     if (serverProducts.length === 0 && templateProducts.length > 0) {
@@ -227,6 +304,44 @@ export default function ProductsListClient({
     lastRefreshAtRef.current = now;
     router.refresh();
   }, [online, lastSyncAt, syncing, pendingCount, router]);
+
+  useEffect(() => {
+    if (!selectedProduct || !online) {
+      setInsightLoadingProductId(null);
+      return;
+    }
+
+    const productId = selectedProduct.id;
+    if (productInsights[productId]) {
+      setInsightLoadingProductId(null);
+      return;
+    }
+
+    let cancelled = false;
+    setInsightLoadingProductId(productId);
+    setInsightError(null);
+
+    (async () => {
+      try {
+        const insight = await getProductReturnInsights(productId, 12);
+        if (cancelled) return;
+        setProductInsights((prev) => ({ ...prev, [productId]: insight }));
+      } catch (err) {
+        if (cancelled) return;
+        handlePermissionError(err);
+        setInsightError(
+          err instanceof Error ? err.message : "Insight load failed"
+        );
+      } finally {
+        if (cancelled) return;
+        setInsightLoadingProductId((prev) => (prev === productId ? null : prev));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [online, productInsights, selectedProduct]);
 
   useEffect(() => {
     if (!online) return;
@@ -440,6 +555,13 @@ export default function ProductsListClient({
         : UNTRACKED_STOCK_CLASSES,
     [selectedProduct]
   );
+  const selectedMetrics = useMemo(
+    () => getProductMetrics(selectedProduct),
+    [selectedProduct]
+  );
+  const selectedInsight = selectedProduct
+    ? productInsights[selectedProduct.id] ?? null
+    : null;
 
   const pageNumbers = useMemo(() => {
     // Online uses cursor pagination, so random page jumps are not supported.
@@ -1192,6 +1314,8 @@ export default function ProductsListClient({
         ) : (
           visibleProducts.map((product) => {
             const tracksStock = product.trackStock === true;
+            const metrics = getProductMetrics(product);
+            const isKpiExpanded = Boolean(expandedKpiByProductId[product.id]);
             const stockClasses = tracksStock
               ? getStockToneClasses(Number(product.stockQty ?? 0))
               : UNTRACKED_STOCK_CLASSES;
@@ -1204,6 +1328,7 @@ export default function ProductsListClient({
                 className={`h-full min-h-[250px] bg-card rounded-2xl shadow-sm border border-border overflow-hidden transition card-lift hover:shadow-md active:scale-[0.98] ${cardAccent}`}
                 onClick={() => {
                   setSelectedProduct(product);
+                  setInsightError(null);
                   triggerHaptic("light");
                 }}
               >
@@ -1254,6 +1379,72 @@ export default function ProductsListClient({
                       {tracksStock ? product.stockQty : "N/A"}
                     </p>
                   </div>
+                </div>
+
+                <div className="mb-4 rounded-xl border border-border bg-muted/20 p-2.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedKpiByProductId((prev) => ({
+                        ...prev,
+                        [product.id]: !prev[product.id],
+                      }));
+                      triggerHaptic("light");
+                    }}
+                    className="flex w-full items-center justify-between gap-2 text-left"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-foreground">
+                        KPI Summary
+                      </p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        আজ বিক্রি {formatQty(metrics.soldQtyToday)} · আজ রিটার্ন {formatQty(metrics.returnedQtyToday)} · নেট বিক্রি {formatQty(metrics.netQtyToday)} · রিটার্ন রেট {formatPercent(metrics.returnRate30d)}%
+                      </p>
+                    </div>
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                        isKpiExpanded ? "rotate-180" : ""
+                      }`}
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.24a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                  {isKpiExpanded && (
+                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border/70 pt-2">
+                      <div className="rounded-lg border border-border bg-card px-2.5 py-2">
+                        <p className="text-[10px] text-muted-foreground">আজ বিক্রি</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {formatQty(metrics.soldQtyToday)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-danger/20 bg-danger-soft/50 px-2.5 py-2">
+                        <p className="text-[10px] text-danger/80">আজ রিটার্ন</p>
+                        <p className="text-sm font-semibold text-danger">
+                          {formatQty(metrics.returnedQtyToday)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-success/20 bg-success-soft/60 px-2.5 py-2">
+                        <p className="text-[10px] text-success/80">নেট বিক্রি</p>
+                        <p className="text-sm font-semibold text-success">
+                          {formatQty(metrics.netQtyToday)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-warning/25 bg-warning-soft/40 px-2.5 py-2">
+                        <p className="text-[10px] text-warning">রিটার্ন রেট (30d)</p>
+                        <p className="text-sm font-semibold text-warning">
+                          {formatPercent(metrics.returnRate30d)}%
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
@@ -1426,6 +1617,116 @@ export default function ProductsListClient({
                     {selectedProduct.isActive ? "✅ সক্রিয়" : "⏸️ বন্ধ"}
                   </p>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-muted/30 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h5 className="text-sm font-semibold text-foreground">
+                    Return / Exchange Insight
+                  </h5>
+                  <p className="text-[11px] text-muted-foreground">
+                    Last Return: {formatDateTime(selectedMetrics.lastReturnAt)}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-border bg-card px-2.5 py-2">
+                    <p className="text-[10px] text-muted-foreground">আজ বিক্রি</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {formatQty(selectedMetrics.soldQtyToday)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-danger/20 bg-danger-soft/50 px-2.5 py-2">
+                    <p className="text-[10px] text-danger/80">আজ রিটার্ন</p>
+                    <p className="text-sm font-semibold text-danger">
+                      {formatQty(selectedMetrics.returnedQtyToday)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-success/20 bg-success-soft/60 px-2.5 py-2">
+                    <p className="text-[10px] text-success/80">আজ নেট বিক্রি</p>
+                    <p className="text-sm font-semibold text-success">
+                      {formatQty(selectedMetrics.netQtyToday)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-warning/25 bg-warning-soft/40 px-2.5 py-2">
+                    <p className="text-[10px] text-warning">রিটার্ন রেট (30d)</p>
+                    <p className="text-sm font-semibold text-warning">
+                      {formatPercent(selectedMetrics.returnRate30d)}%
+                    </p>
+                  </div>
+                </div>
+
+                {!online ? (
+                  <p className="text-xs text-muted-foreground">
+                    Offline mode: return/exchange history দেখতে অনলাইনে আসুন।
+                  </p>
+                ) : insightLoadingProductId === selectedProduct.id ? (
+                  <p className="text-xs text-muted-foreground">
+                    Return history লোড হচ্ছে...
+                  </p>
+                ) : insightError ? (
+                  <p className="text-xs text-danger">{insightError}</p>
+                ) : selectedInsight && selectedInsight.events.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-lg border border-border bg-card px-2.5 py-2">
+                        <p className="text-[10px] text-muted-foreground">
+                          Recent Returned Qty
+                        </p>
+                        <p className="text-sm font-semibold text-danger">
+                          {formatQty(selectedInsight.totals.returnedQty)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-card px-2.5 py-2">
+                        <p className="text-[10px] text-muted-foreground">
+                          Recent Exchange Qty
+                        </p>
+                        <p className="text-sm font-semibold text-success">
+                          {formatQty(selectedInsight.totals.exchangeQty)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                      {selectedInsight.events.map((event) => (
+                        <div
+                          key={event.id}
+                          className="rounded-lg border border-border bg-card px-2.5 py-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                                event.kind === "returned"
+                                  ? "border-danger/30 bg-danger-soft text-danger"
+                                  : "border-success/30 bg-success-soft text-success"
+                              }`}
+                            >
+                              {event.kind === "returned" ? "Returned" : "Exchange Out"}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {formatDateTime(event.createdAt)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-foreground">
+                            {event.returnNo}
+                            {event.saleInvoiceNo ? ` · Invoice ${event.saleInvoiceNo}` : ""}
+                          </p>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            Qty {formatQty(event.quantity)} · Line ৳ {formatQty(event.lineTotal)}
+                          </p>
+                          {event.reason ? (
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              Reason: {event.reason}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    এই পণ্যে এখনো কোনো return/exchange event নেই।
+                  </p>
+                )}
               </div>
 
               {canUpdateProducts || canDeleteProducts ? (

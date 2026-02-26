@@ -1,6 +1,7 @@
 export const REALTIME_EVENTS = {
   saleCommitted: "sale:committed",
   saleVoided: "sale:voided",
+  saleReturned: "sale:returned",
   expenseCreated: "expense:created",
   cashUpdated: "cash:updated",
   stockUpdated: "stock:updated",

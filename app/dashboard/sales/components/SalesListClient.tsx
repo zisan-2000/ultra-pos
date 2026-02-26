@@ -26,6 +26,13 @@ type SaleSummary = {
   itemCount: number;
   itemPreview: string;
   customerName: string | null;
+  returnCount?: number;
+  refundCount?: number;
+  exchangeCount?: number;
+  returnNetAmount?: string | null;
+  lastReturnAt?: string | null;
+  latestReturnedPreview?: string | null;
+  latestExchangePreview?: string | null;
   syncStatus?: "new" | "synced";
 };
 
@@ -37,6 +44,7 @@ type Props = {
   nextHref: string | null;
   hasMore: boolean;
   canVoidSale: boolean;
+  canReturnSale: boolean;
   voidSaleAction: (formData: FormData) => Promise<void>;
 };
 
@@ -83,6 +91,7 @@ export default function SalesListClient({
   nextHref,
   hasMore,
   canVoidSale,
+  canReturnSale,
   voidSaleAction,
 }: Props) {
   const router = useRouter();
@@ -241,6 +250,13 @@ export default function SalesListClient({
             itemCount,
             itemPreview,
             customerName: (r as any).customerName ?? null,
+            returnCount: Number((r as any).returnCount ?? 0),
+            refundCount: Number((r as any).refundCount ?? 0),
+            exchangeCount: Number((r as any).exchangeCount ?? 0),
+            returnNetAmount: (r as any).returnNetAmount ?? "0.00",
+            lastReturnAt: (r as any).lastReturnAt ?? null,
+            latestReturnedPreview: (r as any).latestReturnedPreview ?? null,
+            latestExchangePreview: (r as any).latestExchangePreview ?? null,
             syncStatus: (r as any).syncStatus ?? "synced",
           };
         });
@@ -285,6 +301,13 @@ export default function SalesListClient({
         customerName: s.customerName,
         status: s.status ?? "COMPLETED",
         voidReason: s.voidReason ?? null,
+        returnCount: Number(s.returnCount ?? 0),
+        refundCount: Number(s.refundCount ?? 0),
+        exchangeCount: Number(s.exchangeCount ?? 0),
+        returnNetAmount: s.returnNetAmount ?? "0.00",
+        lastReturnAt: s.lastReturnAt ?? null,
+        latestReturnedPreview: s.latestReturnedPreview ?? null,
+        latestExchangePreview: s.latestExchangePreview ?? null,
       }));
       db.sales.bulkPut(rows).catch((err) => {
         console.error("Seed Dexie sales failed", err);
@@ -339,7 +362,6 @@ export default function SalesListClient({
         renderedItems.map((s) => {
           const isVoided = (s.status || "").toUpperCase() === "VOIDED";
           const voidReason = s.voidReason || "";
-          const totalStr = Number(s.totalAmount || 0).toFixed(2);
           const paymentKey = s.paymentMethod?.toLowerCase?.() || "cash";
           const paymentText =
             paymentLabels[paymentKey] || s.paymentMethod || "নগদ";
@@ -353,10 +375,50 @@ export default function SalesListClient({
           const timeStr = formatTime(s.createdAt);
           const dateStr = formatDate(s.createdAt);
           const formId = `void-sale-${s.id}`;
+          const returnCount = Number(s.returnCount ?? 0);
+          const refundCount = Number(s.refundCount ?? 0);
+          const exchangeCount = Number(s.exchangeCount ?? 0);
+          const hasReturnFlow = !isVoided && returnCount > 0;
+          const hasRefundFlow = refundCount > 0;
+          const hasExchangeFlow = exchangeCount > 0;
+          const flowLabel =
+            hasRefundFlow && hasExchangeFlow
+              ? `${refundCount} রিটার্ন, ${exchangeCount} এক্সচেঞ্জ`
+              : hasExchangeFlow
+              ? `${exchangeCount} এক্সচেঞ্জ`
+              : hasRefundFlow
+              ? `${refundCount} রিটার্ন`
+              : `${returnCount} রিটার্ন/এক্সচেঞ্জ`;
+          const returnNet = Number(s.returnNetAmount ?? 0);
+          const latestReturnedPreview = s.latestReturnedPreview ?? null;
+          const latestExchangePreview = s.latestExchangePreview ?? null;
+          const baseTotal = Number(s.totalAmount ?? 0);
+          const baseTotalStr = baseTotal.toFixed(2);
+          const adjustedTotal = baseTotal + returnNet;
+          const displayTotal = hasReturnFlow ? adjustedTotal : baseTotal;
+          const displayTotalStr = displayTotal.toFixed(2);
+          const returnNetText = Math.abs(returnNet).toFixed(2);
+          const hasExchangeDetail = Boolean(
+            latestReturnedPreview || latestExchangePreview
+          );
           const statusPill = isVoided
             ? "bg-danger-soft text-danger border-danger/30"
+            : hasRefundFlow && hasExchangeFlow
+            ? "bg-warning-soft text-warning border-warning/30"
+            : hasExchangeFlow
+            ? "bg-primary-soft text-primary border-primary/30"
+            : hasRefundFlow
+            ? "bg-warning-soft text-warning border-warning/30"
             : "bg-success-soft text-success border-success/30";
-          const statusText = isVoided ? "❌ বাতিল" : "✅ পরিশোধিত";
+          const statusText = isVoided
+            ? "❌ বাতিল"
+            : hasRefundFlow && hasExchangeFlow
+            ? "↩️ রিটার্ন+এক্সচেঞ্জ"
+            : hasExchangeFlow
+            ? "🔁 এক্সচেঞ্জ"
+            : hasRefundFlow
+            ? "↩️ রিটার্ন"
+            : "✅ পরিশোধিত";
           const accentBorder = isVoided
             ? "border-l-4 border-l-danger/60"
             : "border-l-4 border-l-success/60";
@@ -371,9 +433,16 @@ export default function SalesListClient({
               <div className="space-y-1.5 p-2.5 sm:p-3">
                 <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-lg font-bold text-foreground sm:text-xl">
-                      ৳ {totalStr}
-                    </p>
+                    <div>
+                      <p className="text-lg font-bold text-foreground sm:text-xl">
+                        ৳ {displayTotalStr}
+                      </p>
+                      {hasReturnFlow && (
+                        <p className="text-[11px] text-muted-foreground">
+                          মূল বিল: ৳ {baseTotalStr}
+                        </p>
+                      )}
+                    </div>
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border shadow-[0_1px_0_rgba(0,0,0,0.04)] ${statusPill}`}
                     >
@@ -392,6 +461,11 @@ export default function SalesListClient({
                   <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-foreground border border-border">
                     {paymentText}
                   </span>
+                  {hasReturnFlow && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning border border-warning/30">
+                      ↩️ {flowLabel}
+                    </span>
+                  )}
                   {s.invoiceNo && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary border border-primary/30">
                       ইনভয়েস: {s.invoiceNo}
@@ -411,6 +485,44 @@ export default function SalesListClient({
                     বাতিলের কারণ: {voidReason}
                   </p>
                 )}
+                {hasReturnFlow && (
+                  <p className="text-xs text-muted-foreground">
+                    {hasRefundFlow && hasExchangeFlow
+                      ? `রিটার্ন+এক্সচেঞ্জ সমন্বয়: ${
+                          returnNet > 0
+                            ? `+৳${returnNetText}`
+                            : returnNet < 0
+                            ? `-৳${returnNetText}`
+                            : "৳0.00"
+                        } (চূড়ান্ত ৳${adjustedTotal.toFixed(2)})`
+                      : hasExchangeFlow
+                      ? `এক্সচেঞ্জ সমন্বয়: ${
+                          returnNet > 0
+                            ? `+৳${returnNetText}`
+                            : returnNet < 0
+                            ? `-৳${returnNetText}`
+                            : "৳0.00"
+                        } (চূড়ান্ত ৳${adjustedTotal.toFixed(2)})`
+                      : hasRefundFlow
+                      ? `রিটার্ন সমন্বয়: ${
+                          returnNet > 0
+                            ? `+৳${returnNetText}`
+                            : returnNet < 0
+                            ? `-৳${returnNetText}`
+                            : "৳0.00"
+                        } (চূড়ান্ত ৳${adjustedTotal.toFixed(2)})`
+                      : `নেট সমন্বয়: ৳0.00 (চূড়ান্ত ৳${adjustedTotal.toFixed(2)})`}
+                  </p>
+                )}
+                {hasReturnFlow && hasExchangeDetail && (
+                  <p className="text-xs text-muted-foreground">
+                    {latestReturnedPreview && latestExchangePreview
+                      ? `🔄 বদল: ${latestReturnedPreview} → ${latestExchangePreview}`
+                      : latestReturnedPreview
+                      ? `↩️ ফেরত: ${latestReturnedPreview}`
+                      : `🔁 এক্সচেঞ্জ: ${latestExchangePreview}`}
+                  </p>
+                )}
                 {isDueSale && !isVoided && (
                   <p className="text-xs text-warning">
                     বাকির বিক্রি – কাস্টমার লেজারে পরিশোধ করুন
@@ -426,6 +538,14 @@ export default function SalesListClient({
                       className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary border border-primary/30 hover:bg-primary/15"
                     >
                       ইনভয়েস দেখুন
+                    </Link>
+                  ) : null}
+                  {online && !isVoided && canReturnSale ? (
+                    <Link
+                      href={`/dashboard/sales/${s.id}/return`}
+                      className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-3 py-1 text-xs font-semibold text-warning border border-warning/30 hover:bg-warning/15"
+                    >
+                      রিটার্ন / এক্সচেঞ্জ
                     </Link>
                   ) : null}
                   {!online && (
