@@ -49,6 +49,7 @@ type ProductListRow = {
   buyPrice?: string | null;
   sellPrice: string;
   stockQty: string;
+  trackStock: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -268,6 +269,7 @@ export async function getProductsByShopPaginated({
       buyPrice: true,
       sellPrice: true,
       stockQty: true,
+      trackStock: true,
       isActive: true,
       createdAt: true,
       updatedAt: true,
@@ -285,6 +287,7 @@ export async function getProductsByShopPaginated({
       product.buyPrice === null ? null : product.buyPrice?.toString() ?? null,
     sellPrice: product.sellPrice.toString(),
     stockQty: product.stockQty.toString(),
+    trackStock: Boolean(product.trackStock),
     isActive: product.isActive,
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
@@ -360,6 +363,7 @@ export async function getProductsByShopCursorPaginated({
         buyPrice: true,
         sellPrice: true,
         stockQty: true,
+        trackStock: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -378,6 +382,7 @@ export async function getProductsByShopCursorPaginated({
     buyPrice: p.buyPrice?.toString?.() ?? (p as any).buyPrice ?? null,
     sellPrice: p.sellPrice?.toString?.() ?? (p as any).sellPrice ?? "0",
     stockQty: p.stockQty?.toString?.() ?? (p as any).stockQty ?? "0",
+    trackStock: Boolean(p.trackStock),
     isActive: p.isActive,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),

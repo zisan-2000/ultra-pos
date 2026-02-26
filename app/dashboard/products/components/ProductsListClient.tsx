@@ -39,6 +39,7 @@ type Product = {
   buyPrice?: string | null;
   sellPrice: string;
   stockQty: string;
+  trackStock?: boolean | null;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -86,6 +87,10 @@ type Props = {
 const MAX_PAGE_BUTTONS = 5;
 const OFFLINE_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
+const UNTRACKED_STOCK_CLASSES = {
+  card: "border-border bg-muted/40",
+  label: "text-muted-foreground",
+};
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -260,6 +265,7 @@ export default function ProductsListClient({
               buyPrice: p.buyPrice ?? null,
               sellPrice: p.sellPrice,
               stockQty: p.stockQty,
+              trackStock: p.trackStock ?? false,
               isActive: p.isActive,
               createdAt: p.updatedAt?.toString?.() || "",
             }))
@@ -428,7 +434,10 @@ export default function ProductsListClient({
     : filteredProducts.slice(startIndex, startIndex + OFFLINE_PAGE_SIZE);
 
   const selectedStockClasses = useMemo(
-    () => getStockToneClasses(Number(selectedProduct?.stockQty ?? 0)),
+    () =>
+      selectedProduct?.trackStock === true
+        ? getStockToneClasses(Number(selectedProduct.stockQty ?? 0))
+        : UNTRACKED_STOCK_CLASSES,
     [selectedProduct]
   );
 
@@ -626,6 +635,7 @@ export default function ProductsListClient({
           buyPrice: item.buyPrice ?? null,
           sellPrice: item.sellPrice,
           stockQty: item.stockQty,
+          trackStock: item.trackStock ?? false,
           isActive: item.isActive,
           createdAt: item.updatedAt.toString(),
         })),
@@ -683,7 +693,7 @@ export default function ProductsListClient({
       const markArchived = () => {
         setProducts((prev) => {
           const next = prev.map((p) =>
-            p.id === id ? { ...p, isActive: false } : p
+            p.id === id ? { ...p, isActive: false, trackStock: false } : p
           );
           persistCache(next);
           return next;
@@ -1160,7 +1170,13 @@ export default function ProductsListClient({
 
 
       {/* Products List - Scrolls normally */}
-      <div className="space-y-3">
+      <div
+        className={
+          visibleProducts.length === 0
+            ? "space-y-3"
+            : "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        }
+      >
         {visibleProducts.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-6xl mb-4">📦</div>
@@ -1175,22 +1191,23 @@ export default function ProductsListClient({
           </div>
         ) : (
           visibleProducts.map((product) => {
-            const stockClasses = getStockToneClasses(
-              Number(product.stockQty ?? 0)
-            );
+            const tracksStock = product.trackStock === true;
+            const stockClasses = tracksStock
+              ? getStockToneClasses(Number(product.stockQty ?? 0))
+              : UNTRACKED_STOCK_CLASSES;
             const cardAccent = product.isActive
               ? "border-l-4 border-l-success/60"
               : "border-l-4 border-l-muted-foreground/30";
             return (
               <div
                 key={product.id}
-                className={`bg-card rounded-2xl shadow-sm border border-border overflow-hidden transition card-lift hover:shadow-md active:scale-[0.98] ${cardAccent}`}
+                className={`h-full min-h-[250px] bg-card rounded-2xl shadow-sm border border-border overflow-hidden transition card-lift hover:shadow-md active:scale-[0.98] ${cardAccent}`}
                 onClick={() => {
                   setSelectedProduct(product);
                   triggerHaptic("light");
                 }}
               >
-                <div className="p-4">
+                <div className="flex h-full flex-col p-4">
                 {/* Product Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0 pr-3">
@@ -1234,7 +1251,7 @@ export default function ProductsListClient({
                       স্টক
                     </p>
                     <p className="text-lg font-bold text-foreground">
-                      {product.stockQty}
+                      {tracksStock ? product.stockQty : "N/A"}
                     </p>
                   </div>
                 </div>
@@ -1246,7 +1263,7 @@ export default function ProductsListClient({
                       canUpdateProducts && canDeleteProducts
                         ? "grid-cols-2"
                         : "grid-cols-1"
-                    }`}
+                    } mt-auto`}
                   >
                     {canUpdateProducts ? (
                       <Link
@@ -1283,7 +1300,7 @@ export default function ProductsListClient({
                     ) : null}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="mt-auto text-xs text-muted-foreground">
                     এডিট/ডিলিট অনুমতি নেই।
                   </p>
                 )}
@@ -1398,7 +1415,7 @@ export default function ProductsListClient({
                     স্টক
   </p>
   <p className="text-2xl font-bold text-foreground">
-    {selectedProduct.stockQty}
+    {selectedProduct.trackStock === true ? selectedProduct.stockQty : "N/A"}
   </p>
 </div>
                 <div className="bg-muted rounded-xl p-4 border border-border">
