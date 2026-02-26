@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSaleInvoiceDetails } from "@/app/actions/sales";
 import { requireUser } from "@/lib/auth-session";
 import { canViewSalesInvoice } from "@/lib/sales-invoice";
+import { canManageSaleReturn } from "@/lib/sales-return";
 import PrintInvoiceButton from "./PrintInvoiceButton";
 
 type PageProps = {
@@ -41,6 +42,7 @@ const paymentLabel: Record<string, string> = {
 
 export default async function SalesInvoicePage({ params }: PageProps) {
   const user = await requireUser();
+  const canReturnSale = canManageSaleReturn(user);
   if (!canViewSalesInvoice(user)) {
     return (
       <div className="mx-auto max-w-2xl p-4 sm:p-6">
@@ -110,7 +112,7 @@ export default async function SalesInvoicePage({ params }: PageProps) {
           >
             বিক্রিতে ফিরে যান
           </Link>
-          {!isVoided ? (
+          {!isVoided && canReturnSale ? (
             <Link
               href={`/dashboard/sales/${data.saleId}/return`}
               className="inline-flex h-10 items-center rounded-full border border-warning/30 bg-warning-soft px-4 text-sm font-semibold text-warning hover:bg-warning/15"

@@ -33,9 +33,7 @@ export function formatSaleReturnNo(
 }
 
 export function canManageSaleReturn(user: UserContext) {
-  return (
-    hasPermission(user, "create_sale_return") || hasPermission(user, "create_sale")
-  );
+  return hasPermission(user, "create_sale_return");
 }
 
 export function canViewSaleReturn(user: UserContext) {
