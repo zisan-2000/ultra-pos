@@ -5,6 +5,8 @@ const RESERVED_SLUGS = new Set([
   "dashboard",
   "login",
   "register",
+  "forgot-password",
+  "reset-password",
   "offline",
   "api",
   "_next",
@@ -49,7 +51,10 @@ export function proxy(req: NextRequest) {
   }
 
   const isAuthPage =
-    pathname.startsWith("/login") || pathname.startsWith("/register");
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password");
 
   // Backward-compatible shortcut routes.
   if (pathname === "/sales" || pathname.startsWith("/sales/")) {

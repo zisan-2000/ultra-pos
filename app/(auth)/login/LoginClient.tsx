@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import { LogIn } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -129,12 +128,12 @@ export default function LoginPage() {
 
           {/* only forgot password (no register) */}
           <div className="text-center">
-            <Link
+            <a
               href="/forgot-password"
               className="text-sm text-primary hover:text-primary-hover hover:underline"
             >
               পাসওয়ার্ড মনে পড়ছে না?
-            </Link>
+            </a>
           </div>
 
           {/* trust line */}

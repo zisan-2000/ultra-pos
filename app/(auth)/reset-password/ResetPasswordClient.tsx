@@ -23,6 +23,8 @@ function ResetPasswordPageInner() {
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -88,30 +90,50 @@ function ResetPasswordPageInner() {
             <label className="text-sm font-medium text-foreground">
               নতুন পাসওয়ার্ড
             </label>
-            <input
-              type="password"
-              required
-              minLength={8}
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="কমপক্ষে ৮ অক্ষর"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={8}
+                className="w-full border border-border rounded-lg px-3 py-2 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="কমপক্ষে ৮ অক্ষর"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((p) => !p)}
+                className="absolute inset-y-0 right-3 text-lg text-muted-foreground hover:text-foreground/70"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "🙈" : "👁"}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">
               কনফার্ম পাসওয়ার্ড
             </label>
-            <input
-              type="password"
-              required
-              minLength={8}
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="আবার লিখুন"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-            />
+            <div className="relative">
+              <input
+                type={showConfirm ? "text" : "password"}
+                required
+                minLength={8}
+                className="w-full border border-border rounded-lg px-3 py-2 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="আবার লিখুন"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm((p) => !p)}
+                className="absolute inset-y-0 right-3 text-lg text-muted-foreground hover:text-foreground/70"
+                aria-label={showConfirm ? "Hide password" : "Show password"}
+              >
+                {showConfirm ? "🙈" : "👁"}
+              </button>
+            </div>
           </div>
 
           <button

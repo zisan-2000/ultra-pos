@@ -6,8 +6,8 @@
 
 const CACHE_PREFIX = "pos-cache-";
 // Bump this when deploying so clients drop old Next.js bundles & action IDs.
-const CACHE_NAME = `${CACHE_PREFIX}v13`;
-const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v13`;
+const CACHE_NAME = `${CACHE_PREFIX}v14`;
+const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v14`;
 
 const PRECACHE_URLS = [
   "/offline",

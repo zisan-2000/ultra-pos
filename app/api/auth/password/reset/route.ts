@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
+import crypto from "crypto";
+import { rateLimit } from "@/lib/rate-limit";
 
 const RESET_TYPE = "password_reset";
 
@@ -25,8 +27,24 @@ function validatePassword(password: string) {
   }
 }
 
+function hashResetToken(rawToken: string) {
+  return crypto.createHash("sha256").update(rawToken).digest("hex");
+}
+
 export async function POST(req: Request) {
   try {
+    const rl = await rateLimit(req, {
+      windowMs: 10 * 60_000,
+      max: 20,
+      keyPrefix: "auth-reset-password",
+    });
+    if (rl.limited) {
+      return NextResponse.json(
+        { success: false, error: "অনেকবার চেষ্টা হয়েছে, একটু পরে আবার চেষ্টা করুন" },
+        { status: 429, headers: rl.headers }
+      );
+    }
+
     const body = (await req.json()) as ResetRequest;
     const token = body.token?.trim();
     const password = body.password?.trim() ?? "";
@@ -39,9 +57,10 @@ export async function POST(req: Request) {
     }
 
     validatePassword(password);
+    const hashedToken = hashResetToken(token);
 
-    const verification = await prisma.verification.findUnique({
-      where: { token },
+    let verification = await prisma.verification.findUnique({
+      where: { token: hashedToken },
       select: {
         id: true,
         userId: true,
@@ -50,6 +69,20 @@ export async function POST(req: Request) {
         type: true,
       },
     });
+
+    // Backward compatibility for links issued before token hashing rollout.
+    if (!verification) {
+      verification = await prisma.verification.findUnique({
+        where: { token },
+        select: {
+          id: true,
+          userId: true,
+          identifier: true,
+          expiresAt: true,
+          type: true,
+        },
+      });
+    }
 
     if (
       !verification ||
