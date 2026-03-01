@@ -11,6 +11,8 @@ export async function handleCreateShop(formData: FormData) {
     formData.has("queueTokenEnabled") ||
     formData.has("queueTokenPrefix") ||
     formData.has("queueWorkflow");
+  const hasBarcodeSettings =
+    formData.has("barcodeFeatureEntitled") || formData.has("barcodeScanEnabled");
 
   await createShop({
     name: formData.get("name") as string,
@@ -34,6 +36,13 @@ export async function handleCreateShop(formData: FormData) {
             null,
           queueWorkflow:
             ((formData.get("queueWorkflow") as string) || "").trim() || null,
+        }
+      : {}),
+    ...(hasBarcodeSettings
+      ? {
+          barcodeFeatureEntitled:
+            formData.get("barcodeFeatureEntitled") === "1",
+          barcodeScanEnabled: formData.get("barcodeScanEnabled") === "1",
         }
       : {}),
   });

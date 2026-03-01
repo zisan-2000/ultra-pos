@@ -85,6 +85,15 @@ export const permissionMeta: Record<string, PermissionMeta> = {
     label: "দোকান টোকেন ফিচার ম্যানেজ",
     module: "shops",
   },
+  manage_shop_barcode_entitlement: {
+    label: "দোকান বারকোড entitlement ম্যানেজ",
+    module: "shops",
+    critical: true,
+  },
+  manage_shop_barcode_feature: {
+    label: "দোকান বারকোড স্ক্যান ফিচার ম্যানেজ",
+    module: "shops",
+  },
   delete_shop: { label: "দোকান মুছে ফেলা", module: "shops", critical: true },
   switch_shop: { label: "শপ সুইচ", module: "shops" },
   view_products: { label: "পণ্য দেখা", module: "products" },
@@ -106,6 +115,7 @@ export const permissionMeta: Record<string, PermissionMeta> = {
   view_sale_return: { label: "সেল রিটার্ন দেখা", module: "sales" },
   create_sale: { label: "নতুন বিক্রি", module: "sales" },
   create_sale_return: { label: "সেল রিটার্ন প্রসেস", module: "sales" },
+  use_pos_barcode_scan: { label: "POS বারকোড/এসকেইউ স্ক্যান ব্যবহার", module: "sales" },
   issue_sales_invoice: { label: "বিক্রির ইনভয়েস ইস্যু", module: "sales" },
   view_queue_board: { label: "টোকেন বোর্ড দেখা", module: "queue" },
   create_queue_token: { label: "টোকেন তৈরি", module: "queue" },

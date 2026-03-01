@@ -23,6 +23,16 @@ export default async function NewShopPage() {
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_queue_feature"))
   );
+  const canManageBarcodeEntitlement = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_barcode_entitlement"))
+  );
+  const canManageBarcodeFeature = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_barcode_feature"))
+  );
   const shops = isSuperAdmin ? [] : await getShopsByUser();
   const canOwnerCreateFirstShop = isOwner && shops.length === 0;
 
@@ -67,6 +77,8 @@ export default async function NewShopPage() {
         businessTypeOptions={mergedBusinessTypes}
         showSalesInvoiceSettings={canManageSalesInvoice}
         showQueueTokenSettings={canManageQueueToken}
+        showBarcodeSettings={canManageBarcodeEntitlement || canManageBarcodeFeature}
+        canEditBarcodeEntitlement={canManageBarcodeEntitlement}
       />
     </div>
   );

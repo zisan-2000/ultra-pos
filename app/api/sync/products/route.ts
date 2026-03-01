@@ -17,6 +17,8 @@ const productCreateSchema = z.object({
   shopId: z.string(),
   name: z.string().optional(),
   category: z.string().optional(),
+  sku: z.string().optional().nullable(),
+  barcode: z.string().optional().nullable(),
   buyPrice: z.union([z.string(), z.number()]).optional().nullable(),
   sellPrice: z.union([z.string(), z.number()]).optional(),
   stockQty: z.union([z.string(), z.number()]).optional(),
@@ -74,6 +76,13 @@ function toMoneyString(
   return num.toFixed(2);
 }
 
+function normalizeCode(value: string | null | undefined) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const normalized = value.trim().replace(/\s+/g, "").toUpperCase().slice(0, 80);
+  return normalized || null;
+}
+
 function sanitizeCreate(item: IncomingProduct) {
   const shopId = item.shopId;
   if (!shopId) throw new Error("shopId is required");
@@ -85,12 +94,16 @@ function sanitizeCreate(item: IncomingProduct) {
   const buyPrice = item.buyPrice !== undefined
     ? toMoneyString(item.buyPrice, "buyPrice", { allowNull: true })
     : undefined;
+  const sku = normalizeCode(item.sku);
+  const barcode = normalizeCode(item.barcode);
 
   return {
     id: item.id, // keep client-generated id when present
     shopId,
     name: item.name || "Unnamed product",
     category: item.category || "Uncategorized",
+    sku: sku === undefined ? undefined : sku,
+    barcode: barcode === undefined ? undefined : barcode,
     buyPrice: buyPrice === undefined ? undefined : buyPrice, // undefined omits field, null sets null
     sellPrice,
     stockQty,
@@ -107,6 +120,8 @@ function sanitizeUpdate(item: IncomingProduct) {
 
   if (item.name !== undefined) payload.name = item.name || "Unnamed product";
   if (item.category !== undefined) payload.category = item.category || "Uncategorized";
+  if (item.sku !== undefined) payload.sku = normalizeCode(item.sku);
+  if (item.barcode !== undefined) payload.barcode = normalizeCode(item.barcode);
   if (item.isActive !== undefined) payload.isActive = Boolean(item.isActive);
   if (item.trackStock !== undefined) payload.trackStock = Boolean(item.trackStock);
 

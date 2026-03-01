@@ -25,6 +25,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
   const canCreateDueSale = hasPermission(user, "create_due_sale");
   const canViewCustomers = hasPermission(user, "view_customers");
   const canViewDuePage = hasPermission(user, "view_due_summary");
+  const canUseBarcodeScanPermission = hasPermission(user, "use_pos_barcode_scan");
 
   if (!canViewProducts) {
     return (
@@ -74,6 +75,10 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       : cookieSelectedShopId ?? shops[0].id;
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
+  const canUseBarcodeScan =
+    Boolean((selectedShop as any).barcodeFeatureEntitled) &&
+    Boolean((selectedShop as any).barcodeScanEnabled) &&
+    canUseBarcodeScanPermission;
   const products = await getActiveProductsByShop(selectedShopId);
 
   async function submitSale(formData: FormData) {
@@ -120,6 +125,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       canCreateDueSale={canCreateDueSale}
       canViewCustomers={canViewCustomers}
       canViewDuePage={canViewDuePage}
+      canUseBarcodeScan={canUseBarcodeScan}
       submitSale={submitSale}
     />
   );

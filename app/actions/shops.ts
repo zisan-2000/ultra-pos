@@ -87,6 +87,8 @@ export async function createShop(data: {
   queueTokenEnabled?: boolean;
   queueTokenPrefix?: string | null;
   queueWorkflow?: string | null;
+  barcodeFeatureEntitled?: boolean;
+  barcodeScanEnabled?: boolean;
 }) {
   const user = await getCurrentUser();
   const isSuperAdmin = user.roles?.includes("super_admin") ?? false;
@@ -138,30 +140,53 @@ export async function createShop(data: {
     requirePermission(user, "manage_shop_queue_feature");
   }
 
+  const wantsBarcodeEntitlementChange = data.barcodeFeatureEntitled === true;
+  if (wantsBarcodeEntitlementChange) {
+    requirePermission(user, "manage_shop_barcode_entitlement");
+  }
+  const wantsBarcodeFeatureChange = data.barcodeScanEnabled !== undefined;
+  if (wantsBarcodeFeatureChange) {
+    requirePermission(user, "manage_shop_barcode_feature");
+  }
+
+  const resolvedBarcodeEntitled = Boolean(data.barcodeFeatureEntitled ?? false);
+  const resolvedBarcodeScanEnabled = Boolean(data.barcodeScanEnabled ?? false);
+  if (resolvedBarcodeScanEnabled && !resolvedBarcodeEntitled) {
+    throw new Error(
+      "Barcode scan cannot be enabled before super-admin entitlement is turned on"
+    );
+  }
+
   await prisma.$transaction(async (tx) => {
+    const createData: any = {
+      ownerId: targetOwnerId,
+      name: data.name,
+      address: data.address || "",
+      phone: data.phone || "",
+      businessType: data.businessType || "tea_stall",
+      barcodeFeatureEntitled: resolvedBarcodeEntitled,
+      barcodeScanEnabled: resolvedBarcodeEntitled
+        ? resolvedBarcodeScanEnabled
+        : false,
+      ...(data.salesInvoiceEnabled !== undefined
+        ? { salesInvoiceEnabled: Boolean(data.salesInvoiceEnabled) }
+        : {}),
+      ...(data.salesInvoicePrefix !== undefined
+        ? { salesInvoicePrefix: sanitizeSalesInvoicePrefix(data.salesInvoicePrefix) }
+        : {}),
+      ...(data.queueTokenEnabled !== undefined
+        ? { queueTokenEnabled: Boolean(data.queueTokenEnabled) }
+        : {}),
+      ...(data.queueTokenPrefix !== undefined
+        ? { queueTokenPrefix: sanitizeQueueTokenPrefix(data.queueTokenPrefix) }
+        : {}),
+      ...(data.queueWorkflow !== undefined
+        ? { queueWorkflow: sanitizeQueueWorkflow(data.queueWorkflow) }
+        : {}),
+    };
+
     const shop = await tx.shop.create({
-      data: {
-        ownerId: targetOwnerId,
-        name: data.name,
-        address: data.address || "",
-        phone: data.phone || "",
-        businessType: data.businessType || "tea_stall",
-        ...(data.salesInvoiceEnabled !== undefined
-          ? { salesInvoiceEnabled: Boolean(data.salesInvoiceEnabled) }
-          : {}),
-        ...(data.salesInvoicePrefix !== undefined
-          ? { salesInvoicePrefix: sanitizeSalesInvoicePrefix(data.salesInvoicePrefix) }
-          : {}),
-        ...(data.queueTokenEnabled !== undefined
-          ? { queueTokenEnabled: Boolean(data.queueTokenEnabled) }
-          : {}),
-        ...(data.queueTokenPrefix !== undefined
-          ? { queueTokenPrefix: sanitizeQueueTokenPrefix(data.queueTokenPrefix) }
-          : {}),
-        ...(data.queueWorkflow !== undefined
-          ? { queueWorkflow: sanitizeQueueWorkflow(data.queueWorkflow) }
-          : {}),
-      },
+      data: createData,
     });
 
     await createShopSubscription(tx, { id: shop.id, ownerId: shop.ownerId });
@@ -192,19 +217,31 @@ export async function getOwnerOptions() {
 // ------------------------------
 export async function getShopsByUser() {
   const user = await getCurrentUser();
+  const isSuperAdmin = user.roles?.includes("super_admin");
   const isOwner = user.roles?.includes("owner");
   const isStaff = user.roles?.includes("staff");
+  const ownerSelect = { id: true, name: true, email: true };
+
+  if (isSuperAdmin) {
+    return prisma.shop.findMany({
+      include: { owner: { select: ownerSelect } },
+      orderBy: [{ ownerId: "asc" }, { createdAt: "desc" }, { name: "asc" }],
+    });
+  }
 
   if (isStaff && !isOwner) {
     if (!user.staffShopId) return [];
     const shop = await prisma.shop.findUnique({
       where: { id: user.staffShopId },
+      include: { owner: { select: ownerSelect } },
     });
     return shop ? [shop] : [];
   }
 
   return prisma.shop.findMany({
     where: { ownerId: user.id },
+    include: { owner: { select: ownerSelect } },
+    orderBy: [{ createdAt: "desc" }, { name: "asc" }],
   });
 }
 
@@ -222,7 +259,8 @@ export async function getShop(id: string) {
 export async function updateShop(id: string, data: any) {
   const user = await getCurrentUser();
   const shop = await assertShopAccess(id, user);
-  if (shop.ownerId !== user.id) {
+  const isSuperAdmin = user.roles?.includes("super_admin") ?? false;
+  if (!isSuperAdmin && shop.ownerId !== user.id) {
     throw new Error("Unauthorized");
   }
 
@@ -266,6 +304,34 @@ export async function updateShop(id: string, data: any) {
     }
   }
 
+  const wantsBarcodeEntitlementChange = data.barcodeFeatureEntitled !== undefined;
+  if (wantsBarcodeEntitlementChange) {
+    requirePermission(user, "manage_shop_barcode_entitlement");
+    (updateData as any).barcodeFeatureEntitled = Boolean(data.barcodeFeatureEntitled);
+  }
+
+  const wantsBarcodeFeatureChange = data.barcodeScanEnabled !== undefined;
+  if (wantsBarcodeFeatureChange) {
+    requirePermission(user, "manage_shop_barcode_feature");
+
+    const effectiveEntitlement =
+      data.barcodeFeatureEntitled !== undefined
+        ? Boolean(data.barcodeFeatureEntitled)
+        : Boolean((shop as any).barcodeFeatureEntitled);
+
+    if (Boolean(data.barcodeScanEnabled) && !effectiveEntitlement) {
+      throw new Error(
+        "Barcode scan cannot be enabled before super-admin entitlement is turned on"
+      );
+    }
+
+    (updateData as any).barcodeScanEnabled = Boolean(data.barcodeScanEnabled);
+  }
+
+  if (data.barcodeFeatureEntitled !== undefined && !Boolean(data.barcodeFeatureEntitled)) {
+    (updateData as any).barcodeScanEnabled = false;
+  }
+
   await prisma.shop.update({
     where: { id },
     data: updateData,
@@ -279,7 +345,8 @@ export async function updateShop(id: string, data: any) {
 export async function deleteShop(id: string) {
   const user = await getCurrentUser();
   const shop = await assertShopAccess(id, user);
-  if (shop.ownerId !== user.id) {
+  const isSuperAdmin = user.roles?.includes("super_admin") ?? false;
+  if (!isSuperAdmin && shop.ownerId !== user.id) {
     throw new Error("Unauthorized");
   }
 

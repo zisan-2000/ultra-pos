@@ -17,9 +17,12 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type PosProductSearchProps = {
   shopId: string;
+  canUseBarcodeScan: boolean;
   products: {
     id: string;
     name: string;
+    sku?: string | null;
+    barcode?: string | null;
     sellPrice: string;
     stockQty?: string | number;
     category?: string | null;
@@ -84,6 +87,10 @@ function normalizeCategory(raw?: string | null) {
 
 function toNumber(val: string | number | undefined) {
   return Number(val ?? 0);
+}
+
+function normalizeCodeInput(value: string) {
+  return value.trim().replace(/\s+/g, "").toUpperCase();
 }
 
 function formatCategoryLabel(raw: string) {
@@ -188,8 +195,14 @@ const ProductButton = memo(function ProductButton({
 export const PosProductSearch = memo(function PosProductSearch({
   products,
   shopId,
+  canUseBarcodeScan,
 }: PosProductSearchProps) {
   const [query, setQuery] = useState("");
+  const [scanCode, setScanCode] = useState("");
+  const [scanFeedback, setScanFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [activeCategory, setActiveCategory] = useState("all");
   const [usage, setUsage] = useState<Record<string, UsageEntry>>(() => {
     if (typeof window === "undefined") return {};
@@ -225,6 +238,7 @@ export const PosProductSearch = memo(function PosProductSearch({
   const add = useCart((s: any) => s.add);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const scanInputRef = useRef<HTMLInputElement | null>(null);
   const lastAddRef = useRef(0);
   const recentlyAddedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -299,6 +313,17 @@ export const PosProductSearch = memo(function PosProductSearch({
       byId.set(p.id, p);
     });
     return byId;
+  }, [productsWithCategory]);
+
+  const productByCode = useMemo(() => {
+    const byCode = new Map<string, EnrichedProduct>();
+    productsWithCategory.forEach((p) => {
+      const normalizedSku = normalizeCodeInput(p.sku || "");
+      const normalizedBarcode = normalizeCodeInput(p.barcode || "");
+      if (normalizedSku) byCode.set(normalizedSku, p);
+      if (normalizedBarcode) byCode.set(normalizedBarcode, p);
+    });
+    return byCode;
   }, [productsWithCategory]);
 
   useEffect(() => {
@@ -412,9 +437,15 @@ export const PosProductSearch = memo(function PosProductSearch({
     const term = debouncedQuery.trim().toLowerCase();
     if (!term) return filteredByCategory;
 
-    return filteredByCategory.filter((p) =>
-      p.name.toLowerCase().includes(term)
-    );
+    return filteredByCategory.filter((p) => {
+      const normalizedSku = (p.sku || "").toLowerCase();
+      const normalizedBarcode = (p.barcode || "").toLowerCase();
+      return (
+        p.name.toLowerCase().includes(term) ||
+        normalizedSku.includes(term) ||
+        normalizedBarcode.includes(term)
+      );
+    });
   }, [filteredByCategory, debouncedQuery]);
 
   const shouldSort = showAllProducts || debouncedQuery.trim().length > 0;
@@ -565,6 +596,34 @@ export const PosProductSearch = memo(function PosProductSearch({
     [addToCart]
   );
 
+  const handleScanLookup = useCallback(() => {
+    const normalizedCode = normalizeCodeInput(scanCode);
+    if (!normalizedCode) return;
+
+    const product = productByCode.get(normalizedCode);
+    if (!product) {
+      setScanFeedback({
+        type: "error",
+        message: `কোড ${normalizedCode} পাওয়া যায়নি`,
+      });
+      return;
+    }
+
+    handleAddToCart(product);
+    setScanFeedback({
+      type: "success",
+      message: `${product.name} কার্টে যোগ হয়েছে`,
+    });
+    setScanCode("");
+    scanInputRef.current?.focus();
+  }, [scanCode, productByCode, handleAddToCart]);
+
+  useEffect(() => {
+    if (!scanFeedback) return;
+    const id = setTimeout(() => setScanFeedback(null), 2200);
+    return () => clearTimeout(id);
+  }, [scanFeedback]);
+
   const startVoice = () => {
     if (listening) return;
     const SpeechRecognitionImpl =
@@ -701,6 +760,45 @@ export const PosProductSearch = memo(function PosProductSearch({
             <span className="text-danger">{voiceErrorText}</span>
           ) : null}
         </p>
+
+        {canUseBarcodeScan ? (
+          <div className="rounded-xl border border-primary/20 bg-primary-soft/40 p-2.5">
+            <div className="flex items-center gap-2">
+              <input
+                ref={scanInputRef}
+                type="text"
+                inputMode="text"
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="off"
+                value={scanCode}
+                onChange={(e) => setScanCode(normalizeCodeInput(e.target.value))}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  handleScanLookup();
+                }}
+                className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Barcode / SKU স্ক্যান করুন"
+              />
+              <button
+                type="button"
+                onClick={handleScanLookup}
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-primary-soft px-3 text-xs font-semibold text-primary"
+              >
+                Scan যোগ
+              </button>
+            </div>
+            <p
+              className={`mt-1 text-xs ${
+                scanFeedback?.type === "error" ? "text-danger" : "text-muted-foreground"
+              }`}
+            >
+              {scanFeedback?.message ||
+                "Scanner সাধারণত Enter পাঠায়, তাই স্ক্যান করলেই আইটেম যোগ হবে।"}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       {/* Quick buttons: visible only when not searching to prioritize results */}

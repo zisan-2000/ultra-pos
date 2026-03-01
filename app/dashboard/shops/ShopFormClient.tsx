@@ -49,12 +49,16 @@ type Props = {
     queueTokenEnabled?: boolean;
     queueTokenPrefix?: string | null;
     queueWorkflow?: string | null;
+    barcodeFeatureEntitled?: boolean;
+    barcodeScanEnabled?: boolean;
   };
   submitLabel?: string;
   ownerOptions?: Array<{ id: string; name: string | null; email: string | null }>;
   businessTypeOptions?: Array<{ id: string; label: string }>;
   showSalesInvoiceSettings?: boolean;
   showQueueTokenSettings?: boolean;
+  showBarcodeSettings?: boolean;
+  canEditBarcodeEntitlement?: boolean;
 };
 
 const SHOP_TEMPLATE_KEY = "shopTemplates:v1";
@@ -114,6 +118,8 @@ export default function ShopFormClient({
   businessTypeOptions,
   showSalesInvoiceSettings = false,
   showQueueTokenSettings = false,
+  showBarcodeSettings = false,
+  canEditBarcodeEntitlement = false,
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -145,6 +151,12 @@ export default function ShopFormClient({
   );
   const [queueWorkflow, setQueueWorkflow] = useState<string>(
     initial?.queueWorkflow || ""
+  );
+  const [barcodeFeatureEntitled, setBarcodeFeatureEntitled] = useState<boolean>(
+    Boolean(initial?.barcodeFeatureEntitled ?? false)
+  );
+  const [barcodeScanEnabled, setBarcodeScanEnabled] = useState<boolean>(
+    Boolean(initial?.barcodeScanEnabled ?? false)
   );
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const hasOwnerOptions = Boolean(ownerOptions && ownerOptions.length > 0);
@@ -399,6 +411,10 @@ export default function ShopFormClient({
       .replace(/[^A-Z0-9]/g, "")
       .slice(0, 12);
     const payloadQueueWorkflow = (queueWorkflow || "").trim().toLowerCase();
+    const payloadBarcodeFeatureEntitled = Boolean(barcodeFeatureEntitled);
+    const payloadBarcodeScanEnabled = payloadBarcodeFeatureEntitled
+      ? Boolean(barcodeScanEnabled)
+      : false;
 
     form.set("name", payloadName);
     form.set("address", payloadAddress);
@@ -412,6 +428,15 @@ export default function ShopFormClient({
       form.set("queueTokenEnabled", payloadQueueTokenEnabled ? "1" : "0");
       form.set("queueTokenPrefix", payloadQueueTokenPrefix);
       form.set("queueWorkflow", payloadQueueWorkflow);
+    }
+    if (showBarcodeSettings) {
+      if (canEditBarcodeEntitlement) {
+        form.set(
+          "barcodeFeatureEntitled",
+          payloadBarcodeFeatureEntitled ? "1" : "0"
+        );
+      }
+      form.set("barcodeScanEnabled", payloadBarcodeScanEnabled ? "1" : "0");
     }
     if (ownerOptions) {
       form.set("ownerId", selectedOwnerId);
@@ -445,6 +470,14 @@ export default function ShopFormClient({
                 queueTokenEnabled: payloadQueueTokenEnabled,
                 queueTokenPrefix: payloadQueueTokenPrefix || null,
                 queueWorkflow: payloadQueueWorkflow || null,
+              }
+            : {}),
+          ...(showBarcodeSettings
+            ? {
+                ...(canEditBarcodeEntitlement
+                  ? { barcodeFeatureEntitled: payloadBarcodeFeatureEntitled }
+                  : {}),
+                barcodeScanEnabled: payloadBarcodeScanEnabled,
               }
             : {}),
           ownerId: ownerOptions ? selectedOwnerId || null : null,
@@ -771,6 +804,58 @@ export default function ShopFormClient({
               Auto দিলে ব্যবসার ধরন দেখে status label/flow ঠিক হবে।
             </p>
           </div>
+        </div>
+      ) : null}
+
+      {showBarcodeSettings ? (
+        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
+          <div className="space-y-1">
+            <label className="block text-sm font-semibold text-foreground">
+              Barcode / SKU Scan ফিচার
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Super-admin entitlement + owner toggle + staff permission একসাথে
+              true হলে POS scan দেখাবে।
+            </p>
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={barcodeFeatureEntitled}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setBarcodeFeatureEntitled(next);
+                if (!next) {
+                  setBarcodeScanEnabled(false);
+                }
+              }}
+              disabled={!canEditBarcodeEntitlement}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+            />
+            এই দোকানে Barcode entitlement চালু
+          </label>
+          {!canEditBarcodeEntitlement ? (
+            <p className="text-xs text-muted-foreground">
+              এই entitlement শুধু super-admin পরিবর্তন করতে পারবেন।
+            </p>
+          ) : null}
+
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={barcodeScanEnabled}
+              onChange={(e) => setBarcodeScanEnabled(e.target.checked)}
+              disabled={!barcodeFeatureEntitled}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+            />
+            POS-এ Barcode/SKU scan চালু
+          </label>
+          {!barcodeFeatureEntitled ? (
+            <p className="text-xs text-warning">
+              প্রথমে entitlement চালু না হলে scan toggle activate হবে না।
+            </p>
+          ) : null}
         </div>
       ) : null}
 

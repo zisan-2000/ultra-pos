@@ -9,6 +9,8 @@ export type LocalProduct = {
   shopId: string;
   name: string;
   category: string;
+  sku?: string | null;
+  barcode?: string | null;
   baseUnit?: string;
   displayUnit?: string | null;
   conversion?: string;

@@ -34,6 +34,7 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 type Props = {
   shop: { id: string; name: string; businessType?: string | null };
   businessConfig?: BusinessFieldConfig | null;
+  canUseBarcodeScan?: boolean;
 };
 
 type SpeechRecognitionInstance = {
@@ -156,6 +157,10 @@ function parseProductText(input: string) {
   return { name, price: price || undefined };
 }
 
+function normalizeCodeInput(value: string) {
+  return value.trim().replace(/\s+/g, "").toUpperCase().slice(0, 80);
+}
+
 
 
 function suggestCategoryByName(name: string, businessCategory?: string) {
@@ -201,17 +206,26 @@ function scheduleStateUpdate(fn: () => void) {
   Promise.resolve().then(fn);
 }
 
-function ProductForm({ shop, businessConfig }: Props) {
+function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
   const businessType = (shop.businessType as BusinessType) || "tea_stall";
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const scanInputRef = useRef<HTMLInputElement | null>(null);
   const templateStorageKey = useMemo(() => `productTemplates:${shop.id}`, [shop.id]);
 
   const businessAssist = BUSINESS_ASSISTS[businessType];
   const fallbackName = businessAssist?.fallbackName || "";
   const [name, setName] = useState(fallbackName);
   const [sellPrice, setSellPrice] = useState("");
+  const [sku, setSku] = useState("");
+  const [barcode, setBarcode] = useState("");
+  const [scanCode, setScanCode] = useState("");
+  const [scanTarget, setScanTarget] = useState<"barcode" | "sku">("barcode");
+  const [scanFeedback, setScanFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -393,6 +407,12 @@ function ProductForm({ shop, businessConfig }: Props) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!scanFeedback) return;
+    const id = setTimeout(() => setScanFeedback(null), 2200);
+    return () => clearTimeout(id);
+  }, [scanFeedback]);
 
   // Load recent/frequent templates
   useEffect(() => {
@@ -673,6 +693,34 @@ function ProductForm({ shop, businessConfig }: Props) {
       setSelectedCategory(item.category);
     }
   }
+
+  function handleScanAssign() {
+    const normalizedCode = normalizeCodeInput(scanCode);
+    if (!normalizedCode) {
+      setScanFeedback({
+        type: "error",
+        message: "স্ক্যান কোড খালি আছে, আবার স্ক্যান করুন।",
+      });
+      return;
+    }
+
+    if (scanTarget === "barcode") {
+      setBarcode(normalizedCode);
+    } else {
+      setSku(normalizedCode);
+    }
+
+    setScanFeedback({
+      type: "success",
+      message:
+        scanTarget === "barcode"
+          ? "Barcode ফিল্ডে কোড বসানো হয়েছে।"
+          : "SKU ফিল্ডে কোড বসানো হয়েছে।",
+    });
+    setScanCode("");
+    scanInputRef.current?.focus();
+  }
+
   async function handleSubmit(e: any) {
     e.preventDefault();
     const form = new FormData(e.target);
@@ -699,6 +747,10 @@ function ProductForm({ shop, businessConfig }: Props) {
       : null;
 
     const resolvedSellPrice = (form.get("sellPrice") as string) || sellPrice;
+    const resolvedSku = normalizeCodeInput((form.get("sku") as string) || sku);
+    const resolvedBarcode = normalizeCodeInput(
+      (form.get("barcode") as string) || barcode
+    );
     const resolvedName = isFieldVisible("name")
       ? (form.get("name") as string) || name || fallbackName || "Unnamed product"
       : name || fallbackName || (resolvedSellPrice ? `Item ${resolvedSellPrice}` : "Unnamed product");
@@ -708,6 +760,8 @@ function ProductForm({ shop, businessConfig }: Props) {
       shopId: ensuredShopId,
       name: resolvedName,
       category: selectedCategory || "Uncategorized",
+      sku: resolvedSku || null,
+      barcode: resolvedBarcode || null,
       baseUnit,
       buyPrice,
       sellPrice: resolvedSellPrice,
@@ -914,6 +968,109 @@ function ProductForm({ shop, businessConfig }: Props) {
               শুধু দাম বললেও/লিখলেও অটো শনাক্ত হবে
             </p>
           </div>
+
+          {canUseBarcodeScan ? (
+            <div className="rounded-xl border border-primary/20 bg-primary-soft/40 p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-foreground">স্ক্যান টার্গেট:</span>
+                <button
+                  type="button"
+                  onClick={() => setScanTarget("barcode")}
+                  className={`h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${
+                    scanTarget === "barcode"
+                      ? "border-primary/40 bg-primary-soft text-primary"
+                      : "border-border bg-card text-foreground"
+                  }`}
+                >
+                  Barcode
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScanTarget("sku")}
+                  className={`h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${
+                    scanTarget === "sku"
+                      ? "border-primary/40 bg-primary-soft text-primary"
+                      : "border-border bg-card text-foreground"
+                  }`}
+                >
+                  SKU
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={scanInputRef}
+                  type="text"
+                  inputMode="text"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="off"
+                  value={scanCode}
+                  onChange={(e) => setScanCode(normalizeCodeInput(e.target.value))}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    handleScanAssign();
+                  }}
+                  className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder={
+                    scanTarget === "barcode"
+                      ? "Scanner দিয়ে Barcode scan করুন"
+                      : "Scanner দিয়ে SKU scan করুন"
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={handleScanAssign}
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-primary-soft px-3 text-xs font-semibold text-primary"
+                >
+                  Scan বসান
+                </button>
+              </div>
+              <p
+                className={`text-xs ${
+                  scanFeedback?.type === "error" ? "text-danger" : "text-muted-foreground"
+                }`}
+              >
+                {scanFeedback?.message ||
+                  "Scanner সাধারণত Enter পাঠায়, তাই স্ক্যান করলেই কোড বসে যাবে।"}
+              </p>
+            </div>
+          ) : null}
+
+          {canUseBarcodeScan ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-foreground">
+                  SKU (ঐচ্ছিক)
+                </label>
+                <input
+                  name="sku"
+                  type="text"
+                  value={sku}
+                  onChange={(e) => setSku(normalizeCodeInput(e.target.value))}
+                  className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="যেমন: VEG-001"
+                  maxLength={80}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-foreground">
+                  Barcode (ঐচ্ছিক)
+                </label>
+                <input
+                  name="barcode"
+                  type="text"
+                  value={barcode}
+                  onChange={(e) => setBarcode(normalizeCodeInput(e.target.value))}
+                  className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="যেমন: 8901234567890"
+                  maxLength={80}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Category (optional with custom) */}

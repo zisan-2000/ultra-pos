@@ -20,6 +20,7 @@ export default async function NewProductPage({ searchParams }: PageProps) {
     searchParams,
   ]);
   const canCreateProduct = hasPermission(user, "create_product");
+  const canUseBarcodeScanPermission = hasPermission(user, "use_pos_barcode_scan");
   const backHref = resolved?.shopId
     ? `/dashboard/products?shopId=${resolved.shopId}`
     : "/dashboard/products";
@@ -54,10 +55,18 @@ export default async function NewProductPage({ searchParams }: PageProps) {
       : shops[0];
 
   const businessConfig = await getBusinessTypeConfig(activeShop.businessType ?? null);
+  const canUseBarcodeScan =
+    Boolean((activeShop as any).barcodeFeatureEntitled) &&
+    Boolean((activeShop as any).barcodeScanEnabled) &&
+    canUseBarcodeScanPermission;
 
   return (
     <Suspense fallback={<div>Loading product form...</div>}>
-      <ProductFormClient shop={activeShop} businessConfig={businessConfig || undefined} />
+      <ProductFormClient
+        shop={activeShop}
+        businessConfig={businessConfig || undefined}
+        canUseBarcodeScan={canUseBarcodeScan}
+      />
     </Suspense>
   );
 }

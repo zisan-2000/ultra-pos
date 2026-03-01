@@ -20,6 +20,8 @@ type CreateProductInput = {
   shopId: string;
   name: string;
   category: string;
+  sku?: string | null;
+  barcode?: string | null;
   buyPrice?: string | number | null;
   sellPrice: string;
   stockQty: string;
@@ -33,6 +35,8 @@ type CreateProductInput = {
 type UpdateProductInput = {
   name?: string;
   category?: string;
+  sku?: string | null;
+  barcode?: string | null;
   buyPrice?: string | number | null;
   sellPrice?: string;
   stockQty?: string;
@@ -47,6 +51,8 @@ type ProductListRow = {
   id: string;
   name: string;
   category: string;
+  sku?: string | null;
+  barcode?: string | null;
   buyPrice?: string | null;
   sellPrice: string;
   stockQty: string;
@@ -144,6 +150,29 @@ function normalizeNumberInput(
   }
 
   return parsed.toString();
+}
+
+function normalizeProductCodeInput(value: unknown) {
+  if (value === undefined) return undefined;
+  const raw = value === null ? "" : String(value);
+  const normalized = raw.trim().replace(/\s+/g, "").toUpperCase().slice(0, 80);
+  return normalized || null;
+}
+
+function throwFriendlyCodeConflict(err: unknown): never {
+  if (
+    err instanceof Prisma.PrismaClientKnownRequestError &&
+    err.code === "P2002"
+  ) {
+    const target = Array.isArray(err.meta?.target) ? err.meta?.target : [];
+    if (target.some((item) => String(item).includes("sku"))) {
+      throw new Error("SKU already exists in this shop");
+    }
+    if (target.some((item) => String(item).includes("barcode"))) {
+      throw new Error("Barcode already exists in this shop");
+    }
+  }
+  throw err instanceof Error ? err : new Error("Product save failed");
 }
 
 function toSafeNumber(value: unknown) {
@@ -394,11 +423,15 @@ export async function createProduct(input: CreateProductInput) {
   const trackStock =
     input.trackStock === undefined ? false : Boolean(input.trackStock);
   const stockQty = trackStock ? normalizedStock : "0";
+  const sku = normalizeProductCodeInput(input.sku);
+  const barcode = normalizeProductCodeInput(input.barcode);
 
-  const data: Prisma.ProductUncheckedCreateInput = {
+  const data: any = {
     shopId: input.shopId,
     name: input.name,
     category: input.category || "Uncategorized",
+    sku: sku === undefined ? undefined : sku,
+    barcode: barcode === undefined ? undefined : barcode,
     buyPrice: buyPrice === null ? null : buyPrice ?? undefined,
     sellPrice,
     stockQty,
@@ -410,7 +443,12 @@ export async function createProduct(input: CreateProductInput) {
     data.id = input.id;
   }
 
-  const created = await prisma.product.create({ data });
+  let created: { id: string };
+  try {
+    created = await prisma.product.create({ data });
+  } catch (err) {
+    throwFriendlyCodeConflict(err);
+  }
 
   revalidateReportsForProduct();
   return { success: true, id: created.id };
@@ -430,6 +468,8 @@ export async function getProductsByShop(shopId: string) {
       id: true,
       name: true,
       category: true,
+      sku: true,
+      barcode: true,
       buyPrice: true,
       sellPrice: true,
       stockQty: true,
@@ -470,6 +510,8 @@ export async function getProductsByShopPaginated({
     where.OR = [
       { name: { contains: normalizedQuery, mode: "insensitive" } },
       { category: { contains: normalizedQuery, mode: "insensitive" } },
+      { sku: { contains: normalizedQuery, mode: "insensitive" } },
+      { barcode: { contains: normalizedQuery, mode: "insensitive" } },
     ];
   }
 
@@ -484,6 +526,8 @@ export async function getProductsByShopPaginated({
       id: true,
       name: true,
       category: true,
+      sku: true,
+      barcode: true,
       buyPrice: true,
       sellPrice: true,
       stockQty: true,
@@ -501,6 +545,8 @@ export async function getProductsByShopPaginated({
     id: product.id,
     name: product.name,
     category: product.category,
+    sku: (product as any).sku ?? null,
+    barcode: (product as any).barcode ?? null,
     buyPrice:
       product.buyPrice === null ? null : product.buyPrice?.toString() ?? null,
     sellPrice: product.sellPrice.toString(),
@@ -553,6 +599,8 @@ export async function getProductsByShopCursorPaginated({
     baseWhere.OR = [
       { name: { contains: normalizedQuery, mode: "insensitive" } },
       { category: { contains: normalizedQuery, mode: "insensitive" } },
+      { sku: { contains: normalizedQuery, mode: "insensitive" } },
+      { barcode: { contains: normalizedQuery, mode: "insensitive" } },
     ];
   }
 
@@ -578,6 +626,8 @@ export async function getProductsByShopCursorPaginated({
         id: true,
         name: true,
         category: true,
+        sku: true,
+        barcode: true,
         buyPrice: true,
         sellPrice: true,
         stockQty: true,
@@ -601,6 +651,8 @@ export async function getProductsByShopCursorPaginated({
     id: p.id,
     name: p.name,
     category: p.category,
+    sku: (p as any).sku ?? null,
+    barcode: (p as any).barcode ?? null,
     buyPrice: p.buyPrice?.toString?.() ?? (p as any).buyPrice ?? null,
     sellPrice: p.sellPrice?.toString?.() ?? (p as any).sellPrice ?? "0",
     stockQty: p.stockQty?.toString?.() ?? (p as any).stockQty ?? "0",
@@ -816,21 +868,29 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
     data.trackStock !== undefined
       ? data.trackStock
       : product.trackStock ?? false;
+  const sku = normalizeProductCodeInput(data.sku);
+  const barcode = normalizeProductCodeInput(data.barcode);
   const resolvedStockQty = trackStockFlag ? stockQty : "0";
   const payload: Record<string, any> = {};
 
   if (data.name !== undefined) payload.name = data.name;
   if (data.category !== undefined) payload.category = data.category;
+  if (sku !== undefined) payload.sku = sku;
+  if (barcode !== undefined) payload.barcode = barcode;
   if (data.isActive !== undefined) payload.isActive = data.isActive;
   if (data.trackStock !== undefined) payload.trackStock = data.trackStock;
   if (buyPrice !== undefined) payload.buyPrice = buyPrice;
   if (sellPrice !== undefined) payload.sellPrice = sellPrice;
   if (resolvedStockQty !== undefined) payload.stockQty = resolvedStockQty;
 
-  await prisma.product.update({
-    where: { id },
-    data: payload,
-  });
+  try {
+    await prisma.product.update({
+      where: { id },
+      data: payload,
+    });
+  } catch (err) {
+    throwFriendlyCodeConflict(err);
+  }
 
   revalidateReportsForProduct();
   return { success: true };
@@ -894,6 +954,8 @@ export async function getActiveProductsByShop(shopId: string) {
       id: true,
       name: true,
       category: true,
+      sku: true,
+      barcode: true,
       sellPrice: true,
       stockQty: true,
       trackStock: true,
@@ -905,6 +967,8 @@ export async function getActiveProductsByShop(shopId: string) {
     id: p.id,
     name: p.name,
     category: p.category,
+    sku: (p as any).sku ?? null,
+    barcode: (p as any).barcode ?? null,
     sellPrice: p.sellPrice.toString(),
     stockQty: p.stockQty?.toString() ?? "0",
     trackStock: p.trackStock,

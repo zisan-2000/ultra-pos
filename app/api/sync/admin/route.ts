@@ -117,6 +117,8 @@ const shopCreateSchema = z.object({
   salesInvoicePrefix: z.string().optional().nullable(),
   queueTokenEnabled: z.boolean().optional(),
   queueTokenPrefix: z.string().optional().nullable(),
+  barcodeFeatureEntitled: z.boolean().optional(),
+  barcodeScanEnabled: z.boolean().optional(),
   ownerId: z.string().optional().nullable(),
 });
 
@@ -131,6 +133,8 @@ const shopUpdateSchema = z.object({
   salesInvoicePrefix: z.string().optional().nullable(),
   queueTokenEnabled: z.boolean().optional(),
   queueTokenPrefix: z.string().optional().nullable(),
+  barcodeFeatureEntitled: z.boolean().optional(),
+  barcodeScanEnabled: z.boolean().optional(),
 });
 
 const shopDeleteSchema = z.object({
@@ -303,6 +307,8 @@ export async function POST(req: Request) {
                 salesInvoicePrefix: input.salesInvoicePrefix ?? undefined,
                 queueTokenEnabled: input.queueTokenEnabled,
                 queueTokenPrefix: input.queueTokenPrefix ?? undefined,
+                barcodeFeatureEntitled: input.barcodeFeatureEntitled,
+                barcodeScanEnabled: input.barcodeScanEnabled,
                 ownerId: input.ownerId ?? undefined,
               });
               break;
@@ -331,6 +337,12 @@ export async function POST(req: Request) {
                   : {}),
                 ...(data.queueTokenPrefix !== undefined
                   ? { queueTokenPrefix: data.queueTokenPrefix }
+                  : {}),
+                ...(data.barcodeFeatureEntitled !== undefined
+                  ? { barcodeFeatureEntitled: data.barcodeFeatureEntitled }
+                  : {}),
+                ...(data.barcodeScanEnabled !== undefined
+                  ? { barcodeScanEnabled: data.barcodeScanEnabled }
                   : {}),
               });
               break;

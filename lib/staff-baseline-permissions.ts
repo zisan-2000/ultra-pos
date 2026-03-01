@@ -18,6 +18,7 @@ export const STAFF_BASELINE_PERMISSIONS = [
   "view_sale_return",
   "create_sale",
   "create_sale_return",
+  "use_pos_barcode_scan",
   "update_sale",
   "cancel_sale",
   "create_due_sale",

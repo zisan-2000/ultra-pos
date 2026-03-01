@@ -169,6 +169,8 @@ model Shop {
   queueTokenEnabled   Boolean  @default(false) @map("queue_token_enabled")
   queueTokenPrefix    String?  @map("queue_token_prefix")
   queueWorkflow       String?  @map("queue_workflow")
+  barcodeFeatureEntitled Boolean @default(false) @map("barcode_feature_entitled")
+  barcodeScanEnabled  Boolean  @default(false) @map("barcode_scan_enabled")
   nextQueueTokenSeq   Int      @default(1) @map("next_queue_token_seq")
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -355,6 +357,8 @@ model Product {
   shopId     String   @map("shop_id") @db.Uuid
   name       String
   category   String   @default("Uncategorized")
+  sku        String?  @db.VarChar(80)
+  barcode    String?  @db.VarChar(80)
   buyPrice   Decimal? @map("buy_price") @db.Decimal(12, 2)
   sellPrice  Decimal  @map("sell_price") @db.Decimal(12, 2)
   stockQty   Decimal  @default("0") @map("stock_qty") @db.Decimal(12, 2)
@@ -373,6 +377,10 @@ model Product {
   @@index([shopId], map: "idx_products_shop")
   @@index([shopId, isActive], map: "idx_products_active")
   @@index([shopId, isActive, stockQty], map: "idx_products_low_stock")
+  @@index([shopId, sku], map: "idx_products_shop_sku")
+  @@index([shopId, barcode], map: "idx_products_shop_barcode")
+  @@unique([shopId, sku], map: "uq_products_shop_sku")
+  @@unique([shopId, barcode], map: "uq_products_shop_barcode")
   @@map("products")
 }
 

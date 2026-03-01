@@ -7,6 +7,11 @@ export async function assertShopAccess(shopId: string, user: UserContext) {
     throw new Error("Shop not found");
   }
 
+  const isSuperAdmin = user.roles.includes("super_admin");
+  if (isSuperAdmin) {
+    return shop;
+  }
+
   const isOwner = shop.ownerId === user.id;
   const isStaffForShop =
     user.roles.includes("staff") && user.staffShopId === shopId;

@@ -12,6 +12,7 @@ export default async function EditProductPage({ params }: PageProps) {
   const user = await requireUser();
   const canViewProducts = hasPermission(user, "view_products");
   const canUpdateProduct = hasPermission(user, "update_product");
+  const canUseBarcodeScanPermission = hasPermission(user, "use_pos_barcode_scan");
 
   if (!canViewProducts) {
     return (
@@ -77,6 +78,10 @@ export default async function EditProductPage({ params }: PageProps) {
   if (!shop) return <div>Shop not found.</div>;
 
   const businessConfig = await getBusinessTypeConfig(shop.businessType ?? null);
+  const canUseBarcodeScan =
+    Boolean((shop as any).barcodeFeatureEntitled) &&
+    Boolean((shop as any).barcodeScanEnabled) &&
+    canUseBarcodeScanPermission;
 
   const serializedProduct = JSON.parse(JSON.stringify(product));
   const serializedShop = {
@@ -90,6 +95,7 @@ export default async function EditProductPage({ params }: PageProps) {
       product={serializedProduct}
       shop={serializedShop}
       businessConfig={businessConfig || undefined}
+      canUseBarcodeScan={canUseBarcodeScan}
     />
   );
 }

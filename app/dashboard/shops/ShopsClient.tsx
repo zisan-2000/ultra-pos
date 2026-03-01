@@ -16,6 +16,12 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Shop = {
   id: string;
+  ownerId?: string | null;
+  owner?: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+  } | null;
   name: string;
   address?: string | null;
   phone?: string | null;
@@ -37,6 +43,10 @@ type Props = {
   support: SupportContact;
 };
 
+function normalizeText(value: string | null | undefined) {
+  return (value || "").toLowerCase().trim();
+}
+
 export default function ShopsClient({ initialShops, user, support }: Props) {
   const online = useOnlineStatus();
   const router = useRouter();
@@ -49,6 +59,11 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
   const [supportContact, setSupportContact] = useState<SupportContact>(support);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState("all");
+  const [groupByOwner, setGroupByOwner] = useState<boolean>(
+    () => Boolean(user?.roles?.includes("super_admin"))
+  );
 
   const cacheKey = useMemo(
     () => `cachedShops:${user?.id || "anon"}`,
@@ -119,6 +134,68 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
   const isSuperAdmin = user?.roles?.includes("super_admin") ?? false;
   const isOwner = user?.roles?.includes("owner") ?? false;
   const canCreateShop = isSuperAdmin || (isOwner && shops.length === 0);
+
+  const ownerOptions = useMemo(() => {
+    const byOwner = new Map<string, string>();
+    shops.forEach((shop) => {
+      const ownerId = shop.owner?.id || shop.ownerId || "unknown";
+      const ownerName = shop.owner?.name?.trim() || "";
+      const ownerEmail = shop.owner?.email?.trim() || "";
+      const label = ownerName || ownerEmail || "Unknown owner";
+      if (!byOwner.has(ownerId)) {
+        byOwner.set(ownerId, label);
+      }
+    });
+
+    return Array.from(byOwner.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "bn"));
+  }, [shops]);
+
+  const filteredShops = useMemo(() => {
+    const normalizedQuery = normalizeText(query);
+
+    return shops.filter((shop) => {
+      if (isSuperAdmin && ownerFilter !== "all") {
+        const ownerId = shop.owner?.id || shop.ownerId || "unknown";
+        if (ownerId !== ownerFilter) return false;
+      }
+
+      if (!normalizedQuery) return true;
+
+      const haystack = normalizeText(
+        [
+          shop.name,
+          shop.address || "",
+          shop.phone || "",
+          shop.owner?.name || "",
+          shop.owner?.email || "",
+        ].join(" ")
+      );
+
+      return haystack.includes(normalizedQuery);
+    });
+  }, [shops, query, ownerFilter, isSuperAdmin]);
+
+  const groupedShops = useMemo(() => {
+    const groups = new Map<string, { label: string; shops: Shop[] }>();
+
+    filteredShops.forEach((shop) => {
+      const ownerId = shop.owner?.id || shop.ownerId || "unknown";
+      const ownerName = shop.owner?.name?.trim() || "";
+      const ownerEmail = shop.owner?.email?.trim() || "";
+      const label = ownerName || ownerEmail || "Unknown owner";
+
+      if (!groups.has(ownerId)) {
+        groups.set(ownerId, { label, shops: [] });
+      }
+      groups.get(ownerId)!.shops.push(shop);
+    });
+
+    return Array.from(groups.entries())
+      .map(([key, value]) => ({ key, label: value.label, shops: value.shops }))
+      .sort((a, b) => a.label.localeCompare(b.label, "bn"));
+  }, [filteredShops]);
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -204,6 +281,89 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
   const whatsappHref = supportContact.supportWhatsapp
     ? `https://wa.me/${supportContact.supportWhatsapp.replace(/[^0-9]/g, "")}`
     : undefined;
+
+  const renderShopCard = (shop: Shop) => {
+    const ownerName = shop.owner?.name || null;
+    const ownerEmail = shop.owner?.email || null;
+
+    return (
+      <div
+        key={shop.id}
+        className="bg-card rounded-lg border border-border p-4 md:p-6 space-y-4 hover:shadow-md transition"
+      >
+        <div>
+          <h2 className="text-lg md:text-xl font-bold text-foreground">
+            {shop.name}
+          </h2>
+          {isSuperAdmin ? (
+            <p className="text-xs text-muted-foreground">
+              Owner: {ownerName || ownerEmail || "Unknown owner"}
+              {ownerName && ownerEmail ? ` • ${ownerEmail}` : ""}
+            </p>
+          ) : null}
+          <p className="text-sm text-muted-foreground">
+            ঠিকানা: {shop.address || "ঠিকানা নেই"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            ফোন: {shop.phone || "ফোন নেই"}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 pt-2 md:pt-4 md:border-t md:border-border">
+          {online ? (
+            <Link
+              href={`/dashboard/shops/${shop.id}`}
+              className="
+                w-full
+                inline-flex items-center justify-center gap-2
+                bg-primary-soft border border-primary/30
+                text-primary font-semibold
+                py-3 px-4
+                rounded-lg
+                hover:bg-primary/20
+              "
+            >
+              দেখুন / সেটিংস
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="
+                w-full
+                inline-flex items-center justify-center gap-2
+                bg-primary-soft border border-primary/30
+                text-primary font-semibold
+                py-3 px-4
+                rounded-lg
+                opacity-60 cursor-not-allowed
+              "
+            >
+              দেখুন / সেটিংস
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setConfirmDeleteId(shop.id)}
+            disabled={deletingId === shop.id}
+            className="
+              w-full
+              inline-flex items-center justify-center gap-2
+              bg-danger-soft border border-danger/30
+              text-danger font-semibold
+              py-3 px-4
+              rounded-lg
+              hover:bg-danger-soft
+              disabled:opacity-60 disabled:cursor-not-allowed
+            "
+          >
+            {deletingId === shop.id ? "মুছছে..." : "মুছুন"}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-8 section-gap">
@@ -307,6 +467,54 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
         )}
       </div>
 
+      {shops.length > 0 ? (
+        <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Shop/Owner খুঁজুন..."
+              className="h-11 rounded-lg border border-border bg-card px-4 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            {isSuperAdmin ? (
+              <select
+                value={ownerFilter}
+                onChange={(e) => setOwnerFilter(e.target.value)}
+                className="h-11 rounded-lg border border-border bg-card px-4 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="all">সব Owner</option>
+                {ownerOptions.map((owner) => (
+                  <option key={owner.id} value={owner.id}>
+                    {owner.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="h-11 rounded-lg border border-border bg-muted/50 px-4 text-sm text-muted-foreground flex items-center">
+                Owner view
+              </div>
+            )}
+            {isSuperAdmin ? (
+              <button
+                type="button"
+                onClick={() => setGroupByOwner((prev) => !prev)}
+                className="h-11 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
+              >
+                {groupByOwner ? "Ungroup view" : "Group by owner"}
+              </button>
+            ) : (
+              <div className="h-11 rounded-lg border border-border bg-muted/50 px-4 text-sm text-muted-foreground flex items-center">
+                Total: {filteredShops.length}
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Showing {filteredShops.length} / {shops.length} shops
+          </p>
+        </div>
+      ) : null}
+
       {/* EMPTY STATE */}
       {shops.length === 0 ? (
         <div className="text-center py-12 bg-card rounded-lg border border-border">
@@ -328,81 +536,38 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
             </Link>
           )}
         </div>
+      ) : filteredShops.length === 0 ? (
+        <div className="text-center py-12 bg-card rounded-lg border border-border">
+          <p className="text-muted-foreground mb-2">কোনো দোকান match করেনি</p>
+          <p className="text-xs text-muted-foreground">
+            সার্চ/Owner filter পরিবর্তন করে আবার দেখুন
+          </p>
+        </div>
       ) : (
         /* SHOP LIST */
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-          {shops.map((shop) => (
-            <div
-              key={shop.id}
-              className="bg-card rounded-lg border border-border p-4 md:p-6 space-y-4 hover:shadow-md transition"
-            >
-              <div>
-                <h2 className="text-lg md:text-xl font-bold text-foreground">
-                  {shop.name}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  ঠিকানা: {shop.address || "ঠিকানা নেই"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  ফোন: {shop.phone || "ফোন নেই"}
-                </p>
+        isSuperAdmin && groupByOwner ? (
+          <div className="space-y-5">
+            {groupedShops.map((group) => (
+              <div key={group.key} className="space-y-3">
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    👤 {group.label}
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    {group.shops.length} দোকান
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                  {group.shops.map((shop) => renderShopCard(shop))}
+                </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-2 md:pt-4 md:border-t md:border-border">
-                {online ? (
-                  <Link
-                    href={`/dashboard/shops/${shop.id}`}
-                    className="
-                      w-full
-                      inline-flex items-center justify-center gap-2
-                      bg-primary-soft border border-primary/30
-                      text-primary font-semibold
-                      py-3 px-4
-                      rounded-lg
-                      hover:bg-primary/20
-                    "
-                  >
-                    দেখুন / সেটিংস
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    disabled
-                    className="
-                      w-full
-                      inline-flex items-center justify-center gap-2
-                      bg-primary-soft border border-primary/30
-                      text-primary font-semibold
-                      py-3 px-4
-                      rounded-lg
-                      opacity-60 cursor-not-allowed
-                    "
-                  >
-                    দেখুন / সেটিংস
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setConfirmDeleteId(shop.id)}
-                  disabled={deletingId === shop.id}
-                  className="
-                    w-full
-                    inline-flex items-center justify-center gap-2
-                    bg-danger-soft border border-danger/30
-                    text-danger font-semibold
-                    py-3 px-4
-                    rounded-lg
-                    hover:bg-danger-soft
-                    disabled:opacity-60 disabled:cursor-not-allowed
-                  "
-                >
-                  {deletingId === shop.id ? "মুছছে..." : "মুছুন"}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+            {filteredShops.map((shop) => renderShopCard(shop))}
+          </div>
+        )
       )}
       <ConfirmDialog
         open={Boolean(confirmDeleteId)}

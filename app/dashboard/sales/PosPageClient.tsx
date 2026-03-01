@@ -34,6 +34,8 @@ import { emitSaleUpdate } from "@/lib/events/reportEvents";
 type ProductOption = {
   id: string;
   name: string;
+  sku?: string | null;
+  barcode?: string | null;
   sellPrice: string;
   stockQty?: string | number;
   category?: string | null;
@@ -44,6 +46,8 @@ type PosPageClientProps = {
   products: {
     id: string;
     name: string;
+    sku?: string | null;
+    barcode?: string | null;
     sellPrice: string | number;
     stockQty?: string | number;
     category?: string | null;
@@ -63,6 +67,7 @@ type PosPageClientProps = {
   canCreateDueSale: boolean;
   canViewCustomers: boolean;
   canViewDuePage: boolean;
+  canUseBarcodeScan: boolean;
   submitSale: (formData: FormData) => Promise<{
     success: boolean;
     saleId: string;
@@ -79,6 +84,7 @@ export function PosPageClient({
   canCreateDueSale,
   canViewCustomers,
   canViewDuePage,
+  canUseBarcodeScan,
   submitSale,
 }: PosPageClientProps) {
   const router = useRouter();
@@ -107,6 +113,8 @@ export function PosPageClient({
     () =>
       products.map((p) => ({
         ...p,
+        sku: p.sku ?? null,
+        barcode: p.barcode ?? null,
         sellPrice: p.sellPrice.toString(),
       })) as ProductOption[]
   );
@@ -282,6 +290,8 @@ export function PosPageClient({
       const mapped = rows.map((p) => ({
         id: p.id,
         name: p.name,
+        sku: (p as any).sku ?? null,
+        barcode: (p as any).barcode ?? null,
         sellPrice: p.sellPrice.toString(),
         stockQty: p.stockQty?.toString(),
         category: p.category,
@@ -460,6 +470,8 @@ export function PosPageClient({
       setProductOptions(
         products.map((p) => ({
           ...p,
+          sku: p.sku ?? null,
+          barcode: p.barcode ?? null,
           sellPrice: p.sellPrice.toString(),
         }))
       );
@@ -468,6 +480,8 @@ export function PosPageClient({
         shopId,
         name: p.name,
         category: p.category || "Uncategorized",
+        sku: p.sku ?? null,
+        barcode: p.barcode ?? null,
         sellPrice: p.sellPrice.toString(),
         stockQty: (p.stockQty ?? "0").toString(),
         isActive: true,
@@ -843,7 +857,11 @@ export function PosPageClient({
         </div>
 
         <div className="flex-1">
-          <PosProductSearch products={productOptions} shopId={shopId} />
+          <PosProductSearch
+            products={productOptions}
+            shopId={shopId}
+            canUseBarcodeScan={canUseBarcodeScan}
+          />
         </div>
       </div>
 

@@ -41,6 +41,8 @@ type Product = {
   id: string;
   name: string;
   category: string;
+  sku?: string | null;
+  barcode?: string | null;
   buyPrice?: string | null;
   sellPrice: string;
   stockQty: string;
@@ -377,6 +379,8 @@ export default function ProductsListClient({
               id: p.id,
               name: p.name,
               category: p.category,
+              sku: (p as any).sku ?? null,
+              barcode: (p as any).barcode ?? null,
               buyPrice: p.buyPrice ?? null,
               sellPrice: p.sellPrice,
               stockQty: p.stockQty,
@@ -419,6 +423,8 @@ export default function ProductsListClient({
         shopId: activeShopId,
         name: p.name,
         category: p.category || "Uncategorized",
+        sku: (p as any).sku ?? null,
+        barcode: (p as any).barcode ?? null,
         buyPrice: p.buyPrice ?? null,
         sellPrice: p.sellPrice.toString(),
         stockQty: (p.stockQty ?? "0").toString(),
@@ -529,7 +535,7 @@ export default function ProductsListClient({
       if (status === "active" && !product.isActive) return false;
       if (status === "inactive" && product.isActive) return false;
       if (normalizedQuery) {
-        const haystack = `${product.name} ${product.category}`;
+        const haystack = `${product.name} ${product.category} ${product.sku ?? ""} ${product.barcode ?? ""}`;
         if (!normalizeText(haystack).includes(normalizedQuery)) return false;
       }
       return true;
@@ -727,6 +733,8 @@ export default function ProductsListClient({
           shopId: activeShopId,
           name: template.name,
           category: template.category || "Uncategorized",
+          sku: null,
+          barcode: null,
           buyPrice: null,
           sellPrice: defaultPrice || "0",
           stockQty: "0",
@@ -754,6 +762,8 @@ export default function ProductsListClient({
           id: item.id,
           name: item.name,
           category: item.category,
+          sku: item.sku ?? null,
+          barcode: item.barcode ?? null,
           buyPrice: item.buyPrice ?? null,
           sellPrice: item.sellPrice,
           stockQty: item.stockQty,
@@ -1342,6 +1352,12 @@ export default function ProductsListClient({
                     <p className="text-sm text-muted-foreground">
                       {product.category || "অনির্ধারিত"}
                     </p>
+                    {product.sku || product.barcode ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {product.sku ? `SKU: ${product.sku}` : "SKU: -"}{" · "}
+                        {product.barcode ? `Barcode: ${product.barcode}` : "Barcode: -"}
+                      </p>
+                    ) : null}
                   </div>
                   <span
                     className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${

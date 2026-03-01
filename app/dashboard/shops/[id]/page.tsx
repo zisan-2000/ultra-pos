@@ -22,6 +22,16 @@ export default async function EditShop({ params }: PageProps) {
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_queue_feature"))
   );
+  const canManageBarcodeEntitlement = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_barcode_entitlement"))
+  );
+  const canManageBarcodeFeature = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_barcode_feature"))
+  );
   let shop: Awaited<ReturnType<typeof getShop>> | null = null;
   try {
     shop = await getShop(id);
@@ -70,6 +80,21 @@ export default async function EditShop({ params }: PageProps) {
               ((formData.get("queueWorkflow") as string) || "").trim() || null,
           }
         : {}),
+      ...(canManageBarcodeEntitlement || canManageBarcodeFeature
+        ? {
+            ...(canManageBarcodeEntitlement
+              ? {
+                  barcodeFeatureEntitled:
+                    formData.get("barcodeFeatureEntitled") === "1",
+                }
+              : {}),
+            ...(canManageBarcodeFeature
+              ? {
+                  barcodeScanEnabled: formData.get("barcodeScanEnabled") === "1",
+                }
+              : {}),
+          }
+        : {}),
     });
 
     redirect("/dashboard/shops");
@@ -97,11 +122,15 @@ export default async function EditShop({ params }: PageProps) {
           queueTokenEnabled: Boolean((shop as any).queueTokenEnabled),
           queueTokenPrefix: (shop as any).queueTokenPrefix || "TK",
           queueWorkflow: (shop as any).queueWorkflow || null,
+          barcodeFeatureEntitled: Boolean((shop as any).barcodeFeatureEntitled),
+          barcodeScanEnabled: Boolean((shop as any).barcodeScanEnabled),
         }}
         submitLabel="সংরক্ষণ করুন"
         businessTypeOptions={businessTypeOptions}
         showSalesInvoiceSettings={canManageSalesInvoice}
         showQueueTokenSettings={canManageQueueToken}
+        showBarcodeSettings={canManageBarcodeEntitlement || canManageBarcodeFeature}
+        canEditBarcodeEntitlement={canManageBarcodeEntitlement}
       />
     </div>
   );
