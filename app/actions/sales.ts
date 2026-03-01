@@ -107,6 +107,22 @@ type ProcessSaleReturnInput = {
   note?: string | null;
 };
 
+type ReissueDueSaleItemInput = {
+  productId: string;
+  qty: number;
+  unitPrice: number;
+  name?: string | null;
+};
+
+type ReissueDueSaleInput = {
+  originalSaleId: string;
+  customerId: string;
+  items: ReissueDueSaleItemInput[];
+  paidNow?: number | null;
+  note?: string | null;
+  reason?: string | null;
+};
+
 type SaleReturnHistoryItem = {
   id: string;
   returnNo: string;
@@ -173,6 +189,33 @@ export type SaleReturnDraft = {
   }[];
   existingReturns: SaleReturnHistoryItem[];
   canManage: boolean;
+};
+
+export type DueSaleEditDraft = {
+  sale: {
+    id: string;
+    shopId: string;
+    invoiceNo: string | null;
+    saleDate: string;
+    status: string;
+    paymentMethod: string;
+    totalAmount: string;
+    customer: { id: string; name: string; totalDue: string } | null;
+    note: string | null;
+  };
+  items: {
+    saleItemId: string;
+    productId: string;
+    productName: string;
+    quantity: string;
+    unitPrice: string;
+    lineTotal: string;
+  }[];
+  completedReturnCount: number;
+  partialPaidAtSale: string;
+  outstandingDue: string;
+  canReissue: boolean;
+  blockingReason: string | null;
 };
 
 function toMoney(value: number) {
@@ -582,6 +625,259 @@ export async function getSaleReturnDraft(
     existingReturns,
     canManage: canManageSaleReturn(user),
   };
+}
+
+export async function getDueSaleEditDraft(
+  saleId: string
+): Promise<DueSaleEditDraft> {
+  const user = await requireUser();
+  requirePermission(user, "view_sales");
+  requirePermission(user, "create_sale");
+  requirePermission(user, "create_due_sale");
+  requirePermission(user, "view_customers");
+
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    select: {
+      id: true,
+      shopId: true,
+      invoiceNo: true,
+      saleDate: true,
+      status: true,
+      paymentMethod: true,
+      totalAmount: true,
+      note: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          totalDue: true,
+        },
+      },
+      saleItems: {
+        orderBy: { id: "asc" },
+        select: {
+          id: true,
+          productId: true,
+          productNameSnapshot: true,
+          quantity: true,
+          unitPrice: true,
+          lineTotal: true,
+          product: {
+            select: { name: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!sale) {
+    throw new Error("Sale not found");
+  }
+  await assertShopAccess(sale.shopId, user);
+
+  if ((sale.paymentMethod || "").toLowerCase() !== "due") {
+    throw new Error("Only due sales can be edited via reissue flow");
+  }
+
+  const completedReturnCount = await prisma.saleReturn.count({
+    where: { saleId: sale.id, status: "completed" },
+  });
+
+  const partialCashAgg = await prisma.cashEntry.aggregate({
+    where: {
+      shopId: sale.shopId,
+      entryType: "IN",
+      reason: `Partial cash received for due sale #${sale.id}`,
+    },
+    _sum: { amount: true },
+  });
+
+  const partialPaidAtSale = roundMoney(Number(partialCashAgg._sum.amount ?? 0));
+  const saleTotal = roundMoney(Number(sale.totalAmount ?? 0));
+  const outstandingDue = roundMoney(Math.max(0, saleTotal - partialPaidAtSale));
+  const isVoided = (sale.status || "").toUpperCase() === "VOIDED";
+  const canReissue = !isVoided && completedReturnCount === 0;
+
+  let blockingReason: string | null = null;
+  if (isVoided) {
+    blockingReason = "This sale is already voided";
+  } else if (completedReturnCount > 0) {
+    blockingReason =
+      "This sale already has return/exchange records. Reissue edit is locked.";
+  }
+
+  return {
+    sale: {
+      id: sale.id,
+      shopId: sale.shopId,
+      invoiceNo: sale.invoiceNo ?? null,
+      saleDate: sale.saleDate.toISOString(),
+      status: sale.status,
+      paymentMethod: sale.paymentMethod,
+      totalAmount: sale.totalAmount.toString(),
+      customer: sale.customer
+        ? {
+            id: sale.customer.id,
+            name: sale.customer.name,
+            totalDue: sale.customer.totalDue.toString(),
+          }
+        : null,
+      note: sale.note ?? null,
+    },
+    items: sale.saleItems.map((item) => ({
+      saleItemId: item.id,
+      productId: item.productId,
+      productName:
+        item.productNameSnapshot || item.product?.name || "Unnamed product",
+      quantity: item.quantity.toString(),
+      unitPrice: item.unitPrice.toString(),
+      lineTotal: item.lineTotal.toString(),
+    })),
+    completedReturnCount,
+    partialPaidAtSale: toMoney(partialPaidAtSale),
+    outstandingDue: toMoney(outstandingDue),
+    canReissue,
+    blockingReason,
+  };
+}
+
+export async function reissueDueSale(input: ReissueDueSaleInput) {
+  const user = await requireUser();
+  requirePermission(user, "view_sales");
+  requirePermission(user, "create_sale");
+  requirePermission(user, "create_due_sale");
+
+  const originalSaleId = (input.originalSaleId || "").toString().trim();
+  if (!originalSaleId) {
+    throw new Error("Original sale is required");
+  }
+
+  const originalSale = await prisma.sale.findUnique({
+    where: { id: originalSaleId },
+    select: {
+      id: true,
+      shopId: true,
+      paymentMethod: true,
+      status: true,
+      customerId: true,
+      totalAmount: true,
+    },
+  });
+
+  if (!originalSale) {
+    throw new Error("Original sale not found");
+  }
+  await assertShopAccess(originalSale.shopId, user);
+
+  if ((originalSale.paymentMethod || "").toLowerCase() !== "due") {
+    throw new Error("Only due sales can be reissued");
+  }
+  if ((originalSale.status || "").toUpperCase() === "VOIDED") {
+    throw new Error("This due sale is already voided");
+  }
+
+  const completedReturnCount = await prisma.saleReturn.count({
+    where: { saleId: originalSale.id, status: "completed" },
+  });
+  if (completedReturnCount > 0) {
+    throw new Error("Cannot reissue a sale that already has return/exchange history");
+  }
+
+  const customerId = (input.customerId || "").toString().trim();
+  if (!customerId) {
+    throw new Error("Customer is required for due reissue");
+  }
+
+  const normalizedItems = new Map<
+    string,
+    { qty: number; unitPrice: number; name: string }
+  >();
+  for (const row of input.items || []) {
+    const productId = (row?.productId || "").toString().trim();
+    const qty = toSafePositiveNumber(row?.qty);
+    const unitPrice = Number(row?.unitPrice ?? 0);
+    if (!productId || qty <= 0) continue;
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      throw new Error("Invalid unit price in reissue items");
+    }
+    const existing = normalizedItems.get(productId);
+    const safeName = (row?.name || "").toString().trim();
+    if (!existing) {
+      normalizedItems.set(productId, {
+        qty,
+        unitPrice: roundMoney(unitPrice),
+        name: safeName,
+      });
+      continue;
+    }
+    if (existing.unitPrice !== roundMoney(unitPrice)) {
+      throw new Error("Duplicate product with different unit price is not allowed");
+    }
+    normalizedItems.set(productId, {
+      qty: existing.qty + qty,
+      unitPrice: existing.unitPrice,
+      name: existing.name || safeName,
+    });
+  }
+
+  if (normalizedItems.size === 0) {
+    throw new Error("At least one valid item is required for reissue");
+  }
+
+  const items = Array.from(normalizedItems.entries()).map(([productId, row]) => ({
+    productId,
+    name: row.name || "Reissued item",
+    unitPrice: roundMoney(row.unitPrice),
+    qty: row.qty,
+  }));
+
+  const replacementTotal = roundMoney(
+    items.reduce((sum, row) => sum + row.qty * row.unitPrice, 0)
+  );
+  const paidNowRaw = Number(input.paidNow ?? 0);
+  const paidNow = Math.min(Math.max(paidNowRaw, 0), replacementTotal);
+
+  const reason =
+    (input.reason || "").toString().trim() ||
+    `Due sale reissue correction for #${originalSale.id}`;
+
+  await voidSale(originalSale.id, reason);
+
+  const reissueNote = [input.note?.toString().trim() || "", `Reissue of sale #${originalSale.id}`]
+    .filter(Boolean)
+    .join(" | ");
+
+  try {
+    const created = await createSale({
+      shopId: originalSale.shopId,
+      items,
+      paymentMethod: "due",
+      customerId,
+      paidNow,
+      note: reissueNote || null,
+    });
+
+    revalidatePath("/dashboard/sales");
+    revalidatePath(`/dashboard/sales/${originalSale.id}/invoice`);
+    revalidatePath(`/dashboard/sales/${created.saleId}/invoice`);
+    revalidatePath("/dashboard/due");
+    revalidatePath("/dashboard/cash");
+    revalidatePath("/dashboard/reports");
+
+    return {
+      success: true,
+      oldSaleId: originalSale.id,
+      saleId: created.saleId,
+      invoiceNo: created.invoiceNo ?? null,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error while creating replacement sale";
+    throw new Error(
+      `Original due sale was voided successfully, but replacement sale creation failed: ${message}`
+    );
+  }
 }
 
 // ------------------------------
@@ -1764,7 +2060,7 @@ export async function getSalesSummary({
 }
 
 // ------------------------------
-// VOID SALE (simple version, non-due only)
+// VOID SALE (supports cash + due with guarded reversal)
 // ------------------------------
 export async function voidSale(saleId: string, reason?: string | null) {
   const user = await requireUser();
@@ -1785,13 +2081,12 @@ export async function voidSale(saleId: string, reason?: string | null) {
     return { success: true, alreadyVoided: true };
   }
 
-  // For now, avoid trying to unwind complex due ledger logic.
-  if (sale.paymentMethod === "due") {
-    throw new Error("Due sales cannot be voided yet. Please handle via customer ledger.");
-  }
-
-  const isCashSale = (sale.paymentMethod || "").toLowerCase() === "cash";
+  const paymentMethod = (sale.paymentMethod || "").toLowerCase();
+  const isCashSale = paymentMethod === "cash";
+  const isDueSale = paymentMethod === "due";
   const voidTimestamp = new Date();
+  const voidBusinessDate = toDhakaBusinessDate(voidTimestamp);
+
   const txResult = await prisma.$transaction(async (tx) => {
     // Idempotency + race guard: claim void once.
     const claimed = await tx.sale.updateMany({
@@ -1807,10 +2102,15 @@ export async function voidSale(saleId: string, reason?: string | null) {
       } as any,
     });
     if (claimed.count !== 1) {
-      return { alreadyVoided: true as const, affectedProductIds: [] as string[] };
+      return {
+        alreadyVoided: true as const,
+        affectedProductIds: [] as string[],
+        cashOutAmount: 0,
+      };
     }
 
     let affectedProductIds: string[] = [];
+    let cashOutAmount = 0;
 
     // Restore stock for tracked products
     const saleItems = await tx.saleItem.findMany({
@@ -1838,18 +2138,93 @@ export async function voidSale(saleId: string, reason?: string | null) {
     }
 
     if (isCashSale) {
+      cashOutAmount = roundMoney(Number(sale.totalAmount ?? 0));
       await tx.cashEntry.create({
         data: {
           shopId: sale.shopId,
           entryType: "OUT",
-          amount: sale.totalAmount,
+          amount: toMoney(cashOutAmount),
           reason: `Reversal of sale #${sale.id}`,
-          businessDate: toDhakaBusinessDate(voidTimestamp),
+          businessDate: voidBusinessDate,
         },
       });
     }
 
-    return { alreadyVoided: false as const, affectedProductIds };
+    if (isDueSale) {
+      if (!sale.customerId) {
+        throw new Error("Due sale is missing customer link");
+      }
+
+      const customer = await tx.customer.findUnique({
+        where: { id: sale.customerId },
+        select: { id: true, totalDue: true },
+      });
+      if (!customer) {
+        throw new Error("Customer not found for due sale void");
+      }
+
+      const partialCashAgg = await tx.cashEntry.aggregate({
+        where: {
+          shopId: sale.shopId,
+          entryType: "IN",
+          reason: `Partial cash received for due sale #${sale.id}`,
+        },
+        _sum: { amount: true },
+      });
+
+      const partialCashAtSale = roundMoney(
+        Number(partialCashAgg._sum.amount ?? 0)
+      );
+      const saleTotal = roundMoney(Number(sale.totalAmount ?? 0));
+      const outstandingDueFromSale = roundMoney(
+        Math.max(0, saleTotal - partialCashAtSale)
+      );
+      const currentDue = Number(customer.totalDue ?? 0);
+
+      if (outstandingDueFromSale > 0 && currentDue + 0.000001 < outstandingDueFromSale) {
+        throw new Error(
+          "Due amount already settled/adjusted. Cannot void this due sale safely."
+        );
+      }
+
+      if (outstandingDueFromSale > 0) {
+        await tx.customerLedger.create({
+          data: {
+            shopId: sale.shopId,
+            customerId: customer.id,
+            entryType: "PAYMENT",
+            amount: toMoney(outstandingDueFromSale),
+            description: `Void reversal for due sale #${sale.id}`,
+            entryDate: voidTimestamp,
+            businessDate: voidBusinessDate,
+          },
+        });
+
+        const nextDue = roundMoney(Math.max(0, currentDue - outstandingDueFromSale));
+        await tx.customer.update({
+          where: { id: customer.id },
+          data: {
+            totalDue: toMoney(nextDue),
+            lastPaymentAt: voidTimestamp,
+          },
+        });
+      }
+
+      if (partialCashAtSale > 0) {
+        await tx.cashEntry.create({
+          data: {
+            shopId: sale.shopId,
+            entryType: "OUT",
+            amount: toMoney(partialCashAtSale),
+            reason: `Reversal of partial payment for due sale #${sale.id}`,
+            businessDate: voidBusinessDate,
+          },
+        });
+        cashOutAmount = roundMoney(cashOutAmount + partialCashAtSale);
+      }
+    }
+
+    return { alreadyVoided: false as const, affectedProductIds, cashOutAmount };
   });
   if (txResult.alreadyVoided) {
     return { success: true, alreadyVoided: true };
@@ -1865,10 +2240,10 @@ export async function voidSale(saleId: string, reason?: string | null) {
     })
   );
 
-  if (isCashSale) {
+  if (txResult.cashOutAmount > 0) {
     voidTasks.push(
       publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, sale.shopId, {
-        amount: Number(sale.totalAmount ?? 0),
+        amount: txResult.cashOutAmount,
         entryType: "OUT",
       })
     );
@@ -1885,6 +2260,11 @@ export async function voidSale(saleId: string, reason?: string | null) {
   await Promise.all(voidTasks);
 
   revalidateReportsForSale();
+  revalidatePath("/dashboard/sales");
+  revalidatePath(`/dashboard/sales/${saleId}/invoice`);
+  revalidatePath("/dashboard/cash");
+  revalidatePath("/dashboard/due");
+  revalidatePath("/dashboard/products");
 
   return { success: true };
 }

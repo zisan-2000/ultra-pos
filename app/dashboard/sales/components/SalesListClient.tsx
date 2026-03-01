@@ -44,6 +44,7 @@ type Props = {
   nextHref: string | null;
   hasMore: boolean;
   canVoidSale: boolean;
+  canEditDueSale: boolean;
   canReturnSale: boolean;
   voidSaleAction: (formData: FormData) => Promise<void>;
 };
@@ -91,6 +92,7 @@ export default function SalesListClient({
   nextHref,
   hasMore,
   canVoidSale,
+  canEditDueSale,
   canReturnSale,
   voidSaleAction,
 }: Props) {
@@ -525,7 +527,7 @@ export default function SalesListClient({
                 )}
                 {isDueSale && !isVoided && (
                   <p className="text-xs text-warning">
-                    বাকির বিক্রি – কাস্টমার লেজারে পরিশোধ করুন
+                    বাকির বিক্রি - পরিশোধ/বাতিলের আগে কাস্টমার হিসাব মিলিয়ে নিন
                   </p>
                 )}
               </div>
@@ -548,6 +550,14 @@ export default function SalesListClient({
                       রিটার্ন / এক্সচেঞ্জ
                     </Link>
                   ) : null}
+                  {online && isDueSale && !isVoided && canEditDueSale ? (
+                    <Link
+                      href={`/dashboard/sales/${s.id}/edit`}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary border border-primary/30 hover:bg-primary/15"
+                    >
+                      Due Edit / Reissue
+                    </Link>
+                  ) : null}
                   {!online && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning border border-warning/30">
                       বাতিল করা যাবে না (Offline)
@@ -560,11 +570,11 @@ export default function SalesListClient({
                   )}
                   {online && isDueSale && !isVoided && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-3 py-1 text-xs font-semibold text-warning border border-warning/30">
-                      বাকির বিল – বাতিল নয়
+                      বাকির বিল - বাতিলে due/cash সমন্বয় হবে
                     </span>
                   )}
                 </div>
-                {online && !isDueSale && canVoidSale ? (
+                {online && canVoidSale ? (
                   <div className="flex flex-wrap items-center gap-2">
                     <form id={formId} action={voidSaleAction} />
                     <VoidSaleControls

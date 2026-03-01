@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSaleInvoiceDetails } from "@/app/actions/sales";
 import { requireUser } from "@/lib/auth-session";
+import { hasPermission } from "@/lib/rbac";
 import { canViewSalesInvoice } from "@/lib/sales-invoice";
 import { canManageSaleReturn } from "@/lib/sales-return";
 import PrintInvoiceButton from "./PrintInvoiceButton";
@@ -43,6 +44,8 @@ const paymentLabel: Record<string, string> = {
 export default async function SalesInvoicePage({ params }: PageProps) {
   const user = await requireUser();
   const canReturnSale = canManageSaleReturn(user);
+  const canEditDueSale =
+    hasPermission(user, "create_sale") && hasPermission(user, "create_due_sale");
   if (!canViewSalesInvoice(user)) {
     return (
       <div className="mx-auto max-w-2xl p-4 sm:p-6">
@@ -101,6 +104,7 @@ export default async function SalesInvoicePage({ params }: PageProps) {
   const totalAmountNum = Number(data.totalAmount || 0);
   const statusUpper = (data.status || "").toUpperCase();
   const isVoided = statusUpper === "VOIDED";
+  const isDueSale = (data.paymentMethod || "").toLowerCase() === "due";
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
@@ -118,6 +122,14 @@ export default async function SalesInvoicePage({ params }: PageProps) {
               className="inline-flex h-10 items-center rounded-full border border-warning/30 bg-warning-soft px-4 text-sm font-semibold text-warning hover:bg-warning/15"
             >
               রিটার্ন / এক্সচেঞ্জ
+            </Link>
+          ) : null}
+          {!isVoided && isDueSale && canEditDueSale ? (
+            <Link
+              href={`/dashboard/sales/${data.saleId}/edit`}
+              className="inline-flex h-10 items-center rounded-full border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/15"
+            >
+              Due Edit / Reissue
             </Link>
           ) : null}
         </div>

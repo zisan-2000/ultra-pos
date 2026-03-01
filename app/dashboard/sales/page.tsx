@@ -160,6 +160,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
   ]);
   const canViewSales = hasPermission(user, "view_sales");
   const canCreateSale = hasPermission(user, "create_sale");
+  const canCreateDueSale = hasPermission(user, "create_due_sale");
   const canReturnSale = hasPermission(user, "create_sale_return");
 
   if (!canViewSales) {
@@ -427,6 +428,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
         nextHref={nextHref}
         hasMore={Boolean(hasMore)}
         canVoidSale={canCreateSale}
+        canEditDueSale={canCreateSale && canCreateDueSale}
         canReturnSale={canReturnSale}
         voidSaleAction={voidSaleAction}
       />
