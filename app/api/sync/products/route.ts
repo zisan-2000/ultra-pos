@@ -19,6 +19,9 @@ const productCreateSchema = z.object({
   category: z.string().optional(),
   sku: z.string().optional().nullable(),
   barcode: z.string().optional().nullable(),
+  baseUnit: z.string().optional().nullable(),
+  expiryDate: z.union([z.string(), z.date()]).optional().nullable(),
+  size: z.string().optional().nullable(),
   buyPrice: z.union([z.string(), z.number()]).optional().nullable(),
   sellPrice: z.union([z.string(), z.number()]).optional(),
   stockQty: z.union([z.string(), z.number()]).optional(),
@@ -83,6 +86,34 @@ function normalizeCode(value: string | null | undefined) {
   return normalized || null;
 }
 
+function normalizeBaseUnit(value: unknown, fallback = "pcs") {
+  if (value === undefined) return fallback;
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .slice(0, 40);
+  return normalized || fallback;
+}
+
+function normalizeNullableText(value: unknown, maxLength = 80) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const normalized = String(value).trim();
+  return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+function normalizeDateOnly(value: unknown) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (!Number.isFinite(parsed.getTime())) {
+    throw new Error("expiryDate must be a valid date");
+  }
+  return parsed;
+}
+
 function sanitizeCreate(item: IncomingProduct) {
   const shopId = item.shopId;
   if (!shopId) throw new Error("shopId is required");
@@ -96,6 +127,9 @@ function sanitizeCreate(item: IncomingProduct) {
     : undefined;
   const sku = normalizeCode(item.sku);
   const barcode = normalizeCode(item.barcode);
+  const baseUnit = normalizeBaseUnit(item.baseUnit, "pcs");
+  const expiryDate = normalizeDateOnly(item.expiryDate);
+  const size = normalizeNullableText(item.size, 80);
 
   return {
     id: item.id, // keep client-generated id when present
@@ -104,6 +138,9 @@ function sanitizeCreate(item: IncomingProduct) {
     category: item.category || "Uncategorized",
     sku: sku === undefined ? undefined : sku,
     barcode: barcode === undefined ? undefined : barcode,
+    baseUnit: baseUnit || "pcs",
+    expiryDate: expiryDate === undefined ? undefined : expiryDate,
+    size: size === undefined ? undefined : size,
     buyPrice: buyPrice === undefined ? undefined : buyPrice, // undefined omits field, null sets null
     sellPrice,
     stockQty,
@@ -122,6 +159,9 @@ function sanitizeUpdate(item: IncomingProduct) {
   if (item.category !== undefined) payload.category = item.category || "Uncategorized";
   if (item.sku !== undefined) payload.sku = normalizeCode(item.sku);
   if (item.barcode !== undefined) payload.barcode = normalizeCode(item.barcode);
+  if (item.baseUnit !== undefined) payload.baseUnit = normalizeBaseUnit(item.baseUnit, "pcs");
+  if (item.expiryDate !== undefined) payload.expiryDate = normalizeDateOnly(item.expiryDate);
+  if (item.size !== undefined) payload.size = normalizeNullableText(item.size, 80);
   if (item.isActive !== undefined) payload.isActive = Boolean(item.isActive);
   if (item.trackStock !== undefined) payload.trackStock = Boolean(item.trackStock);
 

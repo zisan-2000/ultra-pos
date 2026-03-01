@@ -22,6 +22,7 @@ type CreateProductInput = {
   category: string;
   sku?: string | null;
   barcode?: string | null;
+  baseUnit?: string | null;
   buyPrice?: string | number | null;
   sellPrice: string;
   stockQty: string;
@@ -37,6 +38,7 @@ type UpdateProductInput = {
   category?: string;
   sku?: string | null;
   barcode?: string | null;
+  baseUnit?: string | null;
   buyPrice?: string | number | null;
   sellPrice?: string;
   stockQty?: string;
@@ -53,6 +55,9 @@ type ProductListRow = {
   category: string;
   sku?: string | null;
   barcode?: string | null;
+  baseUnit?: string;
+  expiryDate?: string | null;
+  size?: string | null;
   buyPrice?: string | null;
   sellPrice: string;
   stockQty: string;
@@ -157,6 +162,39 @@ function normalizeProductCodeInput(value: unknown) {
   const raw = value === null ? "" : String(value);
   const normalized = raw.trim().replace(/\s+/g, "").toUpperCase().slice(0, 80);
   return normalized || null;
+}
+
+function normalizeBaseUnitInput(
+  value: unknown,
+  options?: { defaultValue?: string }
+) {
+  if (value === undefined) {
+    return options?.defaultValue ?? undefined;
+  }
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .slice(0, 40);
+  return normalized || options?.defaultValue || "pcs";
+}
+
+function normalizeNullableTextInput(value: unknown, maxLength = 80) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const normalized = String(value).trim();
+  return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+function normalizeDateOnlyInput(value: unknown) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (!Number.isFinite(parsed.getTime())) {
+    throw new Error("Expiry date must be a valid date");
+  }
+  return parsed;
 }
 
 function throwFriendlyCodeConflict(err: unknown): never {
@@ -351,59 +389,6 @@ async function buildProductCardMetrics(
   return metricsByProduct;
 }
 
-function normalizeUnitCreate(input: {
-  baseUnit?: string;
-  displayUnit?: string | null;
-  conversion?: string | number;
-}) {
-  const baseUnit = input.baseUnit?.toString().trim().toLowerCase() || "pcs";
-
-  const displayUnit =
-    input.displayUnit === undefined
-      ? null
-      : input.displayUnit === null
-      ? null
-      : input.displayUnit.toString().trim().toLowerCase() || null;
-
-  const convNum = Number(input.conversion);
-  const conversion =
-    Number.isFinite(convNum) && convNum > 0 ? convNum.toString() : "1";
-
-  return { baseUnit, displayUnit, conversion };
-}
-
-function normalizeUnitUpdate(
-  input: {
-    baseUnit?: string;
-    displayUnit?: string | null;
-    conversion?: string | number;
-  },
-  existing: { conversion?: string | null }
-) {
-  const patch: any = {};
-
-  if (input.baseUnit !== undefined) {
-    patch.baseUnit = input.baseUnit.toString().trim().toLowerCase() || "pcs";
-  }
-
-  if (input.displayUnit !== undefined) {
-    patch.displayUnit =
-      input.displayUnit === null
-        ? null
-        : input.displayUnit.toString().trim().toLowerCase() || null;
-  }
-
-  if (input.conversion !== undefined) {
-    const convNum = Number(input.conversion);
-    patch.conversion =
-      Number.isFinite(convNum) && convNum > 0
-        ? convNum.toString()
-        : existing.conversion ?? "1";
-  }
-
-  return patch;
-}
-
 // ---------------------------------
 // CREATE PRODUCT
 // ---------------------------------
@@ -425,6 +410,9 @@ export async function createProduct(input: CreateProductInput) {
   const stockQty = trackStock ? normalizedStock : "0";
   const sku = normalizeProductCodeInput(input.sku);
   const barcode = normalizeProductCodeInput(input.barcode);
+  const baseUnit = normalizeBaseUnitInput(input.baseUnit, { defaultValue: "pcs" });
+  const expiryDate = normalizeDateOnlyInput(input.expiryDate);
+  const size = normalizeNullableTextInput(input.size, 80);
 
   const data: any = {
     shopId: input.shopId,
@@ -432,6 +420,9 @@ export async function createProduct(input: CreateProductInput) {
     category: input.category || "Uncategorized",
     sku: sku === undefined ? undefined : sku,
     barcode: barcode === undefined ? undefined : barcode,
+    baseUnit: baseUnit ?? "pcs",
+    expiryDate: expiryDate === undefined ? undefined : expiryDate,
+    size: size === undefined ? undefined : size,
     buyPrice: buyPrice === null ? null : buyPrice ?? undefined,
     sellPrice,
     stockQty,
@@ -470,6 +461,9 @@ export async function getProductsByShop(shopId: string) {
       category: true,
       sku: true,
       barcode: true,
+      baseUnit: true,
+      expiryDate: true,
+      size: true,
       buyPrice: true,
       sellPrice: true,
       stockQty: true,
@@ -528,6 +522,9 @@ export async function getProductsByShopPaginated({
       category: true,
       sku: true,
       barcode: true,
+      baseUnit: true,
+      expiryDate: true,
+      size: true,
       buyPrice: true,
       sellPrice: true,
       stockQty: true,
@@ -547,6 +544,9 @@ export async function getProductsByShopPaginated({
     category: product.category,
     sku: (product as any).sku ?? null,
     barcode: (product as any).barcode ?? null,
+    baseUnit: (product as any).baseUnit ?? "pcs",
+    expiryDate: product.expiryDate ? product.expiryDate.toISOString().slice(0, 10) : null,
+    size: (product as any).size ?? null,
     buyPrice:
       product.buyPrice === null ? null : product.buyPrice?.toString() ?? null,
     sellPrice: product.sellPrice.toString(),
@@ -628,6 +628,9 @@ export async function getProductsByShopCursorPaginated({
         category: true,
         sku: true,
         barcode: true,
+        baseUnit: true,
+        expiryDate: true,
+        size: true,
         buyPrice: true,
         sellPrice: true,
         stockQty: true,
@@ -653,6 +656,9 @@ export async function getProductsByShopCursorPaginated({
     category: p.category,
     sku: (p as any).sku ?? null,
     barcode: (p as any).barcode ?? null,
+    baseUnit: (p as any).baseUnit ?? "pcs",
+    expiryDate: p.expiryDate ? p.expiryDate.toISOString().slice(0, 10) : null,
+    size: (p as any).size ?? null,
     buyPrice: p.buyPrice?.toString?.() ?? (p as any).buyPrice ?? null,
     sellPrice: p.sellPrice?.toString?.() ?? (p as any).sellPrice ?? "0",
     stockQty: p.stockQty?.toString?.() ?? (p as any).stockQty ?? "0",
@@ -870,6 +876,16 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
       : product.trackStock ?? false;
   const sku = normalizeProductCodeInput(data.sku);
   const barcode = normalizeProductCodeInput(data.barcode);
+  const baseUnit =
+    data.baseUnit !== undefined
+      ? normalizeBaseUnitInput(data.baseUnit, { defaultValue: "pcs" })
+      : undefined;
+  const expiryDate =
+    data.expiryDate !== undefined
+      ? normalizeDateOnlyInput(data.expiryDate)
+      : undefined;
+  const size =
+    data.size !== undefined ? normalizeNullableTextInput(data.size, 80) : undefined;
   const resolvedStockQty = trackStockFlag ? stockQty : "0";
   const payload: Record<string, any> = {};
 
@@ -877,6 +893,9 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   if (data.category !== undefined) payload.category = data.category;
   if (sku !== undefined) payload.sku = sku;
   if (barcode !== undefined) payload.barcode = barcode;
+  if (baseUnit !== undefined) payload.baseUnit = baseUnit;
+  if (expiryDate !== undefined) payload.expiryDate = expiryDate;
+  if (size !== undefined) payload.size = size;
   if (data.isActive !== undefined) payload.isActive = data.isActive;
   if (data.trackStock !== undefined) payload.trackStock = data.trackStock;
   if (buyPrice !== undefined) payload.buyPrice = buyPrice;
@@ -956,6 +975,9 @@ export async function getActiveProductsByShop(shopId: string) {
       category: true,
       sku: true,
       barcode: true,
+      baseUnit: true,
+      expiryDate: true,
+      size: true,
       sellPrice: true,
       stockQty: true,
       trackStock: true,
@@ -969,6 +991,9 @@ export async function getActiveProductsByShop(shopId: string) {
     category: p.category,
     sku: (p as any).sku ?? null,
     barcode: (p as any).barcode ?? null,
+    baseUnit: (p as any).baseUnit ?? "pcs",
+    expiryDate: p.expiryDate ? p.expiryDate.toISOString().slice(0, 10) : null,
+    size: (p as any).size ?? null,
     sellPrice: p.sellPrice.toString(),
     stockQty: p.stockQty?.toString() ?? "0",
     trackStock: p.trackStock,

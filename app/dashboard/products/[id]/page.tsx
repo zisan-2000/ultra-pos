@@ -84,6 +84,9 @@ export default async function EditProductPage({ params }: PageProps) {
     canUseBarcodeScanPermission;
 
   const serializedProduct = JSON.parse(JSON.stringify(product));
+  if (serializedProduct?.expiryDate) {
+    serializedProduct.expiryDate = String(serializedProduct.expiryDate).slice(0, 10);
+  }
   const serializedShop = {
     id: shop.id,
     name: shop.name,
