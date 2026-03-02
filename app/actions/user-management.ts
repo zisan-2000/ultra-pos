@@ -493,7 +493,7 @@ async function requireStaffPermissionAccess(
   }
 
   const targetRoleNames = getTargetRoleNames(targetUser);
-  const targetRoleName = targetRoleNames.has("manager")
+  const targetRoleName: "staff" | "manager" | null = targetRoleNames.has("manager")
     ? "manager"
     : targetRoleNames.has("staff")
       ? "staff"
