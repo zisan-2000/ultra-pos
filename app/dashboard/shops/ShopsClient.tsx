@@ -133,6 +133,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
 
   const isSuperAdmin = user?.roles?.includes("super_admin") ?? false;
   const isOwner = user?.roles?.includes("owner") ?? false;
+  const canManageShopSettings = isSuperAdmin || isOwner;
   const canCreateShop = isSuperAdmin || (isOwner && shops.length === 0);
 
   const ownerOptions = useMemo(() => {
@@ -309,7 +310,11 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 pt-2 md:pt-4 md:border-t md:border-border">
+        <div
+          className={`pt-2 md:pt-4 md:border-t md:border-border ${
+            canManageShopSettings ? "grid grid-cols-2 gap-3" : ""
+          }`}
+        >
           {online ? (
             <Link
               href={`/dashboard/shops/${shop.id}`}
@@ -323,7 +328,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
                 hover:bg-primary/20
               "
             >
-              দেখুন / সেটিংস
+              {canManageShopSettings ? "দেখুন / সেটিংস" : "দেখুন"}
             </Link>
           ) : (
             <button
@@ -339,27 +344,29 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
                 opacity-60 cursor-not-allowed
               "
             >
-              দেখুন / সেটিংস
+              {canManageShopSettings ? "দেখুন / সেটিংস" : "দেখুন"}
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => setConfirmDeleteId(shop.id)}
-            disabled={deletingId === shop.id}
-            className="
-              w-full
-              inline-flex items-center justify-center gap-2
-              bg-danger-soft border border-danger/30
-              text-danger font-semibold
-              py-3 px-4
-              rounded-lg
-              hover:bg-danger-soft
-              disabled:opacity-60 disabled:cursor-not-allowed
-            "
-          >
-            {deletingId === shop.id ? "মুছছে..." : "মুছুন"}
-          </button>
+          {canManageShopSettings ? (
+            <button
+              type="button"
+              onClick={() => setConfirmDeleteId(shop.id)}
+              disabled={deletingId === shop.id}
+              className="
+                w-full
+                inline-flex items-center justify-center gap-2
+                bg-danger-soft border border-danger/30
+                text-danger font-semibold
+                py-3 px-4
+                rounded-lg
+                hover:bg-danger-soft
+                disabled:opacity-60 disabled:cursor-not-allowed
+              "
+            >
+              {deletingId === shop.id ? "মুছছে..." : "মুছুন"}
+            </button>
+          ) : null}
         </div>
       </div>
     );

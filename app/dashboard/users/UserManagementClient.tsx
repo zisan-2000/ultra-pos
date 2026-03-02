@@ -292,8 +292,10 @@ export default function UserManagementPage({
 
   const viewingUserIsOwner =
     viewingUser?.roles.some((role) => role.name === "owner") ?? false;
-  const viewingUserIsStaff =
-    viewingUser?.roles.some((role) => role.name === "staff") ?? false;
+  const viewingUserIsAssignedTeamMember =
+    viewingUser?.roles.some(
+      (role) => role.name === "staff" || role.name === "manager"
+    ) ?? false;
   const viewingOwnerShops = viewingUser?.shops ?? [];
   const viewingStaffShopName = viewingUser?.staffShop?.name ?? null;
 
@@ -536,7 +538,9 @@ export default function UserManagementPage({
                       সম্পাদনা
                     </button>
                     {canManageStaffPermissions &&
-                    user.roles.some((role) => role.name === "staff") ? (
+                    user.roles.some(
+                      (role) => role.name === "staff" || role.name === "manager"
+                    ) ? (
                       <Link
                         href={`/dashboard/users/${user.id}/access`}
                         prefetch={false}
@@ -628,7 +632,10 @@ export default function UserManagementPage({
                               সম্পাদনা
                             </button>
                             {canManageStaffPermissions &&
-                            user.roles.some((role) => role.name === "staff") ? (
+                            user.roles.some(
+                              (role) =>
+                                role.name === "staff" || role.name === "manager"
+                            ) ? (
                               <>
                                 <span className="text-muted-foreground">|</span>
                                 <Link
@@ -756,7 +763,7 @@ export default function UserManagementPage({
                     </p>
                   </div>
                 ) : null}
-                {viewingUserIsStaff ? (
+                {viewingUserIsAssignedTeamMember ? (
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted-foreground">
                       নিয়োজিত দোকান

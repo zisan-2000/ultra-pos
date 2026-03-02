@@ -2,6 +2,7 @@
 
 import { getShop, updateShop } from "@/app/actions/shops";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import ShopFormClient from "../ShopFormClient";
 import { listActiveBusinessTypes } from "@/app/actions/business-types";
 import { businessOptions } from "@/lib/productFormConfig";
@@ -12,6 +13,9 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function EditShop({ params }: PageProps) {
   const { id } = await params;
   const user = await getCurrentUser();
+  const canManageShopSettings = Boolean(
+    user && (user.roles?.includes("super_admin") || user.roles?.includes("owner"))
+  );
   const canManageSalesInvoice = Boolean(
     user &&
       (user.roles?.includes("super_admin") ||
@@ -44,6 +48,45 @@ export default async function EditShop({ params }: PageProps) {
   }
   if (!shop) {
     return <div className="p-6 text-center text-danger">Shop not found</div>;
+  }
+
+  if (!canManageShopSettings) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4">
+        <div className="mb-2">
+          <h1 className="text-3xl font-bold text-foreground">দোকানের তথ্য</h1>
+          <p className="text-muted-foreground mt-2">
+            এই পেজটি শুধুমাত্র দেখার জন্য। সেটিংস পরিবর্তনের অনুমতি নেই।
+          </p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
+          <div>
+            <p className="text-xs text-muted-foreground">নাম</p>
+            <p className="text-base font-semibold text-foreground">
+              {shop.name || "-"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">ঠিকানা</p>
+            <p className="text-sm text-foreground">{shop.address || "-"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">ফোন</p>
+            <p className="text-sm text-foreground">{shop.phone || "-"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">ব্যবসার ধরন</p>
+            <p className="text-sm text-foreground">{shop.businessType || "-"}</p>
+          </div>
+        </div>
+        <Link
+          href="/dashboard/shops"
+          className="inline-flex h-11 items-center rounded-lg border border-border px-4 text-sm font-semibold text-foreground hover:bg-muted"
+        >
+          দোকান তালিকায় ফিরে যান
+        </Link>
+      </div>
+    );
   }
 
   const dbBusinessTypes = await listActiveBusinessTypes().catch(() => []);

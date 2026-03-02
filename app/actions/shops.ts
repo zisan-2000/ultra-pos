@@ -219,7 +219,8 @@ export async function getShopsByUser() {
   const user = await getCurrentUser();
   const isSuperAdmin = user.roles?.includes("super_admin");
   const isOwner = user.roles?.includes("owner");
-  const isStaff = user.roles?.includes("staff");
+  const isAssignedTeamMember =
+    user.roles?.includes("staff") || user.roles?.includes("manager");
   const ownerSelect = { id: true, name: true, email: true };
 
   if (isSuperAdmin) {
@@ -229,7 +230,7 @@ export async function getShopsByUser() {
     });
   }
 
-  if (isStaff && !isOwner) {
+  if (isAssignedTeamMember && !isOwner) {
     if (!user.staffShopId) return [];
     const shop = await prisma.shop.findUnique({
       where: { id: user.staffShopId },

@@ -5,6 +5,7 @@ export const ROLE_NAMES = [
   "admin",
   "agent",
   "owner",
+  "manager",
   "staff",
 ] as const;
 
@@ -89,6 +90,7 @@ export const PERMISSION_NAMES: string[] = [
   "view_users_under_me",
   "create_user_agent",
   "create_user_owner",
+  "create_user_manager",
   "create_user_staff",
   "edit_users_under_me",
   "delete_users_under_me",

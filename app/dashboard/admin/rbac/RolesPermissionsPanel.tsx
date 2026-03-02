@@ -165,6 +165,7 @@ export const permissionMeta: Record<string, PermissionMeta> = {
   view_users_under_me: { label: "সাব-ইউজার দেখা", module: "users" },
   create_user_agent: { label: "এজেন্ট তৈরি", module: "users" },
   create_user_owner: { label: "ওনার তৈরি", module: "users" },
+  create_user_manager: { label: "ম্যানেজার তৈরি", module: "users" },
   create_user_staff: { label: "স্টাফ তৈরি", module: "users" },
   edit_users_under_me: { label: "সাব-ইউজার সম্পাদনা", module: "users" },
   delete_users_under_me: { label: "সাব-ইউজার মুছে ফেলা", module: "users", critical: true },

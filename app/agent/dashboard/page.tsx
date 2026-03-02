@@ -14,6 +14,7 @@ export default async function AgentDashboardPage() {
 
   const { total, levels } = await getRoleChainCounts(user.id, [
     "owner",
+    "manager",
     "staff",
   ]);
 
@@ -56,8 +57,8 @@ export default async function AgentDashboardPage() {
     ownerIds.length > 0
       ? await prisma.user.findMany({
           where: {
-            createdBy: { in: ownerIds },
             roles: { some: { name: "staff" } },
+            staffShop: { ownerId: { in: ownerIds } },
           },
           select: {
             id: true,
@@ -74,14 +75,15 @@ export default async function AgentDashboardPage() {
   const staffCountByOwner = new Map<string, number>();
   const staffListByOwner = new Map<string, typeof staffRows>();
   for (const staff of staffRows) {
-    if (!staff.createdBy) continue;
+    const ownerId = staff.staffShop?.ownerId;
+    if (!ownerId) continue;
     staffCountByOwner.set(
-      staff.createdBy,
-      (staffCountByOwner.get(staff.createdBy) ?? 0) + 1,
+      ownerId,
+      (staffCountByOwner.get(ownerId) ?? 0) + 1,
     );
-    const list = staffListByOwner.get(staff.createdBy) ?? [];
+    const list = staffListByOwner.get(ownerId) ?? [];
     list.push(staff);
-    staffListByOwner.set(staff.createdBy, list);
+    staffListByOwner.set(ownerId, list);
   }
 
   const ownerRows = owners.map((owner) => ({

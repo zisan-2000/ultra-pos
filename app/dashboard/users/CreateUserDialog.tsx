@@ -50,10 +50,11 @@ export function CreateUserDialog({
     () => creatableRoles.find((role) => role.id === selectedRoleId),
     [creatableRoles, selectedRoleId]
   );
-  const isStaffRole = selectedRole?.name === "staff";
+  const needsShopAssignment =
+    selectedRole?.name === "staff" || selectedRole?.name === "manager";
 
   useEffect(() => {
-    if (!isOpen || !isStaffRole) return;
+    if (!isOpen || !needsShopAssignment) return;
 
     let mounted = true;
     setError(null);
@@ -83,7 +84,7 @@ export function CreateUserDialog({
     return () => {
       mounted = false;
     };
-  }, [isOpen, isStaffRole, online]);
+  }, [isOpen, needsShopAssignment, online]);
 
   useEffect(() => {
     if (isOpen) {
@@ -104,8 +105,8 @@ export function CreateUserDialog({
       return;
     }
 
-    if (isStaffRole && !selectedShopId) {
-      setError("স্টাফ ইউজারের জন্য শপ নির্বাচন করুন");
+    if (needsShopAssignment && !selectedShopId) {
+      setError("ম্যানেজার/স্টাফ ইউজারের জন্য শপ নির্বাচন করুন");
       return;
     }
 
@@ -120,7 +121,7 @@ export function CreateUserDialog({
         trimmedName,
         trimmedPassword,
         selectedRoleId,
-        isStaffRole ? selectedShopId : undefined
+        needsShopAssignment ? selectedShopId : undefined
       );
       setName("");
       setEmail("");
@@ -245,7 +246,7 @@ export function CreateUserDialog({
             </select>
           </div>
 
-          {isStaffRole && (
+          {needsShopAssignment && (
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
                 শপ নির্বাচন করুন *

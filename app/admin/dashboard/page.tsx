@@ -19,6 +19,7 @@ export default async function AdminDashboardPage() {
   const { total, levels } = await getRoleChainCounts(user.id, [
     "agent",
     "owner",
+    "manager",
     "staff",
   ]);
 
@@ -162,8 +163,8 @@ export default async function AdminDashboardPage() {
     ownerIds.length > 0
       ? await prisma.user.findMany({
           where: {
-            createdBy: { in: ownerIds },
             roles: { some: { name: "staff" } },
+            staffShop: { ownerId: { in: ownerIds } },
           },
           select: {
             id: true,
@@ -180,21 +181,22 @@ export default async function AdminDashboardPage() {
   const staffByOwner = new Map<string, number>();
   const staffListByOwner = new Map<string, typeof staffRows>();
   for (const staff of staffRows) {
-    if (!staff.createdBy) continue;
+    const ownerId = staff.staffShop?.ownerId;
+    if (!ownerId) continue;
     staffByOwner.set(
-      staff.createdBy,
-      (staffByOwner.get(staff.createdBy) ?? 0) + 1,
+      ownerId,
+      (staffByOwner.get(ownerId) ?? 0) + 1,
     );
-    const list = staffListByOwner.get(staff.createdBy) ?? [];
+    const list = staffListByOwner.get(ownerId) ?? [];
     list.push(staff);
-    staffListByOwner.set(staff.createdBy, list);
+    staffListByOwner.set(ownerId, list);
   }
 
   const staffByAgent = new Map<string, number>();
   let directStaffCount = 0;
 
   for (const staff of staffRows) {
-    const ownerCreatorId = ownerToAgent.get(staff.createdBy ?? "");
+    const ownerCreatorId = ownerToAgent.get(staff.staffShop?.ownerId ?? "");
     if (!ownerCreatorId) continue;
     if (ownerCreatorId === user.id) {
       directStaffCount += 1;

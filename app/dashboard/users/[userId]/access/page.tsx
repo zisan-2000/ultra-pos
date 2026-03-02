@@ -18,7 +18,7 @@ export default async function StaffAccessPage({ params }: PageProps) {
   if (!canViewUsers || !canManageStaffPermissions) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-foreground">স্টাফ অ্যাকসেস কন্ট্রোল</h1>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">টিম অ্যাকসেস কন্ট্রোল</h1>
         <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
         <p className="mb-6 text-muted-foreground">
           এই পেজ ব্যবহারের জন্য owner/super admin role এবং{" "}
@@ -28,7 +28,7 @@ export default async function StaffAccessPage({ params }: PageProps) {
           href="/dashboard/users"
           className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
         >
-          স্টাফ তালিকায় ফিরুন
+          ব্যবহারকারী তালিকায় ফিরুন
         </Link>
       </div>
     );

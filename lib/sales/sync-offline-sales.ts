@@ -158,10 +158,11 @@ async function assertShopAccess(
   }
 
   const isOwner = shop.ownerId === user.id;
-  const isStaffForShop =
-    user.roles.includes("staff") && user.staffShopId === shopId;
+  const isAssignedTeamMemberForShop =
+    (user.roles.includes("staff") || user.roles.includes("manager")) &&
+    user.staffShopId === shopId;
 
-  if (!isOwner && !isStaffForShop) {
+  if (!isOwner && !isAssignedTeamMemberForShop) {
     throw new Error("Unauthorized access to this shop");
   }
 

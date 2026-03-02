@@ -20,6 +20,7 @@ export default async function SuperAdminDashboardPage() {
     "admin",
     "agent",
     "owner",
+    "manager",
     "staff",
   ]);
 
@@ -188,8 +189,8 @@ export default async function SuperAdminDashboardPage() {
     ownerIds.length > 0
       ? await prisma.user.findMany({
           where: {
-            createdBy: { in: ownerIds },
             roles: { some: { name: "staff" } },
+            staffShop: { ownerId: { in: ownerIds } },
           },
           select: {
             id: true,
@@ -254,15 +255,16 @@ export default async function SuperAdminDashboardPage() {
   const staffListByOwner = new Map<string, typeof staffRows>();
   let staffUnderDirectAgents = 0;
   for (const staff of staffRows) {
-    if (!staff.createdBy) continue;
+    const ownerId = staff.staffShop?.ownerId;
+    if (!ownerId) continue;
     staffByOwner.set(
-      staff.createdBy,
-      (staffByOwner.get(staff.createdBy) ?? 0) + 1,
+      ownerId,
+      (staffByOwner.get(ownerId) ?? 0) + 1,
     );
-    const list = staffListByOwner.get(staff.createdBy) ?? [];
+    const list = staffListByOwner.get(ownerId) ?? [];
     list.push(staff);
-    staffListByOwner.set(staff.createdBy, list);
-    if (ownersUnderDirectAgents.has(staff.createdBy)) {
+    staffListByOwner.set(ownerId, list);
+    if (ownersUnderDirectAgents.has(ownerId)) {
       staffUnderDirectAgents += 1;
     }
   }
@@ -271,7 +273,7 @@ export default async function SuperAdminDashboardPage() {
   let directStaffCount = 0;
 
   for (const staff of staffRows) {
-    const ownerId = staff.createdBy ?? "";
+    const ownerId = staff.staffShop?.ownerId ?? "";
     if (directOwnerIds.has(ownerId)) {
       directStaffCount += 1;
       continue;

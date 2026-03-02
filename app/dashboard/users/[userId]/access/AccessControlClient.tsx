@@ -139,6 +139,12 @@ function AccessControlInner({
   const [savedIds, setSavedIds] = useState<Set<string>>(
     () => new Set(initialEnabled),
   );
+  const targetRoleLabel = useMemo(() => {
+    if (user.roles.some((role) => role.name === "manager")) {
+      return "ম্যানেজার";
+    }
+    return "স্টাফ";
+  }, [user.roles]);
 
   const permissionIdByName = useMemo(() => {
     const map = new Map<string, string>();
@@ -258,7 +264,10 @@ function AccessControlInner({
       try {
         await updateStaffPermissions(user.id, Array.from(enabledIds));
         setSavedIds(new Set(enabledIds));
-        setFeedback({ type: "success", message: "স্টাফ অ্যাকসেস সংরক্ষণ হয়েছে।" });
+        setFeedback({
+          type: "success",
+          message: `${targetRoleLabel} অ্যাকসেস সংরক্ষণ হয়েছে।`,
+        });
       } catch (err) {
         handlePermissionError(err);
         setFeedback({
@@ -267,7 +276,7 @@ function AccessControlInner({
         });
       }
     });
-  }, [enabledIds, readOnly, saving, startSaving, user.id]);
+  }, [enabledIds, readOnly, saving, startSaving, targetRoleLabel, user.id]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -311,10 +320,10 @@ function AccessControlInner({
               ← ব্যবহারকারী তালিকায় ফিরুন
             </Link>
             <h1 className="text-2xl font-bold text-foreground mt-2">
-              স্টাফ অ্যাকসেস কন্ট্রোল
+              টিম অ্যাকসেস কন্ট্রোল
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              স্টাফের কাজ অনুযায়ী অনুমতি সেট করুন। ডিফল্টে সব অনুমতি চালু থাকে।
+              {targetRoleLabel} এর কাজ অনুযায়ী অনুমতি সেট করুন।
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -360,7 +369,7 @@ function AccessControlInner({
               ডিফল্ট বনাম কাস্টম
             </h2>
             <p className="text-xs text-muted-foreground mt-1">
-              ডিফল্ট = স্টাফ রোলের সব অনুমতি চালু। কাস্টম করলে নির্দিষ্ট কিছু বন্ধ করতে পারবেন।
+              ডিফল্ট = এই রোলের সব অনুমতি চালু। কাস্টম করলে নির্দিষ্ট কিছু বন্ধ করতে পারবেন।
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -426,10 +435,10 @@ function AccessControlInner({
               )}
             >
               <div className="text-sm font-semibold text-foreground">
-                ফুল স্টাফ অ্যাকসেস
+                ফুল রোল অ্যাকসেস
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                স্টাফ রোলের সব অনুমতি চালু করুন
+                এই রোলের সব অনুমতি চালু করুন
               </div>
             </button>
           </div>
@@ -487,7 +496,7 @@ function AccessControlInner({
         <div className="divide-y divide-border">
           {groupedPermissions.length === 0 ? (
             <div className="p-5 text-sm text-muted-foreground">
-              এই স্টাফের জন্য কোনো অনুমতি পাওয়া যায়নি।
+              এই ইউজারের জন্য কোনো অনুমতি পাওয়া যায়নি।
             </div>
           ) : (
             groupedPermissions.map((module) => {

@@ -114,7 +114,7 @@ const navItems: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/dashboard/cash", label: "নগদ খাতা", Icon: NotebookText },
   { href: "/dashboard/reports", label: "রিপোর্ট", Icon: BarChart3 },
   { href: "/dashboard/profile", label: "প্রোফাইল", Icon: User },
-  { href: "/dashboard/users", label: "স্টাফ", Icon: Users },
+  { href: "/dashboard/users", label: "টিম", Icon: Users },
 ];
 
 // ✅ mobile bottom nav: 6 -> 5 (profile removed)
