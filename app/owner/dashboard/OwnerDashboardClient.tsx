@@ -15,6 +15,9 @@ import { BillingStatus } from "@/lib/billing";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import { reportEvents } from "@/lib/events/reportEvents";
+import { useRealtimeStatus } from "@/lib/realtime/status";
+import { usePageVisibility } from "@/lib/use-page-visibility";
 
 type Summary = {
   sales?: { total?: number } | number;
@@ -102,12 +105,16 @@ export default function OwnerDashboardClient({
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
+  const realtime = useRealtimeStatus();
+  const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const serverSnapshotRef = useRef(initialData);
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
+  const lastEventAtRef = useRef(0);
   const REFRESH_MIN_INTERVAL_MS = 15_000;
+  const EVENT_REFRESH_MIN_INTERVAL_MS = 1_500;
 
   const cacheKey = useMemo(() => `owner:dashboard:${userId}`, [userId]);
 
@@ -157,6 +164,63 @@ export default function OwnerDashboardClient({
     refreshInFlightRef.current = true;
     router.refresh();
   }, [online, lastSyncAt, syncing, pendingCount, router]);
+
+  useEffect(() => {
+    if (!online || !isVisible || !realtime.connected || !selectedShopId) return;
+
+    const triggerRefresh = () => {
+      const now = Date.now();
+      if (refreshInFlightRef.current) return;
+      if (syncing || pendingCount > 0) return;
+      if (now - lastEventAtRef.current < EVENT_REFRESH_MIN_INTERVAL_MS) return;
+      if (now - lastRefreshAtRef.current < EVENT_REFRESH_MIN_INTERVAL_MS) return;
+      lastEventAtRef.current = now;
+      lastRefreshAtRef.current = now;
+      refreshInFlightRef.current = true;
+      router.refresh();
+    };
+
+    const saleListener = reportEvents.addListener(
+      "sale-update",
+      (event) => {
+        if (event.shopId !== selectedShopId) return;
+        triggerRefresh();
+      },
+      { shopId: selectedShopId, priority: 10 }
+    );
+
+    const expenseListener = reportEvents.addListener(
+      "expense-update",
+      (event) => {
+        if (event.shopId !== selectedShopId) return;
+        triggerRefresh();
+      },
+      { shopId: selectedShopId, priority: 10 }
+    );
+
+    const cashListener = reportEvents.addListener(
+      "cash-update",
+      (event) => {
+        if (event.shopId !== selectedShopId) return;
+        triggerRefresh();
+      },
+      { shopId: selectedShopId, priority: 10 }
+    );
+
+    return () => {
+      reportEvents.removeListener(saleListener);
+      reportEvents.removeListener(expenseListener);
+      reportEvents.removeListener(cashListener);
+    };
+  }, [
+    online,
+    isVisible,
+    realtime.connected,
+    selectedShopId,
+    syncing,
+    pendingCount,
+    router,
+  ]);
 
   const salesTotal = Number(getSummaryTotal(data.summary?.sales));
   const expenseTotal = Number(getSummaryTotal(data.summary?.expenses));

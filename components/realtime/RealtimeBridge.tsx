@@ -25,6 +25,7 @@ async function fetchAuthToken(): Promise<string | null> {
     const res = await fetch("/api/auth/token", {
       method: "GET",
       credentials: "include",
+      cache: "no-store",
     });
     if (!res.ok) return null;
     const json = (await res.json()) as { token?: string };
@@ -194,6 +195,23 @@ export default function RealtimeBridge() {
       );
     };
 
+    const handleSaleReturned = (payload: RealtimeEventPayload) => {
+      const netAmount = Number(payload.data?.netAmount ?? 0);
+      const safeAmount = Number.isFinite(netAmount) ? Math.abs(netAmount) : 0;
+      const operation = netAmount >= 0 ? "add" : "subtract";
+      emitSaleUpdate(
+        payload.shopId,
+        {
+          type: "sale",
+          operation,
+          amount: safeAmount,
+          shopId: payload.shopId,
+          metadata: { timestamp: payload.at ?? Date.now() },
+        },
+        { source: "websocket", priority: "high" }
+      );
+    };
+
     const handleExpenseCreated = (payload: RealtimeEventPayload) => {
       const amount = Number(payload.data?.amount ?? 0);
       emitExpenseUpdate(
@@ -243,6 +261,7 @@ export default function RealtimeBridge() {
 
     socket.on(REALTIME_EVENTS.saleCommitted, handleSaleCommitted);
     socket.on(REALTIME_EVENTS.saleVoided, handleSaleVoided);
+    socket.on(REALTIME_EVENTS.saleReturned, handleSaleReturned);
     socket.on(REALTIME_EVENTS.expenseCreated, handleExpenseCreated);
     socket.on(REALTIME_EVENTS.cashUpdated, handleCashUpdated);
     socket.on(REALTIME_EVENTS.stockUpdated, handleStockUpdated);
@@ -251,6 +270,7 @@ export default function RealtimeBridge() {
     return () => {
       socket.off(REALTIME_EVENTS.saleCommitted, handleSaleCommitted);
       socket.off(REALTIME_EVENTS.saleVoided, handleSaleVoided);
+      socket.off(REALTIME_EVENTS.saleReturned, handleSaleReturned);
       socket.off(REALTIME_EVENTS.expenseCreated, handleExpenseCreated);
       socket.off(REALTIME_EVENTS.cashUpdated, handleCashUpdated);
       socket.off(REALTIME_EVENTS.stockUpdated, handleStockUpdated);
