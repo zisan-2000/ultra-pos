@@ -113,8 +113,10 @@ export default function OwnerDashboardClient({
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
   const lastEventAtRef = useRef(0);
+  const wasRealtimeConnectedRef = useRef(realtime.connected);
   const REFRESH_MIN_INTERVAL_MS = 15_000;
   const EVENT_REFRESH_MIN_INTERVAL_MS = 1_500;
+  const FALLBACK_POLL_INTERVAL_MS = 15_000;
 
   const cacheKey = useMemo(() => `owner:dashboard:${userId}`, [userId]);
 
@@ -212,6 +214,55 @@ export default function OwnerDashboardClient({
       reportEvents.removeListener(expenseListener);
       reportEvents.removeListener(cashListener);
     };
+  }, [
+    online,
+    isVisible,
+    realtime.connected,
+    selectedShopId,
+    syncing,
+    pendingCount,
+    router,
+  ]);
+
+  useEffect(() => {
+    if (!online || !isVisible || realtime.connected || !selectedShopId) return;
+
+    const intervalId = setInterval(() => {
+      const now = Date.now();
+      if (refreshInFlightRef.current) return;
+      if (syncing || pendingCount > 0) return;
+      if (now - lastRefreshAtRef.current < EVENT_REFRESH_MIN_INTERVAL_MS) return;
+      lastRefreshAtRef.current = now;
+      refreshInFlightRef.current = true;
+      router.refresh();
+    }, FALLBACK_POLL_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [
+    online,
+    isVisible,
+    realtime.connected,
+    selectedShopId,
+    syncing,
+    pendingCount,
+    router,
+  ]);
+
+  useEffect(() => {
+    const wasConnected = wasRealtimeConnectedRef.current;
+    const isConnected = realtime.connected;
+    wasRealtimeConnectedRef.current = isConnected;
+
+    if (!online || !isVisible || !selectedShopId) return;
+    if (!isConnected || wasConnected) return;
+    if (refreshInFlightRef.current) return;
+    if (syncing || pendingCount > 0) return;
+
+    const now = Date.now();
+    if (now - lastRefreshAtRef.current < EVENT_REFRESH_MIN_INTERVAL_MS) return;
+    lastRefreshAtRef.current = now;
+    refreshInFlightRef.current = true;
+    router.refresh();
   }, [
     online,
     isVisible,
