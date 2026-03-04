@@ -171,6 +171,8 @@ model Shop {
   queueWorkflow       String?  @map("queue_workflow")
   barcodeFeatureEntitled Boolean @default(false) @map("barcode_feature_entitled")
   barcodeScanEnabled  Boolean  @default(false) @map("barcode_scan_enabled")
+  smsSummaryEntitled  Boolean  @default(false) @map("sms_summary_entitled")
+  smsSummaryEnabled   Boolean  @default(false) @map("sms_summary_enabled")
   nextQueueTokenSeq   Int      @default(1) @map("next_queue_token_seq")
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -191,6 +193,7 @@ model Shop {
   subscription     ShopSubscription?
   invoices         Invoice[]
   paymentRequests  BillingPaymentRequest[]
+  smsSummaryDispatches SmsSummaryDispatch[]
 
   @@index([ownerId], map: "idx_shops_owner_id")
   @@map("shops")
@@ -215,6 +218,36 @@ enum BillingPaymentRequestStatus {
   pending
   approved
   rejected
+}
+
+enum SmsDispatchStatus {
+  pending
+  sent
+  failed
+  skipped
+}
+
+model SmsSummaryDispatch {
+  id                String            @id @default(uuid()) @db.Uuid
+  shopId            String            @map("shop_id") @db.Uuid
+  businessDate      DateTime          @map("business_date") @db.Date
+  recipientPhone    String            @map("recipient_phone")
+  messageBody       String            @map("message_body")
+  status            SmsDispatchStatus @default(pending)
+  provider          String?           @map("provider")
+  providerMessageId String?           @map("provider_message_id")
+  errorMessage      String?           @map("error_message")
+  attemptCount      Int               @default(0) @map("attempt_count")
+  sentAt            DateTime?         @map("sent_at") @db.Timestamptz(6)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@unique([shopId, businessDate], map: "uq_sms_summary_dispatches_shop_business_date")
+  @@index([businessDate, status], map: "idx_sms_summary_dispatches_business_status")
+  @@index([shopId, createdAt], map: "idx_sms_summary_dispatches_shop_created")
+  @@map("sms_summary_dispatches")
 }
 
 model SubscriptionPlan {

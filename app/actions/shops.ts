@@ -89,6 +89,8 @@ export async function createShop(data: {
   queueWorkflow?: string | null;
   barcodeFeatureEntitled?: boolean;
   barcodeScanEnabled?: boolean;
+  smsSummaryEntitled?: boolean;
+  smsSummaryEnabled?: boolean;
 }) {
   const user = await getCurrentUser();
   const isSuperAdmin = user.roles?.includes("super_admin") ?? false;
@@ -148,12 +150,27 @@ export async function createShop(data: {
   if (wantsBarcodeFeatureChange) {
     requirePermission(user, "manage_shop_barcode_feature");
   }
+  const wantsSmsEntitlementChange = data.smsSummaryEntitled === true;
+  if (wantsSmsEntitlementChange) {
+    requirePermission(user, "manage_shop_sms_entitlement");
+  }
+  const wantsSmsFeatureChange = data.smsSummaryEnabled !== undefined;
+  if (wantsSmsFeatureChange) {
+    requirePermission(user, "manage_shop_sms_feature");
+  }
 
   const resolvedBarcodeEntitled = Boolean(data.barcodeFeatureEntitled ?? false);
   const resolvedBarcodeScanEnabled = Boolean(data.barcodeScanEnabled ?? false);
   if (resolvedBarcodeScanEnabled && !resolvedBarcodeEntitled) {
     throw new Error(
       "Barcode scan cannot be enabled before super-admin entitlement is turned on"
+    );
+  }
+  const resolvedSmsEntitled = Boolean(data.smsSummaryEntitled ?? false);
+  const resolvedSmsEnabled = Boolean(data.smsSummaryEnabled ?? false);
+  if (resolvedSmsEnabled && !resolvedSmsEntitled) {
+    throw new Error(
+      "SMS summary cannot be enabled before super-admin entitlement is turned on"
     );
   }
 
@@ -168,6 +185,8 @@ export async function createShop(data: {
       barcodeScanEnabled: resolvedBarcodeEntitled
         ? resolvedBarcodeScanEnabled
         : false,
+      smsSummaryEntitled: resolvedSmsEntitled,
+      smsSummaryEnabled: resolvedSmsEntitled ? resolvedSmsEnabled : false,
       ...(data.salesInvoiceEnabled !== undefined
         ? { salesInvoiceEnabled: Boolean(data.salesInvoiceEnabled) }
         : {}),
@@ -329,8 +348,35 @@ export async function updateShop(id: string, data: any) {
     (updateData as any).barcodeScanEnabled = Boolean(data.barcodeScanEnabled);
   }
 
+  const wantsSmsEntitlementChange = data.smsSummaryEntitled !== undefined;
+  if (wantsSmsEntitlementChange) {
+    requirePermission(user, "manage_shop_sms_entitlement");
+    (updateData as any).smsSummaryEntitled = Boolean(data.smsSummaryEntitled);
+  }
+
+  const wantsSmsFeatureChange = data.smsSummaryEnabled !== undefined;
+  if (wantsSmsFeatureChange) {
+    requirePermission(user, "manage_shop_sms_feature");
+
+    const effectiveEntitlement =
+      data.smsSummaryEntitled !== undefined
+        ? Boolean(data.smsSummaryEntitled)
+        : Boolean((shop as any).smsSummaryEntitled);
+
+    if (Boolean(data.smsSummaryEnabled) && !effectiveEntitlement) {
+      throw new Error(
+        "SMS summary cannot be enabled before super-admin entitlement is turned on"
+      );
+    }
+
+    (updateData as any).smsSummaryEnabled = Boolean(data.smsSummaryEnabled);
+  }
+
   if (data.barcodeFeatureEntitled !== undefined && !Boolean(data.barcodeFeatureEntitled)) {
     (updateData as any).barcodeScanEnabled = false;
+  }
+  if (data.smsSummaryEntitled !== undefined && !Boolean(data.smsSummaryEntitled)) {
+    (updateData as any).smsSummaryEnabled = false;
   }
 
   await prisma.shop.update({

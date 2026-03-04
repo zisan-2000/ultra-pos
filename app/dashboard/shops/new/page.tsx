@@ -33,6 +33,16 @@ export default async function NewShopPage() {
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_barcode_feature"))
   );
+  const canManageSmsEntitlement = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_sms_entitlement"))
+  );
+  const canManageSmsFeature = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_sms_feature"))
+  );
   const shops = isSuperAdmin ? [] : await getShopsByUser();
   const canOwnerCreateFirstShop = isOwner && shops.length === 0;
 
@@ -79,6 +89,8 @@ export default async function NewShopPage() {
         showQueueTokenSettings={canManageQueueToken}
         showBarcodeSettings={canManageBarcodeEntitlement || canManageBarcodeFeature}
         canEditBarcodeEntitlement={canManageBarcodeEntitlement}
+        showSmsSummarySettings={canManageSmsEntitlement || canManageSmsFeature}
+        canEditSmsSummaryEntitlement={canManageSmsEntitlement}
       />
     </div>
   );

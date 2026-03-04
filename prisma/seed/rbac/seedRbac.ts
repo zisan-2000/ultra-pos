@@ -98,6 +98,7 @@ export async function seedRBACAndUsers(prisma: PrismaClient): Promise<{
     "manage_shop_invoice_feature",
     "manage_shop_queue_feature",
     "manage_shop_barcode_feature",
+    "manage_shop_sms_feature",
     "view_products",
     "create_product",
     "update_product",

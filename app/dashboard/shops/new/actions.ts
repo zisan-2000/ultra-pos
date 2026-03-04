@@ -13,6 +13,8 @@ export async function handleCreateShop(formData: FormData) {
     formData.has("queueWorkflow");
   const hasBarcodeSettings =
     formData.has("barcodeFeatureEntitled") || formData.has("barcodeScanEnabled");
+  const hasSmsSettings =
+    formData.has("smsSummaryEntitled") || formData.has("smsSummaryEnabled");
 
   await createShop({
     name: formData.get("name") as string,
@@ -43,6 +45,12 @@ export async function handleCreateShop(formData: FormData) {
           barcodeFeatureEntitled:
             formData.get("barcodeFeatureEntitled") === "1",
           barcodeScanEnabled: formData.get("barcodeScanEnabled") === "1",
+        }
+      : {}),
+    ...(hasSmsSettings
+      ? {
+          smsSummaryEntitled: formData.get("smsSummaryEntitled") === "1",
+          smsSummaryEnabled: formData.get("smsSummaryEnabled") === "1",
         }
       : {}),
   });

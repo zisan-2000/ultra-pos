@@ -119,6 +119,8 @@ const shopCreateSchema = z.object({
   queueTokenPrefix: z.string().optional().nullable(),
   barcodeFeatureEntitled: z.boolean().optional(),
   barcodeScanEnabled: z.boolean().optional(),
+  smsSummaryEntitled: z.boolean().optional(),
+  smsSummaryEnabled: z.boolean().optional(),
   ownerId: z.string().optional().nullable(),
 });
 
@@ -135,6 +137,8 @@ const shopUpdateSchema = z.object({
   queueTokenPrefix: z.string().optional().nullable(),
   barcodeFeatureEntitled: z.boolean().optional(),
   barcodeScanEnabled: z.boolean().optional(),
+  smsSummaryEntitled: z.boolean().optional(),
+  smsSummaryEnabled: z.boolean().optional(),
 });
 
 const shopDeleteSchema = z.object({
@@ -309,6 +313,8 @@ export async function POST(req: Request) {
                 queueTokenPrefix: input.queueTokenPrefix ?? undefined,
                 barcodeFeatureEntitled: input.barcodeFeatureEntitled,
                 barcodeScanEnabled: input.barcodeScanEnabled,
+                smsSummaryEntitled: input.smsSummaryEntitled,
+                smsSummaryEnabled: input.smsSummaryEnabled,
                 ownerId: input.ownerId ?? undefined,
               });
               break;
@@ -343,6 +349,12 @@ export async function POST(req: Request) {
                   : {}),
                 ...(data.barcodeScanEnabled !== undefined
                   ? { barcodeScanEnabled: data.barcodeScanEnabled }
+                  : {}),
+                ...(data.smsSummaryEntitled !== undefined
+                  ? { smsSummaryEntitled: data.smsSummaryEntitled }
+                  : {}),
+                ...(data.smsSummaryEnabled !== undefined
+                  ? { smsSummaryEnabled: data.smsSummaryEnabled }
                   : {}),
               });
               break;

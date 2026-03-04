@@ -36,6 +36,16 @@ export default async function EditShop({ params }: PageProps) {
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_barcode_feature"))
   );
+  const canManageSmsEntitlement = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_sms_entitlement"))
+  );
+  const canManageSmsFeature = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_sms_feature"))
+  );
   let shop: Awaited<ReturnType<typeof getShop>> | null = null;
   try {
     shop = await getShop(id);
@@ -138,6 +148,21 @@ export default async function EditShop({ params }: PageProps) {
               : {}),
           }
         : {}),
+      ...(canManageSmsEntitlement || canManageSmsFeature
+        ? {
+            ...(canManageSmsEntitlement
+              ? {
+                  smsSummaryEntitled:
+                    formData.get("smsSummaryEntitled") === "1",
+                }
+              : {}),
+            ...(canManageSmsFeature
+              ? {
+                  smsSummaryEnabled: formData.get("smsSummaryEnabled") === "1",
+                }
+              : {}),
+          }
+        : {}),
     });
 
     redirect("/dashboard/shops");
@@ -167,6 +192,8 @@ export default async function EditShop({ params }: PageProps) {
           queueWorkflow: (shop as any).queueWorkflow || null,
           barcodeFeatureEntitled: Boolean((shop as any).barcodeFeatureEntitled),
           barcodeScanEnabled: Boolean((shop as any).barcodeScanEnabled),
+          smsSummaryEntitled: Boolean((shop as any).smsSummaryEntitled),
+          smsSummaryEnabled: Boolean((shop as any).smsSummaryEnabled),
         }}
         submitLabel="সংরক্ষণ করুন"
         businessTypeOptions={businessTypeOptions}
@@ -174,6 +201,8 @@ export default async function EditShop({ params }: PageProps) {
         showQueueTokenSettings={canManageQueueToken}
         showBarcodeSettings={canManageBarcodeEntitlement || canManageBarcodeFeature}
         canEditBarcodeEntitlement={canManageBarcodeEntitlement}
+        showSmsSummarySettings={canManageSmsEntitlement || canManageSmsFeature}
+        canEditSmsSummaryEntitlement={canManageSmsEntitlement}
       />
     </div>
   );

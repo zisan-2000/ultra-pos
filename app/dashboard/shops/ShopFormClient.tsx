@@ -51,6 +51,8 @@ type Props = {
     queueWorkflow?: string | null;
     barcodeFeatureEntitled?: boolean;
     barcodeScanEnabled?: boolean;
+    smsSummaryEntitled?: boolean;
+    smsSummaryEnabled?: boolean;
   };
   submitLabel?: string;
   ownerOptions?: Array<{ id: string; name: string | null; email: string | null }>;
@@ -59,6 +61,8 @@ type Props = {
   showQueueTokenSettings?: boolean;
   showBarcodeSettings?: boolean;
   canEditBarcodeEntitlement?: boolean;
+  showSmsSummarySettings?: boolean;
+  canEditSmsSummaryEntitlement?: boolean;
 };
 
 const SHOP_TEMPLATE_KEY = "shopTemplates:v1";
@@ -120,6 +124,8 @@ export default function ShopFormClient({
   showQueueTokenSettings = false,
   showBarcodeSettings = false,
   canEditBarcodeEntitlement = false,
+  showSmsSummarySettings = false,
+  canEditSmsSummaryEntitlement = false,
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -157,6 +163,12 @@ export default function ShopFormClient({
   );
   const [barcodeScanEnabled, setBarcodeScanEnabled] = useState<boolean>(
     Boolean(initial?.barcodeScanEnabled ?? false)
+  );
+  const [smsSummaryEntitled, setSmsSummaryEntitled] = useState<boolean>(
+    Boolean(initial?.smsSummaryEntitled ?? false)
+  );
+  const [smsSummaryEnabled, setSmsSummaryEnabled] = useState<boolean>(
+    Boolean(initial?.smsSummaryEnabled ?? false)
   );
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const hasOwnerOptions = Boolean(ownerOptions && ownerOptions.length > 0);
@@ -415,6 +427,10 @@ export default function ShopFormClient({
     const payloadBarcodeScanEnabled = payloadBarcodeFeatureEntitled
       ? Boolean(barcodeScanEnabled)
       : false;
+    const payloadSmsSummaryEntitled = Boolean(smsSummaryEntitled);
+    const payloadSmsSummaryEnabled = payloadSmsSummaryEntitled
+      ? Boolean(smsSummaryEnabled)
+      : false;
 
     form.set("name", payloadName);
     form.set("address", payloadAddress);
@@ -437,6 +453,15 @@ export default function ShopFormClient({
         );
       }
       form.set("barcodeScanEnabled", payloadBarcodeScanEnabled ? "1" : "0");
+    }
+    if (showSmsSummarySettings) {
+      if (canEditSmsSummaryEntitlement) {
+        form.set(
+          "smsSummaryEntitled",
+          payloadSmsSummaryEntitled ? "1" : "0"
+        );
+      }
+      form.set("smsSummaryEnabled", payloadSmsSummaryEnabled ? "1" : "0");
     }
     if (ownerOptions) {
       form.set("ownerId", selectedOwnerId);
@@ -478,6 +503,14 @@ export default function ShopFormClient({
                   ? { barcodeFeatureEntitled: payloadBarcodeFeatureEntitled }
                   : {}),
                 barcodeScanEnabled: payloadBarcodeScanEnabled,
+              }
+            : {}),
+          ...(showSmsSummarySettings
+            ? {
+                ...(canEditSmsSummaryEntitlement
+                  ? { smsSummaryEntitled: payloadSmsSummaryEntitled }
+                  : {}),
+                smsSummaryEnabled: payloadSmsSummaryEnabled,
               }
             : {}),
           ownerId: ownerOptions ? selectedOwnerId || null : null,
@@ -854,6 +887,58 @@ export default function ShopFormClient({
           {!barcodeFeatureEntitled ? (
             <p className="text-xs text-warning">
               প্রথমে entitlement চালু না হলে scan toggle activate হবে না।
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showSmsSummarySettings ? (
+        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
+          <div className="space-y-1">
+            <label className="block text-sm font-semibold text-foreground">
+              Daily SMS Summary ফিচার
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Super-admin entitlement + owner toggle true হলে এই দোকানে SMS summary
+              চালু করা যাবে।
+            </p>
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={smsSummaryEntitled}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setSmsSummaryEntitled(next);
+                if (!next) {
+                  setSmsSummaryEnabled(false);
+                }
+              }}
+              disabled={!canEditSmsSummaryEntitlement}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+            />
+            এই দোকানে SMS entitlement চালু
+          </label>
+          {!canEditSmsSummaryEntitlement ? (
+            <p className="text-xs text-muted-foreground">
+              এই entitlement শুধু super-admin পরিবর্তন করতে পারবেন।
+            </p>
+          ) : null}
+
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={smsSummaryEnabled}
+              onChange={(e) => setSmsSummaryEnabled(e.target.checked)}
+              disabled={!smsSummaryEntitled}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+            />
+            Owner daily SMS summary চালু
+          </label>
+          {!smsSummaryEntitled ? (
+            <p className="text-xs text-warning">
+              প্রথমে entitlement চালু না হলে SMS toggle activate হবে না।
             </p>
           ) : null}
         </div>
