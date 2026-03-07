@@ -4,6 +4,7 @@
 "use client";
 
 import {
+  useCallback,
   Fragment,
   Suspense,
   type ReactElement,
@@ -47,6 +48,12 @@ type SpeechRecognitionInstance = {
   onresult: ((event: any) => void) | null;
   onerror: ((event: any) => void) | null;
   onend: (() => void) | null;
+};
+
+type CameraBarcodeDetector = {
+  detect: (
+    source: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement | ImageBitmap
+  ) => Promise<Array<{ rawValue?: string }>>;
 };
 
 type TemplateItem = {
@@ -212,6 +219,13 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   const businessType = (shop.businessType as BusinessType) || "tea_stall";
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraScanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cameraDetectorRef = useRef<CameraBarcodeDetector | null>(null);
+  const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
+  const lastCameraHitRef = useRef<{ code: string; at: number } | null>(null);
+  const cameraContinuousRef = useRef(false);
   const templateStorageKey = useMemo(() => `productTemplates:${shop.id}`, [shop.id]);
 
   const businessAssist = BUSINESS_ASSISTS[businessType];
@@ -226,6 +240,12 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraTorchSupported, setCameraTorchSupported] = useState(false);
+  const [cameraTorchOn, setCameraTorchOn] = useState(false);
+  const [cameraContinuousMode, setCameraContinuousMode] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -335,6 +355,23 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
     isFieldVisible(field)
   );
 
+  const stopCamera = useCallback(() => {
+    if (cameraScanTimerRef.current) {
+      clearTimeout(cameraScanTimerRef.current);
+      cameraScanTimerRef.current = null;
+    }
+    const stream = cameraStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+    cameraStreamRef.current = null;
+    cameraTrackRef.current = null;
+    cameraDetectorRef.current = null;
+    setCameraReady(false);
+    setCameraTorchSupported(false);
+    setCameraTorchOn(false);
+  }, []);
+
   // Reset stock/unit when business type changes
   useEffect(() => {
     let cancelled = false;
@@ -395,8 +432,23 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
     return () => {
       cancelled = true;
       recognitionRef.current?.stop?.();
+      stopCamera();
     };
-  }, []);
+  }, [stopCamera]);
+
+  useEffect(() => {
+    return () => stopCamera();
+  }, [stopCamera]);
+
+  useEffect(() => {
+    cameraContinuousRef.current = cameraContinuousMode;
+  }, [cameraContinuousMode]);
+
+  useEffect(() => {
+    if (!cameraOpen) {
+      stopCamera();
+    }
+  }, [cameraOpen, stopCamera]);
   useEffect(() => {
     let cancelled = false;
     scheduleStateUpdate(() => {
@@ -413,6 +465,15 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
     const id = setTimeout(() => setScanFeedback(null), 2200);
     return () => clearTimeout(id);
   }, [scanFeedback]);
+
+  useEffect(() => {
+    if (!cameraOpen || typeof document === "undefined") return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, [cameraOpen]);
 
   // Load recent/frequent templates
   useEffect(() => {
@@ -694,32 +755,186 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
     }
   }
 
-  function handleScanAssign() {
-    const normalizedCode = normalizeCodeInput(scanCode);
-    if (!normalizedCode) {
+  const assignScannedCode = useCallback(
+    (rawCode: string, source: "manual" | "camera" = "manual") => {
+      const normalizedCode = normalizeCodeInput(rawCode);
+      if (!normalizedCode) {
+        setScanFeedback({
+          type: "error",
+          message: "স্ক্যান কোড খালি আছে, আবার স্ক্যান করুন।",
+        });
+        return false;
+      }
+
+      if (scanTarget === "barcode") {
+        setBarcode(normalizedCode);
+      } else {
+        setSku(normalizedCode);
+      }
+
       setScanFeedback({
-        type: "error",
-        message: "স্ক্যান কোড খালি আছে, আবার স্ক্যান করুন।",
+        type: "success",
+        message:
+          scanTarget === "barcode"
+            ? source === "camera"
+              ? "ক্যামেরা স্ক্যান থেকে Barcode বসানো হয়েছে।"
+              : "Barcode ফিল্ডে কোড বসানো হয়েছে।"
+            : source === "camera"
+            ? "ক্যামেরা স্ক্যান থেকে SKU বসানো হয়েছে।"
+            : "SKU ফিল্ডে কোড বসানো হয়েছে।",
       });
-      return;
-    }
+      return true;
+    },
+    [scanTarget]
+  );
 
-    if (scanTarget === "barcode") {
-      setBarcode(normalizedCode);
-    } else {
-      setSku(normalizedCode);
-    }
-
-    setScanFeedback({
-      type: "success",
-      message:
-        scanTarget === "barcode"
-          ? "Barcode ফিল্ডে কোড বসানো হয়েছে।"
-          : "SKU ফিল্ডে কোড বসানো হয়েছে।",
-    });
+  function handleScanAssign() {
+    const ok = assignScannedCode(scanCode, "manual");
+    if (!ok) return;
     setScanCode("");
     scanInputRef.current?.focus();
   }
+
+  const toggleCameraTorch = useCallback(async () => {
+    const track = cameraTrackRef.current as
+      | (MediaStreamTrack & {
+          applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
+        })
+      | null;
+    if (!track || typeof track.applyConstraints !== "function") return;
+
+    const next = !cameraTorchOn;
+    try {
+      await track.applyConstraints({
+        advanced: [{ torch: next } as any],
+      });
+      setCameraTorchOn(next);
+    } catch {
+      setCameraError("ফ্ল্যাশ চালু করা যায়নি।");
+    }
+  }, [cameraTorchOn]);
+
+  const openCameraScanner = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      const message = "এই ডিভাইসে ক্যামেরা সাপোর্ট নেই।";
+      setCameraError(message);
+      setScanFeedback({ type: "error", message });
+      return;
+    }
+
+    const BarcodeDetectorCtor = (window as any).BarcodeDetector;
+    if (!BarcodeDetectorCtor) {
+      const message =
+        "এই ব্রাউজারে live camera barcode scan সাপোর্ট নেই। Chrome/Edge latest ব্যবহার করুন।";
+      setCameraError(message);
+      setScanFeedback({ type: "error", message });
+      return;
+    }
+
+    setCameraOpen(true);
+    setCameraError(null);
+    setCameraReady(false);
+    lastCameraHitRef.current = null;
+    stopCamera();
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+
+      cameraStreamRef.current = stream;
+      cameraTrackRef.current = stream.getVideoTracks()[0] ?? null;
+
+      const trackAny = cameraTrackRef.current as
+        | (MediaStreamTrack & { getCapabilities?: () => any })
+        | null;
+      const capabilities = (trackAny?.getCapabilities?.() as any) ?? null;
+      const torchSupported = Boolean(capabilities?.torch);
+      setCameraTorchSupported(torchSupported);
+      setCameraTorchOn(false);
+
+      const video = cameraVideoRef.current;
+      if (!video) {
+        throw new Error("ভিডিও এলিমেন্ট পাওয়া যায়নি");
+      }
+      video.srcObject = stream;
+      video.setAttribute("playsinline", "true");
+      await video.play();
+
+      try {
+        cameraDetectorRef.current = new BarcodeDetectorCtor({
+          formats: [
+            "ean_13",
+            "ean_8",
+            "upc_a",
+            "upc_e",
+            "code_128",
+            "code_39",
+            "qr_code",
+          ],
+        });
+      } catch {
+        cameraDetectorRef.current = new BarcodeDetectorCtor();
+      }
+
+      setCameraReady(true);
+
+      const scanLoop = async () => {
+        const detector = cameraDetectorRef.current;
+        const videoEl = cameraVideoRef.current;
+        if (!detector || !videoEl || !cameraStreamRef.current) return;
+
+        try {
+          if (videoEl.readyState >= 2) {
+            const barcodes = await detector.detect(videoEl);
+            const rawCode = barcodes?.[0]?.rawValue;
+            const normalized = normalizeCodeInput(rawCode || "");
+            if (normalized) {
+              const now = Date.now();
+              const last = lastCameraHitRef.current;
+              const duplicateRecent =
+                last && last.code === normalized && now - last.at < 1200;
+
+              if (!duplicateRecent) {
+                lastCameraHitRef.current = { code: normalized, at: now };
+                const ok = assignScannedCode(normalized, "camera");
+                if (ok) {
+                  setScanCode(normalized);
+                  if (typeof navigator.vibrate === "function") {
+                    navigator.vibrate(40);
+                  }
+                  if (!cameraContinuousRef.current) {
+                    setCameraOpen(false);
+                    stopCamera();
+                    return;
+                  }
+                }
+              }
+            }
+          }
+        } catch {
+          // ignore per-frame detection errors
+        }
+
+        cameraScanTimerRef.current = setTimeout(scanLoop, 220);
+      };
+
+      cameraScanTimerRef.current = setTimeout(scanLoop, 220);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "ক্যামেরা চালু করা যায়নি";
+      setCameraError(message);
+      setScanFeedback({ type: "error", message });
+      setCameraOpen(false);
+      stopCamera();
+    }
+  }, [assignScannedCode, stopCamera]);
 
   async function handleSubmit(e: any) {
     e.preventDefault();
@@ -1025,6 +1240,13 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
                 >
                   Scan বসান
                 </button>
+                <button
+                  type="button"
+                  onClick={openCameraScanner}
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-card px-3 text-xs font-semibold text-primary"
+                >
+                  Camera
+                </button>
               </div>
               <p
                 className={`text-xs ${
@@ -1033,6 +1255,9 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
               >
                 {scanFeedback?.message ||
                   "Scanner সাধারণত Enter পাঠায়, তাই স্ক্যান করলেই কোড বসে যাবে।"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Camera mode-এ মোবাইল ফোন দিয়েও barcode/SKU scan করা যাবে।
               </p>
             </div>
           ) : null}
@@ -1362,6 +1587,73 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
           </div>
         </div>
       </form>
+      {cameraOpen ? (
+        <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm">
+          <div className="mx-auto flex h-full w-full max-w-md flex-col px-4 py-4">
+            <div className="mb-3 flex items-center justify-between rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-white">
+              <div>
+                <p className="text-sm font-semibold">ক্যামেরা স্ক্যান</p>
+                <p className="text-[11px] text-white/70">
+                  বারকোড/কোড ফ্রেমে আনুন, auto detect হবে
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCameraOpen(false);
+                  stopCamera();
+                }}
+                className="inline-flex h-9 items-center justify-center rounded-lg border border-white/30 bg-white/10 px-3 text-xs font-semibold"
+              >
+                বন্ধ করুন
+              </button>
+            </div>
+
+            <div className="relative flex-1 overflow-hidden rounded-2xl border border-white/20 bg-black">
+              <video
+                ref={cameraVideoRef}
+                className="h-full w-full object-cover"
+                autoPlay
+                muted
+                playsInline
+              />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="h-52 w-72 max-w-[85%] rounded-2xl border-2 border-emerald-300/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.30)]" />
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-2 rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-white">
+              <div className="flex items-center justify-between gap-2">
+                <label className="inline-flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={cameraContinuousMode}
+                    onChange={(e) => setCameraContinuousMode(e.target.checked)}
+                    className="h-4 w-4 rounded border-white/40 bg-transparent"
+                  />
+                  Continuous scan
+                </label>
+                <button
+                  type="button"
+                  onClick={toggleCameraTorch}
+                  disabled={!cameraTorchSupported}
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-white/30 bg-white/10 px-3 text-xs font-semibold disabled:opacity-50"
+                >
+                  {cameraTorchOn ? "Torch off" : "Torch on"}
+                </button>
+              </div>
+              <p className="text-[11px] text-white/75">
+                {cameraReady
+                  ? "Detected হলে vibration হবে এবং SKU/Barcode auto বসবে।"
+                  : "ক্যামেরা প্রস্তুত হচ্ছে..."}
+              </p>
+              {cameraError ? (
+                <p className="text-[11px] text-rose-300">{cameraError}</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
