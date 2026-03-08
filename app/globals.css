@@ -134,6 +134,8 @@
 
 html {
   color-scheme: light;
+  height: 100vh;
+  overflow: hidden;
 }
 
 html.dark {
@@ -142,8 +144,13 @@ html.dark {
 
 html.theme-switch,
 html.theme-switch * {
-  transition: background-color 160ms ease, border-color 160ms ease,
-    color 160ms ease, fill 160ms ease, stroke 160ms ease, box-shadow 160ms ease;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    fill 160ms ease,
+    stroke 160ms ease,
+    box-shadow 160ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -172,8 +179,7 @@ html.theme-switch * {
   --color-destructive: var(--destructive);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
-  --font-sans: var(--font-bengali), var(--font-geist-sans), "Inter",
-    sans-serif;
+  --font-sans: var(--font-bengali), var(--font-geist-sans), "Inter", sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -209,6 +215,8 @@ body {
   font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.6;
+  height: 100vh;
+  overflow: hidden;
 }
 
 * {
@@ -331,7 +339,9 @@ body {
 }
 
 .card-lift {
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
   will-change: transform, box-shadow;
 }
 .card-lift:hover {
@@ -340,7 +350,9 @@ body {
 }
 
 .fab-tap {
-  transition: transform 140ms ease, box-shadow 140ms ease;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease;
   will-change: transform, box-shadow;
 }
 .fab-tap:active {
