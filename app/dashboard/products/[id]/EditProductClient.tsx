@@ -3,6 +3,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
+import { Switch } from "@/components/ui/switch";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
@@ -11,6 +12,13 @@ import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
 import { handlePermissionError } from "@/lib/permission-toast";
+import {
+  CAMERA_DUPLICATE_WINDOW_MS,
+  isRapidDuplicateScan,
+  MANUAL_DUPLICATE_WINDOW_MS,
+  playScannerFeedbackTone,
+  SCAN_IDLE_SUBMIT_MS,
+} from "@/lib/scanner/ux";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Props = {
@@ -197,8 +205,16 @@ export default function EditProductClient({
   const cameraDetectorRef = useRef<CameraBarcodeDetector | null>(null);
   const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const lastCameraHitRef = useRef<{ code: string; at: number } | null>(null);
+  const lastProcessedScanRef = useRef<{ code: string; at: number } | null>(
+    null
+  );
+  const scanIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cameraContinuousRef = useRef(false);
   const templateStorageKey = useMemo(() => `productTemplates:${shop.id}`, [shop.id]);
+  const scannerModeStorageKey = useMemo(
+    () => `product-scan-mode:${shop.id}`,
+    [shop.id]
+  );
   const shopId = shop.id;
   const businessAssist = BUSINESS_ASSISTS[businessType];
   const fallbackName = businessAssist?.fallbackName || "Unnamed product";
@@ -273,6 +289,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   const [cameraTorchSupported, setCameraTorchSupported] = useState(false);
   const [cameraTorchOn, setCameraTorchOn] = useState(false);
   const [cameraContinuousMode, setCameraContinuousMode] = useState(false);
+  const [scannerAssistEnabled, setScannerAssistEnabled] = useState(true);
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -373,6 +390,50 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   useEffect(() => {
     return () => stopCamera();
   }, [stopCamera]);
+
+  useEffect(() => {
+    try {
+      const stored = safeLocalStorageGet(scannerModeStorageKey);
+      if (stored === "0") {
+        setScannerAssistEnabled(false);
+      }
+    } catch {
+      // ignore local preference read errors
+    }
+  }, [scannerModeStorageKey]);
+
+  useEffect(() => {
+    try {
+      safeLocalStorageSet(
+        scannerModeStorageKey,
+        scannerAssistEnabled ? "1" : "0"
+      );
+    } catch {
+      // ignore local preference write errors
+    }
+  }, [scannerAssistEnabled, scannerModeStorageKey]);
+
+  useEffect(() => {
+    return () => {
+      if (scanIdleTimerRef.current) {
+        clearTimeout(scanIdleTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (scannerAssistEnabled) return;
+    if (scanIdleTimerRef.current) {
+      clearTimeout(scanIdleTimerRef.current);
+      scanIdleTimerRef.current = null;
+    }
+    setScanCode("");
+    setScanFeedback(null);
+    if (cameraOpen) {
+      setCameraOpen(false);
+    }
+    stopCamera();
+  }, [cameraOpen, scannerAssistEnabled, stopCamera]);
 
   useEffect(() => {
     cameraContinuousRef.current = cameraContinuousMode;
@@ -659,14 +720,42 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     }
   }
 
+  const focusScanInput = useCallback(() => {
+    const input = scanInputRef.current;
+    if (!input || cameraOpen) return;
+    input.focus();
+    input.select();
+  }, [cameraOpen]);
+
   const assignScannedCode = useCallback(
     (rawCode: string, source: "manual" | "camera" = "manual") => {
+      if (!scannerAssistEnabled) return false;
       const normalizedCode = normalizeCodeInput(rawCode);
       if (!normalizedCode) {
         setScanFeedback({
           type: "error",
           message: "স্ক্যান কোড খালি আছে, আবার স্ক্যান করুন।",
         });
+        playScannerFeedbackTone("error");
+        return false;
+      }
+
+      const duplicateWindowMs =
+        source === "camera"
+          ? CAMERA_DUPLICATE_WINDOW_MS
+          : MANUAL_DUPLICATE_WINDOW_MS;
+      if (
+        isRapidDuplicateScan(
+          lastProcessedScanRef.current,
+          normalizedCode,
+          duplicateWindowMs
+        )
+      ) {
+        setScanFeedback({
+          type: "error",
+          message: `একই কোড ${normalizedCode} খুব দ্রুত দুইবার এসেছে, duplicate ignore করা হয়েছে।`,
+        });
+        playScannerFeedbackTone("error");
         return false;
       }
 
@@ -676,6 +765,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         setSku(normalizedCode);
       }
 
+      lastProcessedScanRef.current = { code: normalizedCode, at: Date.now() };
       setScanFeedback({
         type: "success",
         message:
@@ -687,17 +777,49 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             ? "ক্যামেরা স্ক্যান থেকে SKU বসানো হয়েছে।"
             : "SKU ফিল্ডে কোড বসানো হয়েছে।",
       });
+      playScannerFeedbackTone("success");
       return true;
     },
-    [scanTarget]
+    [scanTarget, scannerAssistEnabled]
   );
 
   function handleScanAssign() {
+    if (!scannerAssistEnabled) return;
+    if (scanIdleTimerRef.current) {
+      clearTimeout(scanIdleTimerRef.current);
+      scanIdleTimerRef.current = null;
+    }
     const ok = assignScannedCode(scanCode, "manual");
     if (!ok) return;
     setScanCode("");
-    scanInputRef.current?.focus();
+    focusScanInput();
   }
+
+  useEffect(() => {
+    if (!canUseBarcodeScan || !scannerAssistEnabled || cameraOpen || !scanCode) return;
+    if (document.activeElement !== scanInputRef.current) return;
+    const normalizedCode = normalizeCodeInput(scanCode);
+    if (normalizedCode.length < 4) return;
+
+    if (scanIdleTimerRef.current) {
+      clearTimeout(scanIdleTimerRef.current);
+    }
+
+    scanIdleTimerRef.current = setTimeout(() => {
+      if (document.activeElement !== scanInputRef.current) return;
+      const ok = assignScannedCode(normalizedCode, "manual");
+      if (!ok) return;
+      setScanCode("");
+      focusScanInput();
+    }, SCAN_IDLE_SUBMIT_MS);
+
+    return () => {
+      if (scanIdleTimerRef.current) {
+        clearTimeout(scanIdleTimerRef.current);
+        scanIdleTimerRef.current = null;
+      }
+    };
+  }, [assignScannedCode, cameraOpen, canUseBarcodeScan, focusScanInput, scanCode, scannerAssistEnabled]);
 
   const toggleCameraTorch = useCallback(async () => {
     const track = cameraTrackRef.current as
@@ -719,6 +841,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   }, [cameraTorchOn]);
 
   const openCameraScanner = useCallback(async () => {
+    if (!scannerAssistEnabled) return;
     if (typeof window === "undefined") return;
     if (!navigator.mediaDevices?.getUserMedia) {
       const message = "এই ডিভাইসে ক্যামেরা সাপোর্ট নেই।";
@@ -802,8 +925,12 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             if (normalized) {
               const now = Date.now();
               const last = lastCameraHitRef.current;
-              const duplicateRecent =
-                last && last.code === normalized && now - last.at < 1200;
+              const duplicateRecent = isRapidDuplicateScan(
+                last,
+                normalized,
+                CAMERA_DUPLICATE_WINDOW_MS,
+                now
+              );
 
               if (!duplicateRecent) {
                 lastCameraHitRef.current = { code: normalized, at: now };
@@ -838,7 +965,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       setCameraOpen(false);
       stopCamera();
     }
-  }, [assignScannedCode, stopCamera]);
+  }, [assignScannedCode, scannerAssistEnabled, stopCamera]);
 
   async function handleSubmit(e: any) {
     e.preventDefault();
@@ -1020,79 +1147,105 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
         {canUseBarcodeScan ? (
           <div className="rounded-xl border border-primary/20 bg-primary-soft/40 p-3 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-foreground">স্ক্যান টার্গেট:</span>
-              <button
-                type="button"
-                onClick={() => setScanTarget("barcode")}
-                className={`h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${
-                  scanTarget === "barcode"
-                    ? "border-primary/40 bg-primary-soft text-primary"
-                    : "border-border bg-card text-foreground"
-                }`}
-              >
-                Barcode
-              </button>
-              <button
-                type="button"
-                onClick={() => setScanTarget("sku")}
-                className={`h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${
-                  scanTarget === "sku"
-                    ? "border-primary/40 bg-primary-soft text-primary"
-                    : "border-border bg-card text-foreground"
-                }`}
-              >
-                SKU
-              </button>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-foreground">Scanner Assist</p>
+                <p className="text-[11px] text-muted-foreground">
+                  দরকার না হলে সাময়িকভাবে বন্ধ রাখতে পারবেন
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-muted-foreground">
+                  {scannerAssistEnabled ? "চালু" : "বন্ধ"}
+                </span>
+                <Switch
+                  checked={scannerAssistEnabled}
+                  onCheckedChange={setScannerAssistEnabled}
+                  aria-label="Scanner assist toggle"
+                />
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                ref={scanInputRef}
-                type="text"
-                inputMode="text"
-                autoCapitalize="off"
-                autoCorrect="off"
-                autoComplete="off"
-                value={scanCode}
-                onChange={(e) => setScanCode(normalizeCodeInput(e.target.value))}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter") return;
-                  e.preventDefault();
-                  handleScanAssign();
-                }}
-                className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder={
-                  scanTarget === "barcode"
-                    ? "Scanner দিয়ে Barcode scan করুন"
-                    : "Scanner দিয়ে SKU scan করুন"
-                }
-              />
-              <button
-                type="button"
-                onClick={handleScanAssign}
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-primary-soft px-3 text-xs font-semibold text-primary"
-              >
-                Scan বসান
-              </button>
-              <button
-                type="button"
-                onClick={openCameraScanner}
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-card px-3 text-xs font-semibold text-primary"
-              >
-                Camera
-              </button>
-            </div>
-            <p
-              className={`text-xs ${
-                scanFeedback?.type === "error" ? "text-danger" : "text-muted-foreground"
-              }`}
-            >
-              {scanFeedback?.message ||
-                "Scanner সাধারণত Enter পাঠায়, তাই স্ক্যান করলেই কোড বসে যাবে।"}
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              Camera mode-এ মোবাইল ফোন দিয়েও barcode/SKU scan করা যাবে।
-            </p>
+            {scannerAssistEnabled ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-foreground">স্ক্যান টার্গেট:</span>
+                  <button
+                    type="button"
+                    onClick={() => setScanTarget("barcode")}
+                    className={`h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${
+                      scanTarget === "barcode"
+                        ? "border-primary/40 bg-primary-soft text-primary"
+                        : "border-border bg-card text-foreground"
+                    }`}
+                  >
+                    Barcode
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScanTarget("sku")}
+                    className={`h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${
+                      scanTarget === "sku"
+                        ? "border-primary/40 bg-primary-soft text-primary"
+                        : "border-border bg-card text-foreground"
+                    }`}
+                  >
+                    SKU
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={scanInputRef}
+                    type="text"
+                    inputMode="text"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    autoComplete="off"
+                    value={scanCode}
+                    onChange={(e) => setScanCode(normalizeCodeInput(e.target.value))}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      handleScanAssign();
+                    }}
+                    className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder={
+                      scanTarget === "barcode"
+                        ? "Scanner দিয়ে Barcode scan করুন"
+                        : "Scanner দিয়ে SKU scan করুন"
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={handleScanAssign}
+                    className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-primary-soft px-3 text-xs font-semibold text-primary"
+                  >
+                    Scan বসান
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openCameraScanner}
+                    className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-card px-3 text-xs font-semibold text-primary"
+                  >
+                    Camera
+                  </button>
+                </div>
+                <p
+                  className={`text-xs ${
+                    scanFeedback?.type === "error" ? "text-danger" : "text-muted-foreground"
+                  }`}
+                >
+                  {scanFeedback?.message ||
+                    "Enter ছাড়াও scanner idle হলেই code auto বসবে, beep দিয়ে success বোঝাবে।"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Camera mode-এ mobile scan হবে, আর duplicate code খুব দ্রুত repeat হলে ignore হবে।
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Scanner assist বন্ধ আছে। barcode/SKU চাইলে নিচের field-এ manual type করতে পারবেন।
+              </p>
+            )}
           </div>
         ) : null}
 
