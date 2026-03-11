@@ -838,7 +838,9 @@ export function PosPageClient({
     } catch {
       // ignore vibration failures
     }
-    return () => toast.dismiss(toastId);
+    return () => {
+      toast.dismiss(toastId);
+    };
   }, [shopId, success]);
 
   return (
