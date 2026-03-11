@@ -145,29 +145,35 @@ export default function CashbookReport({ shopId, from, to }: Props) {
     [shopId, from, to, page, currentCursor?.at, currentCursor?.id]
   );
 
+  const initialCashData = useMemo(() => {
+    if (online || page !== 1) {
+      return { rows: [], hasMore: false, nextCursor: null };
+    }
+    const cached = readCached(from, to);
+    return cached
+      ? { rows: cached, hasMore: false, nextCursor: null }
+      : { rows: [], hasMore: false, nextCursor: null };
+  }, [online, page, readCached, from, to]);
+
   const cashQuery = useQuery({
     queryKey: cashQueryKey,
     queryFn: () => fetchCash(from, to, currentCursor, page === 1),
     enabled: online,
-    initialData: () => {
-      if (page !== 1) {
-        return { rows: [], hasMore: false, nextCursor: null };
-      }
-      const cached = readCached(from, to);
-      return cached
-        ? { rows: cached, hasMore: false, nextCursor: null }
-        : { rows: [], hasMore: false, nextCursor: null };
-    },
-    placeholderData: (prev) =>
-      prev ?? { rows: [], hasMore: false, nextCursor: null },
+    initialData: initialCashData,
+    staleTime: 0,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
   });
 
-  const rows: CashRow[] = useMemo(
-    () => cashQuery.data?.rows ?? [],
-    [cashQuery.data?.rows]
+  const rawRows: CashRow[] = useMemo(
+    () => cashQuery.data?.rows ?? initialCashData.rows ?? [],
+    [cashQuery.data?.rows, initialCashData.rows]
   );
-  const hasMore = cashQuery.data?.hasMore ?? false;
-  const nextCursor = cashQuery.data?.nextCursor ?? null;
+  const rows: CashRow[] = rawRows;
+  const hasMore = cashQuery.data?.hasMore ?? initialCashData.hasMore ?? false;
+  const nextCursor =
+    cashQuery.data?.nextCursor ?? initialCashData.nextCursor ?? null;
   const loading = cashQuery.isFetching && online;
   const hasFetched = cashQuery.isFetchedAfterMount;
   const showEmpty = rows.length === 0 && (!online || hasFetched) && !loading;

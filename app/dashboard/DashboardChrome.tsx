@@ -175,37 +175,12 @@ const bottomNavTone: Record<
   },
 };
 
-const fabByRoute: Record<string, { href: string; label: string } | null> = {
-  "/dashboard": { href: "/dashboard/sales/new", label: "নতুন বিক্রি যোগ করুন" },
-  "/dashboard/sales": {
-    href: "/dashboard/sales/new",
-    label: "নতুন বিক্রি যোগ করুন",
-  },
-  "/dashboard/products": {
-    href: "/dashboard/products/new",
-    label: "নতুন পণ্য যোগ করুন",
-  },
-  "/dashboard/purchases": {
-    href: "/dashboard/purchases/new",
-    label: "নতুন ক্রয় যোগ করুন",
-  },
-  "/dashboard/expenses": {
-    href: "/dashboard/expenses/new",
-    label: "নতুন খরচ যোগ করুন",
-  },
-  "/dashboard/cash": {
-    href: "/dashboard/cash/new",
-    label: "নতুন এন্ট্রি যোগ করুন",
-  },
-};
+const salesFabConfig = {
+  href: "/dashboard/sales/new",
+  label: "নতুন বিক্রি যোগ করুন",
+} as const;
 
-const fabPermissionMap: Record<string, string> = {
-  "/dashboard/sales/new": "create_sale",
-  "/dashboard/products/new": "create_product",
-  "/dashboard/purchases/new": "create_purchase",
-  "/dashboard/expenses/new": "create_expense",
-  "/dashboard/cash/new": "create_cash_entry",
-};
+const salesFabPermission = "create_sale";
 
 export function DashboardShell({
   shops,
@@ -561,30 +536,12 @@ export function DashboardShell({
 
   const showFabLabel = pathname === "/dashboard";
 
-  const matchedFabRoute = useMemo(() => {
-    const matches = Object.keys(fabByRoute)
-      .filter((route) => {
-        if (route === "/dashboard") {
-          return pathname === route;
-        }
-        return pathname === route || pathname.startsWith(`${route}/`);
-      })
-      .sort((a, b) => b.length - a.length);
-    return matches[0] ?? null;
-  }, [pathname]);
-
-  const baseFabConfig = matchedFabRoute ? fabByRoute[matchedFabRoute] : null;
-  const canUseFab =
-    !baseFabConfig ||
-    hasPermission(
-      baseFabConfig.href ? fabPermissionMap[baseFabConfig.href] : undefined
-    );
+  const canUseFab = hasPermission(salesFabPermission);
   const fabConfig =
     pathname.startsWith("/dashboard/sales/new") ||
-    (!hasInventory && baseFabConfig?.href.startsWith("/dashboard/purchases")) ||
     !canUseFab
       ? null
-      : baseFabConfig;
+      : salesFabConfig;
 
   const mobileNavItems = bottomNav.filter((item) => {
     if (item.href === "/dashboard/queue" && !currentQueueTokenEnabled) {

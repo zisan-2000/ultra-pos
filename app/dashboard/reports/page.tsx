@@ -9,6 +9,7 @@ import {
   getCashSummary,
   getProfitSummary,
 } from "@/app/actions/reports";
+import { shopNeedsCogs } from "@/lib/accounting/cogs";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
 import ReportsClient from "./components/ReportsClient";
@@ -93,12 +94,13 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     ? dhakaDate
     : resolvedSearch?.to ?? dhakaDate;
 
-  const [salesSummary, expenseSummary, cashSummary, profitSummary] =
+  const [salesSummary, expenseSummary, cashSummary, profitSummary, needsCogs] =
     await Promise.all([
       getSalesSummary(selectedShopId, rangeFrom, rangeTo),
       getExpenseSummary(selectedShopId, rangeFrom, rangeTo),
       getCashSummary(selectedShopId, rangeFrom, rangeTo),
       getProfitSummary(selectedShopId, rangeFrom, rangeTo),
+      shopNeedsCogs(selectedShopId),
     ]);
   return (
     <div className="section-gap">
@@ -106,6 +108,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         shopId={selectedShopId}
         shopName={selectedShop.name}
         shops={shops}
+        needsCogs={needsCogs}
         summaryRange={{ from: rangeFrom, to: rangeTo }}
         summary={{
           sales: salesSummary,

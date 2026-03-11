@@ -3,27 +3,33 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type TopProduct = { name: string; qty: number; revenue: number };
+type Props = { shopId: string; from?: string; to?: string };
 
-export default function TopProductsReport({ shopId }: { shopId: string }) {
+function formatMoney(value: number) {
+  return `${value.toFixed(2)} ৳`;
+}
+
+export default function TopProductsReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
 
   const buildCacheKey = useCallback(
-    () => `reports:top-products:${shopId}:${REPORT_ROW_LIMIT}`,
+    (rangeFrom?: string, rangeTo?: string) =>
+      `reports:top-products:${shopId}:${rangeFrom || "all"}:${rangeTo || "all"}:${REPORT_ROW_LIMIT}`,
     [shopId]
   );
 
   
-  const readCached = useCallback(() => {
+  const readCached = useCallback((rangeFrom?: string, rangeTo?: string) => {
     if (typeof window === "undefined") return null;
     try {
-      const raw = safeLocalStorageGet(buildCacheKey());
+      const raw = safeLocalStorageGet(buildCacheKey(rangeFrom, rangeTo));
       if (!raw) {
         return null;
       }
@@ -38,61 +44,88 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
 
   const fetchTopProducts = useCallback(async () => {
     if (!online) {
-      return readCached() ?? [];
+      return readCached(from, to) ?? [];
     }
     const params = new URLSearchParams({
       shopId,
       limit: `${REPORT_ROW_LIMIT}`,
     });
-    const res = await fetch(`/api/reports/top-products?${params.toString()}`);
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+    params.append("fresh", "1");
+    const res = await fetch(`/api/reports/top-products?${params.toString()}`, {
+      cache: "no-store",
+    });
     if (res.status === 304) {
-      return readCached() ?? [];
+      return readCached(from, to) ?? [];
     }
     if (!res.ok) {
-      const cached = readCached();
+      const cached = readCached(from, to);
       if (cached) return cached;
       throw new Error("Top products fetch failed");
     }
     const text = await res.text();
     if (!text) {
-      return readCached() ?? [];
+      return readCached(from, to) ?? [];
     }
     const json = JSON.parse(text);
     const rows = Array.isArray(json?.data) ? json.data : [];
     if (typeof window !== "undefined") {
       try {
-        safeLocalStorageSet(buildCacheKey(), JSON.stringify(rows));
+        safeLocalStorageSet(buildCacheKey(from, to), JSON.stringify(rows));
       } catch (err) {
         handlePermissionError(err);
         console.warn("Top products cache write failed", err);
       }
     }
     return rows;
-  }, [online, shopId, buildCacheKey, readCached]);
+  }, [online, shopId, buildCacheKey, readCached, from, to]);
 
   const queryKey = useMemo(
-    () => ["reports", "top-products", shopId, REPORT_ROW_LIMIT],
-    [shopId]
+    () => ["reports", "top-products", shopId, from ?? "all", to ?? "all", REPORT_ROW_LIMIT],
+    [shopId, from, to]
+  );
+
+  const initialRows = useMemo(
+    () => (online ? [] : (readCached(from, to) ?? [])),
+    [online, readCached, from, to]
   );
 
   const topProductsQuery = useQuery({
     queryKey,
     queryFn: fetchTopProducts,
     enabled: online,
-    initialData: () => readCached() ?? [],
-    placeholderData: keepPreviousData,
+    initialData: initialRows,
+    staleTime: 0,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
   });
 
-  const data: TopProduct[] = topProductsQuery.data ?? [];
+  const rawData: TopProduct[] = topProductsQuery.data ?? initialRows;
+  const data: TopProduct[] = rawData;
   const loading = topProductsQuery.isFetching && online;
   const hasFetched = topProductsQuery.isFetchedAfterMount;
   const showEmpty = data.length === 0 && (!online || hasFetched) && !loading;
+  const showSummaryPlaceholder = loading && data.length === 0;
+  const totals = useMemo(
+    () =>
+      data.reduce(
+        (sum, item) => ({
+          qty: sum.qty + Number(item.qty || 0),
+          revenue: sum.revenue + Number(item.revenue || 0),
+        }),
+        { qty: 0, revenue: 0 }
+      ),
+    [data]
+  );
+  const topProduct = data[0] ?? null;
 
   return (
     <div className="space-y-4">
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
-        <div className="relative space-y-3 p-4">
+        <div className="relative space-y-4 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/15 text-primary text-lg">
@@ -103,13 +136,54 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
                   সেরা বিক্রি হওয়া পণ্য
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  বিক্রিত সংখ্যা ও আয়ের ভিত্তিতে তালিকা
+                  নির্বাচিত সময়ের বিক্রি থেকে কোন পণ্য সবচেয়ে বেশি গেছে ও সবচেয়ে বেশি টাকা এনেছে
                 </p>
               </div>
             </div>
             <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-xs font-semibold text-muted-foreground">
               Top {REPORT_ROW_LIMIT}
             </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <div className="rounded-2xl border border-border bg-card/90 p-3">
+              <p className="text-xs text-muted-foreground">সবচেয়ে এগিয়ে</p>
+              <p className="mt-1 text-sm font-bold text-foreground">
+                {topProduct?.name ||
+                  (showSummaryPlaceholder ? "লোড হচ্ছে..." : "তথ্য নেই")}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {topProduct
+                  ? `${topProduct.qty} টি · ${formatMoney(Number(topProduct.revenue || 0))}`
+                  : "দেখানো তালিকার ১ নম্বর পণ্য"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card/90 p-3">
+              <p className="text-xs text-muted-foreground">মোট বিক্রিত সংখ্যা</p>
+              <p className="mt-1 text-lg font-bold text-foreground">
+                {showSummaryPlaceholder ? "..." : totals.qty}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                দেখানো Top {REPORT_ROW_LIMIT} পণ্যের মোট
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card/90 p-3 col-span-2 lg:col-span-1">
+              <p className="text-xs text-muted-foreground">মোট বিক্রি টাকা</p>
+              <p className="mt-1 text-lg font-bold text-foreground">
+                {showSummaryPlaceholder ? "..." : formatMoney(totals.revenue)}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                দেখানো Top {REPORT_ROW_LIMIT} পণ্য থেকে এসেছে
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+            <p>
+              সহজভাবে: উপরের ১ নম্বর পণ্যটি সবচেয়ে বেশি বিক্রি হয়েছে। নিচের তালিকায়
+              প্রতি পণ্যের <span className="font-semibold text-foreground">কতটি বিক্রি হয়েছে</span> এবং
+              <span className="font-semibold text-foreground"> কত টাকা এসেছে</span> তা দেখানো হচ্ছে।
+            </p>
           </div>
         </div>
       </div>
@@ -118,16 +192,17 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
         <table className="w-full text-sm">
           <thead className="bg-muted">
             <tr>
+              <th className="p-3 text-left text-foreground">র্যাঙ্ক</th>
               <th className="p-3 text-left text-foreground">পণ্য</th>
               <th className="p-3 text-right text-foreground">বিক্রিত সংখ্যা</th>
-              <th className="p-3 text-right text-foreground">আয় (৳)</th>
+              <th className="p-3 text-right text-foreground">মোট বিক্রি টাকা</th>
             </tr>
           </thead>
 
           <tbody>
             {data.length === 0 ? (
               <tr>
-                <td className="p-3 text-center text-muted-foreground" colSpan={3}>
+                <td className="p-3 text-center text-muted-foreground" colSpan={4}>
                   {showEmpty ? "কোনো তথ্য পাওয়া যায়নি" : "লোড হচ্ছে..."}
                 </td>
               </tr>
@@ -137,6 +212,11 @@ export default function TopProductsReport({ shopId }: { shopId: string }) {
                   key={idx}
                   className="border-t hover:bg-muted transition-colors"
                 >
+                  <td className="p-3 text-foreground">
+                    <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-primary/10 px-2 text-xs font-semibold text-primary">
+                      #{idx + 1}
+                    </span>
+                  </td>
                   <td className="p-3 text-foreground">{item.name}</td>
                   <td className="p-3 text-right text-foreground">{item.qty}</td>
                   <td className="p-3 text-right text-foreground">

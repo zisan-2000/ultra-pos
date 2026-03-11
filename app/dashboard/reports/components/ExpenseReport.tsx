@@ -13,10 +13,17 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 type Props = { shopId: string; from?: string; to?: string };
 
 type ReportCursor = { at: string; id: string };
+type SummaryPayload = {
+  expense: {
+    totalAmount: number;
+    count?: number;
+  };
+};
 type ExpenseRow = {
   id: string;
   amount: number | string;
   category?: string | null;
+  note?: string | null;
   expenseDate: string;
 };
 
@@ -26,6 +33,15 @@ function scheduleStateUpdate(fn: () => void) {
     return;
   }
   Promise.resolve().then(fn);
+}
+
+function formatMoney(value: number) {
+  return `${value.toFixed(2)} ৳`;
+}
+
+function shortenText(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 1)}...`;
 }
 
 export default function ExpenseReport({ shopId, from, to }: Props) {
@@ -58,11 +74,9 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
       if (typeof window === "undefined") return null;
       try {
         const raw = safeLocalStorageGet(buildCacheKey(rangeFrom, rangeTo));
-        if (!raw) {
-          return null;
-        }
+        if (!raw) return null;
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : null;
+        return Array.isArray(parsed) ? (parsed as ExpenseRow[]) : null;
       } catch (err) {
         handlePermissionError(err);
         console.warn("Expense report cache read failed", err);
@@ -88,6 +102,8 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
       if (cursor) {
         params.append("cursorAt", cursor.at);
         params.append("cursorId", cursor.id);
+      } else {
+        params.append("fresh", "1");
       }
 
       const res = await fetch(`/api/reports/expenses?${params.toString()}`, {
@@ -129,6 +145,29 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
     [shopId, buildCacheKey, readCached]
   );
 
+  const fetchSummary = useCallback(async () => {
+    const params = new URLSearchParams({ shopId });
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+    params.append("fresh", "1");
+    const res = await fetch(`/api/reports/summary?${params.toString()}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new Error("Expense summary fetch failed");
+    }
+    return (await res.json()) as SummaryPayload;
+  }, [shopId, from, to]);
+
+  const summaryQuery = useQuery({
+    queryKey: ["reports", "summary", shopId, from ?? "all", to ?? "all"],
+    queryFn: fetchSummary,
+    enabled: online,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    staleTime: 15_000,
+  });
+
   const expenseQueryKey = useMemo(
     () => [
       "reports",
@@ -143,26 +182,36 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
     [shopId, from, to, page, currentCursor?.at, currentCursor?.id]
   );
 
+  const initialExpenseData = useMemo(() => {
+    if (online || page !== 1) {
+      return { rows: [], hasMore: false, nextCursor: null };
+    }
+    const cached = readCached(from, to);
+    return cached
+      ? { rows: cached, hasMore: false, nextCursor: null }
+      : { rows: [], hasMore: false, nextCursor: null };
+  }, [online, page, readCached, from, to]);
+
   const expenseQuery = useQuery({
     queryKey: expenseQueryKey,
     queryFn: () => fetchExpenses(from, to, currentCursor, page === 1),
     enabled: online,
-    initialData: () => {
-      if (page !== 1) {
-        return { rows: [], hasMore: false, nextCursor: null };
-      }
-      const cached = readCached(from, to);
-      return cached
-        ? { rows: cached, hasMore: false, nextCursor: null }
-        : { rows: [], hasMore: false, nextCursor: null };
-    },
-    placeholderData: (prev) =>
-      prev ?? { rows: [], hasMore: false, nextCursor: null },
+    initialData: initialExpenseData,
+    staleTime: 0,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
   });
 
-  const items: ExpenseRow[] = expenseQuery.data?.rows ?? [];
-  const hasMore = expenseQuery.data?.hasMore ?? false;
-  const nextCursor = expenseQuery.data?.nextCursor ?? null;
+  const rawItems: ExpenseRow[] = useMemo(
+    () => expenseQuery.data?.rows ?? initialExpenseData.rows ?? [],
+    [expenseQuery.data?.rows, initialExpenseData.rows]
+  );
+  const items: ExpenseRow[] = rawItems;
+  const hasMore =
+    expenseQuery.data?.hasMore ?? initialExpenseData.hasMore ?? false;
+  const nextCursor =
+    expenseQuery.data?.nextCursor ?? initialExpenseData.nextCursor ?? null;
   const loading = expenseQuery.isFetching && online;
   const hasFetched = expenseQuery.isFetchedAfterMount;
   const showEmpty = items.length === 0 && (!online || hasFetched) && !loading;
@@ -192,10 +241,28 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
     };
   }, [page, currentCursor]);
 
-  const shownTotal = items.reduce(
-    (sum, e) => sum + Number(e.amount || 0),
-    0
+  const summaryData = summaryQuery.data;
+  const listTotal = useMemo(
+    () => items.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    [items]
   );
+  const totalExpense = summaryData?.expense.totalAmount ?? listTotal;
+  const entryCount = summaryData?.expense.count ?? items.length;
+  const averageExpense = entryCount > 0 ? totalExpense / entryCount : 0;
+
+  const categoryBreakdown = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const item of items) {
+      const label = item.category?.trim() || "অনির্ধারিত খরচ";
+      totals.set(label, (totals.get(label) ?? 0) + Number(item.amount || 0));
+    }
+    return Array.from(totals.entries())
+      .map(([label, amount]) => ({ label, amount }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [items]);
+
+  const topCategory = categoryBreakdown[0] ?? null;
+  const showSummaryPlaceholder = !summaryData && summaryQuery.isFetching;
 
   const handlePrev = () => {
     setPage((prev) => Math.max(1, prev - 1));
@@ -222,17 +289,17 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
   return (
     <div className="space-y-4">
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
-        <div className="relative space-y-3 p-4">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-danger-soft/45 via-card to-card" />
+        <div className="relative space-y-4 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-danger/15 text-danger text-lg">
                 💸
               </span>
               <div>
-                <h2 className="text-lg font-bold text-foreground">খরচ রিপোর্ট</h2>
+                <h2 className="text-lg font-bold text-foreground">সহজ খরচ রিপোর্ট</h2>
                 <p className="text-xs text-muted-foreground">
-                  সর্বশেষ 20টি খরচ
+                  কোন খাতে কত খরচ হয়েছে, সেটা এক নজরে বোঝার জন্য এই রিপোর্ট
                 </p>
               </div>
             </div>
@@ -244,53 +311,169 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
             </Link>
           </div>
 
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="rounded-2xl border border-border bg-card/90 p-3">
+              <p className="text-xs text-muted-foreground">মোট খরচ</p>
+              <p className="mt-1 text-lg font-bold text-foreground">
+                {showSummaryPlaceholder ? "..." : formatMoney(totalExpense)}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                নির্বাচিত সময়ের মোট খরচ
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card/90 p-3">
+              <p className="text-xs text-muted-foreground">মোট এন্ট্রি</p>
+              <p className="mt-1 text-lg font-bold text-foreground">
+                {showSummaryPlaceholder ? "..." : entryCount}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                সব খরচের রেকর্ড মিলিয়ে
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card/90 p-3">
+              <p className="text-xs text-muted-foreground">গড় খরচ</p>
+              <p className="mt-1 text-lg font-bold text-foreground">
+                {showSummaryPlaceholder ? "..." : formatMoney(averageExpense)}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                প্রতি এন্ট্রিতে গড় খরচ
+              </p>
+            </div>
+            <div className="col-span-2 rounded-2xl border border-border bg-card/90 p-3 lg:col-span-1">
+              <p className="text-xs text-muted-foreground">সবচেয়ে বেশি খাত</p>
+              <p className="mt-1 text-sm font-bold text-foreground">
+                {topCategory?.label ||
+                  (loading && items.length === 0 ? "লোড হচ্ছে..." : "তথ্য নেই")}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {topCategory
+                  ? `${formatMoney(topCategory.amount)} এই তালিকায়`
+                  : "visible list অনুযায়ী দেখানো হচ্ছে"}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+            <p>
+              সহজভাবে: <span className="font-semibold text-foreground">কোথায় টাকা যাচ্ছে</span>{" "}
+              সেটা আগে বুঝুন। তারপর নিচের তালিকা দেখে দেখুন কোন খাতে খরচ বেশি
+              হয়েছে, আর কোন খরচগুলো বারবার হচ্ছে।
+            </p>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
             <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
-              এই তালিকায় মোট খরচ: {shownTotal.toFixed(2)} ৳
+              এই তালিকায় দেখা যাচ্ছে: {formatMoney(listTotal)}
             </span>
+            {categoryBreakdown.slice(0, 3).map((item) => (
+              <span
+                key={item.label}
+                className="inline-flex h-7 items-center rounded-full border border-danger/20 bg-danger-soft/40 px-3 text-danger"
+              >
+                {shortenText(item.label, 18)} • {formatMoney(item.amount)}
+              </span>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border/70 bg-card/80 p-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
-        {items.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {showEmpty ? "কোনো খরচ পাওয়া যায়নি" : "লোড হচ্ছে..."}
-          </p>
-        ) : (
-          <>
-            {items.map((e) => (
+      <div className="rounded-2xl border border-border/70 bg-card/80 p-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-foreground">খরচের বিস্তারিত তালিকা</h3>
+            <p className="text-xs text-muted-foreground">
+              category, note, date আর amount একসাথে দেখে দ্রুত মিলিয়ে নিন
+            </p>
+          </div>
+          <span className="hidden rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground md:inline-flex">
+            Page {page}
+          </span>
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full text-sm">
+            <thead className="bg-muted">
+              <tr>
+                <th className="p-3 text-left text-foreground">খাত</th>
+                <th className="p-3 text-left text-foreground">বিস্তারিত</th>
+                <th className="p-3 text-left text-foreground">তারিখ</th>
+                <th className="p-3 text-right text-foreground">টাকা</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr>
+                  <td className="p-4 text-center text-muted-foreground" colSpan={4}>
+                    {showEmpty ? "কোনো খরচ পাওয়া যায়নি" : "লোড হচ্ছে..."}
+                  </td>
+                </tr>
+              ) : (
+                items.map((item) => (
+                  <tr key={item.id} className="border-t border-border/70">
+                    <td className="p-3 align-top">
+                      <div className="font-semibold text-foreground">
+                        {item.category?.trim() || "অনির্ধারিত খরচ"}
+                      </div>
+                    </td>
+                    <td className="p-3 align-top text-muted-foreground">
+                      {item.note?.trim()
+                        ? shortenText(item.note.trim(), 70)
+                        : "কোনো নোট দেওয়া হয়নি"}
+                    </td>
+                    <td className="p-3 align-top text-muted-foreground">
+                      {new Date(item.expenseDate).toLocaleDateString("bn-BD")}
+                    </td>
+                    <td className="p-3 align-top text-right font-semibold text-danger">
+                      {formatMoney(Number(item.amount || 0))}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="space-y-3 md:hidden">
+          {items.length === 0 ? (
+            <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+              {showEmpty ? "কোনো খরচ পাওয়া যায়নি" : "লোড হচ্ছে..."}
+            </p>
+          ) : (
+            items.map((item) => (
               <div
-                key={e.id}
-                className="relative overflow-hidden rounded-2xl border border-danger/20 bg-card p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
+                key={item.id}
+                className="rounded-2xl border border-danger/20 bg-card p-3 shadow-sm"
               >
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-danger-soft/40 via-transparent to-transparent" />
-                <div className="relative flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-danger/15 text-danger text-lg">
-                      💸
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
-                        {Number(e.amount).toFixed(2)} ৳
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {e.category}
-                      </p>
-                    </div>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-foreground">
+                      {item.category?.trim() || "অনির্ধারিত খরচ"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {item.note?.trim()
+                        ? shortenText(item.note.trim(), 60)
+                        : "কোনো নোট দেওয়া হয়নি"}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(e.expenseDate).toLocaleDateString("bn-BD")}
-                  </p>
+                  <span className="rounded-full border border-danger/20 bg-danger-soft/40 px-2.5 py-1 text-xs font-semibold text-danger">
+                    {formatMoney(Number(item.amount || 0))}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>তারিখ</span>
+                  <span>
+                    {new Date(item.expenseDate).toLocaleDateString("bn-BD")}
+                  </span>
                 </div>
               </div>
-            ))}
-            {loading && (
-              <p className="text-xs text-muted-foreground text-center pt-1">
-                আপডেট হচ্ছে...
-              </p>
-            )}
-          </>
+            ))
+          )}
+        </div>
+
+        {loading && (
+          <p className="pt-3 text-center text-xs text-muted-foreground">
+            আপডেট হচ্ছে...
+          </p>
         )}
       </div>
 
@@ -300,7 +483,7 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
             type="button"
             onClick={handlePrev}
             disabled={page <= 1 || loading || !online}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
             Prev
           </button>
@@ -311,7 +494,7 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
             type="button"
             onClick={handleNext}
             disabled={!hasMore || !nextCursor || loading || !online}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next
           </button>

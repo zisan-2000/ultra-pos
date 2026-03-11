@@ -41,10 +41,11 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
   );
 
   const fetchPayment = useCallback(
-    async (rangeFrom?: string, rangeTo?: string) => {
+    async (rangeFrom?: string, rangeTo?: string, fresh = false) => {
       const params = new URLSearchParams({ shopId });
       if (rangeFrom) params.append("from", rangeFrom);
       if (rangeTo) params.append("to", rangeTo);
+      if (fresh) params.append("fresh", "1");
       const res = await fetch(`/api/reports/payment-method?${params.toString()}`, {
         cache: "no-store",
       });
@@ -87,33 +88,38 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
     [shopId, from, to]
   );
 
-  const initialRows = useMemo(
-    () => readCached(from, to) ?? undefined,
-    [readCached, from, to]
-  );
+  const initialRows = useMemo(() => {
+    if (online) return undefined;
+    return readCached(from, to) ?? undefined;
+  }, [online, readCached, from, to]);
   const hasInitialRows = initialRows !== undefined;
 
   const paymentQuery = useQuery({
     queryKey: paymentQueryKey,
-    queryFn: () => fetchPayment(from, to),
+    queryFn: () => fetchPayment(from, to, true),
     enabled: online,
+    staleTime: 0,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
     ...(hasInitialRows ? { initialData: initialRows } : {}),
     ...(hasInitialRows ? { placeholderData: initialRows } : {}),
   });
 
-  const data: PaymentRow[] = useMemo(
+  const rawData: PaymentRow[] = useMemo(
     () => paymentQuery.data ?? initialRows ?? [],
     [paymentQuery.data, initialRows]
   );
   const loading = paymentQuery.isFetching && online;
   const hasFetched = paymentQuery.isFetchedAfterMount;
+  const data = rawData;
   const showEmpty = data.length === 0 && (!online || hasFetched) && !loading;
 
   const totalAmount = useMemo(
     () => data.reduce((sum, item) => sum + Number(item.value || 0), 0),
     [data]
   );
-  const showTotalPlaceholder = data.length === 0 && loading && !hasFetched;
+  const showTotalPlaceholder = data.length === 0 && loading;
 
   return (
     <div className="space-y-4">

@@ -59,6 +59,7 @@ type Props = {
   shopId: string;
   shopName: string;
   shops: { id: string; name: string }[];
+  needsCogs?: boolean;
   summary: Summary;
   summaryRange: { from: string; to: string };
 };
@@ -75,9 +76,11 @@ function ReportSkeleton() {
 
 function SummaryCards({
   summary,
+  needsCogs = false,
   className = "grid grid-cols-1 sm:grid-cols-2 gap-3",
 }: {
   summary: Summary;
+  needsCogs?: boolean;
   className?: string;
 }) {
   return (
@@ -100,6 +103,15 @@ function SummaryCards({
         icon="💸"
         tone="danger"
       />
+      {needsCogs ? (
+        <StatCard
+          title="COGS"
+          value={`${(summary.profit.cogs ?? 0).toFixed(2)} ৳`}
+          subtitle="বিক্রিত পণ্যের খরচ"
+          icon="📦"
+          tone="warning"
+        />
+      ) : null}
       <StatCard
         title="ক্যাশ ব্যালান্স"
         value={`${summary.cash.balance.toFixed(2)} ৳`}
@@ -121,13 +133,15 @@ function SummaryCards({
 }
 
 function SummaryCardsSkeleton({
+  needsCogs = false,
   className = "grid grid-cols-1 sm:grid-cols-2 gap-3",
 }: {
+  needsCogs?: boolean;
   className?: string;
 }) {
   return (
     <div className={className}>
-      {Array.from({ length: 4 }).map((_, idx) => (
+      {Array.from({ length: needsCogs ? 5 : 4 }).map((_, idx) => (
         <div
           key={idx}
           className="animate-pulse rounded-2xl border border-border bg-card p-4 space-y-3"
@@ -281,6 +295,7 @@ export default function ReportsClient({
   shopId,
   shopName,
   shops,
+  needsCogs = false,
   summary,
   summaryRange,
 }: Props) {
@@ -563,9 +578,16 @@ export default function ReportsClient({
 
   const invalidateTopProducts = useCallback(() => {
     queryClient.invalidateQueries({
-      queryKey: ["reports", "top-products", shopId, REPORT_ROW_LIMIT],
+      queryKey: [
+        "reports",
+        "top-products",
+        shopId,
+        rangeKeyFrom,
+        rangeKeyTo,
+        REPORT_ROW_LIMIT,
+      ],
     });
-  }, [queryClient, shopId]);
+  }, [queryClient, shopId, rangeKeyFrom, rangeKeyTo]);
 
   const invalidateLowStock = useCallback(() => {
     queryClient.invalidateQueries({
@@ -829,7 +851,14 @@ export default function ReportsClient({
     ];
     const paymentKey = ["reports", "payment", shopId, rangeFrom, rangeTo];
     const profitKey = ["reports", "profit", shopId, rangeFrom, rangeTo];
-    const topProductsKey = ["reports", "top-products", shopId, REPORT_ROW_LIMIT];
+    const topProductsKey = [
+      "reports",
+      "top-products",
+      shopId,
+      range.from ?? "all",
+      range.to ?? "all",
+      REPORT_ROW_LIMIT,
+    ];
     const lowStockKey = [
       "reports",
       "low-stock",
@@ -999,6 +1028,8 @@ export default function ReportsClient({
                   shopId,
                   limit: `${REPORT_ROW_LIMIT}`,
                 });
+                if (range.from) params.append("from", range.from);
+                if (range.to) params.append("to", range.to);
                 const res = await fetch(
                   `/api/reports/top-products?${params.toString()}`,
                   { cache: "no-store" }
@@ -1230,11 +1261,38 @@ export default function ReportsClient({
             ? rows.map((row: any) => ({
                 date: row.date,
                 sales: row.sales ?? 0,
-                expense: row.expense ?? 0,
-                profit: Number(row.sales ?? 0) - Number(row.expense ?? 0),
+                cogs: row.cogs ?? 0,
+                operating_expense:
+                  row.operatingExpense ??
+                  Math.max(Number(row.expense ?? 0) - Number(row.cogs ?? 0), 0),
+                gross_profit:
+                  row.grossProfit ??
+                  Number(row.sales ?? 0) - Number(row.cogs ?? 0),
+                net_profit:
+                  row.netProfit ??
+                  Number(row.sales ?? 0) - Number(row.expense ?? 0),
+                net_margin_pct:
+                  row.netMarginPct ??
+                  (Number(row.sales ?? 0)
+                    ? (((Number(row.netProfit ?? 0) ||
+                        (Number(row.sales ?? 0) - Number(row.expense ?? 0))) /
+                        Number(row.sales ?? 0)) *
+                        100)
+                    : 0),
               }))
             : [];
-          const csv = generateCSV(["date", "sales", "expense", "profit"], normalized);
+          const csv = generateCSV(
+            [
+              "date",
+              "sales",
+              "cogs",
+              "operating_expense",
+              "gross_profit",
+              "net_profit",
+              "net_margin_pct",
+            ],
+            normalized
+          );
           downloadFile(`profit-trend-${exportSuffix}.csv`, csv);
           return;
         }
@@ -1244,9 +1302,11 @@ export default function ReportsClient({
             limit: String(REPORT_ROW_LIMIT),
             fresh: "1",
           });
+          if (range.from) params.append("from", range.from);
+          if (range.to) params.append("to", range.to);
           const rows = await fetchReportData("/api/reports/top-products", params);
           const csv = generateCSV(["name", "qty", "revenue"], rows);
-          downloadFile("top-products-all.csv", csv);
+          downloadFile(`top-products-${exportSuffix}.csv`, csv);
           return;
         }
         case "stock": {
@@ -1329,9 +1389,9 @@ export default function ReportsClient({
     switch (active) {
       case "summary":
         return hasSummary ? (
-          <SummaryCards summary={liveSummary!} />
+          <SummaryCards summary={liveSummary!} needsCogs={needsCogs} />
         ) : (
-          <SummaryCardsSkeleton />
+          <SummaryCardsSkeleton needsCogs={needsCogs} />
         );
       case "sales":
         return <SalesReport shopId={shopId} from={range.from} to={range.to} />;
@@ -1347,10 +1407,17 @@ export default function ReportsClient({
         );
       case "profit":
         return (
-          <ProfitTrendReport shopId={shopId} from={range.from} to={range.to} />
+          <ProfitTrendReport
+            shopId={shopId}
+            from={range.from}
+            to={range.to}
+            needsCogs={needsCogs}
+          />
         );
       case "products":
-        return <TopProductsReport shopId={shopId} />;
+        return (
+          <TopProductsReport shopId={shopId} from={range.from} to={range.to} />
+        );
       case "stock":
         return (
           <LowStockReport
@@ -1712,10 +1779,14 @@ export default function ReportsClient({
           {hasSummary ? (
             <SummaryCards
               summary={liveSummary!}
+              needsCogs={needsCogs}
               className="grid grid-cols-1 md:grid-cols-2 gap-3"
             />
           ) : (
-            <SummaryCardsSkeleton className="grid grid-cols-1 md:grid-cols-2 gap-3" />
+            <SummaryCardsSkeleton
+              needsCogs={needsCogs}
+              className="grid grid-cols-1 md:grid-cols-2 gap-3"
+            />
           )}
         </div>
 

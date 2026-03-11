@@ -3,7 +3,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { getStockToneClasses } from "@/lib/stock-level";
@@ -65,7 +65,10 @@ export default function LowStockReport({
       limit: `${REPORT_ROW_LIMIT}`,
       threshold: `${threshold}`,
     });
-    const res = await fetch(`/api/reports/low-stock?${params.toString()}`);
+    params.append("fresh", "1");
+    const res = await fetch(`/api/reports/low-stock?${params.toString()}`, {
+      cache: "no-store",
+    });
     if (res.status === 304) {
       return readCached() ?? [];
     }
@@ -96,18 +99,33 @@ export default function LowStockReport({
     [shopId, threshold]
   );
 
+  const initialRows = useMemo(
+    () => (online ? [] : (readCached() ?? [])),
+    [online, readCached]
+  );
+
   const lowStockQuery = useQuery({
     queryKey,
     queryFn: fetchLowStock,
     enabled: online,
-    initialData: () => readCached() ?? [],
-    placeholderData: keepPreviousData,
+    initialData: initialRows,
+    staleTime: 0,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
   });
 
-  const items: StockRow[] = lowStockQuery.data ?? [];
+  const rawItems: StockRow[] = lowStockQuery.data ?? initialRows;
+  const items: StockRow[] = rawItems;
   const loading = lowStockQuery.isFetching && online;
   const hasFetched = lowStockQuery.isFetchedAfterMount;
   const showEmpty = items.length === 0 && (!online || hasFetched) && !loading;
+  const urgentCount = useMemo(
+    () => items.filter((item) => Number(item.stockQty || 0) <= 5).length,
+    [items]
+  );
+  const lowestStockItem = items[0] ?? null;
+  const showSummaryPlaceholder = loading && items.length === 0;
 
   const renderStatus = (qty: number) => (qty <= 5 ? "জরুরি" : "কম");
 
@@ -115,7 +133,7 @@ export default function LowStockReport({
     <div className="space-y-4">
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-warning-soft/50 via-card to-card" />
-        <div className="relative space-y-3 p-4">
+        <div className="relative space-y-4 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-warning/15 text-warning text-lg">
@@ -124,7 +142,7 @@ export default function LowStockReport({
               <div>
                 <h2 className="text-lg font-bold text-foreground">কম স্টক</h2>
                 <p className="text-xs text-muted-foreground">
-                  জরুরি পণ্যের তালিকা ও বর্তমান পরিমাণ
+                  যেসব পণ্যের স্টক কমে গেছে, সেগুলো দ্রুত কেনার জন্য এই তালিকা দেখুন
                 </p>
               </div>
             </div>
@@ -137,6 +155,49 @@ export default function LowStockReport({
               </span>
             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <div className="rounded-2xl border border-border bg-card/90 p-3">
+              <p className="text-xs text-muted-foreground">মোট কম স্টক পণ্য</p>
+              <p className="mt-1 text-lg font-bold text-foreground">
+                {showSummaryPlaceholder ? "..." : items.length}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                বর্তমান filter অনুযায়ী
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card/90 p-3">
+              <p className="text-xs text-muted-foreground">জরুরি পণ্য</p>
+              <p className="mt-1 text-lg font-bold text-foreground">
+                {showSummaryPlaceholder ? "..." : urgentCount}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                ৫ বা তার কম স্টক
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card/90 p-3 col-span-2 lg:col-span-1">
+              <p className="text-xs text-muted-foreground">সবচেয়ে কম স্টক</p>
+              <p className="mt-1 text-sm font-bold text-foreground">
+                {lowestStockItem?.name ||
+                  (showSummaryPlaceholder ? "লোড হচ্ছে..." : "তথ্য নেই")}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {lowestStockItem
+                  ? `বর্তমান স্টক ${Number(lowestStockItem.stockQty || 0)}`
+                  : "তালিকার শুরুর পণ্য"}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+            <p>
+              সহজভাবে: যেসব পণ্যের স্টক কম, সেগুলো আগে কিনুন।{" "}
+              <span className="font-semibold text-foreground">জরুরি</span> মানে এখনই
+              ব্যবস্থা নেওয়া দরকার, আর <span className="font-semibold text-foreground">কম</span> মানে
+              খুব শিগগির রিস্টক করা ভালো।
+            </p>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
             {[5, 10, 15, 20].map((value) => (
               <button
@@ -160,6 +221,7 @@ export default function LowStockReport({
         <table className="w-full text-sm">
           <thead className="bg-muted">
             <tr>
+              <th className="p-3 text-left text-foreground">র্যাঙ্ক</th>
               <th className="p-3 text-left text-foreground">পণ্য</th>
               <th className="p-3 text-right text-foreground">স্টক পরিমাণ</th>
               <th className="p-3 text-right text-foreground">স্ট্যাটাস</th>
@@ -169,7 +231,7 @@ export default function LowStockReport({
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td className="p-3 text-center text-muted-foreground" colSpan={3}>
+                <td className="p-3 text-center text-muted-foreground" colSpan={4}>
                   {showEmpty ? "কম স্টকের পণ্য নেই" : "লোড হচ্ছে..."}
                 </td>
               </tr>
@@ -179,6 +241,11 @@ export default function LowStockReport({
                 const stockClasses = getStockToneClasses(qty);
                 return (
                   <tr key={p.id ?? p.name ?? i} className="border-t hover:bg-muted">
+                    <td className="p-3 text-foreground">
+                      <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-warning/10 px-2 text-xs font-semibold text-warning">
+                        #{i + 1}
+                      </span>
+                    </td>
                     <td className="p-3 text-foreground">{p.name}</td>
                     <td className="p-3 text-right text-foreground">{qty}</td>
                     <td className={`p-3 text-right font-semibold ${stockClasses.text}`}>
