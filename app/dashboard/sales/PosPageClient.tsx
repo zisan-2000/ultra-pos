@@ -786,14 +786,60 @@ export function PosPageClient({
 
   useEffect(() => {
     if (!success) return;
-    const t = setTimeout(() => setSuccess(null), 2200);
+
+    const toastId = toast.custom(
+      (id) => (
+        <div className="w-[min(92vw,24rem)] rounded-2xl border border-success/30 bg-success px-4 py-3 text-primary-foreground shadow-[0_18px_40px_rgba(22,163,74,0.28)]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold">বিক্রি সম্পন্ন</p>
+              <p className="mt-1 text-xs text-primary-foreground/85">
+                নতুন বিল সফলভাবে সংরক্ষণ হয়েছে।
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => toast.dismiss(id)}
+              className="text-xs font-semibold text-primary-foreground/80 transition hover:text-primary-foreground"
+            >
+              বন্ধ
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Link
+              href={`/dashboard/sales?shopId=${shopId}`}
+              onClick={() => toast.dismiss(id)}
+              className="inline-flex h-8 items-center rounded-full border border-primary-foreground/30 px-3 text-xs font-semibold text-primary-foreground transition hover:bg-primary-foreground/10"
+            >
+              বিক্রি দেখুন
+            </Link>
+            {success.saleId && success.invoiceNo ? (
+              <Link
+                href={`/dashboard/sales/${success.saleId}/invoice`}
+                onClick={() => toast.dismiss(id)}
+                className="inline-flex h-8 items-center rounded-full border border-primary-foreground/30 px-3 text-xs font-semibold text-primary-foreground transition hover:bg-primary-foreground/10"
+              >
+                ইনভয়েস দেখুন
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      ),
+      {
+        duration: 5000,
+      }
+    );
+
+    setSuccess(null);
+
     try {
       navigator.vibrate?.(20);
     } catch {
       // ignore vibration failures
     }
-    return () => clearTimeout(t);
-  }, [success]);
+    return () => toast.dismiss(toastId);
+  }, [shopId, success]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-28">
@@ -1069,37 +1115,6 @@ export function PosPageClient({
                 "বিল সম্পন্ন"
               )}
             </button>
-          </div>
-        </div>
-      )}
-
-      {success && (
-        <div className="fixed bottom-24 inset-x-4 z-50">
-          <div className="rounded-xl bg-success text-primary-foreground px-4 py-3 shadow-lg flex items-center justify-between gap-3">
-            <span className="font-semibold">✔️ বিক্রি সম্পন্ন</span>
-            <div className="flex items-center gap-2">
-              <Link
-                href={`/dashboard/sales?shopId=${shopId}`}
-                className="text-xs font-semibold underline underline-offset-2"
-              >
-                বিক্রি দেখুন
-              </Link>
-              {success.saleId && success.invoiceNo ? (
-                <Link
-                  href={`/dashboard/sales/${success.saleId}/invoice`}
-                  className="text-xs font-semibold underline underline-offset-2"
-                >
-                  ইনভয়েস দেখুন
-                </Link>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setSuccess(null)}
-                className="text-xs font-semibold text-primary-foreground/80 hover:text-primary-foreground"
-              >
-                ঠিক আছে
-              </button>
-            </div>
           </div>
         </div>
       )}
