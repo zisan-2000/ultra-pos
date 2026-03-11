@@ -354,6 +354,7 @@ export async function getExpensesWithFilterPaginated({
     select: {
       id: true,
       expenseDate: true,
+      createdAt: true,
       amount: true,
       category: true,
       note: true,

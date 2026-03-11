@@ -25,6 +25,7 @@ type ExpenseRow = {
   category?: string | null;
   note?: string | null;
   expenseDate: string;
+  createdAt?: string;
 };
 
 function scheduleStateUpdate(fn: () => void) {
@@ -42,6 +43,23 @@ function formatMoney(value: number) {
 function shortenText(value: string, maxLength: number) {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, maxLength - 1)}...`;
+}
+
+function formatExpenseDateTime(item: ExpenseRow) {
+  const businessDate = new Date(item.expenseDate);
+  const entryTime = item.createdAt ? new Date(item.createdAt) : null;
+  const dateLabel = businessDate.toLocaleDateString("bn-BD");
+
+  if (!entryTime || Number.isNaN(entryTime.getTime())) {
+    return dateLabel;
+  }
+
+  const timeLabel = entryTime.toLocaleTimeString("bn-BD", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return `${dateLabel} • ${timeLabel}`;
 }
 
 export default function ExpenseReport({ shopId, from, to }: Props) {
@@ -421,7 +439,7 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
                         : "কোনো নোট দেওয়া হয়নি"}
                     </td>
                     <td className="p-3 align-top text-muted-foreground">
-                      {new Date(item.expenseDate).toLocaleDateString("bn-BD")}
+                      {formatExpenseDateTime(item)}
                     </td>
                     <td className="p-3 align-top text-right font-semibold text-danger">
                       {formatMoney(Number(item.amount || 0))}
@@ -462,7 +480,7 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
                 <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                   <span>তারিখ</span>
                   <span>
-                    {new Date(item.expenseDate).toLocaleDateString("bn-BD")}
+                    {formatExpenseDateTime(item)}
                   </span>
                 </div>
               </div>

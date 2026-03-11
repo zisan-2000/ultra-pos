@@ -1499,11 +1499,11 @@ export default function ReportsClient({
                       ℹ️
                     </button>
                   </div>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
+                  <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-md overflow-y-auto border-border/70 p-0 sm:w-[calc(100vw-2rem)]">
+                    <DialogHeader className="px-6 pt-6">
                       <DialogTitle>CSV এক্সপোর্ট</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4">
+                    <div className="space-y-4 px-6 pb-6">
                       <div className="rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-xs text-muted-foreground space-y-1">
                         <p>রেঞ্জ: {rangeLabel ?? "সব সময়"}</p>
                         <p>
