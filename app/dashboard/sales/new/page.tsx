@@ -24,6 +24,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
   const canCreateSale = hasPermission(user, "create_sale");
   const canCreateDueSale = hasPermission(user, "create_due_sale");
   const canViewCustomers = hasPermission(user, "view_customers");
+  const canCreateCustomer = hasPermission(user, "create_customer");
   const canViewDuePage = hasPermission(user, "view_due_summary");
   const canUseBarcodeScanPermission = hasPermission(user, "use_pos_barcode_scan");
 
@@ -124,6 +125,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       canCreateSale={canCreateSale}
       canCreateDueSale={canCreateDueSale}
       canViewCustomers={canViewCustomers}
+      canCreateCustomer={canCreateCustomer}
       canViewDuePage={canViewDuePage}
       canUseBarcodeScan={canUseBarcodeScan}
       submitSale={submitSale}

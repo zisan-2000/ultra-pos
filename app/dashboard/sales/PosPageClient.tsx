@@ -17,6 +17,21 @@ import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
 import { useCart } from "@/hooks/use-cart";
 import { useShallow } from "zustand/react/shallow";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { toast } from "sonner";
@@ -26,7 +41,10 @@ import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { useRealtimeStatus } from "@/lib/realtime/status";
 import { usePageVisibility } from "@/lib/use-page-visibility";
-import { subscribeDueCustomersEvent } from "@/lib/due/customer-events";
+import {
+  emitDueCustomersEvent,
+  subscribeDueCustomersEvent,
+} from "@/lib/due/customer-events";
 import { subscribeProductEvent } from "@/lib/products/product-events";
 import useRealTimeReports from "@/hooks/useRealTimeReports";
 import { emitSaleUpdate } from "@/lib/events/reportEvents";
@@ -66,6 +84,7 @@ type PosPageClientProps = {
   canCreateSale: boolean;
   canCreateDueSale: boolean;
   canViewCustomers: boolean;
+  canCreateCustomer: boolean;
   canViewDuePage: boolean;
   canUseBarcodeScan: boolean;
   submitSale: (formData: FormData) => Promise<{
@@ -83,6 +102,7 @@ export function PosPageClient({
   canCreateSale,
   canCreateDueSale,
   canViewCustomers,
+  canCreateCustomer,
   canViewDuePage,
   canUseBarcodeScan,
   submitSale,
@@ -106,6 +126,7 @@ export function PosPageClient({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
   const [barFlash, setBarFlash] = useState(false);
   const cartPanelRef = useRef<HTMLDivElement | null>(null);
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -132,6 +153,13 @@ export function PosPageClient({
   const [customerId, setCustomerId] = useState<string>("");
   const [paidNow, setPaidNow] = useState<string>("");
   const [note, setNote] = useState("");
+  const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [quickCustomer, setQuickCustomer] = useState({
+    name: "",
+    phone: "",
+    address: "",
+  });
   const [success, setSuccess] = useState<{
     saleId?: string;
     invoiceNo?: string | null;
@@ -169,15 +197,16 @@ export function PosPageClient({
     () => {
       const options = [
         { value: "cash", label: "ক্যাশ" },
+        { value: "due", label: "ধার" },
         { value: "bkash", label: "বিকাশ" },
         { value: "nagad", label: "নগদ" },
         { value: "card", label: "কার্ড" },
         { value: "bank_transfer", label: "ব্যাংক ট্রান্সফার" },
       ];
       if (canUseDueSale) {
-        options.push({ value: "due", label: "ধার" });
+        return options;
       }
-      return options;
+      return options.filter((option) => option.value !== "due");
     },
     [canUseDueSale]
   );
@@ -741,6 +770,148 @@ export function PosPageClient({
       )),
     [customerList]
   );
+  const currentPaymentLabel =
+    paymentOptions.find((option) => option.value === paymentMethod)?.label ??
+    "ক্যাশ";
+  const selectedCustomerName =
+    customerList.find((customer) => customer.id === customerId)?.name ?? "";
+
+  const sortCustomers = useCallback(
+    (list: typeof customers) =>
+      [...list].sort((a, b) => a.name.localeCompare(b.name, "bn")),
+    []
+  );
+
+  const upsertCustomerList = useCallback(
+    (customer: {
+      id: string;
+      name: string;
+      phone?: string | null;
+      address?: string | null;
+      totalDue?: string | number;
+      lastPaymentAt?: string | null;
+    }) => {
+      setCustomerList((prev) => {
+        const next = prev.filter((item) => item.id !== customer.id);
+        next.push({
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone ?? null,
+          address: customer.address ?? null,
+          totalDue: customer.totalDue ?? 0,
+          lastPaymentAt: customer.lastPaymentAt ?? null,
+        });
+        return sortCustomers(next);
+      });
+    },
+    [sortCustomers]
+  );
+
+  async function handleQuickCustomerSave() {
+    if (!canCreateCustomer) {
+      toast.error("গ্রাহক যোগ করার অনুমতি নেই।");
+      return;
+    }
+
+    const name = quickCustomer.name.trim();
+    const phone = quickCustomer.phone.trim();
+    const address = quickCustomer.address.trim();
+
+    if (!name) {
+      toast.warning("গ্রাহকের নাম লিখুন।");
+      return;
+    }
+
+    if (savingCustomer) return;
+    setSavingCustomer(true);
+
+    try {
+      if (!online) {
+        const now = Date.now();
+        const payload = {
+          id: crypto.randomUUID(),
+          shopId,
+          name,
+          phone: phone || null,
+          address: address || null,
+          totalDue: "0",
+          lastPaymentAt: null,
+          updatedAt: now,
+          syncStatus: "new" as const,
+        };
+
+        await db.transaction("rw", db.dueCustomers, db.queue, async () => {
+          await db.dueCustomers.put(payload);
+          await queueAdd("due_customer", "create", payload);
+        });
+
+        upsertCustomerList(payload);
+        emitDueCustomersEvent({ shopId, at: Date.now(), source: "local" });
+        setCustomerId(payload.id);
+        setQuickCustomer({ name: "", phone: "", address: "" });
+        setQuickCustomerOpen(false);
+        toast.success("অফলাইন: গ্রাহক যোগ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+        return;
+      }
+
+      const res = await fetch("/api/due/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopId,
+          name,
+          phone: phone || undefined,
+          address: address || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Quick customer create failed");
+      }
+
+      const json = (await res.json()) as { id?: string };
+      const createdId = json.id;
+
+      if (!createdId) {
+        throw new Error("Customer id missing");
+      }
+
+      const payload = {
+        id: createdId,
+        shopId,
+        name,
+        phone: phone || null,
+        address: address || null,
+        totalDue: 0,
+        lastPaymentAt: null,
+        updatedAt: Date.now(),
+        syncStatus: "synced" as const,
+      };
+
+      try {
+        await db.dueCustomers.put(payload);
+      } catch (err) {
+        handlePermissionError(err);
+        console.warn("Quick customer cache write failed", err);
+      }
+
+      upsertCustomerList(payload);
+      setCustomerId(createdId);
+      setQuickCustomer({ name: "", phone: "", address: "" });
+      setQuickCustomerOpen(false);
+      emitDueCustomersEvent({ shopId, at: Date.now(), source: "create" });
+      queryClient.invalidateQueries({
+        queryKey: dueCustomerQueryKey,
+        refetchType: "active",
+      });
+      toast.success("গ্রাহক যোগ হয়েছে এবং নির্বাচন করা হয়েছে।");
+    } catch (error) {
+      console.error("Quick customer create failed:", error);
+      toast.error("গ্রাহক যোগ করা যায়নি। আবার চেষ্টা করুন।");
+    } finally {
+      setSavingCustomer(false);
+    }
+  }
 
   const scrollToCart = () => {
     setDrawerOpen(false);
@@ -969,33 +1140,60 @@ export function PosPageClient({
           {/* Customer Selection for Due */}
           {isDue && canUseDueSale && (
             <div className="rounded-xl border border-warning/30 bg-warning-soft/40 p-3 space-y-2">
-              <label className="text-base font-medium text-foreground">
-                গ্রাহক নির্বাচন করুন
-              </label>
-              <select
-                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-                disabled={customersLoading}
-              >
-                <option value="">-- একজন গ্রাহক নির্বাচন করুন --</option>
-                {customersLoading ? (
-                  <option value="" disabled>
-                    গ্রাহক লোড হচ্ছে...
-                  </option>
-                ) : customerList.length === 0 ? (
-                  <option value="" disabled>
-                    কোনো গ্রাহক পাওয়া যায়নি
-                  </option>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-base font-medium text-foreground">
+                  গ্রাহক নির্বাচন করুন
+                </label>
+                {canCreateCustomer ? (
+                  <button
+                    type="button"
+                    onClick={() => setQuickCustomerOpen(true)}
+                    className="inline-flex h-8 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-xs font-semibold text-primary transition hover:bg-primary/20"
+                  >
+                    + নতুন গ্রাহক
+                  </button>
                 ) : null}
-                {customerOptions}
-              </select>
-              {canViewDuePage ? (
+              </div>
+              <Select
+                value={customerId || undefined}
+                onValueChange={setCustomerId}
+                disabled={customersLoading || customerList.length === 0}
+              >
+                <SelectTrigger className="h-11 w-full rounded-xl border border-border bg-card px-3 text-left text-sm text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                  <SelectValue placeholder="একজন গ্রাহক নির্বাচন করুন" />
+                </SelectTrigger>
+                <SelectContent
+                  align="start"
+                  className="min-w-[var(--radix-select-trigger-width)]"
+                >
+                  {customersLoading ? (
+                    <SelectItem value="__loading" disabled>
+                      গ্রাহক লোড হচ্ছে...
+                    </SelectItem>
+                  ) : customerList.length === 0 ? (
+                    <SelectItem value="__empty" disabled>
+                      কোনো গ্রাহক পাওয়া যায়নি
+                    </SelectItem>
+                  ) : (
+                    customerList.map((customer) => (
+                      <SelectItem key={customer.id} value={customer.id}>
+                        {customer.name} — বকেয়া:{" "}
+                        {Number(customer.totalDue || 0).toFixed(2)} ৳
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {canCreateCustomer ? (
+                <p className="text-xs text-muted-foreground">
+                  এখানে নতুন গ্রাহক যোগ করলে সঙ্গে সঙ্গে বাকির বিক্রিতে নির্বাচন হবে।
+                </p>
+              ) : canViewDuePage ? (
                 <a
                   className="text-sm text-primary hover:underline"
                   href={`/dashboard/due?shopId=${shopId}`}
                 >
-                  নতুন গ্রাহক যোগ করুন
+                  নতুন গ্রাহক যোগ করতে ধার/বাকি পেজে যান
                 </a>
               ) : (
                 <p className="text-xs text-muted-foreground">
@@ -1074,49 +1272,69 @@ export function PosPageClient({
       {items.length > 0 && (
         <div className="lg:hidden fixed bottom-16 inset-x-0 z-40 px-4">
           <div
-            className={`relative bg-card/95 backdrop-blur rounded-3xl border border-border shadow-[0_-10px_30px_rgba(15,23,42,0.18)] px-4 py-3 flex items-center gap-3 ${
+            className={`relative bg-card/95 backdrop-blur rounded-3xl border border-border shadow-[0_-10px_30px_rgba(15,23,42,0.18)] px-4 py-3 space-y-3 ${
               barFlash ? "flash-bar" : ""
             }`}
           >
             <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-muted-foreground/30" />
-            <div className="flex-1">
-              <div className="inline-flex items-center gap-1 text-[11px] text-muted-foreground leading-tight">
-                <span>মোট বিল</span>
-                <button
-                  type="button"
-                  aria-label="বিল বিস্তারিত দেখুন"
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={() => setDrawerOpen(true)}
-                >
-                  ▼
-                </button>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="inline-flex items-center gap-1 text-[11px] text-muted-foreground leading-tight">
+                  <span>মোট বিল</span>
+                  <button
+                    type="button"
+                    aria-label="বিল বিস্তারিত দেখুন"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setDrawerOpen(true)}
+                  >
+                    ▼
+                  </button>
+                </div>
+                <p className="text-base font-semibold text-foreground leading-tight">
+                  {safeTotalAmount.toFixed(2)} ৳ — {itemCount} আইটেম
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentSheetOpen(true)}
+                    className="inline-flex h-8 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-xs font-semibold text-primary"
+                  >
+                    পেমেন্ট: {currentPaymentLabel} ▼
+                  </button>
+                  {isDue ? (
+                    <span className="text-[11px] text-muted-foreground">
+                      {selectedCustomerName
+                        ? `গ্রাহক: ${selectedCustomerName}`
+                        : "গ্রাহক বাছাই বাকি"}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-              <p className="text-base font-semibold text-foreground leading-tight">
-                {safeTotalAmount.toFixed(2)} ৳ — {itemCount} আইটেম
-              </p>
             </div>
-            <button
-              type="button"
-              onClick={handleClearFromBar}
-              className="px-3 py-2 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted"
-            >
-              পরিষ্কার
-            </button>
-            <button
-              type="button"
-              onClick={handleSellFromBar}
-              disabled={isSubmitting || !canCreateSale}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold min-w-[140px] flex items-center justify-center gap-1 shadow-[0_10px_18px_rgba(22,163,74,0.28)] disabled:opacity-60"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  সম্পন্ন হচ্ছে...
-                </>
-              ) : (
-                "বিল সম্পন্ন"
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleClearFromBar}
+                className="flex-1 px-3 py-2 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted"
+              >
+                পরিষ্কার
+              </button>
+              <button
+                type="button"
+                onClick={handleSellFromBar}
+                disabled={isSubmitting || !canCreateSale}
+                className="flex-[1.2] px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold min-w-[140px] flex items-center justify-center gap-1 shadow-[0_10px_18px_rgba(22,163,74,0.28)] disabled:opacity-60"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    সম্পন্ন হচ্ছে...
+                  </>
+                ) : (
+                  "বিল সম্পন্ন"
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1171,6 +1389,234 @@ export function PosPageClient({
           </div>
         </div>
       )}
+
+      {paymentSheetOpen && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-foreground/30 animate-fade-in"
+            onClick={() => setPaymentSheetOpen(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 bg-card rounded-t-3xl shadow-[0_-20px_50px_rgba(15,23,42,0.2)] p-5 space-y-4 max-h-[75vh] overflow-y-auto animate-slide-up">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">দ্রুত পেমেন্ট সেটিং</p>
+                <p className="text-lg font-semibold text-foreground">
+                  {safeTotalAmount.toFixed(2)} ৳
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaymentSheetOpen(false)}
+                className="px-3 py-2 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted"
+              >
+                বন্ধ
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground">
+                পেমেন্ট পদ্ধতি
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {paymentOptions.map((method) => (
+                  <button
+                    key={`mobile-${method.value}`}
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod(method.value);
+                      if (method.value !== "due") {
+                        setPaymentSheetOpen(false);
+                      }
+                    }}
+                    className={`h-10 rounded-xl border px-3 text-sm font-semibold transition-colors ${
+                      paymentMethod === method.value
+                        ? "bg-primary-soft text-primary border-primary/40 shadow-sm"
+                        : "bg-card text-foreground border-border hover:border-primary/30"
+                    }`}
+                  >
+                    {method.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {isDue && canUseDueSale ? (
+              <div className="space-y-4 rounded-2xl border border-warning/30 bg-warning-soft/40 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-semibold text-foreground">
+                    গ্রাহক নির্বাচন করুন
+                  </label>
+                  {canCreateCustomer ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentSheetOpen(false);
+                        setQuickCustomerOpen(true);
+                      }}
+                      className="inline-flex h-8 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-xs font-semibold text-primary"
+                    >
+                      + নতুন গ্রাহক
+                    </button>
+                  ) : null}
+                </div>
+                <Select
+                  value={customerId || undefined}
+                  onValueChange={setCustomerId}
+                  disabled={customersLoading || customerList.length === 0}
+                >
+                  <SelectTrigger className="h-11 w-full rounded-xl border border-border bg-card px-3 text-left text-sm text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                    <SelectValue placeholder="একজন গ্রাহক নির্বাচন করুন" />
+                  </SelectTrigger>
+                  <SelectContent
+                    align="start"
+                    className="min-w-[var(--radix-select-trigger-width)]"
+                  >
+                    {customersLoading ? (
+                      <SelectItem value="__loading-mobile" disabled>
+                        গ্রাহক লোড হচ্ছে...
+                      </SelectItem>
+                    ) : customerList.length === 0 ? (
+                      <SelectItem value="__empty-mobile" disabled>
+                        কোনো গ্রাহক পাওয়া যায়নি
+                      </SelectItem>
+                    ) : (
+                      customerList.map((customer) => (
+                        <SelectItem key={`mobile-${customer.id}`} value={customer.id}>
+                          {customer.name} — বকেয়া:{" "}
+                          {Number(customer.totalDue || 0).toFixed(2)} ৳
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-foreground">
+                    এখন পরিশোধ (আংশিক হলে)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={safeTotalAmount}
+                    step="0.01"
+                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="যেমন: 100"
+                    value={paidNow}
+                    onChange={(e) => setPaidNow(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    গ্রাহক বাছাই করে আংশিক টাকা নিলে বাকি পরে দেখাবে।
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => setPaymentSheetOpen(false)}
+              className="w-full h-11 rounded-xl bg-primary-soft text-primary border border-primary/30 text-sm font-semibold"
+            >
+              হয়ে গেছে
+            </button>
+          </div>
+        </div>
+      )}
+
+      <Dialog
+        open={quickCustomerOpen}
+        onOpenChange={(open) => {
+          setQuickCustomerOpen(open);
+          if (!open && !savingCustomer) {
+            setQuickCustomer({ name: "", phone: "", address: "" });
+          }
+        }}
+      >
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-md border-border/70 sm:w-[calc(100vw-2rem)]">
+          <DialogHeader>
+            <DialogTitle>বাকির জন্য নতুন গ্রাহক</DialogTitle>
+            <DialogDescription>
+              এই পেজ ছাড়াই গ্রাহক যোগ করুন। save হলে তাকে সঙ্গে সঙ্গে নির্বাচন করা হবে।
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-foreground">
+                গ্রাহকের নাম *
+              </label>
+              <input
+                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="যেমন: করিম সাহেব"
+                value={quickCustomer.name}
+                onChange={(e) =>
+                  setQuickCustomer((prev) => ({
+                    ...prev,
+                    name: e.target.value,
+                  }))
+                }
+                disabled={savingCustomer}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-foreground">
+                ফোন নম্বর
+              </label>
+              <input
+                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="যেমন: 01700000000"
+                value={quickCustomer.phone}
+                onChange={(e) =>
+                  setQuickCustomer((prev) => ({
+                    ...prev,
+                    phone: e.target.value,
+                  }))
+                }
+                disabled={savingCustomer}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-foreground">
+                ঠিকানা
+              </label>
+              <input
+                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="যেমন: বাজার রোড"
+                value={quickCustomer.address}
+                onChange={(e) =>
+                  setQuickCustomer((prev) => ({
+                    ...prev,
+                    address: e.target.value,
+                  }))
+                }
+                disabled={savingCustomer}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <button
+              type="button"
+              onClick={() => setQuickCustomerOpen(false)}
+              disabled={savingCustomer}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              বন্ধ
+            </button>
+            <button
+              type="button"
+              onClick={handleQuickCustomerSave}
+              disabled={!quickCustomer.name.trim() || savingCustomer}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-primary/30 bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {savingCustomer
+                ? "সংরক্ষণ হচ্ছে..."
+                : "গ্রাহক যোগ করে নির্বাচন করুন"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
