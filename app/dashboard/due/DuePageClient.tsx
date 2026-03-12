@@ -111,6 +111,20 @@ function normalizeEntryDate(value: string | number | Date | undefined) {
     : new Date().toISOString();
 }
 
+function formatStatementDateTime(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "-";
+
+  return date.toLocaleString("bn-BD", {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 function computeSummary(customers: Customer[]): Summary {
   const totalDue = customers.reduce((sum, c) => sum + toNumber(c.totalDue), 0);
   const topDue = [...customers]
@@ -1778,9 +1792,7 @@ export default function DuePageClient({
                           statementWithBalance.map((row) => (
                             <tr key={row.id} className="border-t border-border/70">
                               <td className="p-3">
-                                {new Date(row.entryDate).toLocaleDateString(
-                                  "bn-BD"
-                                )}
+                                {formatStatementDateTime(row.entryDate)}
                               </td>
                               <td className="p-3 text-left">
                                 {row.description || "-"}
@@ -1836,7 +1848,7 @@ export default function DuePageClient({
                             <div className="pl-3 flex items-center justify-between">
                               <div>
                                 <p className="text-xs text-muted-foreground">
-                                  {new Date(row.entryDate).toLocaleDateString("bn-BD")}
+                                  {formatStatementDateTime(row.entryDate)}
                                 </p>
                                 <p className="text-base font-semibold text-foreground mt-1">
                                   {title}
