@@ -4,6 +4,10 @@ import { getSaleInvoiceDetails } from "@/app/actions/sales";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
 import { canViewSalesInvoice } from "@/lib/sales-invoice";
+import {
+  isThermalSalesInvoicePrintSize,
+  sanitizeSalesInvoicePrintSize,
+} from "@/lib/sales-invoice-print";
 import { canManageSaleReturn } from "@/lib/sales-return";
 import PrintInvoiceButton from "./PrintInvoiceButton";
 
@@ -105,6 +109,10 @@ export default async function SalesInvoicePage({ params }: PageProps) {
   const statusUpper = (data.status || "").toUpperCase();
   const isVoided = statusUpper === "VOIDED";
   const isDueSale = (data.paymentMethod || "").toLowerCase() === "due";
+  const invoicePrintPaper = sanitizeSalesInvoicePrintSize(
+    data.salesInvoicePrintSize
+  );
+  const isThermalPrint = isThermalSalesInvoicePrintSize(invoicePrintPaper);
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
@@ -136,27 +144,59 @@ export default async function SalesInvoicePage({ params }: PageProps) {
         <PrintInvoiceButton />
       </div>
 
-      <div id="sales-invoice-print-root" data-print-root>
-        <article className="print-card overflow-hidden rounded-3xl border border-border bg-card shadow-[0_16px_38px_rgba(15,23,42,0.1)] print:rounded-none print:shadow-none">
-          <header className="print-no-break border-b border-border bg-gradient-to-br from-muted/65 via-card to-card px-4 py-5 sm:px-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
+      <div
+        id="sales-invoice-print-root"
+        data-print-root
+        data-print-paper={invoicePrintPaper}
+      >
+        <article
+          className={`print-card overflow-hidden rounded-3xl border border-border bg-card shadow-[0_16px_38px_rgba(15,23,42,0.1)] print:rounded-none print:shadow-none ${
+            isThermalPrint ? "print:text-[11px]" : ""
+          }`}
+        >
+          <header
+            className={`print-no-break border-b border-border bg-gradient-to-br from-muted/65 via-card to-card px-4 py-5 sm:px-6 ${
+              isThermalPrint ? "print:px-2 print:py-2" : ""
+            }`}
+          >
+            <div
+              className={`flex flex-wrap items-start justify-between gap-4 ${
+                isThermalPrint ? "print:flex-col print:gap-2" : ""
+              }`}
+            >
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-muted-foreground">
                   Invoice
                 </p>
-                <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+                <h1
+                  className={`text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl ${
+                    isThermalPrint ? "print:text-xl" : ""
+                  }`}
+                >
                   SALES INVOICE
                 </h1>
-                <p className="text-sm text-muted-foreground">
+                <p
+                  className={`text-sm text-muted-foreground ${
+                    isThermalPrint ? "print:text-[11px]" : ""
+                  }`}
+                >
                   ইস্যুর সময়: <span className="font-semibold text-foreground">{formatDateTime(data.invoiceIssuedAt)}</span>
                 </p>
               </div>
 
-              <div className="min-w-[250px] rounded-2xl border border-border bg-card px-4 py-3 shadow-sm print:shadow-none">
+              <div
+                className={`min-w-[250px] rounded-2xl border border-border bg-card px-4 py-3 shadow-sm print:shadow-none ${
+                  isThermalPrint ? "print:min-w-0 print:w-full print:px-2 print:py-2" : ""
+                }`}
+              >
                 <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                   Invoice No
                 </p>
-                <p className="mt-1 font-mono text-lg font-semibold leading-tight text-foreground">
+                <p
+                  className={`mt-1 font-mono text-lg font-semibold leading-tight text-foreground ${
+                    isThermalPrint ? "print:text-sm" : ""
+                  }`}
+                >
                   {data.invoiceNo}
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -169,8 +209,16 @@ export default async function SalesInvoicePage({ params }: PageProps) {
             </div>
           </header>
 
-          <section className="print-no-break grid grid-cols-1 gap-3 border-b border-border px-4 py-4 sm:grid-cols-2 sm:px-6">
-            <div className="rounded-xl border border-border bg-muted/35 p-3 sm:p-4">
+          <section
+            className={`print-no-break grid grid-cols-1 gap-3 border-b border-border px-4 py-4 sm:grid-cols-2 sm:px-6 ${
+              isThermalPrint ? "print:px-2 print:py-2 print:grid-cols-1" : ""
+            }`}
+          >
+            <div
+              className={`rounded-xl border border-border bg-muted/35 p-3 sm:p-4 ${
+                isThermalPrint ? "print:p-2" : ""
+              }`}
+            >
               <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                 From
               </p>
@@ -183,7 +231,11 @@ export default async function SalesInvoicePage({ params }: PageProps) {
               ) : null}
             </div>
 
-            <div className="rounded-xl border border-border bg-muted/35 p-3 sm:p-4">
+            <div
+              className={`rounded-xl border border-border bg-muted/35 p-3 sm:p-4 ${
+                isThermalPrint ? "print:p-2" : ""
+              }`}
+            >
               <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                 Customer
               </p>
@@ -199,8 +251,16 @@ export default async function SalesInvoicePage({ params }: PageProps) {
             </div>
           </section>
 
-          <section className="px-4 py-4 sm:px-6">
-            <div className="overflow-x-auto rounded-xl border border-border">
+          <section
+            className={`px-4 py-4 sm:px-6 ${
+              isThermalPrint ? "print:px-2 print:py-2" : ""
+            }`}
+          >
+            <div
+              className={`overflow-x-auto rounded-xl border border-border ${
+                isThermalPrint ? "print:hidden" : ""
+              }`}
+            >
               <table className="min-w-full table-fixed text-left text-sm">
                 <thead className="bg-muted/55">
                   <tr className="text-muted-foreground">
@@ -228,9 +288,38 @@ export default async function SalesInvoicePage({ params }: PageProps) {
                 </tbody>
               </table>
             </div>
+
+            <div
+              className={`${isThermalPrint ? "hidden print:block" : "hidden"} overflow-hidden rounded-xl border border-border`}
+            >
+              <div className="border-b border-border bg-muted/35 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                আইটেম
+              </div>
+              <div className="divide-y divide-border">
+                {data.items.map((item) => (
+                  <div key={item.id} className="px-2 py-2">
+                    <div className="text-[11px] font-semibold text-foreground">
+                      {item.productName}
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>
+                        {formatMoney(item.quantity)} x ৳ {formatMoney(item.unitPrice)}
+                      </span>
+                      <span className="font-semibold text-foreground">
+                        ৳ {formatMoney(item.lineTotal)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </section>
 
-          <section className="grid grid-cols-1 gap-3 border-t border-border px-4 py-4 sm:grid-cols-2 sm:px-6">
+          <section
+            className={`grid grid-cols-1 gap-3 border-t border-border px-4 py-4 sm:grid-cols-2 sm:px-6 ${
+              isThermalPrint ? "print:px-2 print:py-2 print:grid-cols-1" : ""
+            }`}
+          >
             <div className="space-y-2 text-sm">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex rounded-full border border-border bg-muted/45 px-3 py-1 text-xs font-semibold text-foreground">
@@ -261,7 +350,11 @@ export default async function SalesInvoicePage({ params }: PageProps) {
               ) : null}
             </div>
 
-            <div className="print-no-break rounded-2xl border border-border bg-muted/35 p-3 sm:p-4">
+            <div
+              className={`print-no-break rounded-2xl border border-border bg-muted/35 p-3 sm:p-4 ${
+                isThermalPrint ? "print:p-2" : ""
+              }`}
+            >
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">সাব-টোটাল</span>
@@ -283,8 +376,16 @@ export default async function SalesInvoicePage({ params }: PageProps) {
             </div>
           </section>
 
-          <footer className="print-no-break border-t border-border bg-muted/30 px-4 py-3 sm:px-6">
-            <p className="text-center text-xs text-muted-foreground sm:text-sm">
+          <footer
+            className={`print-no-break border-t border-border bg-muted/30 px-4 py-3 sm:px-6 ${
+              isThermalPrint ? "print:px-2 print:py-2" : ""
+            }`}
+          >
+            <p
+              className={`text-center text-xs text-muted-foreground sm:text-sm ${
+                isThermalPrint ? "print:text-[10px]" : ""
+              }`}
+            >
               আপনার কেনাকাটার জন্য ধন্যবাদ। এই invoice কপিটি POS সিস্টেম থেকে generated।
             </p>
           </footer>

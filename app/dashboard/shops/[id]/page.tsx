@@ -7,6 +7,8 @@ import ShopFormClient from "../ShopFormClient";
 import { listActiveBusinessTypes } from "@/app/actions/business-types";
 import { businessOptions } from "@/lib/productFormConfig";
 import { getCurrentUser } from "@/lib/auth-session";
+import { prisma } from "@/lib/prisma";
+import { DEFAULT_SALES_INVOICE_PRINT_SIZE } from "@/lib/sales-invoice-print";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -59,6 +61,17 @@ export default async function EditShop({ params }: PageProps) {
   if (!shop) {
     return <div className="p-6 text-center text-danger">Shop not found</div>;
   }
+
+  const shopPrintRows = await prisma.$queryRaw<
+    Array<{ sales_invoice_print_size: string | null }>
+  >`
+    SELECT "sales_invoice_print_size"
+    FROM "shops"
+    WHERE "id" = CAST(${id} AS uuid)
+    LIMIT 1
+  `;
+  const salesInvoicePrintSize =
+    shopPrintRows[0]?.sales_invoice_print_size || DEFAULT_SALES_INVOICE_PRINT_SIZE;
 
   if (!canManageShopSettings) {
     return (
@@ -120,6 +133,9 @@ export default async function EditShop({ params }: PageProps) {
             salesInvoiceEnabled: formData.get("salesInvoiceEnabled") === "1",
             salesInvoicePrefix:
               ((formData.get("salesInvoicePrefix") as string) || "").trim() ||
+              null,
+            salesInvoicePrintSize:
+              ((formData.get("salesInvoicePrintSize") as string) || "").trim() ||
               null,
           }
         : {}),
@@ -187,6 +203,7 @@ export default async function EditShop({ params }: PageProps) {
           businessType: (shop.businessType as any) || "tea_stall",
           salesInvoiceEnabled: Boolean((shop as any).salesInvoiceEnabled),
           salesInvoicePrefix: (shop as any).salesInvoicePrefix || "INV",
+          salesInvoicePrintSize,
           queueTokenEnabled: Boolean((shop as any).queueTokenEnabled),
           queueTokenPrefix: (shop as any).queueTokenPrefix || "TK",
           queueWorkflow: (shop as any).queueWorkflow || null,

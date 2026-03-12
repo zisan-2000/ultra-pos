@@ -2,13 +2,14 @@
 
 "use server";
 
-import { type Prisma } from "@prisma/client";
+import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { assertShopAccess } from "@/lib/shop-access";
 import { requirePermission } from "@/lib/rbac";
 import { BILLING_CONFIG, DEFAULT_PLAN, addDays, addMonths } from "@/lib/billing";
 import { sanitizeSalesInvoicePrefix } from "@/lib/sales-invoice";
+import { sanitizeSalesInvoicePrintSize } from "@/lib/sales-invoice-print";
 import { sanitizeQueueTokenPrefix } from "@/lib/queue-token";
 import { sanitizeQueueWorkflow } from "@/lib/queue-workflow";
 
@@ -16,7 +17,7 @@ async function getCurrentUser() {
   return requireUser();
 }
 
-async function ensureDefaultPlan(tx: Prisma.TransactionClient) {
+async function ensureDefaultPlan(tx: PrismaTypes.TransactionClient) {
   return tx.subscriptionPlan.upsert({
     where: { key: DEFAULT_PLAN.key },
     update: {
@@ -36,7 +37,7 @@ async function ensureDefaultPlan(tx: Prisma.TransactionClient) {
 }
 
 async function createShopSubscription(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTypes.TransactionClient,
   shop: { id: string; ownerId: string },
 ) {
   const plan = await ensureDefaultPlan(tx);
@@ -84,6 +85,7 @@ export async function createShop(data: {
   ownerId?: string;
   salesInvoiceEnabled?: boolean;
   salesInvoicePrefix?: string | null;
+  salesInvoicePrintSize?: string | null;
   queueTokenEnabled?: boolean;
   queueTokenPrefix?: string | null;
   queueWorkflow?: string | null;
@@ -130,7 +132,9 @@ export async function createShop(data: {
   const targetOwnerId = isSuperAdmin ? requestedOwnerId ?? user.id : user.id;
 
   const wantsInvoiceFeatureChange =
-    data.salesInvoiceEnabled !== undefined || data.salesInvoicePrefix !== undefined;
+    data.salesInvoiceEnabled !== undefined ||
+    data.salesInvoicePrefix !== undefined ||
+    data.salesInvoicePrintSize !== undefined;
   if (wantsInvoiceFeatureChange) {
     requirePermission(user, "manage_shop_invoice_feature");
   }
@@ -158,6 +162,10 @@ export async function createShop(data: {
   if (wantsSmsFeatureChange) {
     requirePermission(user, "manage_shop_sms_feature");
   }
+  const resolvedSalesInvoicePrintSize =
+    data.salesInvoicePrintSize !== undefined
+      ? sanitizeSalesInvoicePrintSize(data.salesInvoicePrintSize)
+      : undefined;
 
   const resolvedBarcodeEntitled = Boolean(data.barcodeFeatureEntitled ?? false);
   const resolvedBarcodeScanEnabled = Boolean(data.barcodeScanEnabled ?? false);
@@ -207,6 +215,16 @@ export async function createShop(data: {
     const shop = await tx.shop.create({
       data: createData,
     });
+
+    if (resolvedSalesInvoicePrintSize !== undefined) {
+      await tx.$executeRaw(
+        Prisma.sql`
+          UPDATE "shops"
+          SET "sales_invoice_print_size" = ${resolvedSalesInvoicePrintSize}
+          WHERE "id" = CAST(${shop.id} AS uuid)
+        `
+      );
+    }
 
     await createShopSubscription(tx, { id: shop.id, ownerId: shop.ownerId });
   });
@@ -293,7 +311,9 @@ export async function updateShop(id: string, data: any) {
   };
 
   const wantsInvoiceFeatureChange =
-    data.salesInvoiceEnabled !== undefined || data.salesInvoicePrefix !== undefined;
+    data.salesInvoiceEnabled !== undefined ||
+    data.salesInvoicePrefix !== undefined ||
+    data.salesInvoicePrintSize !== undefined;
   if (wantsInvoiceFeatureChange) {
     requirePermission(user, "manage_shop_invoice_feature");
     if (data.salesInvoiceEnabled !== undefined) {
@@ -383,6 +403,18 @@ export async function updateShop(id: string, data: any) {
     where: { id },
     data: updateData,
   });
+  if (data.salesInvoicePrintSize !== undefined) {
+    const resolvedSalesInvoicePrintSize = sanitizeSalesInvoicePrintSize(
+      data.salesInvoicePrintSize
+    );
+    await prisma.$executeRaw(
+      Prisma.sql`
+        UPDATE "shops"
+        SET "sales_invoice_print_size" = ${resolvedSalesInvoicePrintSize}
+        WHERE "id" = CAST(${id} AS uuid)
+      `
+    );
+  }
   return { success: true };
 }
 

@@ -163,6 +163,7 @@ model Shop {
   closingTime         String?  @map("closing_time")
   salesInvoiceEnabled Boolean  @default(false) @map("sales_invoice_enabled")
   salesInvoicePrefix  String?  @map("sales_invoice_prefix")
+  salesInvoicePrintSize String @default("thermal-80") @map("sales_invoice_print_size")
   nextSalesInvoiceSeq Int      @default(1) @map("next_sales_invoice_seq")
   saleReturnPrefix    String?  @map("sale_return_prefix")
   nextSaleReturnSeq   Int      @default(1) @map("next_sale_return_seq")

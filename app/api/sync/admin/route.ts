@@ -115,6 +115,7 @@ const shopCreateSchema = z.object({
   businessType: z.string().optional(),
   salesInvoiceEnabled: z.boolean().optional(),
   salesInvoicePrefix: z.string().optional().nullable(),
+  salesInvoicePrintSize: z.string().optional().nullable(),
   queueTokenEnabled: z.boolean().optional(),
   queueTokenPrefix: z.string().optional().nullable(),
   barcodeFeatureEntitled: z.boolean().optional(),
@@ -133,6 +134,7 @@ const shopUpdateSchema = z.object({
   closingTime: z.string().optional().nullable(),
   salesInvoiceEnabled: z.boolean().optional(),
   salesInvoicePrefix: z.string().optional().nullable(),
+  salesInvoicePrintSize: z.string().optional().nullable(),
   queueTokenEnabled: z.boolean().optional(),
   queueTokenPrefix: z.string().optional().nullable(),
   barcodeFeatureEntitled: z.boolean().optional(),
@@ -309,6 +311,7 @@ export async function POST(req: Request) {
                 businessType: input.businessType ?? "tea_stall",
                 salesInvoiceEnabled: input.salesInvoiceEnabled,
                 salesInvoicePrefix: input.salesInvoicePrefix ?? undefined,
+                salesInvoicePrintSize: input.salesInvoicePrintSize ?? undefined,
                 queueTokenEnabled: input.queueTokenEnabled,
                 queueTokenPrefix: input.queueTokenPrefix ?? undefined,
                 barcodeFeatureEntitled: input.barcodeFeatureEntitled,
@@ -337,6 +340,9 @@ export async function POST(req: Request) {
                   : {}),
                 ...(data.salesInvoicePrefix !== undefined
                   ? { salesInvoicePrefix: data.salesInvoicePrefix }
+                  : {}),
+                ...(data.salesInvoicePrintSize !== undefined
+                  ? { salesInvoicePrintSize: data.salesInvoicePrintSize }
                   : {}),
                 ...(data.queueTokenEnabled !== undefined
                   ? { queueTokenEnabled: data.queueTokenEnabled }

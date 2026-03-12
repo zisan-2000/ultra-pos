@@ -10,6 +10,11 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { queueAdminAction } from "@/lib/sync/queue";
 import { db } from "@/lib/dexie/db";
 import { handlePermissionError } from "@/lib/permission-toast";
+import {
+  DEFAULT_SALES_INVOICE_PRINT_SIZE,
+  SALES_INVOICE_PRINT_SIZE_OPTIONS,
+  sanitizeSalesInvoicePrintSize,
+} from "@/lib/sales-invoice-print";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -46,6 +51,7 @@ type Props = {
     businessType?: string;
     salesInvoiceEnabled?: boolean;
     salesInvoicePrefix?: string | null;
+    salesInvoicePrintSize?: string | null;
     queueTokenEnabled?: boolean;
     queueTokenPrefix?: string | null;
     queueWorkflow?: string | null;
@@ -148,6 +154,11 @@ export default function ShopFormClient({
   );
   const [salesInvoicePrefix, setSalesInvoicePrefix] = useState<string>(
     initial?.salesInvoicePrefix || "INV"
+  );
+  const [salesInvoicePrintSize, setSalesInvoicePrintSize] = useState<string>(
+    sanitizeSalesInvoicePrintSize(
+      initial?.salesInvoicePrintSize || DEFAULT_SALES_INVOICE_PRINT_SIZE
+    )
   );
   const [queueTokenEnabled, setQueueTokenEnabled] = useState<boolean>(
     Boolean(initial?.queueTokenEnabled ?? false)
@@ -417,6 +428,9 @@ export default function ShopFormClient({
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, "")
       .slice(0, 12);
+    const payloadSalesInvoicePrintSize = sanitizeSalesInvoicePrintSize(
+      salesInvoicePrintSize
+    );
     const payloadQueueTokenEnabled = Boolean(queueTokenEnabled);
     const payloadQueueTokenPrefix = queueTokenPrefix
       .toUpperCase()
@@ -439,6 +453,7 @@ export default function ShopFormClient({
     if (showSalesInvoiceSettings) {
       form.set("salesInvoiceEnabled", payloadSalesInvoiceEnabled ? "1" : "0");
       form.set("salesInvoicePrefix", payloadSalesInvoicePrefix);
+      form.set("salesInvoicePrintSize", payloadSalesInvoicePrintSize);
     }
     if (showQueueTokenSettings) {
       form.set("queueTokenEnabled", payloadQueueTokenEnabled ? "1" : "0");
@@ -488,6 +503,7 @@ export default function ShopFormClient({
             ? {
                 salesInvoiceEnabled: payloadSalesInvoiceEnabled,
                 salesInvoicePrefix: payloadSalesInvoicePrefix || null,
+                salesInvoicePrintSize: payloadSalesInvoicePrintSize,
               }
             : {}),
           ...(showQueueTokenSettings
@@ -774,6 +790,30 @@ export default function ShopFormClient({
             />
             <p className="text-xs text-muted-foreground">
               উদাহরণ: `INV` হলে নম্বর হবে `INV-YYMM-000001`
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-muted-foreground">
+              প্রিন্ট সাইজ
+            </label>
+            <select
+              value={salesInvoicePrintSize}
+              onChange={(e) => setSalesInvoicePrintSize(e.target.value)}
+              className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              disabled={!salesInvoiceEnabled}
+            >
+              {SALES_INVOICE_PRINT_SIZE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {
+                SALES_INVOICE_PRINT_SIZE_OPTIONS.find(
+                  (option) => option.value === salesInvoicePrintSize
+                )?.hint
+              }
             </p>
           </div>
         </div>

@@ -19,6 +19,7 @@ import {
   canIssueSalesInvoice,
   canViewSalesInvoice,
 } from "@/lib/sales-invoice";
+import { DEFAULT_SALES_INVOICE_PRINT_SIZE } from "@/lib/sales-invoice-print";
 import {
   allocateSaleReturnNumber,
   canManageSaleReturn,
@@ -1882,6 +1883,7 @@ type SaleInvoiceDetails = {
   shopName: string;
   shopAddress: string | null;
   shopPhone: string | null;
+  salesInvoicePrintSize: string;
   invoiceNo: string;
   invoiceIssuedAt: string;
   saleDate: string;
@@ -1966,12 +1968,24 @@ export async function getSaleInvoiceDetails(
     throw new Error("Invoice not issued for this sale");
   }
 
+  const shopPrintRows = await prisma.$queryRaw<
+    Array<{ sales_invoice_print_size: string | null }>
+  >`
+    SELECT "sales_invoice_print_size"
+    FROM "shops"
+    WHERE "id" = CAST(${sale.shopId} AS uuid)
+    LIMIT 1
+  `;
+  const shopPrintSize =
+    shopPrintRows[0]?.sales_invoice_print_size || DEFAULT_SALES_INVOICE_PRINT_SIZE;
+
   return {
     saleId: sale.id,
     shopId: sale.shopId,
     shopName: sale.shop.name,
     shopAddress: sale.shop.address ?? null,
     shopPhone: sale.shop.phone ?? null,
+    salesInvoicePrintSize: shopPrintSize,
     invoiceNo: sale.invoiceNo,
     invoiceIssuedAt: (sale.invoiceIssuedAt ?? sale.saleDate).toISOString(),
     saleDate: sale.saleDate.toISOString(),

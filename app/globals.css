@@ -361,6 +361,16 @@ body {
 }
 
 @media print {
+  @page thermal-receipt-80 {
+    size: 80mm auto;
+    margin: 2mm;
+  }
+
+  @page thermal-receipt-58 {
+    size: 58mm auto;
+    margin: 2mm;
+  }
+
   @page {
     margin: 10mm;
   }
@@ -379,17 +389,36 @@ body {
   }
 
   [data-print-root] {
-    position: absolute;
-    inset: 0 auto auto 0;
+    position: static !important;
     width: 100%;
     margin: 0;
     padding: 0;
+    overflow: visible !important;
+  }
+
+  [data-print-root][data-print-paper="thermal-80"] {
+    page: thermal-receipt-80;
+    width: 76mm !important;
+    max-width: 76mm !important;
+  }
+
+  [data-print-root][data-print-paper="thermal-58"] {
+    page: thermal-receipt-58;
+    width: 54mm !important;
+    max-width: 54mm !important;
   }
 
   [data-print-root] .print-card {
     border-radius: 0 !important;
     border-color: #d1d5db !important;
     box-shadow: none !important;
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  [data-print-root][data-print-paper="thermal-80"] .print-card,
+  [data-print-root][data-print-paper="thermal-58"] .print-card {
+    border-color: transparent !important;
   }
 
   [data-print-root] .print-no-break {
