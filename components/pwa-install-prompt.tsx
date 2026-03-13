@@ -183,57 +183,70 @@ export default function PWAInstallPrompt() {
   return (
     <>
       <Dialog open={showInstallPrompt} onOpenChange={setShowInstallPrompt}>
-      <DialogContent className="sm:max-w-md bg-card border-border shadow-2xl">
-        <DialogHeader className="text-center">
-          <DialogTitle className="text-2xl font-bold text-foreground">
-            My POS অ্যাপ ইনস্টল করুন
-          </DialogTitle>
-          <DialogDescription className="text-base text-muted-foreground mt-2">
-            দ্রুত অ্যাক্সেস, অফলাইন সাপোর্ট এবং ফুল স্ক্রিন অভিজ্ঞতার জন্য ডিভাইসে ইনস্টল করুন।
-          </DialogDescription>
-        </DialogHeader>
-          
-          <div className="flex flex-col items-center space-y-4 py-4">
-          <div className="w-20 h-20 rounded-2xl border border-primary/20 bg-primary-soft text-primary flex items-center justify-center shadow-sm">
-            <span className="text-2xl font-bold tracking-wide">POS</span>
-          </div>
-            
-            <div className="text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                - অফলাইন সাপোর্ট<br/>
-                - দ্রুত লোডিং<br/>
-                - ফুল স্ক্রিন মোড<br/>
-                - ব্রাউজার ট্যাব ছাড়াই ব্যবহার
-              </p>
+        <DialogContent className="w-[calc(100vw-24px)] max-w-md max-h-[90vh] overflow-y-auto border-border bg-card p-5 shadow-2xl sm:w-full sm:max-w-md">
+          <DialogHeader className="space-y-3 text-left">
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-[22px] border border-primary/20 bg-gradient-to-br from-primary-soft via-card to-primary-soft/70 text-primary shadow-sm">
+                <span className="text-[22px] font-extrabold tracking-[0.06em]">POS</span>
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="text-[1.7rem] font-black leading-[1.15] tracking-[-0.02em] text-foreground sm:text-[2rem]">
+                  My POS অ্যাপ ইনস্টল করুন
+                </DialogTitle>
+                <DialogDescription className="mt-1.5 text-[15px] font-medium leading-7 text-foreground/72 sm:text-base">
+                  দ্রুত খোলার জন্য আর cleaner full-screen ব্যবহারের জন্য install করুন।
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="mt-5 space-y-3">
+            <div className="rounded-2xl border border-border/60 bg-gradient-to-br from-muted/45 to-card p-4">
+              <p className="text-[15px] font-bold tracking-[-0.01em] text-foreground">যা পাবেন</p>
+              <div className="mt-3 grid gap-2.5">
+                <div className="rounded-xl border border-border/50 bg-card px-3 py-2.5 text-[15px] font-semibold text-foreground">
+                  দ্রুত open হবে
+                </div>
+                <div className="rounded-xl border border-border/50 bg-card px-3 py-2.5 text-[15px] font-semibold text-foreground">
+                  browser tab ছাড়াই ব্যবহার করা যাবে
+                </div>
+                <div className="rounded-xl border border-border/50 bg-card px-3 py-2.5 text-[15px] font-semibold text-foreground">
+                  full-screen এ cleaner কাজের screen পাবেন
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-dashed border-border/70 bg-card p-4 text-[15px] font-medium leading-6 text-foreground/68">
+              এখন না চাইলে পরে আবার install করতে পারবেন।
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 mt-6">
-            <Button 
+          <div className="mt-6 flex flex-col gap-3">
+            <Button
               onClick={handleInstallClick}
-              className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover text-base py-3"
+              className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-primary-foreground hover:bg-primary-hover"
               size="lg"
             >
               এখনই ইনস্টল
             </Button>
-            
-            <Button 
-              variant="outline" 
-              onClick={handleInstallLater}
-              className="flex-1 border-border text-foreground/80 hover:bg-muted text-base py-3"
-              size="lg"
-            >
-              পরে করব
-            </Button>
-            
-            <Button 
-              variant="ghost" 
-              onClick={handleDismiss}
-              className="text-muted-foreground hover:text-foreground text-base py-3"
-              size="lg"
-            >
-              এখন নয়
-            </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                onClick={handleInstallLater}
+                className="h-11 w-full rounded-2xl border-border text-foreground/80 hover:bg-muted"
+                size="lg"
+              >
+                পরে করব
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={handleDismiss}
+                className="h-11 w-full rounded-2xl text-muted-foreground hover:text-foreground"
+                size="lg"
+              >
+                এখন নয়
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
