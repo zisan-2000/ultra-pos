@@ -135,10 +135,6 @@ export default function OwnerSummaryVoice({
   const [intervalMinutes, setIntervalMinutes] = useState(
     DEFAULT_ALERT_INTERVAL_MINUTES
   );
-  const [pendingInterval, setPendingInterval] = useState(
-    String(DEFAULT_ALERT_INTERVAL_MINUTES)
-  );
-  const [intervalError, setIntervalError] = useState<string | null>(null);
   const [closingTimeValue, setClosingTimeValue] = useState(
     normalizeClosingTime(closingTime)
   );
@@ -629,17 +625,13 @@ export default function OwnerSummaryVoice({
   ]);
 
   const openSettings = useCallback(() => {
-    setPendingInterval(String(intervalMinutes));
-    setIntervalError(null);
     setSettingsOpen(true);
-  }, [intervalMinutes]);
+  }, []);
 
   const commitIntervalMinutes = useCallback(
     (value: number) => {
       const normalized = normalizeIntervalMinutes(value);
       setIntervalMinutes(normalized);
-      setPendingInterval(String(normalized));
-      setIntervalError(null);
       try {
         safeLocalStorageSet(intervalStorageKey, String(normalized));
       } catch {
@@ -648,15 +640,6 @@ export default function OwnerSummaryVoice({
     },
     [intervalStorageKey]
   );
-
-  const saveInterval = useCallback(() => {
-    const parsed = Number(pendingInterval);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      setIntervalError("সঠিক মিনিট লিখুন (৫-১৮০)।");
-      return;
-    }
-    commitIntervalMinutes(parsed);
-  }, [pendingInterval, commitIntervalMinutes]);
 
   const saveClosingTime = useCallback(() => {
     if (!shopId) return;
@@ -689,10 +672,18 @@ export default function OwnerSummaryVoice({
 
   const notificationLabel =
     notificationPermission === "denied"
-      ? "নোটিফাই ব্লকড"
+      ? "ব্রাউজারে ব্লক"
       : notificationEnabled
-        ? "নোটিফাই চালু"
-        : "নোটিফাই চালু করুন";
+        ? "চালু আছে"
+        : "চালু নয়";
+  const summaryAlertStatusLabel = alertsEnabled ? "চালু" : "বন্ধ";
+  const reminderStatusLabel = reportReminderEnabled ? "চালু" : "বন্ধ";
+  const browserNotificationHelpText =
+    notificationPermission === "denied"
+      ? "ব্রাউজার থেকে নোটিফিকেশন ব্লক করা আছে। ব্রাউজার settings থেকে Allow করতে হবে।"
+      : notificationEnabled
+        ? "ট্যাব বন্ধ থাকলেও summary reminder পাওয়ার জন্য প্রস্তুত।"
+        : "চালু করলে browser notification-এ summary reminder পাবেন।";
   const summarySales = Number(getSummaryTotal(alertSummary?.sales));
   const summaryExpense = Number(getSummaryTotal(alertSummary?.expenses));
   const summaryProfit = Number(alertSummary?.profit ?? 0);
@@ -846,17 +837,44 @@ export default function OwnerSummaryVoice({
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent className="max-w-none w-full max-h-[85vh] overflow-y-auto rounded-t-2xl sm:rounded-lg sm:max-w-lg !left-0 !right-0 !bottom-0 !top-auto !translate-x-0 !translate-y-0 sm:!left-[50%] sm:!top-[50%] sm:!translate-x-[-50%] sm:!translate-y-[-50%] sm:!right-auto sm:!bottom-auto">
           <DialogHeader>
-            <DialogTitle>সারাংশ সেটিংস</DialogTitle>
+            <DialogTitle>নোটিফিকেশন সেটিংস</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-2xl border border-border/60 bg-muted/35 px-3 py-3">
+                <p className="text-[11px] font-semibold text-muted-foreground">
+                  সারাংশ
+                </p>
+                <p className="mt-1 text-sm font-bold text-foreground">
+                  {summaryAlertStatusLabel}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-muted/35 px-3 py-3">
+                <p className="text-[11px] font-semibold text-muted-foreground">
+                  ব্রাউজার নোটিফাই
+                </p>
+                <p className="mt-1 text-sm font-bold text-foreground">
+                  {notificationLabel}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-muted/35 px-3 py-3">
+                <p className="text-[11px] font-semibold text-muted-foreground">
+                  দিনশেষ রিমাইন্ডার
+                </p>
+                <p className="mt-1 text-sm font-bold text-foreground">
+                  {reminderStatusLabel}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-foreground">
-                    সারাংশ অ্যালার্ট
+                    আজকের সারাংশ দেখান
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    নির্দিষ্ট সময় পর পর আজকের সারাংশ দেখাবে।
+                    নির্দিষ্ট সময় পর পর আজকের বিক্রি, খরচ, লাভ দেখাবে।
                   </p>
                 </div>
                 <button
@@ -867,9 +885,32 @@ export default function OwnerSummaryVoice({
                     size: "sm",
                   })}
                 >
-                  {alertsEnabled ? "চালু" : "বন্ধ"}
+                  {alertsEnabled ? "বন্ধ করুন" : "চালু করুন"}
                 </button>
               </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  কতক্ষণ পর পর দেখাবেন
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {PRESET_INTERVALS.map((minutes) => (
+                    <button
+                      key={minutes}
+                      type="button"
+                      onClick={() => commitIntervalMinutes(minutes)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                        minutes === intervalMinutes
+                          ? "border-primary/40 bg-primary-soft text-primary"
+                          : "border-border bg-card text-foreground"
+                      }`}
+                    >
+                      {minutes} মিনিট
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -882,13 +923,13 @@ export default function OwnerSummaryVoice({
                   এখনই দেখুন
                 </button>
                 <span className="text-xs text-muted-foreground">
-                  ইন্টারভ্যাল: {intervalMinutes} মিনিট
+                  বর্তমান interval: {intervalMinutes} মিনিট
                 </span>
               </div>
             </div>
 
             {notificationSupported ? (
-              <div className="rounded-xl border border-border/60 bg-card p-4 space-y-2">
+              <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <p className="text-sm font-semibold text-foreground">
@@ -907,25 +948,23 @@ export default function OwnerSummaryVoice({
                     })}
                     disabled={notificationPermission === "denied"}
                   >
-                    {notificationLabel}
+                    {notificationEnabled ? "বন্ধ করুন" : "চালু করুন"}
                   </button>
                 </div>
-                {notificationPermission === "denied" ? (
-                  <p className="text-xs text-muted-foreground">
-                    ব্রাউজারে নোটিফিকেশন ব্লক করা আছে।
-                  </p>
-                ) : null}
+                <div className="rounded-xl border border-border/60 bg-muted/35 px-3 py-2 text-xs text-muted-foreground">
+                  {browserNotificationHelpText}
+                </div>
               </div>
             ) : null}
 
-            <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
+            <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-foreground">
                     দিনশেষ রিপোর্ট রিমাইন্ডার
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    দোকান বন্ধের সময়ের পর একবার রিমাইন্ডার পাবেন।
+                    দোকান বন্ধের পর রিপোর্ট ডাউনলোডের কথা মনে করিয়ে দেবে।
                   </p>
                 </div>
                 <button
@@ -936,7 +975,7 @@ export default function OwnerSummaryVoice({
                     size: "sm",
                   })}
                 >
-                  {reportReminderEnabled ? "চালু" : "বন্ধ"}
+                  {reportReminderEnabled ? "বন্ধ করুন" : "চালু করুন"}
                 </button>
               </div>
 
@@ -968,6 +1007,10 @@ export default function OwnerSummaryVoice({
                 ) : null}
               </div>
 
+              <div className="rounded-xl border border-border/60 bg-muted/35 px-3 py-2 text-xs text-muted-foreground">
+                ক্লোজিং টাইম পার হওয়ার {REMINDER_DELAY_MINUTES} মিনিট পরে একবার রিমাইন্ডার দেখাবে।
+              </div>
+
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -981,55 +1024,6 @@ export default function OwnerSummaryVoice({
                   <span className="text-xs text-danger">
                     {reportDownloadError}
                   </span>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
-              <p className="text-sm font-semibold text-foreground">
-                সারাংশ ইন্টারভ্যাল
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {PRESET_INTERVALS.map((minutes) => (
-                  <button
-                    key={minutes}
-                    type="button"
-                    onClick={() => commitIntervalMinutes(minutes)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm ${
-                      minutes === intervalMinutes
-                        ? "border-primary/40 bg-primary-soft text-primary"
-                        : "border-border bg-card text-foreground"
-                    }`}
-                  >
-                    {minutes} মিনিট
-                  </button>
-                ))}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-muted-foreground">
-                  কাস্টম মিনিট (৫-১৮০)
-                </label>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <input
-                    type="number"
-                    min={ALERT_INTERVAL_MIN_MINUTES}
-                    max={ALERT_INTERVAL_MAX_MINUTES}
-                    inputMode="numeric"
-                    value={pendingInterval}
-                    onChange={(event) => setPendingInterval(event.target.value)}
-                    className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                  <button
-                    type="button"
-                    onClick={saveInterval}
-                    className={buttonVariants({ size: "sm" })}
-                  >
-                    সেভ করুন
-                  </button>
-                </div>
-                {intervalError ? (
-                  <p className="text-xs text-danger">{intervalError}</p>
                 ) : null}
               </div>
             </div>
