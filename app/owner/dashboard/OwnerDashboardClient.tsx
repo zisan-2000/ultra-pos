@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ScrollText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -787,19 +786,21 @@ function Card({
         ) : null}
         <div className="space-y-2">
           <p className="text-[13px] font-medium text-foreground/80">{title}</p>
-          <div className="flex items-end gap-1">
-            <span
-              className={`text-[30px] font-extrabold leading-none ${
-                valueColor[color] ?? "text-foreground"
-              }`}
-            >
-              {amount}
-            </span>
-            {currency ? (
-              <span className="text-xs text-muted-foreground pb-1">
-                {currency}
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-end gap-1">
+              <span
+                className={`text-[30px] font-extrabold leading-none ${
+                  valueColor[color] ?? "text-foreground"
+                }`}
+              >
+                {amount}
               </span>
-            ) : null}
+              {currency ? (
+                <span className="text-xs text-muted-foreground pb-1">
+                  {currency}
+                </span>
+              ) : null}
+            </div>
             {amountInWords ? (
               <button
                 type="button"
@@ -808,20 +809,15 @@ function Card({
                 aria-controls={`owner-stat-words-${cardKey}`}
                 aria-label={expanded ? "টাকার কথা লুকান" : "টাকার কথা দেখুন"}
                 title={expanded ? "টাকার কথা লুকান" : "টাকার কথা দেখুন"}
-                className={`group relative mb-0.5 ml-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ease-out ${
+                className={`group inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-200 ease-out ${
                   expanded
-                    ? "border-primary/40 bg-gradient-to-br from-primary-soft via-card to-warning-soft/70 text-primary shadow-[0_10px_22px_rgba(15,23,42,0.12)]"
-                    : "border-border/80 bg-gradient-to-br from-card via-card to-primary-soft/30 text-muted-foreground hover:-translate-y-0.5 hover:scale-105 hover:border-primary/35 hover:text-primary hover:shadow-[0_10px_22px_rgba(15,23,42,0.12)]"
+                    ? "bg-primary/10 text-primary shadow-[0_6px_16px_rgba(15,23,42,0.08)]"
+                    : "text-muted-foreground hover:bg-primary/8 hover:text-primary"
                 }`}
               >
-                <span className="absolute inset-0 rounded-full bg-gradient-to-br from-white/35 to-transparent opacity-70" />
-                <ScrollText
-                  className={`relative h-4 w-4 transition-transform duration-300 ease-out ${
-                    expanded
-                      ? "scale-110 -rotate-6"
-                      : "group-hover:scale-110 group-hover:-rotate-3"
-                  }`}
-                />
+                <span className="text-[17px] leading-none transition-transform duration-200 ease-out group-hover:scale-105">
+                  {expanded ? "🙈" : "👁"}
+                </span>
               </button>
             ) : null}
           </div>
