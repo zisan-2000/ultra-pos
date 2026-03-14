@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ScrollText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,10 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { reportEvents } from "@/lib/events/reportEvents";
 import { useRealtimeStatus } from "@/lib/realtime/status";
 import { usePageVisibility } from "@/lib/use-page-visibility";
+import {
+  amountToBanglaWords,
+  formatBanglaMoney,
+} from "@/lib/utils/bangla-money";
 
 type Summary = {
   sales?: { total?: number } | number;
@@ -109,6 +114,7 @@ export default function OwnerDashboardClient({
   const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [expandedStatKey, setExpandedStatKey] = useState<string | null>(null);
   const serverSnapshotRef = useRef(initialData);
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
@@ -534,40 +540,80 @@ export default function OwnerDashboardClient({
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card
+            cardKey="sales"
             title="আজকের বিক্রি"
-            value={`${salesTotal.toFixed(2)} ৳`}
+            value={formatBanglaMoney(salesTotal)}
+            amountInWords={amountToBanglaWords(salesTotal)}
             color="success"
             icon="💰"
+            expanded={expandedStatKey === "sales"}
+            onToggle={() =>
+              setExpandedStatKey((current) =>
+                current === "sales" ? null : "sales"
+              )
+            }
           />
 
           <Card
+            cardKey="expense"
             title="আজকের খরচ"
-            value={`${expenseTotal.toFixed(2)} ৳`}
+            value={formatBanglaMoney(expenseTotal)}
+            amountInWords={amountToBanglaWords(expenseTotal)}
             color="danger"
             icon="💸"
+            expanded={expandedStatKey === "expense"}
+            onToggle={() =>
+              setExpandedStatKey((current) =>
+                current === "expense" ? null : "expense"
+              )
+            }
           />
 
           {data.needsCogs ? (
             <Card
+              cardKey="cogs"
               title="আজকের COGS"
-              value={`${cogsTotal.toFixed(2)} ৳`}
+              value={formatBanglaMoney(cogsTotal)}
+              amountInWords={amountToBanglaWords(cogsTotal)}
               color="warning"
               icon="📦"
+              expanded={expandedStatKey === "cogs"}
+              onToggle={() =>
+                setExpandedStatKey((current) =>
+                  current === "cogs" ? null : "cogs"
+                )
+              }
             />
           ) : null}
 
           <Card
+            cardKey="profit"
             title="আজকের লাভ"
-            value={`${profitTotal.toFixed(2)} ৳`}
+            value={formatBanglaMoney(profitTotal)}
+            amountInWords={amountToBanglaWords(profitTotal)}
             color="primary"
             icon="📈"
+            expanded={expandedStatKey === "profit"}
+            onToggle={() =>
+              setExpandedStatKey((current) =>
+                current === "profit" ? null : "profit"
+              )
+            }
           />
 
           <Card
+            cardKey="cash"
             title="ক্যাশ ব্যালেন্স"
-            value={`${cashBalance.toFixed(2)} ৳`}
+            value={formatBanglaMoney(cashBalance)}
+            amountInWords={amountToBanglaWords(cashBalance)}
             color="warning"
             icon="🏦"
+            expanded={expandedStatKey === "cash"}
+            onToggle={() =>
+              setExpandedStatKey((current) =>
+                current === "cash" ? null : "cash"
+              )
+            }
           />
         </div>
 
@@ -681,15 +727,23 @@ export default function OwnerDashboardClient({
 }
 
 function Card({
+  cardKey,
   title,
   value,
+  amountInWords,
   color,
   icon,
+  expanded = false,
+  onToggle,
 }: {
+  cardKey: string;
   title: string;
   value: string;
+  amountInWords?: string;
   color: string;
   icon?: string;
+  expanded?: boolean;
+  onToggle?: () => void;
 }) {
   const iconBg: Record<string, string> = {
     success: "bg-success/15 text-success",
@@ -746,7 +800,49 @@ function Card({
                 {currency}
               </span>
             ) : null}
+            {amountInWords ? (
+              <button
+                type="button"
+                onClick={onToggle}
+                aria-expanded={expanded}
+                aria-controls={`owner-stat-words-${cardKey}`}
+                aria-label={expanded ? "টাকার কথা লুকান" : "টাকার কথা দেখুন"}
+                title={expanded ? "টাকার কথা লুকান" : "টাকার কথা দেখুন"}
+                className={`group relative mb-0.5 ml-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ease-out ${
+                  expanded
+                    ? "border-primary/40 bg-gradient-to-br from-primary-soft via-card to-warning-soft/70 text-primary shadow-[0_10px_22px_rgba(15,23,42,0.12)]"
+                    : "border-border/80 bg-gradient-to-br from-card via-card to-primary-soft/30 text-muted-foreground hover:-translate-y-0.5 hover:scale-105 hover:border-primary/35 hover:text-primary hover:shadow-[0_10px_22px_rgba(15,23,42,0.12)]"
+                }`}
+              >
+                <span className="absolute inset-0 rounded-full bg-gradient-to-br from-white/35 to-transparent opacity-70" />
+                <ScrollText
+                  className={`relative h-4 w-4 transition-transform duration-300 ease-out ${
+                    expanded
+                      ? "scale-110 -rotate-6"
+                      : "group-hover:scale-110 group-hover:-rotate-3"
+                  }`}
+                />
+              </button>
+            ) : null}
           </div>
+          {amountInWords ? (
+            <div
+              className={`grid transition-all duration-300 ease-out ${
+                expanded
+                  ? "mt-2 grid-rows-[1fr] opacity-100"
+                  : "mt-0 grid-rows-[0fr] opacity-0"
+              }`}
+            >
+              <div className="overflow-hidden">
+                <p
+                  id={`owner-stat-words-${cardKey}`}
+                  className="max-w-[28rem] text-xs leading-relaxed text-muted-foreground"
+                >
+                  {amountInWords}
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

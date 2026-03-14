@@ -37,6 +37,10 @@ import { usePageVisibility } from "@/lib/use-page-visibility";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { generateCSV } from "@/lib/utils/csv";
 import { downloadFile } from "@/lib/utils/download";
+import {
+  amountToBanglaWords,
+  formatBanglaMoney,
+} from "@/lib/utils/bangla-money";
 
 type Summary = {
   sales: {
@@ -83,11 +87,19 @@ function SummaryCards({
   needsCogs?: boolean;
   className?: string;
 }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
   return (
     <div className={className}>
       <StatCard
         title="মোট বিক্রি"
-        value={`${summary.sales.totalAmount.toFixed(2)} ৳`}
+        value={formatBanglaMoney(summary.sales.totalAmount)}
+        amountInWords={amountToBanglaWords(summary.sales.totalAmount)}
+        expanded={expandedKey === "sales"}
+        onToggleWords={() =>
+          setExpandedKey((current) => (current === "sales" ? null : "sales"))
+        }
+        wordsId="reports-summary-words-sales"
         subtitle={`মোট বিল: ${summary.sales.completedCount ?? 0}${
           typeof summary.sales.voidedCount === "number"
             ? ` · বাতিল: ${summary.sales.voidedCount}`
@@ -98,7 +110,13 @@ function SummaryCards({
       />
       <StatCard
         title="খরচ"
-        value={`${summary.expense.totalAmount.toFixed(2)} ৳`}
+        value={formatBanglaMoney(summary.expense.totalAmount)}
+        amountInWords={amountToBanglaWords(summary.expense.totalAmount)}
+        expanded={expandedKey === "expense"}
+        onToggleWords={() =>
+          setExpandedKey((current) => (current === "expense" ? null : "expense"))
+        }
+        wordsId="reports-summary-words-expense"
         subtitle={`মোট খরচ: ${summary.expense.count ?? 0}`}
         icon="💸"
         tone="danger"
@@ -106,7 +124,13 @@ function SummaryCards({
       {needsCogs ? (
         <StatCard
           title="COGS"
-          value={`${(summary.profit.cogs ?? 0).toFixed(2)} ৳`}
+          value={formatBanglaMoney(summary.profit.cogs ?? 0)}
+          amountInWords={amountToBanglaWords(summary.profit.cogs ?? 0)}
+          expanded={expandedKey === "cogs"}
+          onToggleWords={() =>
+            setExpandedKey((current) => (current === "cogs" ? null : "cogs"))
+          }
+          wordsId="reports-summary-words-cogs"
           subtitle="বিক্রিত পণ্যের খরচ"
           icon="📦"
           tone="warning"
@@ -114,14 +138,26 @@ function SummaryCards({
       ) : null}
       <StatCard
         title="ক্যাশ ব্যালান্স"
-        value={`${summary.cash.balance.toFixed(2)} ৳`}
+        value={formatBanglaMoney(summary.cash.balance)}
+        amountInWords={amountToBanglaWords(summary.cash.balance)}
+        expanded={expandedKey === "cash"}
+        onToggleWords={() =>
+          setExpandedKey((current) => (current === "cash" ? null : "cash"))
+        }
+        wordsId="reports-summary-words-cash"
         subtitle={`ইন: ${summary.cash.totalIn.toFixed(2)} ৳ | আউট: ${summary.cash.totalOut.toFixed(2)} ৳`}
         icon="💵"
         tone="warning"
       />
       <StatCard
         title="লাভ"
-        value={`${summary.profit.profit.toFixed(2)} ৳`}
+        value={formatBanglaMoney(summary.profit.profit)}
+        amountInWords={amountToBanglaWords(summary.profit.profit)}
+        expanded={expandedKey === "profit"}
+        onToggleWords={() =>
+          setExpandedKey((current) => (current === "profit" ? null : "profit"))
+        }
+        wordsId="reports-summary-words-profit"
         subtitle={`বিক্রি: ${summary.profit.salesTotal.toFixed(
           2
         )} ৳ | খরচ: ${summary.profit.expenseTotal.toFixed(2)} ৳`}
