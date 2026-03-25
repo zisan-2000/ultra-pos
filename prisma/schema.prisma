@@ -170,6 +170,8 @@ model Shop {
   queueTokenEnabled   Boolean  @default(false) @map("queue_token_enabled")
   queueTokenPrefix    String?  @map("queue_token_prefix")
   queueWorkflow       String?  @map("queue_workflow")
+  discountFeatureEntitled Boolean @default(false) @map("discount_feature_entitled")
+  discountEnabled      Boolean @default(false) @map("discount_enabled")
   barcodeFeatureEntitled Boolean @default(false) @map("barcode_feature_entitled")
   barcodeScanEnabled  Boolean  @default(false) @map("barcode_scan_enabled")
   smsSummaryEntitled  Boolean  @default(false) @map("sms_summary_entitled")
@@ -617,6 +619,10 @@ model Sale {
   invoiceIssuedAt  DateTime?   @map("invoice_issued_at") @db.Timestamptz(6)
   saleDate         DateTime    @default(now()) @map("sale_date") @db.Timestamptz(6)
   businessDate     DateTime?   @map("business_date") @db.Date
+  subtotalAmount   Decimal     @default(0) @map("subtotal_amount") @db.Decimal(12, 2)
+  discountType     String?     @map("discount_type")
+  discountValue    Decimal?    @map("discount_value") @db.Decimal(12, 2)
+  discountAmount   Decimal     @default(0) @map("discount_amount") @db.Decimal(12, 2)
   totalAmount      Decimal     @map("total_amount") @db.Decimal(12, 2)
   paymentMethod    String      @default("cash") @map("payment_method")
   note             String?

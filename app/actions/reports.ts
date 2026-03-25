@@ -491,7 +491,7 @@ async function computeSalesSummary(
   const [agg, voided, returnNet] = await Promise.all([
     prisma.sale.aggregate({
       where,
-      _sum: { totalAmount: true },
+      _sum: { totalAmount: true, discountAmount: true },
       _count: { _all: true },
     }),
     prisma.sale.count({
@@ -513,6 +513,7 @@ async function computeSalesSummary(
 
   return {
     totalAmount,
+    discountAmount: Number(agg._sum.discountAmount ?? 0),
     count: completedCount,
     completedCount,
     voidedCount,

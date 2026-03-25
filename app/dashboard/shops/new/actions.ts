@@ -13,6 +13,8 @@ export async function handleCreateShop(formData: FormData) {
     formData.has("queueTokenEnabled") ||
     formData.has("queueTokenPrefix") ||
     formData.has("queueWorkflow");
+  const hasDiscountSettings =
+    formData.has("discountFeatureEntitled") || formData.has("discountEnabled");
   const hasBarcodeSettings =
     formData.has("barcodeFeatureEntitled") || formData.has("barcodeScanEnabled");
   const hasSmsSettings =
@@ -43,6 +45,13 @@ export async function handleCreateShop(formData: FormData) {
             null,
           queueWorkflow:
             ((formData.get("queueWorkflow") as string) || "").trim() || null,
+        }
+      : {}),
+    ...(hasDiscountSettings
+      ? {
+          discountFeatureEntitled:
+            formData.get("discountFeatureEntitled") === "1",
+          discountEnabled: formData.get("discountEnabled") === "1",
         }
       : {}),
     ...(hasBarcodeSettings

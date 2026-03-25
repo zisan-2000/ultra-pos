@@ -37,6 +37,10 @@ export type LocalSale = {
   invoiceNo?: string | null;
   customerId?: string | null;
   note: string;
+  subtotalAmount?: string;
+  discountType?: string | null;
+  discountValue?: string | number | null;
+  discountAmount?: string;
   totalAmount: string;
   paidNow?: string | number;
   dueLedgerIds?: string[];

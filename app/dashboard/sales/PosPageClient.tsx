@@ -48,6 +48,7 @@ import {
 import { subscribeProductEvent } from "@/lib/products/product-events";
 import useRealTimeReports from "@/hooks/useRealTimeReports";
 import { emitSaleUpdate } from "@/lib/events/reportEvents";
+import { computeSaleDiscount, type SaleDiscountType } from "@/lib/sales/discount";
 
 type ProductOption = {
   id: string;
@@ -87,6 +88,7 @@ type PosPageClientProps = {
   canCreateCustomer: boolean;
   canViewDuePage: boolean;
   canUseBarcodeScan: boolean;
+  canUseSaleDiscount: boolean;
   submitSale: (formData: FormData) => Promise<{
     success: boolean;
     saleId: string;
@@ -105,6 +107,7 @@ export function PosPageClient({
   canCreateCustomer,
   canViewDuePage,
   canUseBarcodeScan,
+  canUseSaleDiscount,
   submitSale,
 }: PosPageClientProps) {
   const router = useRouter();
@@ -152,6 +155,8 @@ export function PosPageClient({
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [customerId, setCustomerId] = useState<string>("");
   const [paidNow, setPaidNow] = useState<string>("");
+  const [discountType, setDiscountType] = useState<SaleDiscountType>("amount");
+  const [discountValue, setDiscountValue] = useState<string>("");
   const [note, setNote] = useState("");
   const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
@@ -193,6 +198,17 @@ export function PosPageClient({
   const pollingEnabled = !realtime.connected;
   const canUseDueSale = canCreateDueSale && canViewCustomers;
   const isDue = paymentMethod === "due";
+  const saleDiscount = useMemo(
+    () =>
+      canUseSaleDiscount
+        ? computeSaleDiscount(safeTotalAmount, {
+            type: discountType,
+            value: discountValue,
+          })
+        : computeSaleDiscount(safeTotalAmount, null),
+    [canUseSaleDiscount, safeTotalAmount, discountType, discountValue]
+  );
+  const payableTotal = saleDiscount.total;
   const paymentOptions = useMemo(
     () => {
       const options = [
@@ -539,6 +555,12 @@ export function PosPageClient({
     }
   }, [isDue]);
 
+  useEffect(() => {
+    if (canUseSaleDiscount) return;
+    setDiscountType("amount");
+    setDiscountValue("");
+  }, [canUseSaleDiscount]);
+
   const reportSale = useCallback(
     (amount: number) => {
       if (!Number.isFinite(amount) || amount <= 0) return null;
@@ -592,7 +614,7 @@ export function PosPageClient({
     if (isSubmitting) return;
     setIsSubmitting(true);
 
-    const totalVal = safeTotalAmount as number;
+    const totalVal = payableTotal;
     const paidNowNumber = isDue
       ? Math.min(Math.max(Number(paidNow || 0), 0), totalVal)
       : 0;
@@ -606,14 +628,26 @@ export function PosPageClient({
         formData.set("paymentMethod", paymentMethod);
         formData.set("customerId", customerId);
         formData.set("paidNow", paidNowNumber.toString());
+        formData.set(
+          "discountType",
+          canUseSaleDiscount && saleDiscount.hasDiscount ? discountType : ""
+        );
+        formData.set(
+          "discountValue",
+          canUseSaleDiscount && saleDiscount.hasDiscount
+            ? saleDiscount.discountValue.toString()
+            : ""
+        );
         formData.set("note", note);
         formData.set("cart", JSON.stringify(items));
-        formData.set("totalAmount", safeTotalAmount.toString());
+        formData.set("totalAmount", payableTotal.toString());
 
         const res = await submitSale(formData);
         applyStockDelta(items);
         clear();
         setPaidNow("");
+        setDiscountType("amount");
+        setDiscountValue("");
         setNote("");
         setCustomerId("");
         setSuccess({ saleId: res?.saleId, invoiceNo: res?.invoiceNo ?? null });
@@ -654,6 +688,14 @@ export function PosPageClient({
       customerId: isDue ? customerId : null,
       paidNow: isDue ? paidNowNumber : undefined,
       dueLedgerIds: isDue ? dueLedgerIds : undefined,
+      subtotalAmount: saleDiscount.subtotal.toFixed(2),
+      discountType:
+        canUseSaleDiscount && saleDiscount.hasDiscount ? discountType : null,
+      discountValue:
+        canUseSaleDiscount && saleDiscount.hasDiscount
+          ? saleDiscount.discountValue.toFixed(2)
+          : null,
+      discountAmount: saleDiscount.discountAmount.toFixed(2),
       note,
       totalAmount: totalVal.toFixed(2),
       createdAt: nowTs,
@@ -745,6 +787,8 @@ export function PosPageClient({
         : "অফলাইন: বিক্রি সেভ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।"
     );
     clear();
+    setDiscountType("amount");
+    setDiscountValue("");
     } catch (error) {
       console.error("Sale submission failed:", error);
       toast.error("বিল সম্পন্ন করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
@@ -946,6 +990,8 @@ export function PosPageClient({
   const handleClearFromBar = () => {
     clear();
     setPaidNow("");
+    setDiscountType("amount");
+    setDiscountValue("");
   };
 
   useEffect(() => {
@@ -1107,11 +1153,93 @@ export function PosPageClient({
         {/* Summary Section */}
         <div className="border-t border-border/70 pt-5 space-y-4">
           <div className="rounded-2xl border border-border bg-muted/60 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">মোট পরিমাণ</p>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">নেট মোট</p>
             <p className="text-3xl font-bold text-foreground">
-              {(safeTotalAmount as number).toFixed(2)} ৳
+              {payableTotal.toFixed(2)} ৳
             </p>
+            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between">
+                <span>সাব-টোটাল</span>
+                <span>{safeTotalAmount.toFixed(2)} ৳</span>
+              </div>
+              {saleDiscount.hasDiscount ? (
+                <div className="flex items-center justify-between text-success">
+                  <span>
+                    ছাড়
+                    {saleDiscount.discountType === "percent"
+                      ? ` (${saleDiscount.discountValue.toFixed(2)}%)`
+                      : ""}
+                  </span>
+                  <span>- {saleDiscount.discountAmount.toFixed(2)} ৳</span>
+                </div>
+              ) : null}
+            </div>
           </div>
+
+          {canUseSaleDiscount ? (
+            <div className="rounded-xl border border-success/25 bg-success-soft/40 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <label className="text-base font-medium text-foreground">Discount</label>
+                  <p className="text-xs text-muted-foreground">
+                    পুরো bill-এ amount বা percent discount দিন।
+                  </p>
+                </div>
+                {saleDiscount.hasDiscount ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDiscountType("amount");
+                      setDiscountValue("");
+                    }}
+                    className="inline-flex h-8 items-center rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted"
+                  >
+                    রিসেট
+                  </button>
+                ) : null}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: "amount", label: "টাকা" },
+                  { value: "percent", label: "শতাংশ" },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setDiscountType(option.value as SaleDiscountType)}
+                    className={`h-10 rounded-xl border px-3 text-sm font-semibold transition-colors ${
+                      discountType === option.value
+                        ? "bg-success/15 text-success border-success/40"
+                        : "bg-card text-foreground border-border hover:border-success/30"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <input
+                  type="number"
+                  min="0"
+                  max={discountType === "percent" ? 100 : safeTotalAmount}
+                  step="0.01"
+                  className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-success/30"
+                  placeholder={
+                    discountType === "percent"
+                      ? "যেমন: 5 বা 10"
+                      : "যেমন: 20 বা 50"
+                  }
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {saleDiscount.hasDiscount
+                    ? `ছাড় ${saleDiscount.discountAmount.toFixed(2)} ৳, net bill ${payableTotal.toFixed(2)} ৳`
+                    : "ফাঁকা রাখলে কোনো discount apply হবে না।"}
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           {/* Payment Method */}
           <div className="space-y-2">
@@ -1212,7 +1340,7 @@ export function PosPageClient({
               <input
                 type="number"
                 min="0"
-                max={safeTotalAmount}
+                max={payableTotal}
                 step="0.01"
                 className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder="যেমন: 100 (আংশিক পরিশোধের জন্য)"
@@ -1220,7 +1348,7 @@ export function PosPageClient({
                 onChange={(e) => setPaidNow(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                মোট {safeTotalAmount.toFixed(2)} ৳ | আংশিক দিলে বাকি ধার হিসেবে
+                মোট {payableTotal.toFixed(2)} ৳ | আংশিক দিলে বাকি ধার হিসেবে
                 থাকবে।
               </p>
             </div>
@@ -1261,7 +1389,7 @@ export function PosPageClient({
 
           <button
             type="button"
-            onClick={() => clear()}
+            onClick={handleClearFromBar}
             className="w-full h-12 rounded-xl border border-border text-foreground font-semibold text-base hover:bg-muted transition-colors"
           >
             কার্ট পরিষ্কার করুন
@@ -1291,7 +1419,7 @@ export function PosPageClient({
                   </button>
                 </div>
                 <p className="text-base font-semibold text-foreground leading-tight">
-                  {safeTotalAmount.toFixed(2)} ৳ — {itemCount} আইটেম
+                  {payableTotal.toFixed(2)} ৳ — {itemCount} আইটেম
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button
@@ -1301,6 +1429,11 @@ export function PosPageClient({
                   >
                     পেমেন্ট: {currentPaymentLabel} ▼
                   </button>
+                  {saleDiscount.hasDiscount ? (
+                    <span className="inline-flex h-8 items-center rounded-full border border-success/30 bg-success-soft px-3 text-[11px] font-semibold text-success">
+                      ছাড় {saleDiscount.discountAmount.toFixed(2)} ৳
+                    </span>
+                  ) : null}
                   {isDue ? (
                     <span className="text-[11px] text-muted-foreground">
                       {selectedCustomerName
@@ -1350,7 +1483,13 @@ export function PosPageClient({
               <div>
                 <p className="text-xs text-muted-foreground">বর্তমান বিল</p>
                 <p className="text-lg font-semibold text-foreground">
-                  {safeTotalAmount.toFixed(2)} ৳ • {itemCount} আইটেম
+                  {payableTotal.toFixed(2)} ৳ • {itemCount} আইটেম
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  সাব-টোটাল {safeTotalAmount.toFixed(2)} ৳
+                  {saleDiscount.hasDiscount
+                    ? ` • ছাড় ${saleDiscount.discountAmount.toFixed(2)} ৳`
+                    : ""}
                 </p>
               </div>
               <button
@@ -1401,7 +1540,13 @@ export function PosPageClient({
               <div>
                 <p className="text-xs text-muted-foreground">দ্রুত পেমেন্ট সেটিং</p>
                 <p className="text-lg font-semibold text-foreground">
-                  {safeTotalAmount.toFixed(2)} ৳
+                  {payableTotal.toFixed(2)} ৳
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  সাব-টোটাল {safeTotalAmount.toFixed(2)} ৳
+                  {saleDiscount.hasDiscount
+                    ? ` • ছাড় ${saleDiscount.discountAmount.toFixed(2)} ৳`
+                    : ""}
                 </p>
               </div>
               <button
@@ -1497,7 +1642,7 @@ export function PosPageClient({
                   <input
                     type="number"
                     min="0"
-                    max={safeTotalAmount}
+                    max={payableTotal}
                     step="0.01"
                     className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="যেমন: 100"

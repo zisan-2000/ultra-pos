@@ -89,6 +89,8 @@ export async function createShop(data: {
   queueTokenEnabled?: boolean;
   queueTokenPrefix?: string | null;
   queueWorkflow?: string | null;
+  discountFeatureEntitled?: boolean;
+  discountEnabled?: boolean;
   barcodeFeatureEntitled?: boolean;
   barcodeScanEnabled?: boolean;
   smsSummaryEntitled?: boolean;
@@ -145,6 +147,14 @@ export async function createShop(data: {
   if (wantsQueueFeatureChange) {
     requirePermission(user, "manage_shop_queue_feature");
   }
+  const wantsDiscountEntitlementChange = data.discountFeatureEntitled === true;
+  if (wantsDiscountEntitlementChange) {
+    requirePermission(user, "manage_shop_discount_entitlement");
+  }
+  const wantsDiscountFeatureChange = data.discountEnabled !== undefined;
+  if (wantsDiscountFeatureChange) {
+    requirePermission(user, "manage_shop_discount_feature");
+  }
 
   const wantsBarcodeEntitlementChange = data.barcodeFeatureEntitled === true;
   if (wantsBarcodeEntitlementChange) {
@@ -169,6 +179,13 @@ export async function createShop(data: {
 
   const resolvedBarcodeEntitled = Boolean(data.barcodeFeatureEntitled ?? false);
   const resolvedBarcodeScanEnabled = Boolean(data.barcodeScanEnabled ?? false);
+  const resolvedDiscountEntitled = Boolean(data.discountFeatureEntitled ?? false);
+  const resolvedDiscountEnabled = Boolean(data.discountEnabled ?? false);
+  if (resolvedDiscountEnabled && !resolvedDiscountEntitled) {
+    throw new Error(
+      "Discount cannot be enabled before super-admin entitlement is turned on"
+    );
+  }
   if (resolvedBarcodeScanEnabled && !resolvedBarcodeEntitled) {
     throw new Error(
       "Barcode scan cannot be enabled before super-admin entitlement is turned on"
@@ -189,6 +206,8 @@ export async function createShop(data: {
       address: data.address || "",
       phone: data.phone || "",
       businessType: data.businessType || "tea_stall",
+      discountFeatureEntitled: resolvedDiscountEntitled,
+      discountEnabled: resolvedDiscountEntitled ? resolvedDiscountEnabled : false,
       barcodeFeatureEntitled: resolvedBarcodeEntitled,
       barcodeScanEnabled: resolvedBarcodeEntitled
         ? resolvedBarcodeScanEnabled
@@ -344,6 +363,30 @@ export async function updateShop(id: string, data: any) {
     }
   }
 
+  const wantsDiscountEntitlementChange = data.discountFeatureEntitled !== undefined;
+  if (wantsDiscountEntitlementChange) {
+    requirePermission(user, "manage_shop_discount_entitlement");
+    (updateData as any).discountFeatureEntitled = Boolean(data.discountFeatureEntitled);
+  }
+
+  const wantsDiscountFeatureChange = data.discountEnabled !== undefined;
+  if (wantsDiscountFeatureChange) {
+    requirePermission(user, "manage_shop_discount_feature");
+
+    const effectiveEntitlement =
+      data.discountFeatureEntitled !== undefined
+        ? Boolean(data.discountFeatureEntitled)
+        : Boolean((shop as any).discountFeatureEntitled);
+
+    if (Boolean(data.discountEnabled) && !effectiveEntitlement) {
+      throw new Error(
+        "Discount cannot be enabled before super-admin entitlement is turned on"
+      );
+    }
+
+    (updateData as any).discountEnabled = Boolean(data.discountEnabled);
+  }
+
   const wantsBarcodeEntitlementChange = data.barcodeFeatureEntitled !== undefined;
   if (wantsBarcodeEntitlementChange) {
     requirePermission(user, "manage_shop_barcode_entitlement");
@@ -394,6 +437,9 @@ export async function updateShop(id: string, data: any) {
 
   if (data.barcodeFeatureEntitled !== undefined && !Boolean(data.barcodeFeatureEntitled)) {
     (updateData as any).barcodeScanEnabled = false;
+  }
+  if (data.discountFeatureEntitled !== undefined && !Boolean(data.discountFeatureEntitled)) {
+    (updateData as any).discountEnabled = false;
   }
   if (data.smsSummaryEntitled !== undefined && !Boolean(data.smsSummaryEntitled)) {
     (updateData as any).smsSummaryEnabled = false;

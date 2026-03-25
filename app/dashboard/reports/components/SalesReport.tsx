@@ -16,6 +16,7 @@ type ReportCursor = { at: string; id: string };
 type SummaryPayload = {
   sales: {
     totalAmount: number;
+    discountAmount?: number;
     completedCount?: number;
     voidedCount?: number;
     count?: number;
@@ -297,6 +298,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
   const completedCount =
     Number(summaryData?.sales?.completedCount ?? summaryData?.sales?.count ?? 0);
   const voidedCount = Number(summaryData?.sales?.voidedCount ?? 0);
+  const discountAmount = Number(summaryData?.sales?.discountAmount ?? 0);
   const averageBill = completedCount
     ? Number(summaryData?.sales?.totalAmount ?? 0) / completedCount
     : 0;
@@ -370,7 +372,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
             <div className="rounded-2xl border border-border bg-card/90 p-3">
               <p className="text-xs text-muted-foreground">মোট বিক্রি</p>
               <p className="mt-1 text-lg font-bold text-foreground">
@@ -387,6 +389,15 @@ export default function SalesReport({ shopId, from, to }: Props) {
               </p>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 সফলভাবে সম্পন্ন বিক্রি
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card/90 p-3">
+              <p className="text-xs text-muted-foreground">মোট Discount</p>
+              <p className="mt-1 text-lg font-bold text-foreground">
+                {summaryData ? formatMoney(discountAmount) : "..."}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                নির্বাচিত সময়ের মোট discount
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-card/90 p-3">

@@ -27,6 +27,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
   const canCreateCustomer = hasPermission(user, "create_customer");
   const canViewDuePage = hasPermission(user, "view_due_summary");
   const canUseBarcodeScanPermission = hasPermission(user, "use_pos_barcode_scan");
+  const canApplySaleDiscountPermission = hasPermission(user, "apply_sale_discount");
 
   if (!canViewProducts) {
     return (
@@ -80,6 +81,10 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
     Boolean((selectedShop as any).barcodeFeatureEntitled) &&
     Boolean((selectedShop as any).barcodeScanEnabled) &&
     canUseBarcodeScanPermission;
+  const canUseSaleDiscount =
+    Boolean((selectedShop as any).discountFeatureEntitled) &&
+    Boolean((selectedShop as any).discountEnabled) &&
+    canApplySaleDiscountPermission;
   const products = await getActiveProductsByShop(selectedShopId);
 
   async function submitSale(formData: FormData) {
@@ -89,6 +94,8 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
     const paymentMethod = (formData.get("paymentMethod") as string) || "cash";
     const customerId = (formData.get("customerId") as string) || null;
     const paidNowStr = formData.get("paidNow") as string;
+    const discountTypeRaw = (formData.get("discountType") as string) || "";
+    const discountValueStr = (formData.get("discountValue") as string) || "";
     const note = (formData.get("note") as string) || "";
     const cartJson = formData.get("cart") as string;
 
@@ -109,6 +116,11 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       paymentMethod,
       customerId,
       paidNow: paidNowStr ? Number(paidNowStr) : 0,
+      discountType:
+        discountTypeRaw === "amount" || discountTypeRaw === "percent"
+          ? discountTypeRaw
+          : null,
+      discountValue: discountValueStr ? Number(discountValueStr) : 0,
       note,
     });
 
@@ -128,6 +140,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       canCreateCustomer={canCreateCustomer}
       canViewDuePage={canViewDuePage}
       canUseBarcodeScan={canUseBarcodeScan}
+      canUseSaleDiscount={canUseSaleDiscount}
       submitSale={submitSale}
     />
   );

@@ -28,6 +28,16 @@ export default async function EditShop({ params }: PageProps) {
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_queue_feature"))
   );
+  const canManageDiscountEntitlement = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_discount_entitlement"))
+  );
+  const canManageDiscountFeature = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_discount_feature"))
+  );
   const canManageBarcodeEntitlement = Boolean(
     user &&
       (user.roles?.includes("super_admin") ||
@@ -149,6 +159,21 @@ export default async function EditShop({ params }: PageProps) {
               ((formData.get("queueWorkflow") as string) || "").trim() || null,
           }
         : {}),
+      ...(canManageDiscountEntitlement || canManageDiscountFeature
+        ? {
+            ...(canManageDiscountEntitlement
+              ? {
+                  discountFeatureEntitled:
+                    formData.get("discountFeatureEntitled") === "1",
+                }
+              : {}),
+            ...(canManageDiscountFeature
+              ? {
+                  discountEnabled: formData.get("discountEnabled") === "1",
+                }
+              : {}),
+          }
+        : {}),
       ...(canManageBarcodeEntitlement || canManageBarcodeFeature
         ? {
             ...(canManageBarcodeEntitlement
@@ -207,6 +232,8 @@ export default async function EditShop({ params }: PageProps) {
           queueTokenEnabled: Boolean((shop as any).queueTokenEnabled),
           queueTokenPrefix: (shop as any).queueTokenPrefix || "TK",
           queueWorkflow: (shop as any).queueWorkflow || null,
+          discountFeatureEntitled: Boolean((shop as any).discountFeatureEntitled),
+          discountEnabled: Boolean((shop as any).discountEnabled),
           barcodeFeatureEntitled: Boolean((shop as any).barcodeFeatureEntitled),
           barcodeScanEnabled: Boolean((shop as any).barcodeScanEnabled),
           smsSummaryEntitled: Boolean((shop as any).smsSummaryEntitled),
@@ -216,6 +243,8 @@ export default async function EditShop({ params }: PageProps) {
         businessTypeOptions={businessTypeOptions}
         showSalesInvoiceSettings={canManageSalesInvoice}
         showQueueTokenSettings={canManageQueueToken}
+        showDiscountSettings={canManageDiscountEntitlement || canManageDiscountFeature}
+        canEditDiscountEntitlement={canManageDiscountEntitlement}
         showBarcodeSettings={canManageBarcodeEntitlement || canManageBarcodeFeature}
         canEditBarcodeEntitlement={canManageBarcodeEntitlement}
         showSmsSummarySettings={canManageSmsEntitlement || canManageSmsFeature}

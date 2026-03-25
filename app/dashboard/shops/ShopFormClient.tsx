@@ -55,6 +55,8 @@ type Props = {
     queueTokenEnabled?: boolean;
     queueTokenPrefix?: string | null;
     queueWorkflow?: string | null;
+    discountFeatureEntitled?: boolean;
+    discountEnabled?: boolean;
     barcodeFeatureEntitled?: boolean;
     barcodeScanEnabled?: boolean;
     smsSummaryEntitled?: boolean;
@@ -65,6 +67,8 @@ type Props = {
   businessTypeOptions?: Array<{ id: string; label: string }>;
   showSalesInvoiceSettings?: boolean;
   showQueueTokenSettings?: boolean;
+  showDiscountSettings?: boolean;
+  canEditDiscountEntitlement?: boolean;
   showBarcodeSettings?: boolean;
   canEditBarcodeEntitlement?: boolean;
   showSmsSummarySettings?: boolean;
@@ -128,6 +132,8 @@ export default function ShopFormClient({
   businessTypeOptions,
   showSalesInvoiceSettings = false,
   showQueueTokenSettings = false,
+  showDiscountSettings = false,
+  canEditDiscountEntitlement = false,
   showBarcodeSettings = false,
   canEditBarcodeEntitlement = false,
   showSmsSummarySettings = false,
@@ -168,6 +174,12 @@ export default function ShopFormClient({
   );
   const [queueWorkflow, setQueueWorkflow] = useState<string>(
     initial?.queueWorkflow || ""
+  );
+  const [discountFeatureEntitled, setDiscountFeatureEntitled] = useState<boolean>(
+    Boolean(initial?.discountFeatureEntitled ?? false)
+  );
+  const [discountEnabled, setDiscountEnabled] = useState<boolean>(
+    Boolean(initial?.discountEnabled ?? false)
   );
   const [barcodeFeatureEntitled, setBarcodeFeatureEntitled] = useState<boolean>(
     Boolean(initial?.barcodeFeatureEntitled ?? false)
@@ -437,6 +449,10 @@ export default function ShopFormClient({
       .replace(/[^A-Z0-9]/g, "")
       .slice(0, 12);
     const payloadQueueWorkflow = (queueWorkflow || "").trim().toLowerCase();
+    const payloadDiscountFeatureEntitled = Boolean(discountFeatureEntitled);
+    const payloadDiscountEnabled = payloadDiscountFeatureEntitled
+      ? Boolean(discountEnabled)
+      : false;
     const payloadBarcodeFeatureEntitled = Boolean(barcodeFeatureEntitled);
     const payloadBarcodeScanEnabled = payloadBarcodeFeatureEntitled
       ? Boolean(barcodeScanEnabled)
@@ -459,6 +475,15 @@ export default function ShopFormClient({
       form.set("queueTokenEnabled", payloadQueueTokenEnabled ? "1" : "0");
       form.set("queueTokenPrefix", payloadQueueTokenPrefix);
       form.set("queueWorkflow", payloadQueueWorkflow);
+    }
+    if (showDiscountSettings) {
+      if (canEditDiscountEntitlement) {
+        form.set(
+          "discountFeatureEntitled",
+          payloadDiscountFeatureEntitled ? "1" : "0"
+        );
+      }
+      form.set("discountEnabled", payloadDiscountEnabled ? "1" : "0");
     }
     if (showBarcodeSettings) {
       if (canEditBarcodeEntitlement) {
@@ -511,6 +536,14 @@ export default function ShopFormClient({
                 queueTokenEnabled: payloadQueueTokenEnabled,
                 queueTokenPrefix: payloadQueueTokenPrefix || null,
                 queueWorkflow: payloadQueueWorkflow || null,
+              }
+            : {}),
+          ...(showDiscountSettings
+            ? {
+                ...(canEditDiscountEntitlement
+                  ? { discountFeatureEntitled: payloadDiscountFeatureEntitled }
+                  : {}),
+                discountEnabled: payloadDiscountEnabled,
               }
             : {}),
           ...(showBarcodeSettings
@@ -877,6 +910,57 @@ export default function ShopFormClient({
               Auto দিলে ব্যবসার ধরন দেখে status label/flow ঠিক হবে।
             </p>
           </div>
+        </div>
+      ) : null}
+
+      {showDiscountSettings ? (
+        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
+          <div className="space-y-1">
+            <label className="block text-sm font-semibold text-foreground">
+              Sale Discount ফিচার
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Super-admin entitlement + owner toggle true হলে POS-এ sale-level discount দেখা যাবে।
+            </p>
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={discountFeatureEntitled}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setDiscountFeatureEntitled(next);
+                if (!next) {
+                  setDiscountEnabled(false);
+                }
+              }}
+              disabled={!canEditDiscountEntitlement}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+            />
+            এই দোকানে Discount entitlement চালু
+          </label>
+          {!canEditDiscountEntitlement ? (
+            <p className="text-xs text-muted-foreground">
+              এই entitlement শুধু super-admin পরিবর্তন করতে পারবেন।
+            </p>
+          ) : null}
+
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={discountEnabled}
+              onChange={(e) => setDiscountEnabled(e.target.checked)}
+              disabled={!discountFeatureEntitled}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+            />
+            POS-এ sale discount চালু
+          </label>
+          {!discountFeatureEntitled ? (
+            <p className="text-xs text-warning">
+              প্রথমে entitlement চালু না হলে discount toggle activate হবে না।
+            </p>
+          ) : null}
         </div>
       ) : null}
 

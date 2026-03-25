@@ -25,6 +25,10 @@ import {
   canManageSaleReturn,
   canViewSaleReturn,
 } from "@/lib/sales-return";
+import {
+  computeSaleDiscount,
+  type SaleDiscountType,
+} from "@/lib/sales/discount";
 
 const logPerf = (...args: unknown[]) => {
   if (process.env.NODE_ENV !== "production") {
@@ -46,6 +50,8 @@ type CreateSaleInput = {
   note?: string | null;
   customerId?: string | null;
   paidNow?: number | null;
+  discountType?: SaleDiscountType | null;
+  discountValue?: number | null;
 };
 
 export type SaleCursor = {
@@ -56,6 +62,10 @@ export type SaleCursor = {
 type SaleRow = {
   id: string;
   saleDate: Date;
+  subtotalAmount: Prisma.Decimal | string;
+  discountType?: string | null;
+  discountValue?: Prisma.Decimal | string | null;
+  discountAmount: Prisma.Decimal | string;
   totalAmount: Prisma.Decimal | string;
   paymentMethod: string;
   invoiceNo?: string | null;
@@ -68,6 +78,10 @@ type SaleWithSummary = SaleRow & {
   itemCount: number;
   itemPreview: string;
   customerName: string | null;
+  subtotalAmountText: string;
+  discountType: string | null;
+  discountValueText: string | null;
+  discountAmountText: string;
   returnCount: number;
   refundCount: number;
   exchangeCount: number;
@@ -419,6 +433,13 @@ async function attachSaleSummaries(
       itemCount: summary.count,
       itemPreview: summary.names.join(", "),
       customerName: r.customerId ? customerMap[r.customerId] : null,
+      subtotalAmountText: toMoney(Number(r.subtotalAmount ?? 0)),
+      discountType: r.discountType ?? null,
+      discountValueText:
+        r.discountValue === null || r.discountValue === undefined
+          ? null
+          : toMoney(Number(r.discountValue ?? 0)),
+      discountAmountText: toMoney(Number(r.discountAmount ?? 0)),
       returnCount: returnSummary?.count ?? 0,
       refundCount: returnTypeSummary?.refundCount ?? 0,
       exchangeCount: returnTypeSummary?.exchangeCount ?? 0,
@@ -989,7 +1010,23 @@ export async function createSale(input: CreateSaleInput) {
     }
   }
 
-  const totalStr = computedTotal.toFixed(2); // numeric as string
+  const discountFeatureEnabled = Boolean((shop as any).discountEnabled);
+  const discount = discountFeatureEnabled
+    ? computeSaleDiscount(computedTotal, {
+        type: input.discountType,
+        value: input.discountValue,
+      })
+    : computeSaleDiscount(computedTotal, null);
+  if (discount.hasDiscount) {
+    requirePermission(user, "apply_sale_discount");
+  }
+  const subtotalStr = discount.subtotal.toFixed(2);
+  const discountValueStr =
+    discount.discountType && discount.discountValue > 0
+      ? discount.discountValue.toFixed(2)
+      : null;
+  const discountAmountStr = discount.discountAmount.toFixed(2);
+  const totalStr = discount.total.toFixed(2);
   const normalizedPaymentMethod = (input.paymentMethod || "cash").toLowerCase();
   const totalNum = Number(totalStr);
   const payNowRaw = Number(input.paidNow || 0);
@@ -1022,6 +1059,10 @@ export async function createSale(input: CreateSaleInput) {
       data: {
         shopId: input.shopId,
         customerId: input.customerId || null,
+        subtotalAmount: subtotalStr,
+        discountType: discount.discountType,
+        discountValue: discountValueStr,
+        discountAmount: discountAmountStr,
         totalAmount: totalStr,
         paymentMethod: input.paymentMethod || "cash",
         note: input.note || null,
@@ -1782,6 +1823,10 @@ export async function getSalesByShop(shopId: string) {
     select: {
       id: true,
       saleDate: true,
+      subtotalAmount: true,
+      discountType: true,
+      discountValue: true,
+      discountAmount: true,
       totalAmount: true,
       paymentMethod: true,
       status: true,
@@ -1840,6 +1885,10 @@ export async function getSalesByShopPaginated({
     select: {
       id: true,
       saleDate: true,
+      subtotalAmount: true,
+      discountType: true,
+      discountValue: true,
+      discountAmount: true,
       totalAmount: true,
       paymentMethod: true,
       status: true,
@@ -1890,6 +1939,10 @@ type SaleInvoiceDetails = {
   businessDate: string | null;
   paymentMethod: string;
   note: string | null;
+  subtotalAmount: string;
+  discountType: string | null;
+  discountValue: string | null;
+  discountAmount: string;
   totalAmount: string;
   status: string;
   voidReason: string | null;
@@ -1917,6 +1970,10 @@ export async function getSaleInvoiceDetails(
       shopId: true,
       saleDate: true,
       businessDate: true,
+      subtotalAmount: true,
+      discountType: true,
+      discountValue: true,
+      discountAmount: true,
       totalAmount: true,
       paymentMethod: true,
       note: true,
@@ -1992,6 +2049,10 @@ export async function getSaleInvoiceDetails(
     businessDate: sale.businessDate ? sale.businessDate.toISOString() : null,
     paymentMethod: sale.paymentMethod,
     note: sale.note ?? null,
+    subtotalAmount: sale.subtotalAmount.toString(),
+    discountType: sale.discountType ?? null,
+    discountValue: sale.discountValue ? sale.discountValue.toString() : null,
+    discountAmount: sale.discountAmount.toString(),
     totalAmount: sale.totalAmount.toString(),
     status: sale.status,
     voidReason: sale.voidReason ?? null,
@@ -2049,7 +2110,7 @@ export async function getSalesSummary({
 
   const agg = await prisma.sale.aggregate({
     where,
-    _sum: { totalAmount: true },
+    _sum: { totalAmount: true, discountAmount: true },
     _count: { _all: true },
   });
 
@@ -2069,6 +2130,7 @@ export async function getSalesSummary({
     totalAmount: (
       Number(agg._sum.totalAmount ?? 0) + Number(returnAgg._sum.netAmount ?? 0)
     ).toFixed(2),
+    discountAmount: Number(agg._sum.discountAmount ?? 0).toFixed(2),
     count: agg._count._all ?? 0,
   };
 }

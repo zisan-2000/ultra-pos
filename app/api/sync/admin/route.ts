@@ -118,6 +118,8 @@ const shopCreateSchema = z.object({
   salesInvoicePrintSize: z.string().optional().nullable(),
   queueTokenEnabled: z.boolean().optional(),
   queueTokenPrefix: z.string().optional().nullable(),
+  discountFeatureEntitled: z.boolean().optional(),
+  discountEnabled: z.boolean().optional(),
   barcodeFeatureEntitled: z.boolean().optional(),
   barcodeScanEnabled: z.boolean().optional(),
   smsSummaryEntitled: z.boolean().optional(),
@@ -137,6 +139,8 @@ const shopUpdateSchema = z.object({
   salesInvoicePrintSize: z.string().optional().nullable(),
   queueTokenEnabled: z.boolean().optional(),
   queueTokenPrefix: z.string().optional().nullable(),
+  discountFeatureEntitled: z.boolean().optional(),
+  discountEnabled: z.boolean().optional(),
   barcodeFeatureEntitled: z.boolean().optional(),
   barcodeScanEnabled: z.boolean().optional(),
   smsSummaryEntitled: z.boolean().optional(),
@@ -314,6 +318,8 @@ export async function POST(req: Request) {
                 salesInvoicePrintSize: input.salesInvoicePrintSize ?? undefined,
                 queueTokenEnabled: input.queueTokenEnabled,
                 queueTokenPrefix: input.queueTokenPrefix ?? undefined,
+                discountFeatureEntitled: input.discountFeatureEntitled,
+                discountEnabled: input.discountEnabled,
                 barcodeFeatureEntitled: input.barcodeFeatureEntitled,
                 barcodeScanEnabled: input.barcodeScanEnabled,
                 smsSummaryEntitled: input.smsSummaryEntitled,
@@ -349,6 +355,12 @@ export async function POST(req: Request) {
                   : {}),
                 ...(data.queueTokenPrefix !== undefined
                   ? { queueTokenPrefix: data.queueTokenPrefix }
+                  : {}),
+                ...(data.discountFeatureEntitled !== undefined
+                  ? { discountFeatureEntitled: data.discountFeatureEntitled }
+                  : {}),
+                ...(data.discountEnabled !== undefined
+                  ? { discountEnabled: data.discountEnabled }
                   : {}),
                 ...(data.barcodeFeatureEntitled !== undefined
                   ? { barcodeFeatureEntitled: data.barcodeFeatureEntitled }

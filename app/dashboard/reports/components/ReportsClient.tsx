@@ -45,6 +45,7 @@ import {
 type Summary = {
   sales: {
     totalAmount: number;
+    discountAmount?: number;
     completedCount?: number;
     voidedCount?: number;
     count?: number;
@@ -103,6 +104,10 @@ function SummaryCards({
         subtitle={`মোট বিল: ${summary.sales.completedCount ?? 0}${
           typeof summary.sales.voidedCount === "number"
             ? ` · বাতিল: ${summary.sales.voidedCount}`
+            : ""
+        }${
+          Number(summary.sales.discountAmount ?? 0) > 0
+            ? ` · ছাড়: ${Number(summary.sales.discountAmount ?? 0).toFixed(2)} ৳`
             : ""
         }`}
         icon="🧾"

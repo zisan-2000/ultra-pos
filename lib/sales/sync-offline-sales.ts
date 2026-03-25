@@ -1,4 +1,8 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import {
+  computeSaleDiscount,
+  type SaleDiscountType,
+} from "@/lib/sales/discount";
 
 export type IncomingSaleItem = {
   productId: string;
@@ -15,6 +19,10 @@ export type IncomingSale = {
   note?: string | null;
   customerId?: string | null;
   paidNow?: string | number;
+  subtotalAmount?: string | number;
+  discountType?: SaleDiscountType | null;
+  discountValue?: string | number | null;
+  discountAmount?: string | number;
   totalAmount?: string | number;
   createdAt?: number | string;
 };
@@ -319,10 +327,24 @@ export async function syncOfflineSalesBatch({
       computedTotal += qtyNum * priceNum;
     }
 
-    const totalAmount = toMoneyString(
-      raw?.totalAmount ?? computedTotal,
-      "totalAmount"
-    );
+    const discountFeatureEnabled = Boolean((shop as any).discountEnabled);
+    const discount = discountFeatureEnabled
+      ? computeSaleDiscount(computedTotal, {
+          type: raw?.discountType,
+          value: raw?.discountValue,
+        })
+      : computeSaleDiscount(computedTotal, null);
+    if (discount.hasDiscount && !hasPermission(user, "apply_sale_discount")) {
+      throw new Error("Forbidden: missing permission apply_sale_discount");
+    }
+    const subtotalAmount = discount.subtotal.toFixed(2);
+    const discountType = discount.discountType;
+    const discountValue =
+      discount.discountType && discount.discountValue > 0
+        ? discount.discountValue.toFixed(2)
+        : null;
+    const discountAmount = discount.discountAmount.toFixed(2);
+    const totalAmount = toMoneyString(discount.total, "totalAmount");
     const totalNum = Number(totalAmount);
     const payNowRaw = Number(raw?.paidNow ?? 0);
     const payNow = Math.min(
@@ -360,6 +382,10 @@ export async function syncOfflineSalesBatch({
           id: clientSaleId ?? undefined,
           shopId,
           customerId: isDue ? customerId : null,
+          subtotalAmount,
+          discountType,
+          discountValue,
+          discountAmount,
           totalAmount,
           paymentMethod,
           note,

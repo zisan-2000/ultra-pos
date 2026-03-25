@@ -17,6 +17,10 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type SaleSummary = {
   id: string;
+  subtotalAmount?: string | null;
+  discountType?: string | null;
+  discountValue?: string | null;
+  discountAmount?: string | null;
   totalAmount: string;
   paymentMethod: string;
   invoiceNo?: string | null;
@@ -243,6 +247,10 @@ export default function SalesListClient({
             (Array.isArray(r.items) ? r.items.length : 0);
           return {
             id: (r as any).id || r.tempId,
+            subtotalAmount: (r as any).subtotalAmount ?? null,
+            discountType: (r as any).discountType ?? null,
+            discountValue: (r as any).discountValue ?? null,
+            discountAmount: (r as any).discountAmount ?? "0.00",
             totalAmount: r.totalAmount,
             paymentMethod: payment,
             invoiceNo: (r as any).invoiceNo ?? null,
@@ -295,6 +303,10 @@ export default function SalesListClient({
         invoiceNo: s.invoiceNo ?? null,
         customerId: null,
         note: "",
+        subtotalAmount: s.subtotalAmount ?? undefined,
+        discountType: s.discountType ?? null,
+        discountValue: s.discountValue ?? null,
+        discountAmount: s.discountAmount ?? "0.00",
         totalAmount: s.totalAmount,
         createdAt: new Date(s.createdAt).getTime(),
         syncStatus: "synced" as const,
@@ -395,6 +407,10 @@ export default function SalesListClient({
           const latestReturnedPreview = s.latestReturnedPreview ?? null;
           const latestExchangePreview = s.latestExchangePreview ?? null;
           const baseTotal = Number(s.totalAmount ?? 0);
+          const discountAmount = Number(s.discountAmount ?? 0);
+          const subtotalAmount = Number(
+            s.subtotalAmount ?? baseTotal + discountAmount
+          );
           const baseTotalStr = baseTotal.toFixed(2);
           const adjustedTotal = baseTotal + returnNet;
           const displayTotal = hasReturnFlow ? adjustedTotal : baseTotal;
@@ -468,6 +484,11 @@ export default function SalesListClient({
                       ↩️ {flowLabel}
                     </span>
                   )}
+                  {!isVoided && discountAmount > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-[11px] font-semibold text-success border border-success/30">
+                      ছাড় {discountAmount.toFixed(2)} ৳
+                    </span>
+                  ) : null}
                   {s.invoiceNo && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary border border-primary/30">
                       ইনভয়েস: {s.invoiceNo}
@@ -487,6 +508,15 @@ export default function SalesListClient({
                     বাতিলের কারণ: {voidReason}
                   </p>
                 )}
+                {!isVoided && discountAmount > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Discount: ৳{discountAmount.toFixed(2)} কমেছে
+                    {s.discountType === "percent" && s.discountValue
+                      ? ` (${Number(s.discountValue).toFixed(2)}%)`
+                      : ""}
+                    {" "}· সাব-টোটাল ৳{subtotalAmount.toFixed(2)}
+                  </p>
+                ) : null}
                 {hasReturnFlow && (
                   <p className="text-xs text-muted-foreground">
                     {hasRefundFlow && hasExchangeFlow

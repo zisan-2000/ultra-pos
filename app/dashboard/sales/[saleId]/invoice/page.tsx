@@ -101,10 +101,8 @@ export default async function SalesInvoicePage({ params }: PageProps) {
     throw error;
   }
 
-  const subTotal = data.items.reduce(
-    (sum, item) => sum + Number(item.lineTotal || 0),
-    0
-  );
+  const subTotal = Number(data.subtotalAmount || 0);
+  const discountAmountNum = Number(data.discountAmount || 0);
   const totalAmountNum = Number(data.totalAmount || 0);
   const statusUpper = (data.status || "").toUpperCase();
   const isVoided = statusUpper === "VOIDED";
@@ -360,10 +358,23 @@ export default async function SalesInvoicePage({ params }: PageProps) {
                   <span className="text-muted-foreground">সাব-টোটাল</span>
                   <span className="font-medium tabular-nums text-foreground">৳ {formatMoney(subTotal)}</span>
                 </div>
+                {discountAmountNum > 0 ? (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      ছাড়
+                      {data.discountType === "percent" && data.discountValue
+                        ? ` (${formatMoney(data.discountValue)}%)`
+                        : ""}
+                    </span>
+                    <span className="font-medium tabular-nums text-success">
+                      -৳ {formatMoney(discountAmountNum)}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">রাউন্ডিং</span>
                   <span className="font-medium tabular-nums text-foreground">
-                    ৳ {formatMoney(totalAmountNum - subTotal)}
+                    ৳ {formatMoney(totalAmountNum - (subTotal - discountAmountNum))}
                   </span>
                 </div>
                 <div className="border-t border-border pt-2">

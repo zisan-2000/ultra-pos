@@ -333,6 +333,10 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
 
   const clientSales = sales.map((s) => ({
     id: s.id,
+    subtotalAmount: (s as any).subtotalAmountText ?? "0.00",
+    discountType: (s as any).discountType ?? null,
+    discountValue: (s as any).discountValueText ?? null,
+    discountAmount: (s as any).discountAmountText ?? "0.00",
     totalAmount:
       (s.totalAmount as any)?.toString?.() ??
       s.totalAmount?.toString?.() ??
@@ -394,6 +398,11 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
               <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">
                 {summary.count} বিল
               </span>
+              {Number((summary as any).discountAmount ?? 0) > 0 ? (
+                <span className="inline-flex h-7 items-center gap-1 rounded-full bg-success-soft px-3 font-semibold text-success border border-success/30">
+                  ছাড় {formatCurrency((summary as any).discountAmount)}
+                </span>
+              ) : null}
               <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">
                 {rangeLabel}
               </span>
