@@ -29,6 +29,7 @@ import {
   computeSaleDiscount,
   type SaleDiscountType,
 } from "@/lib/sales/discount";
+import { computeSaleTax } from "@/lib/sales/tax";
 
 const logPerf = (...args: unknown[]) => {
   if (process.env.NODE_ENV !== "production") {
@@ -66,6 +67,10 @@ type SaleRow = {
   discountType?: string | null;
   discountValue?: Prisma.Decimal | string | null;
   discountAmount: Prisma.Decimal | string;
+  taxableAmount?: Prisma.Decimal | string;
+  taxLabel?: string | null;
+  taxRate?: Prisma.Decimal | string | null;
+  taxAmount?: Prisma.Decimal | string;
   totalAmount: Prisma.Decimal | string;
   paymentMethod: string;
   invoiceNo?: string | null;
@@ -82,6 +87,10 @@ type SaleWithSummary = SaleRow & {
   discountType: string | null;
   discountValueText: string | null;
   discountAmountText: string;
+  taxableAmountText: string;
+  taxLabel: string | null;
+  taxRateText: string | null;
+  taxAmountText: string;
   returnCount: number;
   refundCount: number;
   exchangeCount: number;
@@ -147,6 +156,10 @@ type SaleReturnHistoryItem = {
   note: string | null;
   subtotal: string;
   exchangeSubtotal: string;
+  returnedTaxAmount: string;
+  exchangeTaxAmount: string;
+  taxLabel: string | null;
+  taxRate: string | null;
   netAmount: string;
   refundAmount: string;
   additionalCashInAmount: string;
@@ -180,6 +193,10 @@ export type SaleReturnDraft = {
     invoiceNo: string | null;
     paymentMethod: string;
     status: string;
+    taxableAmount: string;
+    taxLabel: string | null;
+    taxRate: string | null;
+    taxAmount: string;
     totalAmount: string;
     note: string | null;
     customer: { id: string; name: string; totalDue: string } | null;
@@ -440,6 +457,13 @@ async function attachSaleSummaries(
           ? null
           : toMoney(Number(r.discountValue ?? 0)),
       discountAmountText: toMoney(Number(r.discountAmount ?? 0)),
+      taxableAmountText: toMoney(Number(r.taxableAmount ?? 0)),
+      taxLabel: r.taxLabel ?? null,
+      taxRateText:
+        r.taxRate === null || r.taxRate === undefined
+          ? null
+          : toMoney(Number(r.taxRate ?? 0)),
+      taxAmountText: toMoney(Number(r.taxAmount ?? 0)),
       returnCount: returnSummary?.count ?? 0,
       refundCount: returnTypeSummary?.refundCount ?? 0,
       exchangeCount: returnTypeSummary?.exchangeCount ?? 0,
@@ -512,6 +536,10 @@ async function getSaleReturnHistoryBySale(
     note: row.note ?? null,
     subtotal: row.subtotal.toString(),
     exchangeSubtotal: row.exchangeSubtotal.toString(),
+    returnedTaxAmount: row.returnedTaxAmount.toString(),
+    exchangeTaxAmount: row.exchangeTaxAmount.toString(),
+    taxLabel: row.taxLabel ?? null,
+    taxRate: row.taxRate ? row.taxRate.toString() : null,
     netAmount: row.netAmount.toString(),
     refundAmount: row.refundAmount.toString(),
     additionalCashInAmount: row.additionalCashInAmount.toString(),
@@ -553,6 +581,10 @@ export async function getSaleReturnDraft(
       invoiceNo: true,
       paymentMethod: true,
       status: true,
+      taxableAmount: true,
+      taxLabel: true,
+      taxRate: true,
+      taxAmount: true,
       totalAmount: true,
       note: true,
       customer: {
@@ -610,6 +642,10 @@ export async function getSaleReturnDraft(
       invoiceNo: sale.invoiceNo ?? null,
       paymentMethod: sale.paymentMethod,
       status: sale.status,
+      taxableAmount: sale.taxableAmount.toString(),
+      taxLabel: sale.taxLabel ?? null,
+      taxRate: sale.taxRate ? sale.taxRate.toString() : null,
+      taxAmount: sale.taxAmount.toString(),
       totalAmount: sale.totalAmount.toString(),
       note: sale.note ?? null,
       customer: sale.customer
@@ -1026,7 +1062,16 @@ export async function createSale(input: CreateSaleInput) {
       ? discount.discountValue.toFixed(2)
       : null;
   const discountAmountStr = discount.discountAmount.toFixed(2);
-  const totalStr = discount.total.toFixed(2);
+  const tax = computeSaleTax(discount.total, {
+    enabled:
+      Boolean((shop as any).taxFeatureEntitled) && Boolean((shop as any).taxEnabled),
+    label: (shop as any).taxLabel,
+    rate: (shop as any).taxRate,
+  });
+  const taxableAmountStr = tax.taxableAmount.toFixed(2);
+  const taxRateStr = tax.rate > 0 ? tax.rate.toFixed(2) : null;
+  const taxAmountStr = tax.taxAmount.toFixed(2);
+  const totalStr = tax.total.toFixed(2);
   const normalizedPaymentMethod = (input.paymentMethod || "cash").toLowerCase();
   const totalNum = Number(totalStr);
   const payNowRaw = Number(input.paidNow || 0);
@@ -1063,6 +1108,10 @@ export async function createSale(input: CreateSaleInput) {
         discountType: discount.discountType,
         discountValue: discountValueStr,
         discountAmount: discountAmountStr,
+        taxableAmount: taxableAmountStr,
+        taxLabel: tax.label,
+        taxRate: taxRateStr,
+        taxAmount: taxAmountStr,
         totalAmount: totalStr,
         paymentMethod: input.paymentMethod || "cash",
         note: input.note || null,
@@ -1368,6 +1417,8 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
         customerId: true,
         paymentMethod: true,
         status: true,
+        taxLabel: true,
+        taxRate: true,
         saleItems: {
           select: {
             id: true,
@@ -1538,7 +1589,25 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
 
     const subtotalRounded = roundMoney(returnedSubtotal);
     const exchangeRounded = roundMoney(exchangeSubtotal);
-    const netAmount = roundMoney(exchangeRounded - subtotalRounded);
+    const saleTaxRate = Number(sale.taxRate ?? 0);
+    const taxEnabled = saleTaxRate > 0 && Boolean(sale.taxLabel);
+    const returnedTaxAmount = taxEnabled
+      ? computeSaleTax(subtotalRounded, {
+          enabled: true,
+          label: sale.taxLabel,
+          rate: saleTaxRate,
+        }).taxAmount
+      : 0;
+    const exchangeTaxAmount = taxEnabled
+      ? computeSaleTax(exchangeRounded, {
+          enabled: true,
+          label: sale.taxLabel,
+          rate: saleTaxRate,
+        }).taxAmount
+      : 0;
+    const netAmount = roundMoney(
+      exchangeRounded + exchangeTaxAmount - subtotalRounded - returnedTaxAmount
+    );
 
     let refundAmount = 0;
     let additionalCashInAmount = 0;
@@ -1581,6 +1650,10 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
         note,
         subtotal: toMoney(subtotalRounded),
         exchangeSubtotal: toMoney(exchangeRounded),
+        returnedTaxAmount: toMoney(returnedTaxAmount),
+        exchangeTaxAmount: toMoney(exchangeTaxAmount),
+        taxLabel: taxEnabled ? sale.taxLabel : null,
+        taxRate: taxEnabled ? toMoney(saleTaxRate) : null,
         netAmount: toMoney(netAmount),
         refundAmount: toMoney(refundAmount),
         additionalCashInAmount: toMoney(additionalCashInAmount),
@@ -1827,6 +1900,10 @@ export async function getSalesByShop(shopId: string) {
       discountType: true,
       discountValue: true,
       discountAmount: true,
+      taxableAmount: true,
+      taxLabel: true,
+      taxRate: true,
+      taxAmount: true,
       totalAmount: true,
       paymentMethod: true,
       status: true,
@@ -1889,6 +1966,10 @@ export async function getSalesByShopPaginated({
       discountType: true,
       discountValue: true,
       discountAmount: true,
+      taxableAmount: true,
+      taxLabel: true,
+      taxRate: true,
+      taxAmount: true,
       totalAmount: true,
       paymentMethod: true,
       status: true,
@@ -1943,6 +2024,10 @@ type SaleInvoiceDetails = {
   discountType: string | null;
   discountValue: string | null;
   discountAmount: string;
+  taxableAmount: string;
+  taxLabel: string | null;
+  taxRate: string | null;
+  taxAmount: string;
   totalAmount: string;
   status: string;
   voidReason: string | null;
@@ -1974,6 +2059,10 @@ export async function getSaleInvoiceDetails(
       discountType: true,
       discountValue: true,
       discountAmount: true,
+      taxableAmount: true,
+      taxLabel: true,
+      taxRate: true,
+      taxAmount: true,
       totalAmount: true,
       paymentMethod: true,
       note: true,
@@ -2053,6 +2142,10 @@ export async function getSaleInvoiceDetails(
     discountType: sale.discountType ?? null,
     discountValue: sale.discountValue ? sale.discountValue.toString() : null,
     discountAmount: sale.discountAmount.toString(),
+    taxableAmount: sale.taxableAmount.toString(),
+    taxLabel: sale.taxLabel ?? null,
+    taxRate: sale.taxRate ? sale.taxRate.toString() : null,
+    taxAmount: sale.taxAmount.toString(),
     totalAmount: sale.totalAmount.toString(),
     status: sale.status,
     voidReason: sale.voidReason ?? null,
@@ -2110,7 +2203,7 @@ export async function getSalesSummary({
 
   const agg = await prisma.sale.aggregate({
     where,
-    _sum: { totalAmount: true, discountAmount: true },
+    _sum: { totalAmount: true, discountAmount: true, taxAmount: true },
     _count: { _all: true },
   });
 
@@ -2123,7 +2216,7 @@ export async function getSalesSummary({
         ...(end ? { lte: end } : {}),
       },
     },
-    _sum: { netAmount: true },
+    _sum: { netAmount: true, returnedTaxAmount: true, exchangeTaxAmount: true },
   });
 
   return {
@@ -2131,6 +2224,11 @@ export async function getSalesSummary({
       Number(agg._sum.totalAmount ?? 0) + Number(returnAgg._sum.netAmount ?? 0)
     ).toFixed(2),
     discountAmount: Number(agg._sum.discountAmount ?? 0).toFixed(2),
+    taxAmount: (
+      Number(agg._sum.taxAmount ?? 0) -
+      Number(returnAgg._sum.returnedTaxAmount ?? 0) +
+      Number(returnAgg._sum.exchangeTaxAmount ?? 0)
+    ).toFixed(2),
     count: agg._count._all ?? 0,
   };
 }

@@ -491,7 +491,7 @@ async function computeSalesSummary(
   const [agg, voided, returnNet] = await Promise.all([
     prisma.sale.aggregate({
       where,
-      _sum: { totalAmount: true, discountAmount: true },
+      _sum: { totalAmount: true, discountAmount: true, taxAmount: true },
       _count: { _all: true },
     }),
     prisma.sale.count({
@@ -504,16 +504,35 @@ async function computeSalesSummary(
         },
       },
     }),
-    computeSaleReturnNetAmount(shopId, start, end),
+    prisma.saleReturn.aggregate({
+      where: {
+        shopId,
+        status: "completed",
+        businessDate: {
+          gte: start ?? undefined,
+          lte: end ?? undefined,
+        },
+      },
+      _sum: {
+        netAmount: true,
+        returnedTaxAmount: true,
+        exchangeTaxAmount: true,
+      },
+    }),
   ]);
 
-  const totalAmount = Number(agg._sum.totalAmount ?? 0) + returnNet;
+  const totalAmount =
+    Number(agg._sum.totalAmount ?? 0) + Number(returnNet._sum.netAmount ?? 0);
   const completedCount = agg._count._all ?? 0;
   const voidedCount = voided ?? 0;
 
   return {
     totalAmount,
     discountAmount: Number(agg._sum.discountAmount ?? 0),
+    taxAmount:
+      Number(agg._sum.taxAmount ?? 0) -
+      Number(returnNet._sum.returnedTaxAmount ?? 0) +
+      Number(returnNet._sum.exchangeTaxAmount ?? 0),
     count: completedCount,
     completedCount,
     voidedCount,
@@ -712,9 +731,11 @@ async function computeProfitSummary(
     computeSalesSummary(shopId, from, to),
     computeExpenseSummary(shopId, from, to),
   ]);
+  const netSalesRevenue =
+    salesData.totalAmount - Number(salesData.taxAmount ?? 0);
   return computeProfitFromTotals(
     shopId,
-    salesData.totalAmount,
+    netSalesRevenue,
     expenseData.totalAmount,
     from,
     to
@@ -766,9 +787,10 @@ async function getSummaryBundleInternal(
     expenseTask,
     cashTask,
   ]);
+  const netSalesRevenue = sales.totalAmount - Number(sales.taxAmount ?? 0);
   const profit = await computeProfitFromTotals(
     shopId,
-    sales.totalAmount,
+    netSalesRevenue,
     expense.totalAmount,
     from,
     to

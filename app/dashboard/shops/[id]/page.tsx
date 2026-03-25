@@ -38,6 +38,16 @@ export default async function EditShop({ params }: PageProps) {
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_discount_feature"))
   );
+  const canManageTaxEntitlement = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_tax_entitlement"))
+  );
+  const canManageTaxFeature = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_tax_feature"))
+  );
   const canManageBarcodeEntitlement = Boolean(
     user &&
       (user.roles?.includes("super_admin") ||
@@ -169,7 +179,25 @@ export default async function EditShop({ params }: PageProps) {
               : {}),
             ...(canManageDiscountFeature
               ? {
-                  discountEnabled: formData.get("discountEnabled") === "1",
+                discountEnabled: formData.get("discountEnabled") === "1",
+              }
+            : {}),
+        }
+      : {}),
+      ...(canManageTaxEntitlement || canManageTaxFeature
+        ? {
+            ...(canManageTaxEntitlement
+              ? {
+                  taxFeatureEntitled: formData.get("taxFeatureEntitled") === "1",
+                }
+              : {}),
+            ...(canManageTaxFeature
+              ? {
+                  taxEnabled: formData.get("taxEnabled") === "1",
+                  taxLabel:
+                    ((formData.get("taxLabel") as string) || "").trim() || null,
+                  taxRate:
+                    ((formData.get("taxRate") as string) || "").trim() || null,
                 }
               : {}),
           }
@@ -234,6 +262,10 @@ export default async function EditShop({ params }: PageProps) {
           queueWorkflow: (shop as any).queueWorkflow || null,
           discountFeatureEntitled: Boolean((shop as any).discountFeatureEntitled),
           discountEnabled: Boolean((shop as any).discountEnabled),
+          taxFeatureEntitled: Boolean((shop as any).taxFeatureEntitled),
+          taxEnabled: Boolean((shop as any).taxEnabled),
+          taxLabel: (shop as any).taxLabel || "VAT",
+          taxRate: (shop as any).taxRate?.toString?.() || "",
           barcodeFeatureEntitled: Boolean((shop as any).barcodeFeatureEntitled),
           barcodeScanEnabled: Boolean((shop as any).barcodeScanEnabled),
           smsSummaryEntitled: Boolean((shop as any).smsSummaryEntitled),
@@ -245,6 +277,8 @@ export default async function EditShop({ params }: PageProps) {
         showQueueTokenSettings={canManageQueueToken}
         showDiscountSettings={canManageDiscountEntitlement || canManageDiscountFeature}
         canEditDiscountEntitlement={canManageDiscountEntitlement}
+        showTaxSettings={canManageTaxEntitlement || canManageTaxFeature}
+        canEditTaxEntitlement={canManageTaxEntitlement}
         showBarcodeSettings={canManageBarcodeEntitlement || canManageBarcodeFeature}
         canEditBarcodeEntitlement={canManageBarcodeEntitlement}
         showSmsSummarySettings={canManageSmsEntitlement || canManageSmsFeature}

@@ -15,6 +15,11 @@ export async function handleCreateShop(formData: FormData) {
     formData.has("queueWorkflow");
   const hasDiscountSettings =
     formData.has("discountFeatureEntitled") || formData.has("discountEnabled");
+  const hasTaxSettings =
+    formData.has("taxFeatureEntitled") ||
+    formData.has("taxEnabled") ||
+    formData.has("taxLabel") ||
+    formData.has("taxRate");
   const hasBarcodeSettings =
     formData.has("barcodeFeatureEntitled") || formData.has("barcodeScanEnabled");
   const hasSmsSettings =
@@ -52,6 +57,14 @@ export async function handleCreateShop(formData: FormData) {
           discountFeatureEntitled:
             formData.get("discountFeatureEntitled") === "1",
           discountEnabled: formData.get("discountEnabled") === "1",
+        }
+      : {}),
+    ...(hasTaxSettings
+      ? {
+          taxFeatureEntitled: formData.get("taxFeatureEntitled") === "1",
+          taxEnabled: formData.get("taxEnabled") === "1",
+          taxLabel: ((formData.get("taxLabel") as string) || "").trim() || null,
+          taxRate: ((formData.get("taxRate") as string) || "").trim() || null,
         }
       : {}),
     ...(hasBarcodeSettings

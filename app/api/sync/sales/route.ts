@@ -36,6 +36,10 @@ const saleSchema = z.object({
   discountType: z.enum(["amount", "percent"]).nullable().optional(),
   discountValue: z.union([z.string(), z.number()]).nullable().optional(),
   discountAmount: z.union([z.string(), z.number()]).optional(),
+  taxableAmount: z.union([z.string(), z.number()]).optional(),
+  taxLabel: z.string().nullable().optional(),
+  taxRate: z.union([z.string(), z.number()]).nullable().optional(),
+  taxAmount: z.union([z.string(), z.number()]).optional(),
   totalAmount: z.union([z.string(), z.number()]).optional(),
   createdAt: z.union([z.string(), z.number()]).optional(),
 });

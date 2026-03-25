@@ -103,6 +103,10 @@ export default async function SalesInvoicePage({ params }: PageProps) {
 
   const subTotal = Number(data.subtotalAmount || 0);
   const discountAmountNum = Number(data.discountAmount || 0);
+  const taxableAmountNum = Number(
+    data.taxableAmount || Math.max(subTotal - discountAmountNum, 0)
+  );
+  const taxAmountNum = Number(data.taxAmount || 0);
   const totalAmountNum = Number(data.totalAmount || 0);
   const statusUpper = (data.status || "").toUpperCase();
   const isVoided = statusUpper === "VOIDED";
@@ -371,10 +375,21 @@ export default async function SalesInvoicePage({ params }: PageProps) {
                     </span>
                   </div>
                 ) : null}
+                {taxAmountNum > 0 ? (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {data.taxLabel || "VAT"}
+                      {data.taxRate ? ` (${formatMoney(data.taxRate)}%)` : ""}
+                    </span>
+                    <span className="font-medium tabular-nums text-primary">
+                      +৳ {formatMoney(taxAmountNum)}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">রাউন্ডিং</span>
                   <span className="font-medium tabular-nums text-foreground">
-                    ৳ {formatMoney(totalAmountNum - (subTotal - discountAmountNum))}
+                    ৳ {formatMoney(totalAmountNum - (taxableAmountNum + taxAmountNum))}
                   </span>
                 </div>
                 <div className="border-t border-border pt-2">

@@ -33,6 +33,16 @@ export default async function NewShopPage() {
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_discount_feature"))
   );
+  const canManageTaxEntitlement = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_tax_entitlement"))
+  );
+  const canManageTaxFeature = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_tax_feature"))
+  );
   const canManageBarcodeEntitlement = Boolean(
     user &&
       (user.roles?.includes("super_admin") ||
@@ -99,6 +109,8 @@ export default async function NewShopPage() {
         showQueueTokenSettings={canManageQueueToken}
         showDiscountSettings={canManageDiscountEntitlement || canManageDiscountFeature}
         canEditDiscountEntitlement={canManageDiscountEntitlement}
+        showTaxSettings={canManageTaxEntitlement || canManageTaxFeature}
+        canEditTaxEntitlement={canManageTaxEntitlement}
         showBarcodeSettings={canManageBarcodeEntitlement || canManageBarcodeFeature}
         canEditBarcodeEntitlement={canManageBarcodeEntitlement}
         showSmsSummarySettings={canManageSmsEntitlement || canManageSmsFeature}

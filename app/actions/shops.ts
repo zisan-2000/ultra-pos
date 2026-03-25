@@ -12,9 +12,20 @@ import { sanitizeSalesInvoicePrefix } from "@/lib/sales-invoice";
 import { sanitizeSalesInvoicePrintSize } from "@/lib/sales-invoice-print";
 import { sanitizeQueueTokenPrefix } from "@/lib/queue-token";
 import { sanitizeQueueWorkflow } from "@/lib/queue-workflow";
+import { sanitizeSaleTaxLabel, sanitizeSaleTaxRate } from "@/lib/sales/tax";
 
 async function getCurrentUser() {
   return requireUser();
+}
+
+function serializeShopForClient<T extends Record<string, any>>(shop: T): T {
+  return {
+    ...shop,
+    taxRate:
+      shop.taxRate === null || shop.taxRate === undefined
+        ? shop.taxRate
+        : shop.taxRate.toString(),
+  };
 }
 
 async function ensureDefaultPlan(tx: PrismaTypes.TransactionClient) {
@@ -91,6 +102,10 @@ export async function createShop(data: {
   queueWorkflow?: string | null;
   discountFeatureEntitled?: boolean;
   discountEnabled?: boolean;
+  taxFeatureEntitled?: boolean;
+  taxEnabled?: boolean;
+  taxLabel?: string | null;
+  taxRate?: number | string | null;
   barcodeFeatureEntitled?: boolean;
   barcodeScanEnabled?: boolean;
   smsSummaryEntitled?: boolean;
@@ -155,6 +170,17 @@ export async function createShop(data: {
   if (wantsDiscountFeatureChange) {
     requirePermission(user, "manage_shop_discount_feature");
   }
+  const wantsTaxEntitlementChange = data.taxFeatureEntitled === true;
+  if (wantsTaxEntitlementChange) {
+    requirePermission(user, "manage_shop_tax_entitlement");
+  }
+  const wantsTaxFeatureChange =
+    data.taxEnabled !== undefined ||
+    data.taxLabel !== undefined ||
+    data.taxRate !== undefined;
+  if (wantsTaxFeatureChange) {
+    requirePermission(user, "manage_shop_tax_feature");
+  }
 
   const wantsBarcodeEntitlementChange = data.barcodeFeatureEntitled === true;
   if (wantsBarcodeEntitlementChange) {
@@ -186,6 +212,18 @@ export async function createShop(data: {
       "Discount cannot be enabled before super-admin entitlement is turned on"
     );
   }
+  const resolvedTaxEntitled = Boolean(data.taxFeatureEntitled ?? false);
+  const resolvedTaxEnabled = Boolean(data.taxEnabled ?? false);
+  const resolvedTaxLabel = sanitizeSaleTaxLabel(data.taxLabel);
+  const resolvedTaxRate = sanitizeSaleTaxRate(data.taxRate);
+  if (resolvedTaxEnabled && !resolvedTaxEntitled) {
+    throw new Error(
+      "VAT/Tax cannot be enabled before super-admin entitlement is turned on"
+    );
+  }
+  if (resolvedTaxEnabled && resolvedTaxRate <= 0) {
+    throw new Error("VAT/Tax rate must be greater than 0 to enable the feature");
+  }
   if (resolvedBarcodeScanEnabled && !resolvedBarcodeEntitled) {
     throw new Error(
       "Barcode scan cannot be enabled before super-admin entitlement is turned on"
@@ -208,6 +246,14 @@ export async function createShop(data: {
       businessType: data.businessType || "tea_stall",
       discountFeatureEntitled: resolvedDiscountEntitled,
       discountEnabled: resolvedDiscountEntitled ? resolvedDiscountEnabled : false,
+      taxFeatureEntitled: resolvedTaxEntitled,
+      taxEnabled: resolvedTaxEntitled ? resolvedTaxEnabled : false,
+      taxLabel:
+        resolvedTaxEntitled && resolvedTaxEnabled ? resolvedTaxLabel : null,
+      taxRate:
+        resolvedTaxEntitled && resolvedTaxEnabled
+          ? resolvedTaxRate.toFixed(2)
+          : "0.00",
       barcodeFeatureEntitled: resolvedBarcodeEntitled,
       barcodeScanEnabled: resolvedBarcodeEntitled
         ? resolvedBarcodeScanEnabled
@@ -280,10 +326,11 @@ export async function getShopsByUser() {
   const ownerSelect = { id: true, name: true, email: true };
 
   if (isSuperAdmin) {
-    return prisma.shop.findMany({
+    const shops = await prisma.shop.findMany({
       include: { owner: { select: ownerSelect } },
       orderBy: [{ ownerId: "asc" }, { createdAt: "desc" }, { name: "asc" }],
     });
+    return shops.map(serializeShopForClient);
   }
 
   if (isAssignedTeamMember && !isOwner) {
@@ -292,14 +339,15 @@ export async function getShopsByUser() {
       where: { id: user.staffShopId },
       include: { owner: { select: ownerSelect } },
     });
-    return shop ? [shop] : [];
+    return shop ? [serializeShopForClient(shop)] : [];
   }
 
-  return prisma.shop.findMany({
+  const shops = await prisma.shop.findMany({
     where: { ownerId: user.id },
     include: { owner: { select: ownerSelect } },
     orderBy: [{ createdAt: "desc" }, { name: "asc" }],
   });
+  return shops.map(serializeShopForClient);
 }
 
 // ------------------------------
@@ -387,6 +435,58 @@ export async function updateShop(id: string, data: any) {
     (updateData as any).discountEnabled = Boolean(data.discountEnabled);
   }
 
+  const wantsTaxEntitlementChange = data.taxFeatureEntitled !== undefined;
+  if (wantsTaxEntitlementChange) {
+    requirePermission(user, "manage_shop_tax_entitlement");
+    (updateData as any).taxFeatureEntitled = Boolean(data.taxFeatureEntitled);
+  }
+
+  const wantsTaxFeatureChange =
+    data.taxEnabled !== undefined ||
+    data.taxLabel !== undefined ||
+    data.taxRate !== undefined;
+  if (wantsTaxFeatureChange) {
+    requirePermission(user, "manage_shop_tax_feature");
+
+    const effectiveEntitlement =
+      data.taxFeatureEntitled !== undefined
+        ? Boolean(data.taxFeatureEntitled)
+        : Boolean((shop as any).taxFeatureEntitled);
+    const effectiveEnabled =
+      data.taxEnabled !== undefined
+        ? Boolean(data.taxEnabled)
+        : Boolean((shop as any).taxEnabled);
+    const resolvedTaxLabel = sanitizeSaleTaxLabel(
+      data.taxLabel !== undefined ? data.taxLabel : (shop as any).taxLabel
+    );
+    const resolvedTaxRate = sanitizeSaleTaxRate(
+      data.taxRate !== undefined ? data.taxRate : (shop as any).taxRate
+    );
+
+    if (effectiveEnabled && !effectiveEntitlement) {
+      throw new Error(
+        "VAT/Tax cannot be enabled before super-admin entitlement is turned on"
+      );
+    }
+    if (effectiveEnabled && resolvedTaxRate <= 0) {
+      throw new Error("VAT/Tax rate must be greater than 0 to enable the feature");
+    }
+
+    if (data.taxEnabled !== undefined) {
+      (updateData as any).taxEnabled = Boolean(data.taxEnabled);
+    }
+    if (data.taxLabel !== undefined || effectiveEnabled) {
+      (updateData as any).taxLabel =
+        effectiveEntitlement && effectiveEnabled ? resolvedTaxLabel : null;
+    }
+    if (data.taxRate !== undefined || effectiveEnabled) {
+      (updateData as any).taxRate =
+        effectiveEntitlement && effectiveEnabled
+          ? resolvedTaxRate.toFixed(2)
+          : "0.00";
+    }
+  }
+
   const wantsBarcodeEntitlementChange = data.barcodeFeatureEntitled !== undefined;
   if (wantsBarcodeEntitlementChange) {
     requirePermission(user, "manage_shop_barcode_entitlement");
@@ -440,6 +540,11 @@ export async function updateShop(id: string, data: any) {
   }
   if (data.discountFeatureEntitled !== undefined && !Boolean(data.discountFeatureEntitled)) {
     (updateData as any).discountEnabled = false;
+  }
+  if (data.taxFeatureEntitled !== undefined && !Boolean(data.taxFeatureEntitled)) {
+    (updateData as any).taxEnabled = false;
+    (updateData as any).taxLabel = null;
+    (updateData as any).taxRate = "0.00";
   }
   if (data.smsSummaryEntitled !== undefined && !Boolean(data.smsSummaryEntitled)) {
     (updateData as any).smsSummaryEnabled = false;

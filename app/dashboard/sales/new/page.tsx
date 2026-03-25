@@ -85,6 +85,11 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
     Boolean((selectedShop as any).discountFeatureEntitled) &&
     Boolean((selectedShop as any).discountEnabled) &&
     canApplySaleDiscountPermission;
+  const canUseSaleTax =
+    Boolean((selectedShop as any).taxFeatureEntitled) &&
+    Boolean((selectedShop as any).taxEnabled);
+  const saleTaxLabel = String((selectedShop as any).taxLabel || "VAT");
+  const saleTaxRate = Number((selectedShop as any).taxRate ?? 0);
   const products = await getActiveProductsByShop(selectedShopId);
 
   async function submitSale(formData: FormData) {
@@ -141,6 +146,9 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       canViewDuePage={canViewDuePage}
       canUseBarcodeScan={canUseBarcodeScan}
       canUseSaleDiscount={canUseSaleDiscount}
+      canUseSaleTax={canUseSaleTax}
+      saleTaxLabel={saleTaxLabel}
+      saleTaxRate={saleTaxRate}
       submitSale={submitSale}
     />
   );

@@ -10,6 +10,7 @@ import {
 import { useRouter } from "next/navigation";
 import { processSaleReturn, type SaleReturnDraft } from "@/app/actions/sales";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { computeSaleTax } from "@/lib/sales/tax";
 
 type Props = {
   initialDraft: SaleReturnDraft;
@@ -159,7 +160,30 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
     [validExchangeRows]
   );
 
-  const netAmount = exchangeSubtotal - returnedSubtotal;
+  const returnedTax = useMemo(
+    () =>
+      computeSaleTax(returnedSubtotal, {
+        enabled:
+          Boolean(initialDraft.sale.taxLabel) &&
+          toNumber(initialDraft.sale.taxRate) > 0,
+        label: initialDraft.sale.taxLabel,
+        rate: initialDraft.sale.taxRate,
+      }),
+    [initialDraft.sale.taxLabel, initialDraft.sale.taxRate, returnedSubtotal]
+  );
+  const exchangeTax = useMemo(
+    () =>
+      computeSaleTax(exchangeSubtotal, {
+        enabled:
+          Boolean(initialDraft.sale.taxLabel) &&
+          toNumber(initialDraft.sale.taxRate) > 0,
+        label: initialDraft.sale.taxLabel,
+        rate: initialDraft.sale.taxRate,
+      }),
+    [exchangeSubtotal, initialDraft.sale.taxLabel, initialDraft.sale.taxRate]
+  );
+  const netAmount =
+    exchangeSubtotal + exchangeTax.taxAmount - returnedSubtotal - returnedTax.taxAmount;
   const hasCustomer = Boolean(initialDraft.sale.customer?.id);
 
   const canSubmit =
@@ -328,6 +352,12 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
             <p className="font-semibold text-foreground">
               ৳ {formatMoney(toNumber(initialDraft.sale.totalAmount))}
             </p>
+            {toNumber(initialDraft.sale.taxAmount) > 0 ? (
+              <p className="text-[11px] text-muted-foreground">
+                {initialDraft.sale.taxLabel || "VAT"} ৳{" "}
+                {formatMoney(toNumber(initialDraft.sale.taxAmount))}
+              </p>
+            ) : null}
           </div>
           <div className="rounded-xl border border-border bg-muted/20 p-2.5">
             <p className="text-[11px] text-muted-foreground">কাস্টমার</p>
@@ -693,10 +723,20 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
             <div className="rounded-lg border border-border bg-card px-3 py-2">
               <p className="text-[11px] text-muted-foreground">রিটার্ন সাবটোটাল</p>
               <p className="font-semibold text-danger">৳ {formatMoney(returnedSubtotal)}</p>
+              {returnedTax.taxAmount > 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  {returnedTax.label} refund ৳ {formatMoney(returnedTax.taxAmount)}
+                </p>
+              ) : null}
             </div>
             <div className="rounded-lg border border-border bg-card px-3 py-2">
               <p className="text-[11px] text-muted-foreground">এক্সচেঞ্জ সাবটোটাল</p>
               <p className="font-semibold text-success">৳ {formatMoney(exchangeSubtotal)}</p>
+              {exchangeTax.taxAmount > 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  {exchangeTax.label} charge ৳ {formatMoney(exchangeTax.taxAmount)}
+                </p>
+              ) : null}
             </div>
             <div className="rounded-lg border border-border bg-card px-3 py-2">
               <p className="text-[11px] text-muted-foreground">নেট</p>
@@ -781,9 +821,19 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
                   <div className="mt-2 grid gap-2 text-xs sm:grid-cols-3">
                     <p className="rounded-lg border border-border bg-muted/20 px-2.5 py-1.5 text-muted-foreground">
                       রিটার্ন: <span className="font-semibold text-danger">৳ {formatMoney(toNumber(row.subtotal))}</span>
+                      {toNumber(row.returnedTaxAmount) > 0
+                        ? ` + ${row.taxLabel || "VAT"} ৳ ${formatMoney(
+                            toNumber(row.returnedTaxAmount)
+                          )}`
+                        : ""}
                     </p>
                     <p className="rounded-lg border border-border bg-muted/20 px-2.5 py-1.5 text-muted-foreground">
                       এক্সচেঞ্জ: <span className="font-semibold text-success">৳ {formatMoney(toNumber(row.exchangeSubtotal))}</span>
+                      {toNumber(row.exchangeTaxAmount) > 0
+                        ? ` + ${row.taxLabel || "VAT"} ৳ ${formatMoney(
+                            toNumber(row.exchangeTaxAmount)
+                          )}`
+                        : ""}
                     </p>
                     <p className="rounded-lg border border-border bg-muted/20 px-2.5 py-1.5 text-muted-foreground">
                       নেট: <span className="font-semibold text-foreground">৳ {formatMoney(toNumber(row.netAmount))}</span>

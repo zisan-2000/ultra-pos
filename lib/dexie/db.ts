@@ -41,6 +41,10 @@ export type LocalSale = {
   discountType?: string | null;
   discountValue?: string | number | null;
   discountAmount?: string;
+  taxableAmount?: string;
+  taxLabel?: string | null;
+  taxRate?: string | number | null;
+  taxAmount?: string;
   totalAmount: string;
   paidNow?: string | number;
   dueLedgerIds?: string[];

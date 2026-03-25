@@ -94,6 +94,15 @@ export const permissionMeta: Record<string, PermissionMeta> = {
     label: "দোকান discount ফিচার ম্যানেজ",
     module: "shops",
   },
+  manage_shop_tax_entitlement: {
+    label: "দোকান VAT/Tax entitlement ম্যানেজ",
+    module: "shops",
+    critical: true,
+  },
+  manage_shop_tax_feature: {
+    label: "দোকান VAT/Tax ফিচার ম্যানেজ",
+    module: "shops",
+  },
   manage_shop_barcode_entitlement: {
     label: "দোকান বারকোড entitlement ম্যানেজ",
     module: "shops",

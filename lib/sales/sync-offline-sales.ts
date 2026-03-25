@@ -3,6 +3,7 @@ import {
   computeSaleDiscount,
   type SaleDiscountType,
 } from "@/lib/sales/discount";
+import { computeSaleTax } from "@/lib/sales/tax";
 
 export type IncomingSaleItem = {
   productId: string;
@@ -23,6 +24,10 @@ export type IncomingSale = {
   discountType?: SaleDiscountType | null;
   discountValue?: string | number | null;
   discountAmount?: string | number;
+  taxableAmount?: string | number;
+  taxLabel?: string | null;
+  taxRate?: string | number | null;
+  taxAmount?: string | number;
   totalAmount?: string | number;
   createdAt?: number | string;
 };
@@ -344,7 +349,13 @@ export async function syncOfflineSalesBatch({
         ? discount.discountValue.toFixed(2)
         : null;
     const discountAmount = discount.discountAmount.toFixed(2);
-    const totalAmount = toMoneyString(discount.total, "totalAmount");
+    const tax = computeSaleTax(discount.total, {
+      enabled:
+        Boolean((shop as any).taxFeatureEntitled) && Boolean((shop as any).taxEnabled),
+      label: (shop as any).taxLabel,
+      rate: (shop as any).taxRate,
+    });
+    const totalAmount = toMoneyString(tax.total, "totalAmount");
     const totalNum = Number(totalAmount);
     const payNowRaw = Number(raw?.paidNow ?? 0);
     const payNow = Math.min(
@@ -386,6 +397,10 @@ export async function syncOfflineSalesBatch({
           discountType,
           discountValue,
           discountAmount,
+          taxableAmount: tax.taxableAmount.toFixed(2),
+          taxLabel: tax.label,
+          taxRate: tax.rate > 0 ? tax.rate.toFixed(2) : null,
+          taxAmount: tax.taxAmount.toFixed(2),
           totalAmount,
           paymentMethod,
           note,

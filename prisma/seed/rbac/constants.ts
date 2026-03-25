@@ -19,6 +19,8 @@ export const PERMISSION_NAMES: string[] = [
   "manage_shop_queue_feature",
   "manage_shop_discount_entitlement",
   "manage_shop_discount_feature",
+  "manage_shop_tax_entitlement",
+  "manage_shop_tax_feature",
   "manage_shop_barcode_entitlement",
   "manage_shop_barcode_feature",
   "manage_shop_sms_entitlement",

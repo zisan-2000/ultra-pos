@@ -57,6 +57,10 @@ type Props = {
     queueWorkflow?: string | null;
     discountFeatureEntitled?: boolean;
     discountEnabled?: boolean;
+    taxFeatureEntitled?: boolean;
+    taxEnabled?: boolean;
+    taxLabel?: string | null;
+    taxRate?: string | number | null;
     barcodeFeatureEntitled?: boolean;
     barcodeScanEnabled?: boolean;
     smsSummaryEntitled?: boolean;
@@ -69,6 +73,8 @@ type Props = {
   showQueueTokenSettings?: boolean;
   showDiscountSettings?: boolean;
   canEditDiscountEntitlement?: boolean;
+  showTaxSettings?: boolean;
+  canEditTaxEntitlement?: boolean;
   showBarcodeSettings?: boolean;
   canEditBarcodeEntitlement?: boolean;
   showSmsSummarySettings?: boolean;
@@ -134,6 +140,8 @@ export default function ShopFormClient({
   showQueueTokenSettings = false,
   showDiscountSettings = false,
   canEditDiscountEntitlement = false,
+  showTaxSettings = false,
+  canEditTaxEntitlement = false,
   showBarcodeSettings = false,
   canEditBarcodeEntitlement = false,
   showSmsSummarySettings = false,
@@ -180,6 +188,16 @@ export default function ShopFormClient({
   );
   const [discountEnabled, setDiscountEnabled] = useState<boolean>(
     Boolean(initial?.discountEnabled ?? false)
+  );
+  const [taxFeatureEntitled, setTaxFeatureEntitled] = useState<boolean>(
+    Boolean(initial?.taxFeatureEntitled ?? false)
+  );
+  const [taxEnabled, setTaxEnabled] = useState<boolean>(
+    Boolean(initial?.taxEnabled ?? false)
+  );
+  const [taxLabel, setTaxLabel] = useState<string>(initial?.taxLabel || "VAT");
+  const [taxRate, setTaxRate] = useState<string>(
+    initial?.taxRate?.toString?.() || ""
   );
   const [barcodeFeatureEntitled, setBarcodeFeatureEntitled] = useState<boolean>(
     Boolean(initial?.barcodeFeatureEntitled ?? false)
@@ -453,6 +471,14 @@ export default function ShopFormClient({
     const payloadDiscountEnabled = payloadDiscountFeatureEntitled
       ? Boolean(discountEnabled)
       : false;
+    const payloadTaxFeatureEntitled = Boolean(taxFeatureEntitled);
+    const payloadTaxEnabled = payloadTaxFeatureEntitled ? Boolean(taxEnabled) : false;
+    const payloadTaxLabel = (taxLabel || "").trim().slice(0, 24) || "VAT";
+    const payloadTaxRateNum = Number(taxRate || 0);
+    const payloadTaxRate =
+      Number.isFinite(payloadTaxRateNum) && payloadTaxRateNum > 0
+        ? Math.min(payloadTaxRateNum, 100).toFixed(2)
+        : "0.00";
     const payloadBarcodeFeatureEntitled = Boolean(barcodeFeatureEntitled);
     const payloadBarcodeScanEnabled = payloadBarcodeFeatureEntitled
       ? Boolean(barcodeScanEnabled)
@@ -484,6 +510,14 @@ export default function ShopFormClient({
         );
       }
       form.set("discountEnabled", payloadDiscountEnabled ? "1" : "0");
+    }
+    if (showTaxSettings) {
+      if (canEditTaxEntitlement) {
+        form.set("taxFeatureEntitled", payloadTaxFeatureEntitled ? "1" : "0");
+      }
+      form.set("taxEnabled", payloadTaxEnabled ? "1" : "0");
+      form.set("taxLabel", payloadTaxLabel);
+      form.set("taxRate", payloadTaxRate);
     }
     if (showBarcodeSettings) {
       if (canEditBarcodeEntitlement) {
@@ -544,6 +578,16 @@ export default function ShopFormClient({
                   ? { discountFeatureEntitled: payloadDiscountFeatureEntitled }
                   : {}),
                 discountEnabled: payloadDiscountEnabled,
+              }
+            : {}),
+          ...(showTaxSettings
+            ? {
+                ...(canEditTaxEntitlement
+                  ? { taxFeatureEntitled: payloadTaxFeatureEntitled }
+                  : {}),
+                taxEnabled: payloadTaxEnabled,
+                taxLabel: payloadTaxLabel,
+                taxRate: payloadTaxRate,
               }
             : {}),
           ...(showBarcodeSettings
@@ -961,6 +1005,96 @@ export default function ShopFormClient({
               প্রথমে entitlement চালু না হলে discount toggle activate হবে না।
             </p>
           ) : null}
+        </div>
+      ) : null}
+
+      {showTaxSettings ? (
+        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
+          <div className="space-y-1">
+            <label className="block text-sm font-semibold text-foreground">
+              VAT / Tax ফিচার
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Super-admin entitlement + owner toggle true হলে sale, invoice, report-এ
+              per-shop exclusive VAT/Tax apply হবে।
+            </p>
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={taxFeatureEntitled}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setTaxFeatureEntitled(next);
+                if (!next) {
+                  setTaxEnabled(false);
+                }
+              }}
+              disabled={!canEditTaxEntitlement}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+            />
+            এই দোকানে VAT/Tax entitlement চালু
+          </label>
+          {!canEditTaxEntitlement ? (
+            <p className="text-xs text-muted-foreground">
+              এই entitlement শুধু super-admin পরিবর্তন করতে পারবেন।
+            </p>
+          ) : null}
+
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={taxEnabled}
+              onChange={(e) => setTaxEnabled(e.target.checked)}
+              disabled={!taxFeatureEntitled}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+            />
+            POS-এ VAT/Tax চালু
+          </label>
+          {!taxFeatureEntitled ? (
+            <p className="text-xs text-warning">
+              প্রথমে entitlement চালু না হলে VAT/Tax toggle activate হবে না।
+            </p>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-muted-foreground">
+                Tax label
+              </label>
+              <input
+                value={taxLabel}
+                onChange={(e) => setTaxLabel(e.target.value.slice(0, 24))}
+                className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                placeholder="VAT"
+                maxLength={24}
+                disabled={!taxFeatureEntitled}
+              />
+              <p className="text-xs text-muted-foreground">
+                Invoice-এ যেমন দেখাতে চান: VAT, Tax, Service Tax
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-muted-foreground">
+                Rate (%)
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={taxRate}
+                onChange={(e) => setTaxRate(e.target.value)}
+                className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                placeholder="যেমন 5"
+                disabled={!taxFeatureEntitled}
+              />
+              <p className="text-xs text-muted-foreground">
+                Exclusive rate. Discount-এর পর net subtotal-এর উপর apply হবে।
+              </p>
+            </div>
+          </div>
         </div>
       ) : null}
 

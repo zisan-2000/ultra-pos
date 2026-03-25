@@ -46,6 +46,7 @@ type Summary = {
   sales: {
     totalAmount: number;
     discountAmount?: number;
+    taxAmount?: number;
     completedCount?: number;
     voidedCount?: number;
     count?: number;
@@ -108,6 +109,10 @@ function SummaryCards({
         }${
           Number(summary.sales.discountAmount ?? 0) > 0
             ? ` · ছাড়: ${Number(summary.sales.discountAmount ?? 0).toFixed(2)} ৳`
+            : ""
+        }${
+          Number(summary.sales.taxAmount ?? 0) > 0
+            ? ` · VAT/Tax: ${Number(summary.sales.taxAmount ?? 0).toFixed(2)} ৳`
             : ""
         }`}
         icon="🧾"
@@ -1214,6 +1219,7 @@ export default function ReportsClient({
               "sales_total",
               "sales_count",
               "sales_voided",
+              "sales_tax",
               "expense_total",
               "expense_count",
               "cash_in",
@@ -1229,6 +1235,7 @@ export default function ReportsClient({
                 sales_total: summaryData.sales.totalAmount ?? 0,
                 sales_count: salesCount,
                 sales_voided: summaryData.sales.voidedCount ?? 0,
+                sales_tax: summaryData.sales.taxAmount ?? 0,
                 expense_total: summaryData.expense.totalAmount ?? 0,
                 expense_count: summaryData.expense.count ?? 0,
                 cash_in: summaryData.cash.totalIn ?? 0,

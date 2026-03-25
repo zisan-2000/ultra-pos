@@ -21,6 +21,10 @@ type SaleSummary = {
   discountType?: string | null;
   discountValue?: string | null;
   discountAmount?: string | null;
+  taxableAmount?: string | null;
+  taxLabel?: string | null;
+  taxRate?: string | null;
+  taxAmount?: string | null;
   totalAmount: string;
   paymentMethod: string;
   invoiceNo?: string | null;
@@ -251,6 +255,10 @@ export default function SalesListClient({
             discountType: (r as any).discountType ?? null,
             discountValue: (r as any).discountValue ?? null,
             discountAmount: (r as any).discountAmount ?? "0.00",
+            taxableAmount: (r as any).taxableAmount ?? null,
+            taxLabel: (r as any).taxLabel ?? null,
+            taxRate: (r as any).taxRate ?? null,
+            taxAmount: (r as any).taxAmount ?? "0.00",
             totalAmount: r.totalAmount,
             paymentMethod: payment,
             invoiceNo: (r as any).invoiceNo ?? null,
@@ -408,6 +416,7 @@ export default function SalesListClient({
           const latestExchangePreview = s.latestExchangePreview ?? null;
           const baseTotal = Number(s.totalAmount ?? 0);
           const discountAmount = Number(s.discountAmount ?? 0);
+          const taxAmount = Number(s.taxAmount ?? 0);
           const subtotalAmount = Number(
             s.subtotalAmount ?? baseTotal + discountAmount
           );
@@ -489,6 +498,11 @@ export default function SalesListClient({
                       ছাড় {discountAmount.toFixed(2)} ৳
                     </span>
                   ) : null}
+                  {!isVoided && taxAmount > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary border border-primary/30">
+                      {(s.taxLabel || "VAT").trim()} {taxAmount.toFixed(2)} ৳
+                    </span>
+                  ) : null}
                   {s.invoiceNo && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary border border-primary/30">
                       ইনভয়েস: {s.invoiceNo}
@@ -515,6 +529,13 @@ export default function SalesListClient({
                       ? ` (${Number(s.discountValue).toFixed(2)}%)`
                       : ""}
                     {" "}· সাব-টোটাল ৳{subtotalAmount.toFixed(2)}
+                  </p>
+                ) : null}
+                {!isVoided && taxAmount > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {(s.taxLabel || "VAT").trim()}: ৳{taxAmount.toFixed(2)}
+                    {s.taxRate ? ` (${Number(s.taxRate).toFixed(2)}%)` : ""}
+                    {" "}· taxable ৳{Number(s.taxableAmount ?? baseTotal).toFixed(2)}
                   </p>
                 ) : null}
                 {hasReturnFlow && (

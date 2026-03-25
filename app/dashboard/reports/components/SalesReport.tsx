@@ -17,6 +17,7 @@ type SummaryPayload = {
   sales: {
     totalAmount: number;
     discountAmount?: number;
+    taxAmount?: number;
     completedCount?: number;
     voidedCount?: number;
     count?: number;
@@ -299,6 +300,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
     Number(summaryData?.sales?.completedCount ?? summaryData?.sales?.count ?? 0);
   const voidedCount = Number(summaryData?.sales?.voidedCount ?? 0);
   const discountAmount = Number(summaryData?.sales?.discountAmount ?? 0);
+  const taxAmount = Number(summaryData?.sales?.taxAmount ?? 0);
   const averageBill = completedCount
     ? Number(summaryData?.sales?.totalAmount ?? 0) / completedCount
     : 0;
@@ -398,6 +400,15 @@ export default function SalesReport({ shopId, from, to }: Props) {
               </p>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 নির্বাচিত সময়ের মোট discount
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card/90 p-3">
+              <p className="text-xs text-muted-foreground">মোট VAT/Tax</p>
+              <p className="mt-1 text-lg font-bold text-foreground">
+                {summaryData ? formatMoney(taxAmount) : "..."}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                নির্বাচিত সময়ের মোট collected VAT/Tax
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-card/90 p-3">

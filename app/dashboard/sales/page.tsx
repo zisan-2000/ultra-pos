@@ -337,6 +337,10 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     discountType: (s as any).discountType ?? null,
     discountValue: (s as any).discountValueText ?? null,
     discountAmount: (s as any).discountAmountText ?? "0.00",
+    taxableAmount: (s as any).taxableAmountText ?? "0.00",
+    taxLabel: (s as any).taxLabel ?? null,
+    taxRate: (s as any).taxRateText ?? null,
+    taxAmount: (s as any).taxAmountText ?? "0.00",
     totalAmount:
       (s.totalAmount as any)?.toString?.() ??
       s.totalAmount?.toString?.() ??
@@ -401,6 +405,11 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
               {Number((summary as any).discountAmount ?? 0) > 0 ? (
                 <span className="inline-flex h-7 items-center gap-1 rounded-full bg-success-soft px-3 font-semibold text-success border border-success/30">
                   ছাড় {formatCurrency((summary as any).discountAmount)}
+                </span>
+              ) : null}
+              {Number((summary as any).taxAmount ?? 0) > 0 ? (
+                <span className="inline-flex h-7 items-center gap-1 rounded-full bg-primary-soft px-3 font-semibold text-primary border border-primary/30">
+                  VAT/Tax {formatCurrency((summary as any).taxAmount)}
                 </span>
               ) : null}
               <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">

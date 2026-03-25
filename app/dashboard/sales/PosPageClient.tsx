@@ -49,6 +49,7 @@ import { subscribeProductEvent } from "@/lib/products/product-events";
 import useRealTimeReports from "@/hooks/useRealTimeReports";
 import { emitSaleUpdate } from "@/lib/events/reportEvents";
 import { computeSaleDiscount, type SaleDiscountType } from "@/lib/sales/discount";
+import { computeSaleTax } from "@/lib/sales/tax";
 
 type ProductOption = {
   id: string;
@@ -89,6 +90,9 @@ type PosPageClientProps = {
   canViewDuePage: boolean;
   canUseBarcodeScan: boolean;
   canUseSaleDiscount: boolean;
+  canUseSaleTax: boolean;
+  saleTaxLabel: string;
+  saleTaxRate: number;
   submitSale: (formData: FormData) => Promise<{
     success: boolean;
     saleId: string;
@@ -108,6 +112,9 @@ export function PosPageClient({
   canViewDuePage,
   canUseBarcodeScan,
   canUseSaleDiscount,
+  canUseSaleTax,
+  saleTaxLabel,
+  saleTaxRate,
   submitSale,
 }: PosPageClientProps) {
   const router = useRouter();
@@ -208,7 +215,16 @@ export function PosPageClient({
         : computeSaleDiscount(safeTotalAmount, null),
     [canUseSaleDiscount, safeTotalAmount, discountType, discountValue]
   );
-  const payableTotal = saleDiscount.total;
+  const saleTax = useMemo(
+    () =>
+      computeSaleTax(saleDiscount.total, {
+        enabled: canUseSaleTax,
+        label: saleTaxLabel,
+        rate: saleTaxRate,
+      }),
+    [canUseSaleTax, saleDiscount.total, saleTaxLabel, saleTaxRate]
+  );
+  const payableTotal = saleTax.total;
   const paymentOptions = useMemo(
     () => {
       const options = [
@@ -698,6 +714,10 @@ export function PosPageClient({
       discountAmount: saleDiscount.discountAmount.toFixed(2),
       note,
       totalAmount: totalVal.toFixed(2),
+      taxableAmount: saleTax.taxableAmount.toFixed(2),
+      taxLabel: saleTax.label,
+      taxRate: saleTax.rate > 0 ? saleTax.rate.toFixed(2) : null,
+      taxAmount: saleTax.taxAmount.toFixed(2),
       createdAt: nowTs,
       syncStatus: "new" as const,
     };
@@ -1173,6 +1193,15 @@ export function PosPageClient({
                   <span>- {saleDiscount.discountAmount.toFixed(2)} ৳</span>
                 </div>
               ) : null}
+              {saleTax.taxAmount > 0 ? (
+                <div className="flex items-center justify-between text-primary">
+                  <span>
+                    {saleTax.label}
+                    {saleTax.rate > 0 ? ` (${saleTax.rate.toFixed(2)}%)` : ""}
+                  </span>
+                  <span>+ {saleTax.taxAmount.toFixed(2)} ৳</span>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -1434,6 +1463,11 @@ export function PosPageClient({
                       ছাড় {saleDiscount.discountAmount.toFixed(2)} ৳
                     </span>
                   ) : null}
+                  {saleTax.taxAmount > 0 ? (
+                    <span className="inline-flex h-8 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-[11px] font-semibold text-primary">
+                      {saleTax.label} {saleTax.taxAmount.toFixed(2)} ৳
+                    </span>
+                  ) : null}
                   {isDue ? (
                     <span className="text-[11px] text-muted-foreground">
                       {selectedCustomerName
@@ -1489,6 +1523,9 @@ export function PosPageClient({
                   সাব-টোটাল {safeTotalAmount.toFixed(2)} ৳
                   {saleDiscount.hasDiscount
                     ? ` • ছাড় ${saleDiscount.discountAmount.toFixed(2)} ৳`
+                    : ""}
+                  {saleTax.taxAmount > 0
+                    ? ` • ${saleTax.label} ${saleTax.taxAmount.toFixed(2)} ৳`
                     : ""}
                 </p>
               </div>
@@ -1546,6 +1583,9 @@ export function PosPageClient({
                   সাব-টোটাল {safeTotalAmount.toFixed(2)} ৳
                   {saleDiscount.hasDiscount
                     ? ` • ছাড় ${saleDiscount.discountAmount.toFixed(2)} ৳`
+                    : ""}
+                  {saleTax.taxAmount > 0
+                    ? ` • ${saleTax.label} ${saleTax.taxAmount.toFixed(2)} ৳`
                     : ""}
                 </p>
               </div>

@@ -120,6 +120,10 @@ const shopCreateSchema = z.object({
   queueTokenPrefix: z.string().optional().nullable(),
   discountFeatureEntitled: z.boolean().optional(),
   discountEnabled: z.boolean().optional(),
+  taxFeatureEntitled: z.boolean().optional(),
+  taxEnabled: z.boolean().optional(),
+  taxLabel: z.string().optional().nullable(),
+  taxRate: z.union([z.string(), z.number()]).optional().nullable(),
   barcodeFeatureEntitled: z.boolean().optional(),
   barcodeScanEnabled: z.boolean().optional(),
   smsSummaryEntitled: z.boolean().optional(),
@@ -141,6 +145,10 @@ const shopUpdateSchema = z.object({
   queueTokenPrefix: z.string().optional().nullable(),
   discountFeatureEntitled: z.boolean().optional(),
   discountEnabled: z.boolean().optional(),
+  taxFeatureEntitled: z.boolean().optional(),
+  taxEnabled: z.boolean().optional(),
+  taxLabel: z.string().optional().nullable(),
+  taxRate: z.union([z.string(), z.number()]).optional().nullable(),
   barcodeFeatureEntitled: z.boolean().optional(),
   barcodeScanEnabled: z.boolean().optional(),
   smsSummaryEntitled: z.boolean().optional(),
@@ -320,6 +328,10 @@ export async function POST(req: Request) {
                 queueTokenPrefix: input.queueTokenPrefix ?? undefined,
                 discountFeatureEntitled: input.discountFeatureEntitled,
                 discountEnabled: input.discountEnabled,
+                taxFeatureEntitled: input.taxFeatureEntitled,
+                taxEnabled: input.taxEnabled,
+                taxLabel: input.taxLabel ?? undefined,
+                taxRate: input.taxRate ?? undefined,
                 barcodeFeatureEntitled: input.barcodeFeatureEntitled,
                 barcodeScanEnabled: input.barcodeScanEnabled,
                 smsSummaryEntitled: input.smsSummaryEntitled,
@@ -362,6 +374,14 @@ export async function POST(req: Request) {
                 ...(data.discountEnabled !== undefined
                   ? { discountEnabled: data.discountEnabled }
                   : {}),
+                ...(data.taxFeatureEntitled !== undefined
+                  ? { taxFeatureEntitled: data.taxFeatureEntitled }
+                  : {}),
+                ...(data.taxEnabled !== undefined
+                  ? { taxEnabled: data.taxEnabled }
+                  : {}),
+                ...(data.taxLabel !== undefined ? { taxLabel: data.taxLabel } : {}),
+                ...(data.taxRate !== undefined ? { taxRate: data.taxRate } : {}),
                 ...(data.barcodeFeatureEntitled !== undefined
                   ? { barcodeFeatureEntitled: data.barcodeFeatureEntitled }
                   : {}),
