@@ -932,6 +932,7 @@ export default function DuePageClient({
   const isListeningAddress = listeningField === "customerAddress";
   const isListeningPaymentAmount = listeningField === "paymentAmount";
   const isListeningPaymentDescription = listeningField === "paymentDescription";
+  const isVoiceListening = listeningField !== null;
 
   const nameVoiceHint = isListeningName
     ? "শুনছি... গ্রাহকের নাম বলুন"
@@ -1329,7 +1330,9 @@ export default function DuePageClient({
                         ? stopVoice
                         : () => startVoice("customerName")
                     }
-                    disabled={!voiceReady}
+                    disabled={
+                      !voiceReady || (isVoiceListening && !isListeningName)
+                    }
                     aria-label={
                       isListeningName
                         ? "ভয়েস বন্ধ করুন"
@@ -1339,7 +1342,11 @@ export default function DuePageClient({
                       isListeningName
                         ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
                         : "bg-primary-soft text-primary border-primary/30 active:scale-95"
-                    } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                    } ${
+                      !voiceReady || (isVoiceListening && !isListeningName)
+                        ? "opacity-60 cursor-not-allowed"
+                        : ""
+                    }`}
                   >
                     {isListeningName ? "🔴" : "🎤"}
                   </button>
@@ -1387,7 +1394,9 @@ export default function DuePageClient({
                         ? stopVoice
                         : () => startVoice("customerPhone")
                     }
-                    disabled={!voiceReady}
+                    disabled={
+                      !voiceReady || (isVoiceListening && !isListeningPhone)
+                    }
                     aria-label={
                       isListeningPhone
                         ? "ভয়েস বন্ধ করুন"
@@ -1397,7 +1406,11 @@ export default function DuePageClient({
                       isListeningPhone
                         ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
                         : "bg-primary-soft text-primary border-primary/30 active:scale-95"
-                    } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                    } ${
+                      !voiceReady || (isVoiceListening && !isListeningPhone)
+                        ? "opacity-60 cursor-not-allowed"
+                        : ""
+                    }`}
                   >
                     {isListeningPhone ? "🔴" : "🎤"}
                   </button>
@@ -1429,7 +1442,9 @@ export default function DuePageClient({
                         ? stopVoice
                         : () => startVoice("customerAddress")
                     }
-                    disabled={!voiceReady}
+                    disabled={
+                      !voiceReady || (isVoiceListening && !isListeningAddress)
+                    }
                     aria-label={
                       isListeningAddress
                         ? "ভয়েস বন্ধ করুন"
@@ -1439,7 +1454,11 @@ export default function DuePageClient({
                       isListeningAddress
                         ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
                         : "bg-primary-soft text-primary border-primary/30 active:scale-95"
-                    } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                    } ${
+                      !voiceReady || (isVoiceListening && !isListeningAddress)
+                        ? "opacity-60 cursor-not-allowed"
+                        : ""
+                    }`}
                   >
                     {isListeningAddress ? "🔴" : "🎤"}
                   </button>
@@ -1588,7 +1607,10 @@ export default function DuePageClient({
                         ? stopVoice
                         : () => startVoice("paymentAmount")
                     }
-                    disabled={!voiceReady}
+                    disabled={
+                      !voiceReady ||
+                      (isVoiceListening && !isListeningPaymentAmount)
+                    }
                     aria-label={
                       isListeningPaymentAmount
                         ? "ভয়েস বন্ধ করুন"
@@ -1598,7 +1620,12 @@ export default function DuePageClient({
                       isListeningPaymentAmount
                         ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
                         : "bg-primary-soft text-primary border-primary/30 active:scale-95"
-                    } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                    } ${
+                      !voiceReady ||
+                      (isVoiceListening && !isListeningPaymentAmount)
+                        ? "opacity-60 cursor-not-allowed"
+                        : ""
+                    }`}
                   >
                     {isListeningPaymentAmount ? "🔴" : "🎤"}
                   </button>
@@ -1649,7 +1676,10 @@ export default function DuePageClient({
                         ? stopVoice
                         : () => startVoice("paymentDescription")
                     }
-                    disabled={!voiceReady}
+                    disabled={
+                      !voiceReady ||
+                      (isVoiceListening && !isListeningPaymentDescription)
+                    }
                     aria-label={
                       isListeningPaymentDescription
                         ? "ভয়েস বন্ধ করুন"
@@ -1659,7 +1689,12 @@ export default function DuePageClient({
                       isListeningPaymentDescription
                         ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
                         : "bg-primary-soft text-primary border-primary/30 active:scale-95"
-                    } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                    } ${
+                      !voiceReady ||
+                      (isVoiceListening && !isListeningPaymentDescription)
+                        ? "opacity-60 cursor-not-allowed"
+                        : ""
+                    }`}
                   >
                     {isListeningPaymentDescription ? "🔴" : "🎤"}
                   </button>
