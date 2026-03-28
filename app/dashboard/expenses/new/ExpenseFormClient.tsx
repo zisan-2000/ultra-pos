@@ -131,7 +131,9 @@ export default function ExpenseFormClient({
   const router = useRouter();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const amountInputRef = useRef<HTMLInputElement | null>(null);
-  const [listening, setListening] = useState(false);
+  const [listeningField, setListeningField] = useState<"amount" | "note" | null>(
+    null
+  );
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
@@ -258,12 +260,15 @@ export default function ExpenseFormClient({
       : "ভয়েস + স্মার্ট টেমপ্লেট দিয়ে দ্রুত খরচ যোগ করুন");
   const shopLabel = shopName?.trim() || "";
   const voiceErrorText = voiceError ? `(${voiceError})` : "";
-  const amountVoiceHint = listening
+  const isAmountListening = listeningField === "amount";
+  const isNoteListening = listeningField === "note";
+  const isVoiceListening = listeningField !== null;
+  const amountVoiceHint = isAmountListening
     ? "শুনছি... খরচের নাম/দাম বলুন"
     : voiceReady
     ? "ভয়েসে বললে অটো পূরণ হবে"
     : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
-  const noteVoiceHint = listening
+  const noteVoiceHint = isNoteListening
     ? "শুনছি... নোট বলুন"
     : voiceReady
     ? "ভয়েসে নোট বলুন"
@@ -301,7 +306,7 @@ export default function ExpenseFormClient({
   }
 
   function startVoice(field: "amount" | "note") {
-    if (listening) return;
+    if (isVoiceListening) return;
     const SpeechRecognitionImpl =
       typeof window !== "undefined"
         ? ((window as any).SpeechRecognition ||
@@ -319,10 +324,10 @@ export default function ExpenseFormClient({
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onerror = () => {
-      setListening(false);
+      setListeningField(null);
       setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
     };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => setListeningField(null);
     recognition.onresult = (event: any) => {
       const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
       if (spoken) {
@@ -338,18 +343,18 @@ export default function ExpenseFormClient({
           if (parsed && !amount) setAmount(parsed);
         }
       }
-      setListening(false);
+      setListeningField(null);
     };
 
     recognitionRef.current = recognition;
     setVoiceError(null);
-    setListening(true);
+    setListeningField(field);
     recognition.start();
   }
 
   function stopVoice() {
     recognitionRef.current?.stop?.();
-    setListening(false);
+    setListeningField(null);
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -619,16 +624,16 @@ export default function ExpenseFormClient({
             />
             <button
               type="button"
-              onClick={listening ? stopVoice : () => startVoice("amount")}
-              disabled={!voiceReady}
-              aria-label={listening ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
+              onClick={isAmountListening ? stopVoice : () => startVoice("amount")}
+              disabled={!voiceReady || (isVoiceListening && !isAmountListening)}
+              aria-label={isAmountListening ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
               className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
-                listening
+                isAmountListening
                   ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
                   : "bg-primary-soft text-primary border-primary/30 active:scale-95"
-              } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+              } ${!voiceReady || (isVoiceListening && !isAmountListening) ? "opacity-60 cursor-not-allowed" : ""}`}
             >
-              {listening ? "🔴" : "🎤"}
+              {isAmountListening ? "🔴" : "🎤"}
             </button>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -676,16 +681,16 @@ export default function ExpenseFormClient({
                 </label>
                 <button
                   type="button"
-                  onClick={listening ? stopVoice : () => startVoice("note")}
-                  disabled={!voiceReady}
-                  aria-label={listening ? "ভয়েস বন্ধ করুন" : "ভয়েস নোট চালু করুন"}
+                  onClick={isNoteListening ? stopVoice : () => startVoice("note")}
+                  disabled={!voiceReady || (isVoiceListening && !isNoteListening)}
+                  aria-label={isNoteListening ? "ভয়েস বন্ধ করুন" : "ভয়েস নোট চালু করুন"}
                   className={`inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
-                    listening
+                    isNoteListening
                       ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
                       : "bg-primary-soft text-primary border-primary/30 active:scale-95"
-                  } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
+                  } ${!voiceReady || (isVoiceListening && !isNoteListening) ? "opacity-60 cursor-not-allowed" : ""}`}
                 >
-                  {listening ? "🔴" : "🎤"}
+                  {isNoteListening ? "🔴" : "🎤"}
                 </button>
               </div>
               <textarea
