@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { createUserWithRole } from "@/app/actions/user-management";
 import { getShopsByUser } from "@/app/actions/shops";
+import {
+  getPasswordPolicyError,
+  PASSWORD_POLICY_HELPER_TEXT,
+} from "@/lib/password-policy";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { handlePermissionError } from "@/lib/permission-toast";
 
@@ -102,6 +106,12 @@ export function CreateUserDialog({
 
     if (!trimmedName || !trimmedEmail || !trimmedPassword || !selectedRoleId) {
       setError("সব ফিল্ড পূরণ করুন");
+      return;
+    }
+
+    const passwordError = getPasswordPolicyError(trimmedPassword);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -224,7 +234,7 @@ export function CreateUserDialog({
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              কমপক্ষে ৮ অক্ষর, একটি বড় হাতের অক্ষর ও একটি সংখ্যা থাকা ভালো।
+              {PASSWORD_POLICY_HELPER_TEXT}
             </p>
           </div>
 

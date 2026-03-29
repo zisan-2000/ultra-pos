@@ -5,6 +5,10 @@ import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  getPasswordPolicyError,
+  PASSWORD_POLICY_HELPER_TEXT,
+} from "@/lib/password-policy";
 
 type ApiResponse = { success: boolean; error?: string };
 
@@ -41,6 +45,12 @@ function ResetPasswordPageInner() {
 
     if (password !== confirm) {
       setMessage("নতুন পাসওয়ার্ড ও কনফার্ম পাসওয়ার্ড মিলছে না");
+      return;
+    }
+
+    const passwordError = getPasswordPolicyError(password.trim());
+    if (passwordError) {
+      setMessage(passwordError);
       return;
     }
 
@@ -109,6 +119,9 @@ function ResetPasswordPageInner() {
                 {showPassword ? "🙈" : "👁"}
               </button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {PASSWORD_POLICY_HELPER_TEXT}
+            </p>
           </div>
 
           <div className="space-y-2">

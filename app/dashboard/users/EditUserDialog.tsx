@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { updateUser } from "@/app/actions/user-management";
+import {
+  getPasswordPolicyError,
+  PASSWORD_POLICY_HELPER_TEXT,
+} from "@/lib/password-policy";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdminAction } from "@/lib/sync/queue";
 import { db } from "@/lib/dexie/db";
@@ -110,8 +114,9 @@ export function EditUserDialog({
         return;
       }
 
-      if (password.length < 8) {
-        setError("পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে");
+      const passwordError = getPasswordPolicyError(password.trim());
+      if (passwordError) {
+        setError(passwordError);
         return;
       }
     }
@@ -151,7 +156,7 @@ export function EditUserDialog({
       await updateUser(user.id, {
         name: trimmedName,
         email: trimmedEmail,
-        password: password || undefined,
+        password: password.trim() || undefined,
       });
       onSuccess();
       onClose();
@@ -231,7 +236,7 @@ export function EditUserDialog({
                 </button>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                কমপক্ষে ৮ অক্ষর; একটি বড় হাতের অক্ষর ও একটি সংখ্যা দিলে ভালো।
+                {PASSWORD_POLICY_HELPER_TEXT}
               </p>
             </div>
             <div>

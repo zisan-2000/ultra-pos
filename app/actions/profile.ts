@@ -5,6 +5,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import { assertStrongPassword } from "@/lib/password-policy";
 
 type MyProfile = {
   id: string;
@@ -140,22 +141,7 @@ export async function changeMyPassword(input: {
     throw new Error("পাসওয়ার্ড ফাঁকা রাখা যাবে না");
   }
 
-  if (newPassword.length < 8) {
-    throw new Error("নতুন পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে");
-  }
-
-  const complexityChecks = [
-    /[A-Z]/.test(newPassword),
-    /[a-z]/.test(newPassword),
-    /[0-9]/.test(newPassword),
-    /[^A-Za-z0-9]/.test(newPassword),
-  ];
-
-  if (complexityChecks.filter(Boolean).length < 3) {
-    throw new Error(
-      "নতুন পাসওয়ার্ডে বড় হাতের, ছোট হাতের, সংখ্যা এবং বিশেষ অক্ষরের যেকোনো তিনটি থাকতে হবে"
-    );
-  }
+  assertStrongPassword(newPassword);
 
   if (currentPassword === newPassword) {
     throw new Error("নতুন পাসওয়ার্ড পুরনোটির থেকে আলাদা হতে হবে");

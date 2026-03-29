@@ -30,6 +30,7 @@ import {
   deleteUser,
   updateUser,
 } from "@/app/actions/user-management";
+import { getPasswordPolicyError } from "@/lib/password-policy";
 import { businessFieldConfig as STATIC_CONFIGS, type BusinessType } from "@/lib/productFormConfig";
 
 function isBusinessType(value: string): value is BusinessType {
@@ -163,7 +164,12 @@ const userCreateSchema = z.object({
   clientId: z.string().optional(),
   email: z.string().email(),
   name: z.string().min(1),
-  password: z.string().min(8),
+  password: z.string().superRefine((value, ctx) => {
+    const error = getPasswordPolicyError(value.trim());
+    if (error) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
+    }
+  }),
   roleId: z.string().min(1),
   staffShopId: z.string().optional().nullable(),
 });
@@ -172,7 +178,16 @@ const userUpdateSchema = z.object({
   userId: z.string().min(1),
   name: z.string().optional(),
   email: z.string().optional(),
-  password: z.string().optional(),
+  password: z
+    .string()
+    .optional()
+    .superRefine((value, ctx) => {
+      if (!value || !value.trim()) return;
+      const error = getPasswordPolicyError(value.trim());
+      if (error) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
+      }
+    }),
 });
 
 const userDeleteSchema = z.object({

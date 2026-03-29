@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
 import { hashPassword } from "@/lib/password";
+import { assertStrongPassword } from "@/lib/password-policy";
 import { STAFF_BASELINE_PERMISSIONS } from "@/lib/staff-baseline-permissions";
 
 /**
@@ -217,6 +218,8 @@ export async function createUserWithRole(
 ) {
   const creator = await requireUser();
   const creatorRole = getUserPrimaryRole(creator.roles);
+  const trimmedPassword = password.trim();
+  assertStrongPassword(trimmedPassword);
 
   // Get the role to be assigned
   const role = await prisma.role.findUnique({ where: { id: roleId } });
@@ -263,7 +266,7 @@ export async function createUserWithRole(
     throw new Error("Email already exists");
   }
 
-  const passwordHash = await hashPassword(password);
+  const passwordHash = await hashPassword(trimmedPassword);
   let resolvedStaffShopId: string | null | undefined = undefined;
 
   if (role.name === "staff" || role.name === "manager") {
@@ -367,7 +370,9 @@ export async function updateUser(
   // If password provided, hash and update both User + credential Account
   let passwordHash: string | undefined;
   if (password && password.trim().length > 0) {
-    passwordHash = await hashPassword(password);
+    const trimmedPassword = password.trim();
+    assertStrongPassword(trimmedPassword);
+    passwordHash = await hashPassword(trimmedPassword);
 
     // Update credential account password if exists
     await prisma.account.updateMany({

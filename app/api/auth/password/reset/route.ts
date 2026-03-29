@@ -1,31 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
+import { assertStrongPassword } from "@/lib/password-policy";
 import crypto from "crypto";
 import { rateLimit } from "@/lib/rate-limit";
 
 const RESET_TYPE = "password_reset";
 
 type ResetRequest = { token?: string; password?: string };
-
-function validatePassword(password: string) {
-  if (!password || password.length < 8) {
-    throw new Error("পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে");
-  }
-
-  const checks = [
-    /[A-Z]/.test(password),
-    /[a-z]/.test(password),
-    /[0-9]/.test(password),
-    /[^A-Za-z0-9]/.test(password),
-  ];
-
-  if (checks.filter(Boolean).length < 3) {
-    throw new Error(
-      "বড়-ছোট হাতের অক্ষর, সংখ্যা ও বিশেষ অক্ষরের যেকোনো তিনটি থাকতে হবে"
-    );
-  }
-}
 
 function hashResetToken(rawToken: string) {
   return crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -56,7 +38,7 @@ export async function POST(req: Request) {
       );
     }
 
-    validatePassword(password);
+    assertStrongPassword(password);
     const hashedToken = hashResetToken(token);
 
     let verification = await prisma.verification.findUnique({
