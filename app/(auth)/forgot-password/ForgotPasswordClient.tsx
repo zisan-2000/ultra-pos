@@ -97,12 +97,9 @@ export default function ForgotPasswordPage() {
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between text-sm text-primary">
+        <div className="flex items-center justify-start text-sm text-primary">
           <Link href="/login" className="hover:underline hover:text-primary-hover">
             লগইন পাতায় ফিরে যান
-          </Link>
-          <Link href="/register" className="hover:underline hover:text-primary-hover">
-            নতুন একাউন্ট খুলুন
           </Link>
         </div>
       </div>
