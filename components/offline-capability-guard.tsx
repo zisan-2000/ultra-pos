@@ -3,34 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useOnlineStatus } from "@/lib/sync/net-status";
-
-const OFFLINE_ALLOWED_PREFIXES = [
-  "/offline",
-  "/login",
-  "/dashboard/sales",
-  "/dashboard/products",
-  "/dashboard/expenses",
-  "/dashboard/cash",
-  "/dashboard/due",
-  "/owner/dashboard",
-  "/admin/dashboard",
-  "/agent/dashboard",
-  "/super-admin/dashboard",
-];
-
-const isAllowedOffline = (path: string) => {
-  if (path === "/dashboard") return true;
-  return OFFLINE_ALLOWED_PREFIXES.some((prefix) =>
-    path === prefix || path.startsWith(`${prefix}/`)
-  );
-};
+import { isOfflineCapableRoute } from "@/lib/offline/offline-capable-routes";
 
 export default function OfflineCapabilityGuard() {
   const online = useOnlineStatus();
   const pathname = usePathname();
 
   if (online) return null;
-  if (!pathname || isAllowedOffline(pathname)) return null;
+  if (!pathname || isOfflineCapableRoute(pathname)) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-6">

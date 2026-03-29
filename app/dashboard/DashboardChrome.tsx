@@ -26,6 +26,7 @@ import OwnerSummaryVoice from "@/components/voice/OwnerSummaryVoice";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { SHOP_TYPES_WITH_COGS } from "@/lib/accounting/cogs-types";
+import { isOfflineCapableRoute } from "@/lib/offline/offline-capable-routes";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import {
   BarChart3,
@@ -388,8 +389,13 @@ export function DashboardShell({
     }
 
     event.preventDefault();
+    const targetHref = buildShopHref(href);
+    if (!online && isOfflineCapableRoute(href.split("?")[0] || href)) {
+      window.location.assign(targetHref);
+      return;
+    }
     startTransition(() => {
-      router.push(buildShopHref(href));
+      router.push(targetHref);
     });
   };
 
@@ -507,6 +513,10 @@ export function DashboardShell({
     const params = new URLSearchParams(searchParams?.toString() || "");
     params.set("shopId", id);
     const next = `${pathname}?${params.toString()}`;
+    if (!online && isOfflineCapableRoute(pathname || "")) {
+      window.location.assign(next);
+      return;
+    }
     startTransition(() => {
       router.replace(next, { scroll: false });
     });

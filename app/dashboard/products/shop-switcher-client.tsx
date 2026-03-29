@@ -5,6 +5,7 @@
 import { ShopSwitcher } from "@/components/shop/shop-switcher";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { useRouter } from "next/navigation";
+import { useOnlineStatus } from "@/lib/sync/net-status";
 
 type Shop = {
   id: string;
@@ -27,6 +28,7 @@ export function ShopSwitcherClient({
   status = "all",
 }: Props) {
   const router = useRouter();
+  const online = useOnlineStatus();
   const { shopId, setShop } = useCurrentShop();
 
   const currentId = shopId || activeShopId || shops[0].id;
@@ -38,7 +40,12 @@ export function ShopSwitcherClient({
     const params = new URLSearchParams({ shopId: id });
     if (query) params.set("q", query);
     if (status !== "all") params.set("status", status);
-    router.push(`/dashboard/products?${params.toString()}`);
+    const href = `/dashboard/products?${params.toString()}`;
+    if (!online) {
+      window.location.assign(href);
+      return;
+    }
+    router.push(href);
   }
 
   return (

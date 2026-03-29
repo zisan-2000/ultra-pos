@@ -4,6 +4,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCurrentShop } from "@/hooks/use-current-shop";
+import { useOnlineStatus } from "@/lib/sync/net-status";
 import {
   Select,
   SelectContent,
@@ -21,6 +22,7 @@ type Props = {
 
 export default function ShopSelectorClient({ shops, selectedShopId }: Props) {
   const router = useRouter();
+  const online = useOnlineStatus();
   const { setShop } = useCurrentShop();
 
   return (
@@ -32,7 +34,12 @@ export default function ShopSelectorClient({ shops, selectedShopId }: Props) {
         document.cookie = `activeShopId=${id}; path=/; max-age=${
           60 * 60 * 24 * 30
         }`;
-        router.push(`/dashboard/cash?shopId=${id}`);
+        const href = `/dashboard/cash?shopId=${id}`;
+        if (!online) {
+          window.location.assign(href);
+          return;
+        }
+        router.push(href);
       }}
     >
       <SelectTrigger className="h-11 w-full sm:w-[220px] border border-border bg-card text-left text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
