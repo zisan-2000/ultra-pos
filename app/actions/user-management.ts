@@ -82,7 +82,7 @@ async function ensureOwnerOwnsStaffShop(ownerId: string, staffShopId?: string | 
   }
 
   const shop = await prisma.shop.findFirst({
-    where: { id: staffShopId, ownerId },
+    where: { id: staffShopId, ownerId, deletedAt: null },
     select: { id: true },
   });
 
@@ -274,7 +274,9 @@ export async function createUserWithRole(
       throw new Error("Shop is required for manager/staff users");
     }
 
-    const shop = await prisma.shop.findUnique({ where: { id: staffShopId } });
+    const shop = await prisma.shop.findFirst({
+      where: { id: staffShopId, deletedAt: null },
+    });
     if (!shop) {
       throw new Error("Invalid shop for user");
     }

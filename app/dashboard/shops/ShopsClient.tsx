@@ -246,7 +246,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
             alert("অফলাইন: কিউ থেকে দোকানটি সরানো হয়েছে।");
           } else {
             await queueAdminAction("shop_delete", { id });
-            alert("অফলাইন: দোকান মুছে ফেলা কিউ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+            alert("অফলাইন: দোকান আর্কাইভ কিউ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
           }
           return;
         }
@@ -259,7 +259,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
         const message =
           err instanceof Error && err.message
             ? err.message
-            : "Shop delete failed.";
+            : "Shop archive failed.";
         alert(message);
       } finally {
         setDeletingId(null);
@@ -364,7 +364,7 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
                 disabled:opacity-60 disabled:cursor-not-allowed
               "
             >
-              {deletingId === shop.id ? "মুছছে..." : "মুছুন"}
+              {deletingId === shop.id ? "আর্কাইভ হচ্ছে..." : "আর্কাইভ"}
             </button>
           ) : null}
         </div>
@@ -578,13 +578,13 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
       )}
       <ConfirmDialog
         open={Boolean(confirmDeleteId)}
-        title="দোকান মুছে ফেলবেন?"
+        title="দোকান আর্কাইভ করবেন?"
         description={
           confirmShop
-            ? `${confirmShop.name} দোকানটি মুছে ফেলতে চান?`
-            : "এই দোকানটি মুছে ফেলতে চান?"
+            ? `${confirmShop.name} দোকানটি আর্কাইভ করতে চান?`
+            : "এই দোকানটি আর্কাইভ করতে চান?"
         }
-        confirmLabel="মুছুন"
+        confirmLabel="আর্কাইভ"
         cancelLabel="বাতিল"
         onOpenChange={(open) => {
           if (!open) setConfirmDeleteId(null);

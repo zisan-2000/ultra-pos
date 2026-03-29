@@ -3,7 +3,7 @@ import type { UserContext } from "@/lib/rbac";
 
 export async function assertShopAccess(shopId: string, user: UserContext) {
   const shop = await prisma.shop.findUnique({ where: { id: shopId } });
-  if (!shop) {
+  if (!shop || shop.deletedAt) {
     throw new Error("Shop not found");
   }
 

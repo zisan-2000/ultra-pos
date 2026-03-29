@@ -40,7 +40,7 @@ export default async function AgentDashboardPage() {
   const shops =
     ownerIds.length > 0
       ? await prisma.shop.findMany({
-          where: { ownerId: { in: ownerIds } },
+          where: { ownerId: { in: ownerIds }, deletedAt: null },
           select: { id: true, ownerId: true },
         })
       : [];

@@ -330,6 +330,7 @@ export async function runDailySmsSummaryJob(
 
   const shops = await prisma.shop.findMany({
     where: {
+      deletedAt: null,
       smsSummaryEntitled: true,
       smsSummaryEnabled: true,
     },

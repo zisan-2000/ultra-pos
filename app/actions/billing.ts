@@ -27,8 +27,8 @@ export async function submitPaymentRequest(formData: FormData) {
 
   const method = ALLOWED_METHODS.has(methodRaw) ? methodRaw : "other";
 
-  const shop = await prisma.shop.findUnique({
-    where: { id: shopId },
+  const shop = await prisma.shop.findFirst({
+    where: { id: shopId, deletedAt: null },
     select: { id: true, ownerId: true },
   });
 

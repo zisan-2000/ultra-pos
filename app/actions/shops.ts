@@ -126,7 +126,7 @@ export async function createShop(data: {
     }
 
     const existingCount = await prisma.shop.count({
-      where: { ownerId: user.id },
+      where: { ownerId: user.id, deletedAt: null },
     });
 
     if (existingCount > 0) {
@@ -327,6 +327,7 @@ export async function getShopsByUser() {
 
   if (isSuperAdmin) {
     const shops = await prisma.shop.findMany({
+      where: { deletedAt: null },
       include: { owner: { select: ownerSelect } },
       orderBy: [{ ownerId: "asc" }, { createdAt: "desc" }, { name: "asc" }],
     });
@@ -339,11 +340,11 @@ export async function getShopsByUser() {
       where: { id: user.staffShopId },
       include: { owner: { select: ownerSelect } },
     });
-    return shop ? [serializeShopForClient(shop)] : [];
+    return shop && !shop.deletedAt ? [serializeShopForClient(shop)] : [];
   }
 
   const shops = await prisma.shop.findMany({
-    where: { ownerId: user.id },
+    where: { ownerId: user.id, deletedAt: null },
     include: { owner: { select: ownerSelect } },
     orderBy: [{ createdAt: "desc" }, { name: "asc" }],
   });
@@ -581,48 +582,18 @@ export async function deleteShop(id: string) {
   }
 
   await prisma.$transaction(async (tx) => {
-    const saleIds = await tx.sale.findMany({
-      where: { shopId: id },
-      select: { id: true },
+    await tx.user.updateMany({
+      where: { staffShopId: id },
+      data: { staffShopId: null },
     });
-    const productIds = await tx.product.findMany({
-      where: { shopId: id },
-      select: { id: true },
+    await tx.shop.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        smsSummaryEnabled: false,
+        queueTokenEnabled: false,
+      },
     });
-    const invoiceIds = await tx.invoice.findMany({
-      where: { shopId: id },
-      select: { id: true },
-    });
-
-    if (saleIds.length) {
-      await tx.saleItem.deleteMany({
-        where: { saleId: { in: saleIds.map((s) => s.id) } },
-      });
-    }
-    if (productIds.length) {
-      await tx.saleItem.deleteMany({
-        where: { productId: { in: productIds.map((p) => p.id) } },
-      });
-    }
-
-    await tx.customerLedger.deleteMany({ where: { shopId: id } });
-    await tx.queueTokenItem.deleteMany({
-      where: { token: { shopId: id } },
-    });
-    await tx.queueToken.deleteMany({ where: { shopId: id } });
-    await tx.expense.deleteMany({ where: { shopId: id } });
-    await tx.cashEntry.deleteMany({ where: { shopId: id } });
-    await tx.sale.deleteMany({ where: { shopId: id } });
-    await tx.customer.deleteMany({ where: { shopId: id } });
-    await tx.product.deleteMany({ where: { shopId: id } });
-    if (invoiceIds.length) {
-      await tx.invoicePayment.deleteMany({
-        where: { invoiceId: { in: invoiceIds.map((row) => row.id) } },
-      });
-    }
-    await tx.invoice.deleteMany({ where: { shopId: id } });
-    await tx.shopSubscription.deleteMany({ where: { shopId: id } });
-    await tx.shop.delete({ where: { id } });
   });
 
   return { success: true };

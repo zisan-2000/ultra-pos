@@ -181,6 +181,7 @@ model Shop {
   smsSummaryEntitled  Boolean  @default(false) @map("sms_summary_entitled")
   smsSummaryEnabled   Boolean  @default(false) @map("sms_summary_enabled")
   nextQueueTokenSeq   Int      @default(1) @map("next_queue_token_seq")
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(6)
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   owner            User                    @relation("OwnerShops", fields: [ownerId], references: [id])
