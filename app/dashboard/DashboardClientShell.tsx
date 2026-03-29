@@ -8,6 +8,7 @@ import OfflineCapabilityGuard from "@/components/offline-capability-guard";
 import { handlePermissionError } from "@/lib/permission-toast";
 import OfflineConflictBanner from "@/components/offline-conflict-banner";
 import SyncHealthBanner from "@/components/sync-health-banner";
+import OfflineUnlockGuard from "@/components/offline-unlock-guard";
 
 export default function DashboardClientShell({
   children,
@@ -36,6 +37,7 @@ export default function DashboardClientShell({
   return (
     <>
       <OfflineSessionGuard />
+      <OfflineUnlockGuard />
       <OfflineCapabilityGuard />
       <SyncBootstrap />
       <RealtimeBridge />

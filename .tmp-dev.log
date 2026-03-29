@@ -1,0 +1,23 @@
+
+> pos-app@0.1.0 dev
+> next dev
+
+⚠ Port 3000 is in use by process 23664, using available port 3001 instead.
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.92:3001
+- Environments: .env.local, .env
+
+✓ Starting...
+Creating turbopack project { dir: 'E:\\pos\\pos-app-supabase', testMode: true }
+✓ Ready in 2.7s
+ HEAD /api/auth/session-rbac 200 in 3.6s (compile: 3.5s, render: 84ms)
+○ Compiling /api/auth/session-rbac ...
+ HEAD /api/auth/token 401 in 3.7s (compile: 3.6s, render: 34ms)
+ HEAD /api/auth/sign-in/email 404 in 7.1s (compile: 7.1s, render: 45ms)
+2026-03-29T06:17:44.054Z ERROR [Better Auth]: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+# SERVER_ERROR:  SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+ POST /api/auth/sign-in/email 500 in 97ms (compile: 21ms, render: 76ms)
+2026-03-29T06:17:59.983Z ERROR [Better Auth]: User not found { email: 'nope@example.com' }
+ POST /api/auth/sign-in/email 401 in 1741ms (compile: 38ms, render: 1703ms)
