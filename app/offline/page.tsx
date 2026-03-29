@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import OfflineCenterClient from "./OfflineCenterClient";
 
 export default function OfflinePage() {
-  return <OfflineCenterClient />;
+  return (
+    <Suspense fallback={null}>
+      <OfflineCenterClient />
+    </Suspense>
+  );
 }
