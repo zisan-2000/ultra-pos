@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { isOfflineCapableRoute } from "@/lib/offline/offline-capable-routes";
+import OfflineAwareLink from "@/components/offline-aware-link";
 
 export default function OfflineCapabilityGuard() {
   const online = useOnlineStatus();
@@ -23,18 +23,18 @@ export default function OfflineCapabilityGuard() {
           area or reconnect.
         </p>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <Link
+          <OfflineAwareLink
             href="/offline"
             className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-muted px-4 text-sm font-semibold text-foreground hover:bg-muted/80"
           >
             Offline Page
-          </Link>
-          <Link
+          </OfflineAwareLink>
+          <OfflineAwareLink
             href="/dashboard/sales"
             className="inline-flex h-10 items-center justify-center rounded-xl border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/10"
           >
             Go to POS
-          </Link>
+          </OfflineAwareLink>
         </div>
       </div>
     </div>

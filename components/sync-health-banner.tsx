@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
@@ -8,6 +7,7 @@ import { clearSyncPause } from "@/lib/sync/pause";
 import { queueReviveDead } from "@/lib/sync/queue";
 import { runSyncEngine } from "@/lib/sync/sync-engine";
 import { useSyncQueueDetails } from "@/lib/sync/use-sync-queue-details";
+import OfflineAwareLink from "@/components/offline-aware-link";
 
 export default function SyncHealthBanner() {
   const online = useOnlineStatus();
@@ -93,12 +93,12 @@ export default function SyncHealthBanner() {
               >
                 {forcing ? "Syncing..." : "Force sync"}
               </button>
-              <Link
+              <OfflineAwareLink
                 href="/offline"
                 className="inline-flex h-9 items-center justify-center rounded-xl border border-primary/30 bg-card px-3 text-xs font-semibold text-primary hover:bg-primary/10"
               >
                 Offline center
-              </Link>
+              </OfflineAwareLink>
             </div>
           </div>
         </div>
@@ -154,12 +154,12 @@ export default function SyncHealthBanner() {
               >
                 {reviving ? "Retrying..." : "Retry failed"}
               </button>
-              <Link
+              <OfflineAwareLink
                 href="/offline/conflicts"
                 className="inline-flex h-9 items-center justify-center rounded-xl border border-danger/30 bg-card px-3 text-xs font-semibold text-danger hover:bg-danger/10"
               >
                 Review issues
-              </Link>
+              </OfflineAwareLink>
             </div>
           </div>
         </div>

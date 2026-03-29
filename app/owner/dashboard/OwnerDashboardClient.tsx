@@ -22,6 +22,7 @@ import {
   amountToBanglaWords,
   formatBanglaMoney,
 } from "@/lib/utils/bangla-money";
+import OfflineAwareLink from "@/components/offline-aware-link";
 
 type Summary = {
   sales?: { total?: number } | number;
@@ -640,7 +641,7 @@ export default function OwnerDashboardClient({
           <span className="text-xs text-muted-foreground">এক ক্লিকে শুরু</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <Link
+          <OfflineAwareLink
             href={`/dashboard/sales/new?shopId=${selectedShopId}`}
             className="group relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary-soft/60 via-card to-card p-3.5 text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] pressable min-h-[120px]"
           >
@@ -653,9 +654,9 @@ export default function OwnerDashboardClient({
               </p>
               <p className="text-xs text-muted-foreground">POS শুরু করুন</p>
             </div>
-          </Link>
+          </OfflineAwareLink>
 
-          <Link
+          <OfflineAwareLink
             href={`/dashboard/due?shopId=${selectedShopId}`}
             className="group relative overflow-hidden rounded-2xl border border-warning/20 bg-gradient-to-br from-warning-soft/70 via-card to-card p-3.5 text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] pressable min-h-[120px]"
           >
@@ -666,9 +667,9 @@ export default function OwnerDashboardClient({
               <p className="text-sm font-bold text-foreground">ধার বাকি</p>
               <p className="text-xs text-muted-foreground">বাকি লিখে রাখুন</p>
             </div>
-          </Link>
+          </OfflineAwareLink>
 
-          <Link
+          <OfflineAwareLink
             href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
             className="group relative overflow-hidden rounded-2xl border border-danger/20 bg-gradient-to-br from-danger-soft/60 via-card to-card p-3.5 text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] pressable min-h-[120px]"
           >
@@ -679,9 +680,9 @@ export default function OwnerDashboardClient({
               <p className="text-sm font-bold text-foreground">খরচ যোগ</p>
               <p className="text-xs text-muted-foreground">দ্রুত খরচ লিখুন</p>
             </div>
-          </Link>
+          </OfflineAwareLink>
 
-          <Link
+          <OfflineAwareLink
             href={`/dashboard/cash?shopId=${selectedShopId}`}
             className="group relative overflow-hidden rounded-2xl border border-success/20 bg-gradient-to-br from-success-soft/60 via-card to-card p-3.5 text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] pressable min-h-[120px]"
           >
@@ -692,9 +693,9 @@ export default function OwnerDashboardClient({
               <p className="text-sm font-bold text-foreground">ক্যাশবুক</p>
               <p className="text-xs text-muted-foreground">লেনদেন দেখুন</p>
             </div>
-          </Link>
+          </OfflineAwareLink>
 
-          <Link
+          <OfflineAwareLink
             href={`/dashboard/products/new?shopId=${selectedShopId}`}
             className="group relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-muted/30 p-3.5 text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] pressable min-h-[120px]"
           >
@@ -705,7 +706,7 @@ export default function OwnerDashboardClient({
               <p className="text-sm font-bold text-foreground">পণ্য যোগ</p>
               <p className="text-xs text-muted-foreground">নতুন পণ্য বানান</p>
             </div>
-          </Link>
+          </OfflineAwareLink>
 
           <Link
             href={`/dashboard/reports?shopId=${selectedShopId}`}

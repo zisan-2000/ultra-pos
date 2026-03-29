@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { liveQuery } from "dexie";
-import Link from "next/link";
 import { db, type LocalProduct, type LocalExpense, type LocalCashEntry } from "@/lib/dexie/db";
 import { queueAdd, queueRemoveByTypeAndId } from "@/lib/sync/queue";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import OfflineAwareLink from "@/components/offline-aware-link";
 
 type ConflictRow = {
   id: string;
@@ -277,12 +277,12 @@ export default function ConflictsClient() {
           <span>Cash: {grouped.cash.length}</span>
         </div>
         <div className="flex gap-2">
-          <Link
+          <OfflineAwareLink
             href="/dashboard"
             className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-muted px-3 text-xs font-semibold text-foreground hover:bg-muted/80"
           >
             Back to dashboard
-          </Link>
+          </OfflineAwareLink>
         </div>
       </div>
 

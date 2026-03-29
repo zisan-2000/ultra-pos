@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useConflictCounts } from "@/lib/sync/conflict-status";
+import OfflineAwareLink from "@/components/offline-aware-link";
 
 export default function OfflineConflictBanner() {
   const counts = useConflictCounts();
@@ -17,12 +17,12 @@ export default function OfflineConflictBanner() {
             {counts.total} item(s) need review before syncing.
           </span>
         </div>
-        <Link
+        <OfflineAwareLink
           href="/offline/conflicts"
           className="inline-flex h-9 items-center justify-center rounded-xl border border-warning/40 bg-card px-3 text-xs font-semibold text-warning hover:bg-warning/10"
         >
           Resolve Now
-        </Link>
+        </OfflineAwareLink>
       </div>
     </div>
   );
