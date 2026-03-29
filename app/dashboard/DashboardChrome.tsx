@@ -27,6 +27,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { SHOP_TYPES_WITH_COGS } from "@/lib/accounting/cogs-types";
 import { isOfflineCapableRoute } from "@/lib/offline/offline-capable-routes";
+import { getOfflineRouteFallbackHref } from "@/lib/offline/route-readiness";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import {
   BarChart3,
@@ -391,7 +392,7 @@ export function DashboardShell({
     event.preventDefault();
     const targetHref = buildShopHref(href);
     if (!online && isOfflineCapableRoute(href.split("?")[0] || href)) {
-      window.location.assign(targetHref);
+      window.location.assign(getOfflineRouteFallbackHref(targetHref));
       return;
     }
     startTransition(() => {
@@ -514,7 +515,7 @@ export function DashboardShell({
     params.set("shopId", id);
     const next = `${pathname}?${params.toString()}`;
     if (!online && isOfflineCapableRoute(pathname || "")) {
-      window.location.assign(next);
+      window.location.assign(getOfflineRouteFallbackHref(next));
       return;
     }
     startTransition(() => {

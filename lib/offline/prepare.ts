@@ -62,6 +62,11 @@ export async function prepareOfflineForShop(
         credentials: "include",
         headers: { "x-offline-warm": "1" },
       })
+        .then(() => {
+          // Ignore per-route readiness here. A route becomes "ready" only after
+          // it has actually rendered online once, which guarantees its app
+          // shell and route bundle were loaded by the browser.
+        })
     )
   );
 

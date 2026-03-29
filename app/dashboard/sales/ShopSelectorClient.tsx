@@ -5,6 +5,7 @@
 import { useRouter } from "next/navigation";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { getOfflineRouteFallbackHref } from "@/lib/offline/route-readiness";
 import {
   Select,
   SelectContent,
@@ -46,7 +47,7 @@ export default function ShopSelectorClient({
         if (to) params.set("to", to);
         const href = `/dashboard/sales?${params.toString()}`;
         if (!online) {
-          window.location.assign(href);
+          window.location.assign(getOfflineRouteFallbackHref(href));
           return;
         }
         router.push(href);

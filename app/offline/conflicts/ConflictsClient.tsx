@@ -6,6 +6,7 @@ import { db, type LocalProduct, type LocalExpense, type LocalCashEntry } from "@
 import { queueAdd, queueRemoveByTypeAndId } from "@/lib/sync/queue";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import OfflineAwareLink from "@/components/offline-aware-link";
+import { markOfflineRouteReady } from "@/lib/offline/route-readiness";
 
 type ConflictRow = {
   id: string;
@@ -35,6 +36,11 @@ const toTimestamp = (value?: string | number | Date | null) => {
 export default function ConflictsClient() {
   const online = useOnlineStatus();
   const [state, setState] = useState<ConflictState>(emptyState);
+
+  useEffect(() => {
+    if (!online) return;
+    markOfflineRouteReady("/offline/conflicts");
+  }, [online]);
 
   useEffect(() => {
     const sub = liveQuery(async () => {

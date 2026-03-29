@@ -5,6 +5,7 @@
 import { useRouter } from "next/navigation";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { getOfflineRouteFallbackHref } from "@/lib/offline/route-readiness";
 import {
   Select,
   SelectContent,
@@ -36,7 +37,7 @@ export default function DueShopSelector({ shops, selectedShopId }: Props) {
         }`;
         const href = `/dashboard/due?shopId=${id}`;
         if (!online) {
-          window.location.assign(href);
+          window.location.assign(getOfflineRouteFallbackHref(href));
           return;
         }
         router.push(href);

@@ -4,8 +4,9 @@ import Link, { type LinkProps } from "next/link";
 import { type AnchorHTMLAttributes, type MouseEvent } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { isOfflineCapableRoute } from "@/lib/offline/offline-capable-routes";
+import { getOfflineRouteFallbackHref } from "@/lib/offline/route-readiness";
 
-type OfflineAwareLinkProps = LinkProps &
+export type OfflineAwareLinkProps = LinkProps &
   Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof LinkProps> & {
     href: string;
   };
@@ -41,7 +42,7 @@ export default function OfflineAwareLink({
 
     if (!online && isOfflineCapableRoute(getPathname(href))) {
       event.preventDefault();
-      window.location.assign(href);
+      window.location.assign(getOfflineRouteFallbackHref(href));
     }
   };
 

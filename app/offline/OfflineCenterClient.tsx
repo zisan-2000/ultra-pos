@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { liveQuery } from "dexie";
 import { useEffect, useMemo, useState } from "react";
 import { db } from "@/lib/dexie/db";
+import OfflineAwareLink from "@/components/offline-aware-link";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { useSyncQueueDetails } from "@/lib/sync/use-sync-queue-details";
@@ -12,8 +12,13 @@ import { queueReviveDead } from "@/lib/sync/queue";
 import { runSyncEngine } from "@/lib/sync/sync-engine";
 import { getRememberedOfflineProfile } from "@/lib/offline-auth";
 import { prepareOfflineForShop } from "@/lib/offline/prepare";
+import {
+  isOfflineRouteReady,
+  markOfflineRouteReady,
+} from "@/lib/offline/route-readiness";
 import { safeLocalStorageGet } from "@/lib/storage";
 import { useCurrentShop } from "@/hooks/use-current-shop";
+import { useSearchParams } from "next/navigation";
 
 type OfflineMetrics = {
   shopId: string | null;
@@ -141,6 +146,7 @@ function readOwnerSnapshot(profileUserId: string | null): OwnerSnapshot | null {
 
 export default function OfflineCenterClient() {
   const online = useOnlineStatus();
+  const searchParams = useSearchParams();
   const { shopId: currentShopId } = useCurrentShop();
   const { pendingCount, deadCount, lastSyncAt, lastError, pausedUntil } =
     useSyncStatus();
@@ -160,6 +166,11 @@ export default function OfflineCenterClient() {
 
   useEffect(() => {
     setProfile(getRememberedOfflineProfile());
+  }, [online]);
+
+  useEffect(() => {
+    if (!online) return;
+    markOfflineRouteReady("/offline");
   }, [online]);
 
   useEffect(() => {
@@ -238,47 +249,15 @@ export default function OfflineCenterClient() {
   }, [currentShopId, metrics.shopId]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const checkRoutes = async () => {
-      const routes = toRouteStatuses(metrics.shopId || currentShopId);
-      if (typeof window === "undefined" || !("caches" in window)) {
-        if (!cancelled) setRouteStatuses(routes);
-        return;
-      }
-
-      const cacheNames = (await caches.keys()).filter((key) =>
-        key.startsWith("pos-cache-")
-      );
-      const next = await Promise.all(
-        routes.map(async (route) => {
-          const path = normalizePathname(route.href);
-          let cached = false;
-          for (const cacheName of cacheNames) {
-            const cache = await caches.open(cacheName);
-            const match = await cache.match(
-              new Request(`${window.location.origin}${path}`)
-            );
-            if (match) {
-              cached = true;
-              break;
-            }
-          }
-          return { ...route, cached };
-        })
-      );
-
-      if (!cancelled) {
-        setRouteStatuses(next);
-      }
-    };
-
-    void checkRoutes();
-
-    return () => {
-      cancelled = true;
-    };
+    const routes = toRouteStatuses(metrics.shopId || currentShopId);
+    const next = routes.map((route) => ({
+      ...route,
+      cached: isOfflineRouteReady(route.href),
+    }));
+    setRouteStatuses(next);
   }, [metrics.shopId, currentShopId, preparing, lastSyncAt]);
+
+  const missingRoute = searchParams?.get("missingRoute") || null;
 
   const readyRoutesCount = routeStatuses.filter((route) => route.cached).length;
   const pendingSummary = useMemo(
@@ -292,7 +271,9 @@ export default function OfflineCenterClient() {
 
   const readinessLabel = useMemo(() => {
     if (!profile) return "remembered user নেই";
-    if (readyRoutesCount < routeStatuses.length) return "কিছু route এখনো cached না";
+    if (readyRoutesCount < routeStatuses.length) {
+      return "কিছু route এখনো fully ready না";
+    }
     if (metrics.products === 0 || metrics.sales === 0) return "core data cache কম";
     if (pendingCount > 0 || deadCount > 0) return "sync queue pending";
     return "Offline ready";
@@ -378,15 +359,28 @@ export default function OfflineCenterClient() {
             >
               {forcing ? "Syncing..." : "Force sync"}
             </button>
-            <Link
+            <OfflineAwareLink
               href="/offline/conflicts"
               className="inline-flex h-10 items-center justify-center rounded-xl border border-warning/30 bg-warning-soft px-4 text-sm font-semibold text-warning hover:bg-warning/15"
             >
               Conflict center
-            </Link>
+            </OfflineAwareLink>
           </div>
         </div>
       </div>
+
+      {missingRoute ? (
+        <div className="rounded-2xl border border-warning/30 bg-warning-soft/40 p-4 shadow-sm">
+          <h2 className="text-base font-semibold text-foreground">
+            এই route এখনো offline-ready হয়নি
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{missingRoute}</span> route
+            এখনও fully ready হয়নি। route-টা অন্তত একবার online খুলুন, তারপর
+            offline use করুন।
+          </p>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -433,7 +427,7 @@ export default function OfflineCenterClient() {
                 Route readiness
               </h2>
               <p className="text-xs text-muted-foreground">
-                Cached routes: {readyRoutesCount}/{routeStatuses.length}
+                Fully ready routes: {readyRoutesCount}/{routeStatuses.length}
               </p>
             </div>
             <span className="text-xs font-semibold text-muted-foreground">
@@ -456,7 +450,7 @@ export default function OfflineCenterClient() {
                       : "bg-warning-soft text-warning"
                   }`}
                 >
-                  {route.cached ? "cached" : "pending"}
+                  {route.cached ? "ready" : "open online once"}
                 </span>
               </div>
             ))}

@@ -6,6 +6,7 @@ import { ShopSwitcher } from "@/components/shop/shop-switcher";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { useRouter } from "next/navigation";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { getOfflineRouteFallbackHref } from "@/lib/offline/route-readiness";
 
 type Shop = {
   id: string;
@@ -42,7 +43,7 @@ export function ShopSwitcherClient({
     if (status !== "all") params.set("status", status);
     const href = `/dashboard/products?${params.toString()}`;
     if (!online) {
-      window.location.assign(href);
+      window.location.assign(getOfflineRouteFallbackHref(href));
       return;
     }
     router.push(href);

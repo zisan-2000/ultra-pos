@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import SyncBootstrap from "@/components/sync-bootstrap";
 import RealtimeBridge from "@/components/realtime/RealtimeBridge";
 import OfflineSessionGuard from "@/components/offline-session-guard";
@@ -14,6 +15,8 @@ import {
   getLastOfflinePreparedAt,
   prepareOfflineForShop,
 } from "@/lib/offline/prepare";
+import { isOfflineCapableRoute } from "@/lib/offline/offline-capable-routes";
+import { markOfflineRouteReady } from "@/lib/offline/route-readiness";
 
 const AUTO_PREPARE_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -23,6 +26,7 @@ export default function DashboardClientShell({
   children: ReactNode;
 }) {
   const online = useOnlineStatus();
+  const pathname = usePathname();
   const { shopId } = useCurrentShop();
 
   useEffect(() => {
@@ -70,6 +74,12 @@ export default function DashboardClientShell({
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [online, shopId]);
+
+  useEffect(() => {
+    if (!online || !pathname) return;
+    if (!isOfflineCapableRoute(pathname)) return;
+    markOfflineRouteReady(pathname);
+  }, [online, pathname]);
 
   return (
     <>
