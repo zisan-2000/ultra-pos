@@ -53,7 +53,15 @@ const NAVIGATION_CACHE_PREFIXES = [
 const NAVIGATION_WARM_ROUTES = [
   "/dashboard",
   "/dashboard/sales",
+  "/dashboard/sales/new",
   "/dashboard/products",
+  "/dashboard/products/new",
+  "/dashboard/expenses",
+  "/dashboard/expenses/new",
+  "/dashboard/cash",
+  "/dashboard/cash/new",
+  "/dashboard/due",
+  "/offline/conflicts",
 ];
 const NAVIGATION_FALLBACKS = {
   "/dashboard": [

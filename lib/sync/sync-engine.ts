@@ -331,6 +331,18 @@ async function runSyncEngineInternal() {
   const productConflictActions = new Map<string, "update" | "delete">();
   const expenseConflictActions = new Map<string, "update" | "delete">();
   const cashConflictActions = new Map<string, "update" | "delete">();
+  const productConflictMeta = new Map<
+    string,
+    { reason?: string; serverUpdatedAt?: string }
+  >();
+  const expenseConflictMeta = new Map<
+    string,
+    { reason?: string; serverUpdatedAt?: string }
+  >();
+  const cashConflictMeta = new Map<
+    string,
+    { reason?: string; serverUpdatedAt?: string }
+  >();
 
   // --------------------------
   // Group items by type/action
@@ -485,6 +497,10 @@ async function runSyncEngineInternal() {
             deleteConflicts.add(conflict.id);
             productConflictActions.set(conflict.id, "delete");
           }
+          productConflictMeta.set(conflict.id, {
+            reason: conflict.reason,
+            serverUpdatedAt: conflict.serverUpdatedAt,
+          });
         }
         if (updateConflicts.size > 0) {
           productSyncedIds = productSyncedIds.filter(
@@ -552,6 +568,10 @@ async function runSyncEngineInternal() {
             deleteConflicts.add(conflict.id);
             expenseConflictActions.set(conflict.id, "delete");
           }
+          expenseConflictMeta.set(conflict.id, {
+            reason: conflict.reason,
+            serverUpdatedAt: conflict.serverUpdatedAt,
+          });
         }
         if (updateConflicts.size > 0) {
           expenseSyncedIds = expenseSyncedIds.filter(
@@ -599,6 +619,10 @@ async function runSyncEngineInternal() {
             deleteConflicts.add(conflict.id);
             cashConflictActions.set(conflict.id, "delete");
           }
+          cashConflictMeta.set(conflict.id, {
+            reason: conflict.reason,
+            serverUpdatedAt: conflict.serverUpdatedAt,
+          });
         }
         if (updateConflicts.size > 0) {
           cashSyncedIds = cashSyncedIds.filter(
@@ -698,6 +722,8 @@ async function runSyncEngineInternal() {
                     syncStatus: "synced",
                     updatedAt: toTimestamp(row.updatedAt ?? now),
                     conflictAction: undefined,
+                    conflictReason: undefined,
+                    conflictServerUpdatedAt: undefined,
                     deletedAt: undefined,
                   };
                   if (row.isActive !== undefined) next.isActive = row.isActive;
@@ -717,6 +743,11 @@ async function runSyncEngineInternal() {
                     db.products.update(pid, {
                       syncStatus: "conflict",
                       conflictAction: action,
+                      conflictReason:
+                        productConflictMeta.get(pid)?.reason ??
+                        "Server conflict detected",
+                      conflictServerUpdatedAt:
+                        productConflictMeta.get(pid)?.serverUpdatedAt ?? null,
                     })
                 )
               );
@@ -736,6 +767,8 @@ async function runSyncEngineInternal() {
                     syncStatus: "synced",
                     updatedAt: toTimestamp(row.updatedAt ?? now),
                     conflictAction: undefined,
+                    conflictReason: undefined,
+                    conflictServerUpdatedAt: undefined,
                     deletedAt: undefined,
                   })
                 )
@@ -748,6 +781,11 @@ async function runSyncEngineInternal() {
                     db.expenses.update(eid, {
                       syncStatus: "conflict",
                       conflictAction: action,
+                      conflictReason:
+                        expenseConflictMeta.get(eid)?.reason ??
+                        "Server conflict detected",
+                      conflictServerUpdatedAt:
+                        expenseConflictMeta.get(eid)?.serverUpdatedAt ?? null,
                     })
                 )
               );
@@ -763,6 +801,8 @@ async function runSyncEngineInternal() {
                     syncStatus: "synced",
                     updatedAt: toTimestamp(row.updatedAt ?? now),
                     conflictAction: undefined,
+                    conflictReason: undefined,
+                    conflictServerUpdatedAt: undefined,
                     deletedAt: undefined,
                   })
                 )
@@ -775,6 +815,11 @@ async function runSyncEngineInternal() {
                     db.cash.update(cid, {
                       syncStatus: "conflict",
                       conflictAction: action,
+                      conflictReason:
+                        cashConflictMeta.get(cid)?.reason ??
+                        "Server conflict detected",
+                      conflictServerUpdatedAt:
+                        cashConflictMeta.get(cid)?.serverUpdatedAt ?? null,
                     })
                 )
               );

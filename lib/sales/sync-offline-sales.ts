@@ -4,6 +4,12 @@ import {
   type SaleDiscountType,
 } from "@/lib/sales/discount";
 import { computeSaleTax } from "@/lib/sales/tax";
+import {
+  formatSalesInvoiceNo,
+  parseSalesInvoiceSequence,
+  resolveSalesInvoicePrefix,
+  sanitizeSalesInvoicePrefix,
+} from "@/lib/sales/invoice-format";
 
 export type IncomingSaleItem = {
   productId: string;
@@ -29,6 +35,8 @@ export type IncomingSale = {
   taxRate?: string | number | null;
   taxAmount?: string | number;
   totalAmount?: string | number;
+  invoiceNo?: string | null;
+  invoiceIssuedAt?: number | string | null;
   createdAt?: number | string;
 };
 
@@ -63,8 +71,6 @@ const SHOP_TYPES_WITH_COGS = new Set([
   "cosmetics_gift",
   "mini_wholesale",
 ]);
-
-const DEFAULT_SALES_INVOICE_PREFIX = "INV";
 
 function hasPermission(user: SalesFlowUser, permission: string) {
   if (user.roles.includes("super_admin")) return true;
@@ -101,29 +107,6 @@ function toDhakaBusinessDate(input?: Date | string | number | null) {
   return new Date(`${day}T00:00:00.000Z`);
 }
 
-function sanitizeSalesInvoicePrefix(value?: string | null) {
-  const raw = value?.trim().toUpperCase() ?? "";
-  const cleaned = raw.replace(/[^A-Z0-9]/g, "").slice(0, 12);
-  return cleaned || null;
-}
-
-function resolveSalesInvoicePrefix(value?: string | null) {
-  return sanitizeSalesInvoicePrefix(value) ?? DEFAULT_SALES_INVOICE_PREFIX;
-}
-
-function formatSalesInvoiceNo(
-  prefix: string | null | undefined,
-  sequence: number,
-  issuedAt: Date = new Date()
-) {
-  const normalizedPrefix = resolveSalesInvoicePrefix(prefix);
-  const safeSeq = Math.max(1, Math.floor(sequence));
-  const yy = String(issuedAt.getUTCFullYear()).slice(-2);
-  const mm = String(issuedAt.getUTCMonth() + 1).padStart(2, "0");
-  const serial = String(safeSeq).padStart(6, "0");
-  return `${normalizedPrefix}-${yy}${mm}-${serial}`;
-}
-
 function canIssueSalesInvoice(
   user: SalesFlowUser,
   salesInvoiceEnabled?: boolean | null
@@ -156,6 +139,38 @@ async function allocateSalesInvoiceNumber(
   }
   return {
     invoiceNo: formatSalesInvoiceNo(row.prefix, seq, issuedAt),
+    issuedAt,
+  };
+}
+
+async function reserveProvidedInvoiceNumber(
+  tx: Prisma.TransactionClient,
+  shopId: string,
+  invoiceNo: string,
+  issuedAt: Date
+) {
+  const normalizedInvoiceNo = invoiceNo.trim().toUpperCase();
+  const existing = await tx.sale.findFirst({
+    where: { shopId, invoiceNo: normalizedInvoiceNo },
+    select: { id: true },
+  });
+  if (existing) {
+    return allocateSalesInvoiceNumber(tx, shopId, issuedAt);
+  }
+
+  const parsedSequence = parseSalesInvoiceSequence(normalizedInvoiceNo);
+  if (parsedSequence) {
+    await tx.$executeRaw(
+      Prisma.sql`
+        UPDATE "shops"
+        SET "next_sales_invoice_seq" = GREATEST(COALESCE("next_sales_invoice_seq", 1), ${parsedSequence + 1})
+        WHERE "id" = CAST(${shopId} AS uuid)
+      `
+    );
+  }
+
+  return {
+    invoiceNo: normalizedInvoiceNo,
     issuedAt,
   };
 }
@@ -259,6 +274,12 @@ export async function syncOfflineSalesBatch({
       user,
       (shop as any).salesInvoiceEnabled
     );
+    const requestedInvoiceNo =
+      typeof raw?.invoiceNo === "string" && raw.invoiceNo.trim()
+        ? raw.invoiceNo.trim()
+        : null;
+    const requestedInvoiceIssuedAt =
+      toDateOrUndefined(raw?.invoiceIssuedAt ?? undefined) ?? createdAt;
 
     if (clientSaleId) {
       const existingSale = await db.sale.findUnique({
@@ -385,7 +406,14 @@ export async function syncOfflineSalesBatch({
       }
 
       const issuedInvoice = shouldIssueSalesInvoice
-        ? await allocateSalesInvoiceNumber(tx, shopId, createdAt)
+        ? requestedInvoiceNo
+          ? await reserveProvidedInvoiceNumber(
+              tx,
+              shopId,
+              requestedInvoiceNo,
+              requestedInvoiceIssuedAt
+            )
+          : await allocateSalesInvoiceNumber(tx, shopId, createdAt)
         : null;
 
       const sale = await tx.sale.create({

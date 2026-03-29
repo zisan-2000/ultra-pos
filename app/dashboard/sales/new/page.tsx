@@ -28,6 +28,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
   const canViewDuePage = hasPermission(user, "view_due_summary");
   const canUseBarcodeScanPermission = hasPermission(user, "use_pos_barcode_scan");
   const canApplySaleDiscountPermission = hasPermission(user, "apply_sale_discount");
+  const canIssueSalesInvoicePermission = hasPermission(user, "issue_sales_invoice");
 
   if (!canViewProducts) {
     return (
@@ -88,6 +89,9 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
   const canUseSaleTax =
     Boolean((selectedShop as any).taxFeatureEntitled) &&
     Boolean((selectedShop as any).taxEnabled);
+  const canIssueSalesInvoice =
+    Boolean((selectedShop as any).salesInvoiceEnabled) &&
+    canIssueSalesInvoicePermission;
   const saleTaxLabel = String((selectedShop as any).taxLabel || "VAT");
   const saleTaxRate = Number((selectedShop as any).taxRate ?? 0);
   const products = await getActiveProductsByShop(selectedShopId);
@@ -149,6 +153,9 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       canUseSaleTax={canUseSaleTax}
       saleTaxLabel={saleTaxLabel}
       saleTaxRate={saleTaxRate}
+      canIssueSalesInvoice={canIssueSalesInvoice}
+      salesInvoicePrefix={(selectedShop as any).salesInvoicePrefix ?? null}
+      nextSalesInvoiceSeq={Number((selectedShop as any).nextSalesInvoiceSeq ?? 1)}
       submitSale={submitSale}
     />
   );

@@ -19,6 +19,7 @@ import {
   type OfflineAuthUser,
   type OfflineRememberedProfile,
 } from "@/lib/offline-auth";
+import { prepareOfflineForShop } from "@/lib/offline/prepare";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -73,12 +74,16 @@ export default function LoginPage() {
 
       const sessionUser = await fetchSessionRbacUser();
       if (!sessionUser) {
+        void prepareOfflineForShop(null, { runSync: false });
         router.push("/dashboard");
         return;
       }
 
       if (!isOfflineCapableUser(sessionUser)) {
         clearRememberedOfflineAuth();
+        void prepareOfflineForShop(sessionUser.staffShopId ?? null, {
+          runSync: false,
+        });
         router.push("/dashboard");
         return;
       }
@@ -87,6 +92,9 @@ export default function LoginPage() {
       setOfflineProfile(remembered);
       if (remembered && hasConfiguredOfflinePin(remembered)) {
         activateOfflineUnlock(remembered);
+        void prepareOfflineForShop(sessionUser.staffShopId ?? null, {
+          runSync: false,
+        });
         router.push("/dashboard");
         return;
       }

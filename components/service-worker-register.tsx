@@ -5,7 +5,16 @@ import { useEffect } from "react";
 const OFFLINE_WARM_ROUTES = [
   "/dashboard",
   "/dashboard/sales",
+  "/dashboard/sales/new",
   "/dashboard/products",
+  "/dashboard/products/new",
+  "/dashboard/expenses",
+  "/dashboard/expenses/new",
+  "/dashboard/cash",
+  "/dashboard/cash/new",
+  "/dashboard/due",
+  "/offline",
+  "/offline/conflicts",
 ];
 
 // Registers the service worker from the client to avoid making the layout a client component.

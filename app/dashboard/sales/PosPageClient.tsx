@@ -50,6 +50,7 @@ import useRealTimeReports from "@/hooks/useRealTimeReports";
 import { emitSaleUpdate } from "@/lib/events/reportEvents";
 import { computeSaleDiscount, type SaleDiscountType } from "@/lib/sales/discount";
 import { computeSaleTax } from "@/lib/sales/tax";
+import { reserveOfflineSalesInvoice } from "@/lib/offline/offline-sales-invoice";
 
 type ProductOption = {
   id: string;
@@ -93,6 +94,9 @@ type PosPageClientProps = {
   canUseSaleTax: boolean;
   saleTaxLabel: string;
   saleTaxRate: number;
+  canIssueSalesInvoice: boolean;
+  salesInvoicePrefix?: string | null;
+  nextSalesInvoiceSeq?: number;
   submitSale: (formData: FormData) => Promise<{
     success: boolean;
     saleId: string;
@@ -115,6 +119,9 @@ export function PosPageClient({
   canUseSaleTax,
   saleTaxLabel,
   saleTaxRate,
+  canIssueSalesInvoice,
+  salesInvoicePrefix,
+  nextSalesInvoiceSeq,
   submitSale,
 }: PosPageClientProps) {
   const router = useRouter();
@@ -719,8 +726,22 @@ export function PosPageClient({
       taxRate: saleTax.rate > 0 ? saleTax.rate.toFixed(2) : null,
       taxAmount: saleTax.taxAmount.toFixed(2),
       createdAt: nowTs,
+      invoiceNo: null as string | null,
+      invoiceIssuedAt: null as string | null,
       syncStatus: "new" as const,
     };
+
+    const offlineInvoice = reserveOfflineSalesInvoice({
+      shopId,
+      enabled: canIssueSalesInvoice,
+      prefix: salesInvoicePrefix,
+      nextSequence: nextSalesInvoiceSeq,
+      issuedAt: new Date(nowTs),
+    });
+    if (offlineInvoice) {
+      salePayload.invoiceNo = offlineInvoice.invoiceNo;
+      salePayload.invoiceIssuedAt = offlineInvoice.issuedAt;
+    }
 
     await db.transaction(
       "rw",
@@ -800,6 +821,10 @@ export function PosPageClient({
     );
     applyStockDelta(items);
     reportSale(totalVal);
+    setSuccess({
+      saleId: salePayload.id,
+      invoiceNo: salePayload.invoiceNo ?? null,
+    });
 
     toast.success(
       isDue

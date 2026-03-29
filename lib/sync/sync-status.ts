@@ -5,6 +5,10 @@ import { liveQuery } from "dexie";
 import { db } from "@/lib/dexie/db";
 import { SYNC_EVENT_NAME, type SyncEventDetail } from "./sync-events";
 import { getSyncPause } from "./pause";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+
+const LAST_SYNC_AT_KEY = "offline:sync:lastSuccessAt";
+const LAST_SYNC_ERROR_KEY = "offline:sync:lastError";
 
 type SyncStatus = {
   pendingCount: number;
@@ -20,8 +24,14 @@ export function useSyncStatus(): SyncStatus {
   const [pendingCount, setPendingCount] = useState(0);
   const [deadCount, setDeadCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
-  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
-  const [lastError, setLastError] = useState<string | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(() => {
+    const raw = safeLocalStorageGet(LAST_SYNC_AT_KEY);
+    const parsed = Number(raw ?? 0);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  });
+  const [lastError, setLastError] = useState<string | null>(
+    () => safeLocalStorageGet(LAST_SYNC_ERROR_KEY) || null
+  );
   const [pausedUntil, setPausedUntil] = useState<number | null>(null);
   const [pauseReason, setPauseReason] = useState<string | null>(null);
 
@@ -51,13 +61,18 @@ export function useSyncStatus(): SyncStatus {
       if (detail.status === "start") {
         setSyncing(true);
         setLastError(null);
+        safeLocalStorageSet(LAST_SYNC_ERROR_KEY, "");
       } else if (detail.status === "success") {
         setSyncing(false);
         setLastSyncAt(detail.at);
         setLastError(null);
+        safeLocalStorageSet(LAST_SYNC_AT_KEY, `${detail.at}`);
+        safeLocalStorageSet(LAST_SYNC_ERROR_KEY, "");
       } else if (detail.status === "error") {
         setSyncing(false);
-        setLastError(detail.error || "Sync failed");
+        const nextError = detail.error || "Sync failed";
+        setLastError(nextError);
+        safeLocalStorageSet(LAST_SYNC_ERROR_KEY, nextError);
       }
     };
 

@@ -13,6 +13,8 @@ type ConflictRow = {
   action: "update" | "delete";
   title: string;
   subtitle: string;
+  reason?: string | null;
+  serverUpdatedAt?: string | null;
   local: LocalProduct | LocalExpense | LocalCashEntry;
 };
 
@@ -51,6 +53,8 @@ export default function ConflictsClient() {
           action: p.conflictAction ?? "update",
           title: p.name,
           subtitle: `Category: ${p.category || "Uncategorized"}`,
+          reason: p.conflictReason ?? null,
+          serverUpdatedAt: p.conflictServerUpdatedAt ?? null,
           local: p,
         });
       });
@@ -62,6 +66,8 @@ export default function ConflictsClient() {
           action: e.conflictAction ?? "update",
           title: `${Number(e.amount || 0).toFixed(2)} expense`,
           subtitle: e.category || "Uncategorized",
+          reason: e.conflictReason ?? null,
+          serverUpdatedAt: e.conflictServerUpdatedAt ?? null,
           local: e,
         });
       });
@@ -73,6 +79,8 @@ export default function ConflictsClient() {
           action: c.conflictAction ?? "update",
           title: `${c.entryType || "IN"} ৳${Number(c.amount || 0).toFixed(2)}`,
           subtitle: c.reason || "Cash entry",
+          reason: c.conflictReason ?? null,
+          serverUpdatedAt: c.conflictServerUpdatedAt ?? null,
           local: c,
         });
       });
@@ -304,6 +312,16 @@ export default function ConflictsClient() {
                   <div className="mt-1 text-[11px] text-warning">
                     Conflict on {item.type} ({item.action})
                   </div>
+                  {item.reason ? (
+                    <div className="mt-1 text-[11px] text-warning/90">
+                      Reason: {item.reason}
+                    </div>
+                  ) : null}
+                  {item.serverUpdatedAt ? (
+                    <div className="text-[11px] text-muted-foreground">
+                      Server updated: {new Date(item.serverUpdatedAt).toLocaleString("bn-BD")}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button

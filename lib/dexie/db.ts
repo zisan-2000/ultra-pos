@@ -25,6 +25,8 @@ export type LocalProduct = {
   updatedAt: number; // timestamp for sync
   syncStatus: "new" | "updated" | "deleted" | "synced" | "conflict";
   conflictAction?: "update" | "delete";
+  conflictReason?: string;
+  conflictServerUpdatedAt?: string | null;
   deletedAt?: number;
 };
 
@@ -35,6 +37,7 @@ export type LocalSale = {
   items: any[];
   paymentMethod: string;
   invoiceNo?: string | null;
+  invoiceIssuedAt?: string | null;
   customerId?: string | null;
   note: string;
   subtotalAmount?: string;
@@ -76,6 +79,8 @@ export type LocalExpense = {
   updatedAt?: number;
   syncStatus: "new" | "updated" | "deleted" | "synced" | "conflict";
   conflictAction?: "update" | "delete";
+  conflictReason?: string;
+  conflictServerUpdatedAt?: string | null;
   deletedAt?: number;
 };
 
@@ -89,6 +94,8 @@ export type LocalCashEntry = {
   updatedAt?: number;
   syncStatus: "new" | "updated" | "deleted" | "synced" | "conflict";
   conflictAction?: "update" | "delete";
+  conflictReason?: string;
+  conflictServerUpdatedAt?: string | null;
   deletedAt?: number;
 };
 

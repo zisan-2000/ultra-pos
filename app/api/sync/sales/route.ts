@@ -41,6 +41,8 @@ const saleSchema = z.object({
   taxRate: z.union([z.string(), z.number()]).nullable().optional(),
   taxAmount: z.union([z.string(), z.number()]).optional(),
   totalAmount: z.union([z.string(), z.number()]).optional(),
+  invoiceNo: z.string().nullable().optional(),
+  invoiceIssuedAt: z.union([z.string(), z.number()]).nullable().optional(),
   createdAt: z.union([z.string(), z.number()]).optional(),
 });
 
