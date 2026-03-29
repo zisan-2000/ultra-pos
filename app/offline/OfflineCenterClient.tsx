@@ -10,10 +10,7 @@ import { useSyncQueueDetails } from "@/lib/sync/use-sync-queue-details";
 import { clearSyncPause } from "@/lib/sync/pause";
 import { queueReviveDead } from "@/lib/sync/queue";
 import { runSyncEngine } from "@/lib/sync/sync-engine";
-import {
-  getRememberedOfflineProfile,
-  hasConfiguredOfflinePin,
-} from "@/lib/offline-auth";
+import { getRememberedOfflineProfile } from "@/lib/offline-auth";
 import { prepareOfflineForShop } from "@/lib/offline/prepare";
 import { safeLocalStorageGet } from "@/lib/storage";
 import { useCurrentShop } from "@/hooks/use-current-shop";
@@ -145,7 +142,7 @@ function readOwnerSnapshot(profileUserId: string | null): OwnerSnapshot | null {
 export default function OfflineCenterClient() {
   const online = useOnlineStatus();
   const { shopId: currentShopId } = useCurrentShop();
-  const { pendingCount, deadCount, syncing, lastSyncAt, lastError, pausedUntil } =
+  const { pendingCount, deadCount, lastSyncAt, lastError, pausedUntil } =
     useSyncStatus();
   const { breakdown, deadItems, pendingItems } = useSyncQueueDetails();
   const [metrics, setMetrics] = useState<OfflineMetrics>(emptyMetrics);
@@ -155,12 +152,15 @@ export default function OfflineCenterClient() {
   const [preparing, setPreparing] = useState(false);
   const [forcing, setForcing] = useState(false);
   const [reviving, setReviving] = useState(false);
-  const profile = useMemo(() => getRememberedOfflineProfile(), []);
-  const hasPin = hasConfiguredOfflinePin(profile);
+  const [profile, setProfile] = useState(() => getRememberedOfflineProfile());
   const ownerSnapshot = useMemo(
     () => readOwnerSnapshot(profile?.userId ?? null),
     [profile?.userId]
   );
+
+  useEffect(() => {
+    setProfile(getRememberedOfflineProfile());
+  }, [online]);
 
   useEffect(() => {
     const sub = liveQuery(async () => {
@@ -180,10 +180,7 @@ export default function OfflineCenterClient() {
       dueCustomers.forEach((item) => shopIds.add(item.shopId));
 
       const activeShopId =
-        currentShopId ||
-        metrics.shopId ||
-        Array.from(shopIds)[0] ||
-        null;
+        currentShopId || metrics.shopId || Array.from(shopIds)[0] || null;
       if (!activeShopId) return emptyMetrics;
 
       const today = getDhakaDateString();
@@ -225,7 +222,8 @@ export default function OfflineCenterClient() {
         sales: sales.filter((item) => item.shopId === activeShopId).length,
         expenses: expenses.filter((item) => item.shopId === activeShopId).length,
         cash: cash.filter((item) => item.shopId === activeShopId).length,
-        dueCustomers: dueCustomers.filter((item) => item.shopId === activeShopId).length,
+        dueCustomers: dueCustomers.filter((item) => item.shopId === activeShopId)
+          .length,
         todaySales,
         todayExpenses,
         todayDueCollected,
@@ -293,17 +291,17 @@ export default function OfflineCenterClient() {
   );
 
   const readinessLabel = useMemo(() => {
-    if (!hasPin) return "PIN সেট করা হয়নি";
+    if (!profile) return "remembered user নেই";
     if (readyRoutesCount < routeStatuses.length) return "কিছু route এখনো cached না";
     if (metrics.products === 0 || metrics.sales === 0) return "core data cache কম";
     if (pendingCount > 0 || deadCount > 0) return "sync queue pending";
     return "Offline ready";
   }, [
     deadCount,
-    hasPin,
     metrics.products,
     metrics.sales,
     pendingCount,
+    profile,
     readyRoutesCount,
     routeStatuses.length,
   ]);
@@ -316,6 +314,7 @@ export default function OfflineCenterClient() {
         runSync: true,
       });
       await new Promise((resolve) => window.setTimeout(resolve, 1200));
+      setProfile(getRememberedOfflineProfile());
     } finally {
       setPreparing(false);
     }
@@ -416,9 +415,9 @@ export default function OfflineCenterClient() {
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <p className="text-xs text-muted-foreground">Offline PIN</p>
+          <p className="text-xs text-muted-foreground">Remembered user</p>
           <p className="mt-2 text-lg font-semibold text-foreground">
-            {hasPin ? "Configured" : "Not ready"}
+            {profile ? "Ready" : "Not ready"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {profile?.email || "Remembered user নেই"}
