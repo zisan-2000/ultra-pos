@@ -7,10 +7,15 @@ import { Switch } from "@/components/ui/switch";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
-import { suggestProductSku, updateProduct } from "@/app/actions/products";
+import {
+  generateProductBarcode,
+  suggestProductSku,
+  updateProduct,
+} from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
+import BarcodePreviewCard from "@/components/products/BarcodePreviewCard";
 import { handlePermissionError } from "@/lib/permission-toast";
 import {
   CAMERA_DUPLICATE_WINDOW_MS,
@@ -278,6 +283,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   const [sku, setSku] = useState((product.sku || "").toString());
   const [barcode, setBarcode] = useState((product.barcode || "").toString());
   const [skuLoading, setSkuLoading] = useState(false);
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [skuManuallyEdited, setSkuManuallyEdited] = useState(
     Boolean((product.sku || "").toString().trim())
   );
@@ -319,6 +325,23 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     },
     [name, product.id, shopId, skuManuallyEdited]
   );
+
+  const autoGenerateBarcode = useCallback(async () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+
+    try {
+      setBarcodeLoading(true);
+      const result = await generateProductBarcode(shopId, trimmedName, product.id);
+      if (result?.barcode) {
+        setBarcode(result.barcode);
+      }
+    } catch {
+      // Barcode generation failure should not block product form usage.
+    } finally {
+      setBarcodeLoading(false);
+    }
+  }, [name, product.id, shopId]);
 
   const voiceErrorText = voiceError ? `(${voiceError})` : "";
 
@@ -1338,6 +1361,15 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                 placeholder="যেমন: 8901234567890"
                 maxLength={80}
                 autoComplete="off"
+              />
+              <BarcodePreviewCard
+                value={barcode}
+                productName={name}
+                sellPrice={sellPrice}
+                generating={barcodeLoading}
+                onGenerate={() => {
+                  void autoGenerateBarcode();
+                }}
               />
             </div>
           </div>

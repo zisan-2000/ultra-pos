@@ -279,6 +279,11 @@ function buildSuggestedSkuBase(name: string) {
   return compact || "PRD";
 }
 
+function buildSuggestedBarcodeBase(name: string) {
+  const skuLikeBase = buildSuggestedSkuBase(name).replace(/-/g, "").slice(0, 8);
+  return skuLikeBase || "ITEM";
+}
+
 function normalizeBaseUnitInput(
   value: unknown,
   options?: { defaultValue?: string }
@@ -614,6 +619,56 @@ export async function suggestProductSku(
 
   const nextSequence = String(maxSequence + 1).padStart(3, "0");
   return { sku: `${base}-${nextSequence}` };
+}
+
+export async function generateProductBarcode(
+  shopId: string,
+  productName: string,
+  excludeProductId?: string | null
+) {
+  const user = await requireUser();
+  if (!hasAnyPermission(user, ["view_products", "create_product", "update_product"])) {
+    throw new Error("Forbidden: missing product access permission");
+  }
+  await assertShopAccess(shopId, user);
+
+  const normalizedName = String(productName || "").trim();
+  const base = buildSuggestedBarcodeBase(normalizedName || "ITEM");
+  const prefix = `BC-${base}`;
+
+  const rows = await prisma.product.findMany({
+    where: {
+      shopId,
+      ...(excludeProductId ? { id: { not: excludeProductId } } : {}),
+      barcode: {
+        startsWith: prefix,
+        mode: "insensitive",
+      },
+    },
+    select: { barcode: true },
+    take: 500,
+  });
+
+  const used = new Set(
+    rows
+      .map((row) => normalizeProductCodeInput(row.barcode))
+      .filter((value): value is string => Boolean(value))
+  );
+
+  let maxSequence = 0;
+  const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d{4})$`);
+
+  for (const barcode of used) {
+    const match = barcode.match(pattern);
+    if (!match) continue;
+    const seq = Number(match[1]);
+    if (Number.isFinite(seq) && seq > maxSequence) {
+      maxSequence = seq;
+    }
+  }
+
+  const nextSequence = String(maxSequence + 1).padStart(4, "0");
+  return { barcode: `${prefix}-${nextSequence}` };
 }
 
 // ---------------------------------

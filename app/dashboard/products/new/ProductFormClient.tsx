@@ -24,11 +24,16 @@ import { Switch } from "@/components/ui/switch";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
-import { createProduct, suggestProductSku } from "@/app/actions/products";
+import {
+  createProduct,
+  generateProductBarcode,
+  suggestProductSku,
+} from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
 import { emitProductEvent } from "@/lib/products/product-events";
+import BarcodePreviewCard from "@/components/products/BarcodePreviewCard";
 import { toast } from "sonner";
 import { handlePermissionError } from "@/lib/permission-toast";
 import {
@@ -251,6 +256,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
   const [skuLoading, setSkuLoading] = useState(false);
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [skuManuallyEdited, setSkuManuallyEdited] = useState(false);
   const [scanCode, setScanCode] = useState("");
   const [scanTarget, setScanTarget] = useState<"barcode" | "sku">("barcode");
@@ -291,6 +297,23 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
     },
     [name, shop.id, skuManuallyEdited]
   );
+
+  const autoGenerateBarcode = useCallback(async () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+
+    try {
+      setBarcodeLoading(true);
+      const result = await generateProductBarcode(shop.id, trimmedName);
+      if (result?.barcode) {
+        setBarcode(result.barcode);
+      }
+    } catch {
+      // Barcode generation failure should not block product form usage.
+    } finally {
+      setBarcodeLoading(false);
+    }
+  }, [name, shop.id]);
 
   const templateCategories = useMemo(
     () => dedupe(templates.map((t) => t.category).filter(Boolean) as string[]),
@@ -1502,6 +1525,15 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
                   placeholder="যেমন: 8901234567890"
                   maxLength={80}
                   autoComplete="off"
+                />
+                <BarcodePreviewCard
+                  value={barcode}
+                  productName={name}
+                  sellPrice={sellPrice}
+                  generating={barcodeLoading}
+                  onGenerate={() => {
+                    void autoGenerateBarcode();
+                  }}
                 />
               </div>
             </div>
