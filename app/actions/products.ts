@@ -4,7 +4,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
-import { requirePermission } from "@/lib/rbac";
+import { hasAnyPermission, requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
 import { Prisma } from "@prisma/client";
 import { revalidateReportsForProduct } from "@/lib/reports/revalidate";
@@ -162,6 +162,27 @@ function normalizeProductCodeInput(value: unknown) {
   const raw = value === null ? "" : String(value);
   const normalized = raw.trim().replace(/\s+/g, "").toUpperCase().slice(0, 80);
   return normalized || null;
+}
+
+function buildSuggestedSkuBase(name: string) {
+  const ascii = name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x00-\x7F]/g, "");
+
+  const cleaned = ascii
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  const compact = cleaned
+    .split("-")
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("-")
+    .slice(0, 18);
+
+  return compact || "PRD";
 }
 
 function normalizeBaseUnitInput(
@@ -443,6 +464,62 @@ export async function createProduct(input: CreateProductInput) {
 
   revalidateReportsForProduct();
   return { success: true, id: created.id };
+}
+
+export async function suggestProductSku(
+  shopId: string,
+  productName: string,
+  excludeProductId?: string | null
+) {
+  const user = await requireUser();
+  if (!hasAnyPermission(user, ["view_products", "create_product", "update_product"])) {
+    throw new Error("Forbidden: missing product access permission");
+  }
+  await assertShopAccess(shopId, user);
+
+  const normalizedName = String(productName || "").trim();
+  if (!normalizedName) {
+    return { sku: "" };
+  }
+
+  const base = buildSuggestedSkuBase(normalizedName);
+  const rows = await prisma.product.findMany({
+    where: {
+      shopId,
+      ...(excludeProductId ? { id: { not: excludeProductId } } : {}),
+      sku: {
+        startsWith: base,
+        mode: "insensitive",
+      },
+    },
+    select: { sku: true },
+    take: 200,
+  });
+
+  const used = new Set(
+    rows
+      .map((row) => normalizeProductCodeInput(row.sku))
+      .filter((value): value is string => Boolean(value))
+  );
+
+  if (!used.has(base)) {
+    return { sku: base };
+  }
+
+  let maxSequence = 0;
+  const pattern = new RegExp(`^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d{3,})$`);
+
+  for (const sku of used) {
+    const match = sku.match(pattern);
+    if (!match) continue;
+    const seq = Number(match[1]);
+    if (Number.isFinite(seq) && seq > maxSequence) {
+      maxSequence = seq;
+    }
+  }
+
+  const nextSequence = String(maxSequence + 1).padStart(3, "0");
+  return { sku: `${base}-${nextSequence}` };
 }
 
 // ---------------------------------

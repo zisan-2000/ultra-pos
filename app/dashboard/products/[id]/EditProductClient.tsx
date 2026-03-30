@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
-import { updateProduct } from "@/app/actions/products";
+import { suggestProductSku, updateProduct } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
@@ -277,6 +277,10 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   const [sellPrice, setSellPrice] = useState((product.sellPrice || "").toString());
   const [sku, setSku] = useState((product.sku || "").toString());
   const [barcode, setBarcode] = useState((product.barcode || "").toString());
+  const [skuLoading, setSkuLoading] = useState(false);
+  const [skuManuallyEdited, setSkuManuallyEdited] = useState(
+    Boolean((product.sku || "").toString().trim())
+  );
   const [scanCode, setScanCode] = useState("");
   const [scanTarget, setScanTarget] = useState<"barcode" | "sku">("barcode");
   const [scanFeedback, setScanFeedback] = useState<{
@@ -294,6 +298,27 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
+
+  const autoGenerateSku = useCallback(
+    async (force = false) => {
+      const trimmedName = name.trim();
+      if (!trimmedName) return;
+      if (!force && skuManuallyEdited) return;
+
+      try {
+        setSkuLoading(true);
+        const result = await suggestProductSku(shopId, trimmedName, product.id);
+        if (result?.sku) {
+          setSku(result.sku);
+        }
+      } catch {
+        // SKU suggestion failure should not block product form usage.
+      } finally {
+        setSkuLoading(false);
+      }
+    },
+    [name, product.id, shopId, skuManuallyEdited]
+  );
 
   const voiceErrorText = voiceError ? `(${voiceError})` : "";
 
@@ -637,6 +662,17 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       setSellPrice(parsed.price);
     }
   }
+
+  useEffect(() => {
+    if (!name.trim()) return;
+    if (skuManuallyEdited) return;
+
+    const timer = setTimeout(() => {
+      void autoGenerateSku(false);
+    }, 260);
+
+    return () => clearTimeout(timer);
+  }, [autoGenerateSku, name, skuManuallyEdited]);
 
   function startVoice() {
     if (listening) return;
@@ -1259,12 +1295,35 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                 name="sku"
                 type="text"
                 value={sku}
-                onChange={(e) => setSku(normalizeCodeInput(e.target.value))}
+                onChange={(e) => {
+                  setSku(normalizeCodeInput(e.target.value));
+                  setSkuManuallyEdited(true);
+                }}
                 className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder="যেমন: VEG-001"
                 maxLength={80}
                 autoComplete="off"
               />
+                <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  {skuLoading
+                    ? "SKU suggest করা হচ্ছে..."
+                    : skuManuallyEdited
+                    ? "Manual SKU চালু আছে, চাইলে আবার auto-generate করতে পারেন।"
+                    : "নাম অনুযায়ী auto-suggest হবে, চাইলে edit করতে পারবেন।"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSkuManuallyEdited(false);
+                    void autoGenerateSku(true);
+                  }}
+                  disabled={!name.trim() || skuLoading}
+                  className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-3 text-xs font-semibold text-foreground transition hover:bg-muted disabled:opacity-50"
+                >
+                  Auto SKU
+                </button>
+              </div>
             </div>
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-foreground">

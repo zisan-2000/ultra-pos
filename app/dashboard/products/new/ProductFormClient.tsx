@@ -24,7 +24,7 @@ import { Switch } from "@/components/ui/switch";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
-import { createProduct } from "@/app/actions/products";
+import { createProduct, suggestProductSku } from "@/app/actions/products";
 import { useRouter } from "next/navigation";
 import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
@@ -250,6 +250,8 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   const [sellPrice, setSellPrice] = useState("");
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
+  const [skuLoading, setSkuLoading] = useState(false);
+  const [skuManuallyEdited, setSkuManuallyEdited] = useState(false);
   const [scanCode, setScanCode] = useState("");
   const [scanTarget, setScanTarget] = useState<"barcode" | "sku">("barcode");
   const [scanFeedback, setScanFeedback] = useState<{
@@ -268,6 +270,27 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [isMounted, setIsMounted] = useState(false);
+
+  const autoGenerateSku = useCallback(
+    async (force = false) => {
+      const trimmedName = name.trim();
+      if (!trimmedName) return;
+      if (!force && skuManuallyEdited) return;
+
+      try {
+        setSkuLoading(true);
+        const result = await suggestProductSku(shop.id, trimmedName);
+        if (result?.sku) {
+          setSku(result.sku);
+        }
+      } catch {
+        // SKU suggestion failure should not block product form usage.
+      } finally {
+        setSkuLoading(false);
+      }
+    },
+    [name, shop.id, skuManuallyEdited]
+  );
 
   const templateCategories = useMemo(
     () => dedupe(templates.map((t) => t.category).filter(Boolean) as string[]),
@@ -724,6 +747,17 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       setSelectedCategory(byCategory);
     }
   }
+
+  useEffect(() => {
+    if (!name.trim()) return;
+    if (skuManuallyEdited) return;
+
+    const timer = setTimeout(() => {
+      void autoGenerateSku(false);
+    }, 260);
+
+    return () => clearTimeout(timer);
+  }, [autoGenerateSku, name, skuManuallyEdited]);
 
   function handleVoiceResult(spoken: string) {
     const parsed = parseProductText(spoken);
@@ -1425,12 +1459,35 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
                   name="sku"
                   type="text"
                   value={sku}
-                  onChange={(e) => setSku(normalizeCodeInput(e.target.value))}
+                  onChange={(e) => {
+                    setSku(normalizeCodeInput(e.target.value));
+                    setSkuManuallyEdited(true);
+                  }}
                   className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   placeholder="যেমন: VEG-001"
                   maxLength={80}
                   autoComplete="off"
                 />
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    {skuLoading
+                      ? "SKU suggest করা হচ্ছে..."
+                      : skuManuallyEdited
+                      ? "Manual SKU চালু আছে, চাইলে আবার auto-generate করতে পারেন।"
+                      : "নাম অনুযায়ী auto-suggest হবে, চাইলে edit করতে পারবেন।"}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSkuManuallyEdited(false);
+                      void autoGenerateSku(true);
+                    }}
+                    disabled={!name.trim() || skuLoading}
+                    className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-3 text-xs font-semibold text-foreground transition hover:bg-muted disabled:opacity-50"
+                  >
+                    Auto SKU
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-foreground">
