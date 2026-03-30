@@ -80,13 +80,13 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
   }
 
   for (const def of cookieDefs) {
-    const options = def!.options ?? {};
-    const { sameSite: rawSameSite, prefix: _prefix, ...rest } =
-      options as Record<string, unknown>;
+    const attributes = def!.attributes ?? {};
+    const { sameSite: rawSameSite, ...rest } =
+      attributes as Record<string, unknown>;
     const normalizedSameSite = normalizeSameSite(rawSameSite);
     const secure =
-      typeof options.secure === "boolean"
-        ? options.secure
+      typeof attributes.secure === "boolean"
+        ? attributes.secure
         : proto === "https" || def!.name.startsWith("__Secure-");
 
     const names = expandCookieNames(def!.name);
