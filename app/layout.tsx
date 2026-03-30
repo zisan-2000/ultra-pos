@@ -26,8 +26,9 @@ const notoBengali = Noto_Sans_Bengali({
 });
 
 export const metadata: Metadata = {
-  title: "আল্ট্রা পিওএস - দোকানের হিসাব",
-  description: "ছোট দোকানের জন্য সহজ বিক্রি ও হিসাব ব্যবস্থাপনা",
+  title: "মাইক্রো পিওএস - স্মার্ট ব্যবসা ব্যবস্থাপনা",
+  description:
+    "দ্রুত, সহজ ও নির্ভরযোগ্য পিওএস সফটওয়্যার—সব ধরনের দোকান ও ব্যবসার জন্য বিক্রি, স্টক ও হিসাব একসাথে",
   manifest: "/manifest.webmanifest",
 };
 
