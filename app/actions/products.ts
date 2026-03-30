@@ -164,8 +164,102 @@ function normalizeProductCodeInput(value: unknown) {
   return normalized || null;
 }
 
+const BANGLA_DIGIT_MAP: Record<string, string> = {
+  "০": "0",
+  "১": "1",
+  "২": "2",
+  "৩": "3",
+  "৪": "4",
+  "৫": "5",
+  "৬": "6",
+  "৭": "7",
+  "৮": "8",
+  "৯": "9",
+};
+
+const BANGLA_CHAR_MAP: Record<string, string> = {
+  "অ": "A",
+  "আ": "A",
+  "ই": "I",
+  "ঈ": "I",
+  "উ": "U",
+  "ঊ": "U",
+  "ঋ": "RI",
+  "এ": "E",
+  "ঐ": "OI",
+  "ও": "O",
+  "ঔ": "OU",
+  "ক": "K",
+  "খ": "KH",
+  "গ": "G",
+  "ঘ": "GH",
+  "ঙ": "NG",
+  "চ": "CH",
+  "ছ": "CHH",
+  "জ": "J",
+  "ঝ": "JH",
+  "ঞ": "NY",
+  "ট": "T",
+  "ঠ": "TH",
+  "ড": "D",
+  "ঢ": "DH",
+  "ণ": "N",
+  "ত": "T",
+  "থ": "TH",
+  "দ": "D",
+  "ধ": "DH",
+  "ন": "N",
+  "প": "P",
+  "ফ": "F",
+  "ব": "B",
+  "ভ": "BH",
+  "ম": "M",
+  "য": "Y",
+  "র": "R",
+  "ল": "L",
+  "শ": "SH",
+  "ষ": "SH",
+  "স": "S",
+  "হ": "H",
+  "ড়": "R",
+  "ঢ়": "RH",
+  "য়": "Y",
+  "ৎ": "T",
+  "ং": "N",
+  "ঃ": "H",
+  "ঁ": "N",
+  "া": "A",
+  "ি": "I",
+  "ী": "I",
+  "ু": "U",
+  "ূ": "U",
+  "ৃ": "RI",
+  "ে": "E",
+  "ৈ": "OI",
+  "ো": "O",
+  "ৌ": "OU",
+  "্": "",
+};
+
+function transliterateProductName(value: string) {
+  let output = "";
+  for (const char of value) {
+    if (BANGLA_DIGIT_MAP[char]) {
+      output += BANGLA_DIGIT_MAP[char];
+      continue;
+    }
+    if (BANGLA_CHAR_MAP[char] !== undefined) {
+      output += BANGLA_CHAR_MAP[char];
+      continue;
+    }
+    output += char;
+  }
+  return output;
+}
+
 function buildSuggestedSkuBase(name: string) {
-  const ascii = name
+  const transliterated = transliterateProductName(name);
+  const ascii = transliterated
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^\x00-\x7F]/g, "");
