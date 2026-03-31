@@ -39,7 +39,8 @@ import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
-import { useRealtimeStatus } from "@/lib/realtime/status";
+import { getPollingProfile } from "@/lib/polling/config";
+import { useSmartPolling } from "@/lib/polling/use-smart-polling";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import {
   emitDueCustomersEvent,
@@ -146,6 +147,7 @@ export function PosPageClient({
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
   const [barFlash, setBarFlash] = useState(false);
   const cartPanelRef = useRef<HTMLDivElement | null>(null);
+  const saleFormRef = useRef<HTMLFormElement | null>(null);
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
   const [productOptions, setProductOptions] = useState<ProductOption[]>(
     () =>
@@ -185,9 +187,9 @@ export function PosPageClient({
   } | null>(null);
   const [productsRefreshing, setProductsRefreshing] = useState(false);
   const online = useOnlineStatus();
-  const realtime = useRealtimeStatus();
   const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
+  const posPollingProfile = useMemo(() => getPollingProfile("pos"), []);
   const lastSyncLabel = useMemo(() => {
     if (!lastSyncAt) return null;
     return new Intl.DateTimeFormat("bn-BD", {
@@ -204,12 +206,6 @@ export function PosPageClient({
     setCustomerList([]);
   }, [shopId]);
   const refreshInFlightRef = useRef(false);
-  const lastRefreshAtRef = useRef(0);
-  const REFRESH_MIN_INTERVAL_MS = 15_000;
-  const lastEventAtRef = useRef(0);
-  const wasVisibleRef = useRef(isVisible);
-  const pollIntervalMs = realtime.connected ? 60_000 : 15_000;
-  const pollingEnabled = !realtime.connected;
   const canUseDueSale = canCreateDueSale && canViewCustomers;
   const isDue = paymentMethod === "due";
   const saleDiscount = useMemo(
@@ -335,8 +331,8 @@ export function PosPageClient({
     enabled: online && isDue && canViewCustomers,
     staleTime: 15_000,
     refetchInterval:
-      online && isDue && isVisible && pollingEnabled && canViewCustomers
-        ? pollIntervalMs
+      online && isDue && isVisible && canViewCustomers
+        ? posPollingProfile.intervalMs
         : false,
     initialData: () => (canViewCustomers ? customers ?? [] : []),
     placeholderData: (prev) => prev ?? [],
@@ -422,54 +418,21 @@ export function PosPageClient({
     }
   }, [products]);
 
-  useEffect(() => {
-    if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
-    if (refreshInFlightRef.current) return;
-    const now = Date.now();
-    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
-    refreshInFlightRef.current = true;
-    lastRefreshAtRef.current = now;
-    router.refresh();
-  }, [online, lastSyncAt, syncing, pendingCount, router]);
-
-  useEffect(() => {
-    if (!online || !isVisible || !pollingEnabled) return;
-    const intervalId = setInterval(() => {
-      const now = Date.now();
-      if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
-      if (refreshInFlightRef.current) return;
-      if (syncing || pendingCount > 0) return;
-      if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
-      refreshInFlightRef.current = true;
-      lastRefreshAtRef.current = now;
-      router.refresh();
-    }, pollIntervalMs);
-
-    return () => clearInterval(intervalId);
-  }, [
+  const { triggerRefresh } = useSmartPolling({
+    profile: "pos",
+    enabled: Boolean(shopId),
     online,
     isVisible,
-    pollingEnabled,
-    router,
-    syncing,
-    pendingCount,
-    pollIntervalMs,
-  ]);
-
-  useEffect(() => {
-    if (!online) return;
-    if (wasVisibleRef.current === isVisible) return;
-    wasVisibleRef.current = isVisible;
-    if (!isVisible) return;
-    const now = Date.now();
-    if (refreshInFlightRef.current) return;
-    if (syncing || pendingCount > 0) return;
-    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
-    lastEventAtRef.current = now;
-    lastRefreshAtRef.current = now;
-    refreshInFlightRef.current = true;
-    router.refresh();
-  }, [online, isVisible, router, syncing, pendingCount]);
+    blocked: syncing || pendingCount > 0,
+    syncToken: lastSyncAt,
+    canRefresh: () => !refreshInFlightRef.current,
+    markRefreshStarted: () => {
+      refreshInFlightRef.current = true;
+    },
+    onRefresh: () => {
+      router.refresh();
+    },
+  });
 
   useEffect(() => {
     if (!canUseDueSale && paymentMethod === "due") {
@@ -493,7 +456,6 @@ export function PosPageClient({
     if (!canViewCustomers) return;
     return subscribeDueCustomersEvent((detail) => {
       if (detail.shopId !== shopId) return;
-      lastEventAtRef.current = Date.now();
       loadCustomersFromDexie();
       if (online) {
         queryClient.invalidateQueries({
@@ -515,17 +477,11 @@ export function PosPageClient({
     return subscribeProductEvent((detail) => {
       if (detail.shopId !== shopId) return;
       const now = detail.at ?? Date.now();
-      lastEventAtRef.current = now;
       loadProductsFromDexie();
       if (!online) return;
-      if (syncing || pendingCount > 0) return;
-      if (refreshInFlightRef.current) return;
-      if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
-      refreshInFlightRef.current = true;
-      lastRefreshAtRef.current = now;
-      router.refresh();
+      triggerRefresh("event", { at: now });
     });
-  }, [loadProductsFromDexie, shopId, online, router, syncing, pendingCount]);
+  }, [loadProductsFromDexie, shopId, online, triggerRefresh]);
 
   // Keep Dexie seeded when online; load from Dexie when offline.
   useEffect(() => {
@@ -1019,17 +975,53 @@ export function PosPageClient({
     }
     if (productsRefreshing) return;
     setProductsRefreshing(true);
-    refreshInFlightRef.current = true;
-    lastRefreshAtRef.current = Date.now();
-    router.refresh();
+    triggerRefresh("manual", { force: true });
   };
+
+  const suspendScannerBeforeCheckout = useCallback((ms = 1600) => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("pos-scanner-suspend", {
+          detail: { shopId, ms },
+        })
+      );
+    }
+
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur();
+    }
+  }, [shopId]);
 
   const handleSellFromBar = () => {
     if (!canCreateSale) {
       toast.error("আপনার বিক্রি সম্পন্ন করার অনুমতি নেই।");
       return;
     }
-    submitButtonRef.current?.click();
+    suspendScannerBeforeCheckout();
+    const latestCartItems = useCart
+      .getState()
+      .items.filter((item) => item.shopId === shopId);
+
+    if (latestCartItems.length === 0) {
+      toast.warning("কার্টে কোনো পণ্য নেই।");
+      return;
+    }
+
+    const submitCurrentForm = () => {
+      saleFormRef.current?.requestSubmit(submitButtonRef.current ?? undefined);
+    };
+
+    if (items.length > 0) {
+      submitCurrentForm();
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        submitCurrentForm();
+      });
+    });
   };
 
   const handleClearFromBar = () => {
@@ -1424,9 +1416,10 @@ export function PosPageClient({
         </div>
 
         {/* Complete Sale Button */}
-        <form onSubmit={handleSubmit} className="mt-6 space-y-3">
+        <form ref={saleFormRef} onSubmit={handleSubmit} className="mt-6 space-y-3">
           <button
             type="submit"
+            onPointerDown={() => suspendScannerBeforeCheckout()}
             disabled={items.length === 0 || isSubmitting || !canCreateSale}
             ref={submitButtonRef}
             className="w-full h-14 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -1513,6 +1506,7 @@ export function PosPageClient({
               </button>
               <button
                 type="button"
+                onPointerDown={() => suspendScannerBeforeCheckout()}
                 onClick={handleSellFromBar}
                 disabled={isSubmitting || !canCreateSale}
                 className="flex-[1.2] px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold min-w-[140px] flex items-center justify-center gap-1 shadow-[0_10px_18px_rgba(22,163,74,0.28)] disabled:opacity-60"

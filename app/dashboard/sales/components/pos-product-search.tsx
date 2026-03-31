@@ -63,6 +63,11 @@ type CameraBarcodeDetector = {
   ) => Promise<Array<{ rawValue?: string }>>;
 };
 
+type ScannerSuspendDetail = {
+  shopId?: string;
+  ms?: number;
+};
+
 const QUICK_LIMIT = 8; // fixed slots so buttons never jump during a session
 const INITIAL_RENDER = 60;
 const RENDER_BATCH = 40;
@@ -272,6 +277,7 @@ export const PosProductSearch = memo(function PosProductSearch({
   );
   const scanIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scannerSuspendUntilRef = useRef(0);
   const cameraContinuousRef = useRef(false);
   const lastAddRef = useRef(0);
   const recentlyAddedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -355,20 +361,37 @@ export const PosProductSearch = memo(function PosProductSearch({
     setCameraTorchOn(false);
   }, []);
 
+  const clearScanTimers = useCallback(() => {
+    if (scanIdleTimerRef.current) {
+      clearTimeout(scanIdleTimerRef.current);
+      scanIdleTimerRef.current = null;
+    }
+    if (scanFocusTimerRef.current) {
+      clearTimeout(scanFocusTimerRef.current);
+      scanFocusTimerRef.current = null;
+    }
+  }, []);
+
+  const isScannerTemporarilySuspended = useCallback(
+    () => scannerSuspendUntilRef.current > Date.now(),
+    []
+  );
+
   const focusScanInput = useCallback(() => {
     const input = scanInputRef.current;
-    if (!input || cameraOpen) return;
+    if (!input || cameraOpen || isScannerTemporarilySuspended()) return;
     input.focus();
     input.select();
-  }, [cameraOpen]);
+  }, [cameraOpen, isScannerTemporarilySuspended]);
 
   const scheduleScanFocus = useCallback(
     (delay = 90) => {
+      if (isScannerTemporarilySuspended()) return;
       if (scanFocusTimerRef.current) {
         clearTimeout(scanFocusTimerRef.current);
       }
       scanFocusTimerRef.current = setTimeout(() => {
-        if (cameraOpen) return;
+        if (cameraOpen || isScannerTemporarilySuspended()) return;
         const active = document.activeElement as Element | null;
         if (active && active !== document.body && isEditableElement(active)) {
           return;
@@ -376,7 +399,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         focusScanInput();
       }, delay);
     },
-    [cameraOpen, focusScanInput]
+    [cameraOpen, focusScanInput, isScannerTemporarilySuspended]
   );
 
   useEffect(() => {
@@ -384,18 +407,39 @@ export const PosProductSearch = memo(function PosProductSearch({
   }, [stopCamera]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleScannerSuspend = (event: Event) => {
+      const detail = (event as CustomEvent<ScannerSuspendDetail>).detail;
+      if (detail?.shopId && detail.shopId !== shopId) return;
+
+      scannerSuspendUntilRef.current = Date.now() + Math.max(detail?.ms ?? 0, 600);
+      clearScanTimers();
+
+      if (document.activeElement === scanInputRef.current) {
+        scanInputRef.current?.blur();
+      }
+    };
+
+    window.addEventListener("pos-scanner-suspend", handleScannerSuspend as EventListener);
+    return () => {
+      window.removeEventListener(
+        "pos-scanner-suspend",
+        handleScannerSuspend as EventListener
+      );
+    };
+  }, [clearScanTimers, shopId]);
+
+  useEffect(() => {
     if (scannerAssistEnabled) return;
-    if (scanIdleTimerRef.current) {
-      clearTimeout(scanIdleTimerRef.current);
-      scanIdleTimerRef.current = null;
-    }
+    clearScanTimers();
     setScanCode("");
     setScanFeedback(null);
     if (cameraOpen) {
       setCameraOpen(false);
     }
     stopCamera();
-  }, [cameraOpen, scannerAssistEnabled, stopCamera]);
+  }, [cameraOpen, clearScanTimers, scannerAssistEnabled, stopCamera]);
 
   useEffect(() => {
     cameraContinuousRef.current = cameraContinuousMode;
@@ -409,12 +453,7 @@ export const PosProductSearch = memo(function PosProductSearch({
 
   useEffect(() => {
     return () => {
-      if (scanIdleTimerRef.current) {
-        clearTimeout(scanIdleTimerRef.current);
-      }
-      if (scanFocusTimerRef.current) {
-        clearTimeout(scanFocusTimerRef.current);
-      }
+      clearScanTimers();
       if (recentlyAddedTimeoutRef.current) {
         clearTimeout(recentlyAddedTimeoutRef.current);
       }
@@ -422,7 +461,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         clearTimeout(cooldownTimeoutRef.current);
       }
     };
-  }, []);
+  }, [clearScanTimers]);
 
   const bumpUsage = useCallback((productId: string) => {
     setUsage((prev) => {
@@ -949,9 +988,21 @@ export const PosProductSearch = memo(function PosProductSearch({
   }, [cameraOpen]);
 
   useEffect(() => {
-    if (!canUseBarcodeScan || !scannerAssistEnabled || cameraOpen) return;
+    if (
+      !canUseBarcodeScan ||
+      !scannerAssistEnabled ||
+      cameraOpen ||
+      isScannerTemporarilySuspended()
+    )
+      return;
     scheduleScanFocus(140);
-  }, [canUseBarcodeScan, cameraOpen, scannerAssistEnabled, scheduleScanFocus]);
+  }, [
+    canUseBarcodeScan,
+    cameraOpen,
+    scannerAssistEnabled,
+    scheduleScanFocus,
+    isScannerTemporarilySuspended,
+  ]);
 
   useEffect(() => {
     if (!scanFeedback) return;
@@ -960,7 +1011,14 @@ export const PosProductSearch = memo(function PosProductSearch({
   }, [scanFeedback]);
 
   useEffect(() => {
-    if (!canUseBarcodeScan || !scannerAssistEnabled || cameraOpen || !scanCode) return;
+    if (
+      !canUseBarcodeScan ||
+      !scannerAssistEnabled ||
+      cameraOpen ||
+      !scanCode ||
+      isScannerTemporarilySuspended()
+    )
+      return;
     if (document.activeElement !== scanInputRef.current) return;
     const normalizedCode = normalizeCodeInput(scanCode);
     if (normalizedCode.length < 4) return;
@@ -980,7 +1038,14 @@ export const PosProductSearch = memo(function PosProductSearch({
         scanIdleTimerRef.current = null;
       }
     };
-  }, [cameraOpen, canUseBarcodeScan, handleScanLookup, scanCode, scannerAssistEnabled]);
+  }, [
+    cameraOpen,
+    canUseBarcodeScan,
+    handleScanLookup,
+    scanCode,
+    scannerAssistEnabled,
+    isScannerTemporarilySuspended,
+  ]);
 
   const startVoice = () => {
     if (listening) return;
@@ -1201,7 +1266,10 @@ export const PosProductSearch = memo(function PosProductSearch({
                         e.preventDefault();
                         handleScanLookup();
                       }}
-                      onBlur={() => scheduleScanFocus()}
+                      onBlur={() => {
+                        if (isScannerTemporarilySuspended()) return;
+                        scheduleScanFocus();
+                      }}
                       className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                       placeholder="Barcode / SKU স্ক্যান করুন"
                     />

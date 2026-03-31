@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useOnlineStatus } from "@/lib/sync/net-status";
+import { useSyncStatus } from "@/lib/sync/sync-status";
 import {
   computeRange,
   computePresetRange,
@@ -32,7 +33,7 @@ import { REPORT_MAX_RANGE_DAYS, REPORT_ROW_LIMIT } from "@/lib/reporting-config"
 import { scheduleIdle } from "@/lib/schedule-idle";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { reportEvents } from "@/lib/events/reportEvents";
-import { useRealtimeStatus } from "@/lib/realtime/status";
+import { useSmartPolling, type SmartPollingReason } from "@/lib/polling/use-smart-polling";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { generateCSV } from "@/lib/utils/csv";
@@ -346,9 +347,9 @@ export default function ReportsClient({
   summaryRange,
 }: Props) {
   const online = useOnlineStatus();
-  const realtime = useRealtimeStatus();
   const isVisible = usePageVisibility();
   const queryClient = useQueryClient();
+  const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
 
   const [active, setActive] = useState<(typeof NAV)[number]["key"]>("summary");
   const [preset, setPreset] = useState<RangePreset>("today");
@@ -361,15 +362,10 @@ export default function ReportsClient({
   const [exportOpen, setExportOpen] = useState(false);
   const [exportingKey, setExportingKey] = useState<ExportKey | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  const lastEventAtRef = useRef(0);
   const lastSummaryFreshAtRef = useRef(0);
   const summaryFreshInFlightRef = useRef<Promise<void> | null>(null);
   const lastRangeKeyRef = useRef<string | null>(null);
-  const wasVisibleRef = useRef(isVisible);
   const indicatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
-  const pollingEnabled = !realtime.connected;
-  const EVENT_DEBOUNCE_MS = 600;
   const customRangeValidation = useMemo(() => {
     if (preset !== "custom") {
       return { isValid: true, message: null as string | null };
@@ -678,6 +674,26 @@ export default function ReportsClient({
     invalidateLowStock,
   ]);
 
+  const handleSmartRefresh = useCallback(
+    (reason: SmartPollingReason) => {
+      const force =
+        reason === "sync" || reason === "focus" || reason === "reconnect";
+      refreshSummaryFresh(force);
+      invalidateActiveReport();
+    },
+    [refreshSummaryFresh, invalidateActiveReport]
+  );
+
+  const { triggerRefresh } = useSmartPolling({
+    profile: "reports",
+    enabled: Boolean(shopId),
+    online,
+    isVisible,
+    blocked: syncing || pendingCount > 0,
+    syncToken: lastSyncAt,
+    onRefresh: handleSmartRefresh,
+  });
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mutationKey = `reports-last-mutation:${shopId}`;
@@ -730,20 +746,14 @@ export default function ReportsClient({
       }, 1000);
     };
 
-    const maybeDebounce = () => {
-      const now = Date.now();
-      if (now - lastEventAtRef.current < EVENT_DEBOUNCE_MS) return false;
-      lastEventAtRef.current = now;
-      return true;
-    };
-
     const saleUpdateListener = reportEvents.addListener(
       "sale-update",
       (event) => {
         if (event.shopId !== shopId) return;
         handleIndicator();
-        if (!maybeDebounce()) return;
-        refreshSummaryFresh();
+        if (!triggerRefresh("event", { at: event.timestamp ?? Date.now() })) {
+          return;
+        }
         invalidateSales();
         invalidateProfit();
         invalidatePayment();
@@ -757,8 +767,9 @@ export default function ReportsClient({
       (event) => {
         if (event.shopId !== shopId) return;
         handleIndicator();
-        if (!maybeDebounce()) return;
-        refreshSummaryFresh();
+        if (!triggerRefresh("event", { at: event.timestamp ?? Date.now() })) {
+          return;
+        }
         invalidateExpenses();
         invalidateProfit();
       },
@@ -770,8 +781,9 @@ export default function ReportsClient({
       (event) => {
         if (event.shopId !== shopId) return;
         handleIndicator();
-        if (!maybeDebounce()) return;
-        refreshSummaryFresh();
+        if (!triggerRefresh("event", { at: event.timestamp ?? Date.now() })) {
+          return;
+        }
         invalidateCash();
       },
       { shopId, priority: 10 }
@@ -795,6 +807,7 @@ export default function ReportsClient({
     invalidateProfit,
     invalidatePayment,
     invalidateTopProducts,
+    triggerRefresh,
   ]);
 
   useEffect(() => {
@@ -825,34 +838,6 @@ export default function ReportsClient({
   useEffect(() => {
     lastRangeKeyRef.current = rangeKey;
   }, [rangeKey]);
-
-  useEffect(() => {
-    if (!online || !isVisible || !pollingEnabled) return;
-    const intervalId = setInterval(() => {
-      const now = Date.now();
-      if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
-      refreshSummaryFresh();
-      invalidateActiveReport();
-    }, pollIntervalMs);
-    return () => clearInterval(intervalId);
-  }, [
-    online,
-    isVisible,
-    pollingEnabled,
-    refreshSummaryFresh,
-    invalidateActiveReport,
-    pollIntervalMs,
-  ]);
-
-  useEffect(() => {
-    if (!online) return;
-    if (wasVisibleRef.current === isVisible) return;
-    wasVisibleRef.current = isVisible;
-    if (!isVisible) return;
-    lastEventAtRef.current = Date.now();
-    refreshSummaryFresh();
-    invalidateActiveReport();
-  }, [online, isVisible, refreshSummaryFresh, invalidateActiveReport]);
 
   useEffect(() => {
     if (!online) return;

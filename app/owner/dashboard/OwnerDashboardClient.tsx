@@ -16,7 +16,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { reportEvents } from "@/lib/events/reportEvents";
-import { useRealtimeStatus } from "@/lib/realtime/status";
+import { useSmartPolling } from "@/lib/polling/use-smart-polling";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import {
   amountToBanglaWords,
@@ -110,19 +110,12 @@ export default function OwnerDashboardClient({
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
-  const realtime = useRealtimeStatus();
   const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [expandedStatKey, setExpandedStatKey] = useState<string | null>(null);
   const serverSnapshotRef = useRef(initialData);
   const refreshInFlightRef = useRef(false);
-  const lastRefreshAtRef = useRef(0);
-  const lastEventAtRef = useRef(0);
-  const wasRealtimeConnectedRef = useRef(realtime.connected);
-  const REFRESH_MIN_INTERVAL_MS = 15_000;
-  const EVENT_REFRESH_MIN_INTERVAL_MS = 1_500;
-  const FALLBACK_POLL_INTERVAL_MS = 15_000;
 
   const cacheKey = useMemo(() => `owner:dashboard:${userId}`, [userId]);
 
@@ -163,36 +156,30 @@ export default function OwnerDashboardClient({
 
   const selectedShopId = data.shopId || data.shops?.[0]?.id || "";
 
-  useEffect(() => {
-    if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
-    if (refreshInFlightRef.current) return;
-    const now = Date.now();
-    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
-    lastRefreshAtRef.current = now;
-    refreshInFlightRef.current = true;
-    router.refresh();
-  }, [online, lastSyncAt, syncing, pendingCount, router]);
-
-  useEffect(() => {
-    if (!online || !isVisible || !realtime.connected || !selectedShopId) return;
-
-    const triggerRefresh = () => {
-      const now = Date.now();
-      if (refreshInFlightRef.current) return;
-      if (syncing || pendingCount > 0) return;
-      if (now - lastEventAtRef.current < EVENT_REFRESH_MIN_INTERVAL_MS) return;
-      if (now - lastRefreshAtRef.current < EVENT_REFRESH_MIN_INTERVAL_MS) return;
-      lastEventAtRef.current = now;
-      lastRefreshAtRef.current = now;
+  const { triggerRefresh } = useSmartPolling({
+    profile: "ownerDashboard",
+    enabled: Boolean(selectedShopId),
+    online,
+    isVisible,
+    blocked: syncing || pendingCount > 0,
+    syncToken: lastSyncAt,
+    canRefresh: () => !refreshInFlightRef.current,
+    markRefreshStarted: () => {
       refreshInFlightRef.current = true;
+    },
+    onRefresh: () => {
       router.refresh();
-    };
+    },
+  });
+
+  useEffect(() => {
+    if (!online || !selectedShopId) return;
 
     const saleListener = reportEvents.addListener(
       "sale-update",
       (event) => {
         if (event.shopId !== selectedShopId) return;
-        triggerRefresh();
+        triggerRefresh("event", { at: event.timestamp ?? Date.now() });
       },
       { shopId: selectedShopId, priority: 10 }
     );
@@ -201,7 +188,7 @@ export default function OwnerDashboardClient({
       "expense-update",
       (event) => {
         if (event.shopId !== selectedShopId) return;
-        triggerRefresh();
+        triggerRefresh("event", { at: event.timestamp ?? Date.now() });
       },
       { shopId: selectedShopId, priority: 10 }
     );
@@ -210,7 +197,7 @@ export default function OwnerDashboardClient({
       "cash-update",
       (event) => {
         if (event.shopId !== selectedShopId) return;
-        triggerRefresh();
+        triggerRefresh("event", { at: event.timestamp ?? Date.now() });
       },
       { shopId: selectedShopId, priority: 10 }
     );
@@ -220,64 +207,7 @@ export default function OwnerDashboardClient({
       reportEvents.removeListener(expenseListener);
       reportEvents.removeListener(cashListener);
     };
-  }, [
-    online,
-    isVisible,
-    realtime.connected,
-    selectedShopId,
-    syncing,
-    pendingCount,
-    router,
-  ]);
-
-  useEffect(() => {
-    if (!online || !isVisible || realtime.connected || !selectedShopId) return;
-
-    const intervalId = setInterval(() => {
-      const now = Date.now();
-      if (refreshInFlightRef.current) return;
-      if (syncing || pendingCount > 0) return;
-      if (now - lastRefreshAtRef.current < EVENT_REFRESH_MIN_INTERVAL_MS) return;
-      lastRefreshAtRef.current = now;
-      refreshInFlightRef.current = true;
-      router.refresh();
-    }, FALLBACK_POLL_INTERVAL_MS);
-
-    return () => clearInterval(intervalId);
-  }, [
-    online,
-    isVisible,
-    realtime.connected,
-    selectedShopId,
-    syncing,
-    pendingCount,
-    router,
-  ]);
-
-  useEffect(() => {
-    const wasConnected = wasRealtimeConnectedRef.current;
-    const isConnected = realtime.connected;
-    wasRealtimeConnectedRef.current = isConnected;
-
-    if (!online || !isVisible || !selectedShopId) return;
-    if (!isConnected || wasConnected) return;
-    if (refreshInFlightRef.current) return;
-    if (syncing || pendingCount > 0) return;
-
-    const now = Date.now();
-    if (now - lastRefreshAtRef.current < EVENT_REFRESH_MIN_INTERVAL_MS) return;
-    lastRefreshAtRef.current = now;
-    refreshInFlightRef.current = true;
-    router.refresh();
-  }, [
-    online,
-    isVisible,
-    realtime.connected,
-    selectedShopId,
-    syncing,
-    pendingCount,
-    router,
-  ]);
+  }, [online, selectedShopId, triggerRefresh]);
 
   const salesTotal = Number(getSummaryTotal(data.summary?.sales));
   const expenseTotal = Number(getSummaryTotal(data.summary?.expenses));

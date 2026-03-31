@@ -105,7 +105,7 @@ export default async function DuePage({ searchParams }: DuePageProps) {
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border">
-                লাইভ সিঙ্ক
+                অটো আপডেট
               </span>
               <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">
                 অফলাইন ব্যাকআপ

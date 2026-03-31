@@ -2,9 +2,6 @@
   "name": "pos-app",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "realtime"
-  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -16,8 +13,6 @@
     "test:watch": "ts-node --esm --experimentalSpecifierResolution=node tests/unit/run.ts",
     "test:coverage": "ts-node --esm --experimentalSpecifierResolution=node tests/unit/run.ts",
     "seed": "tsx --tsconfig tsconfig.seed.json prisma/seed.ts",
-    "realtime:dev": "npm run -w realtime dev",
-    "realtime:start": "npm run -w realtime start",
     "ci:health": "bash scripts/ci-healthcheck.sh",
     "release:check-sw": "bash scripts/check-sw-cache-name.sh",
     "test:e2e": "playwright test"
@@ -27,11 +22,9 @@
   },
   "dependencies": {
     "@next/bundle-analyzer": "^16.2.1",
-    "@opentelemetry/api": "^1.9.1",
     "@prisma/client": "^6.19.2",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-select": "^2.2.6",
-    "@socket.io/redis-adapter": "^8.3.0",
     "@tanstack/react-query": "^5.90.10",
     "better-auth": "^1.5.6",
     "class-variance-authority": "^0.7.1",
@@ -47,8 +40,6 @@
     "recharts": "^3.5.0",
     "redis": "^4.7.1",
     "shadcn-ui": "^0.9.5",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3",
     "sonner": "^1.7.4",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",

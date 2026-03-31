@@ -22,7 +22,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
-import { useRealtimeStatus } from "@/lib/realtime/status";
+import { useSmartPolling, type SmartPollingReason } from "@/lib/polling/use-smart-polling";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import {
   emitDueCustomersEvent,
@@ -211,7 +211,6 @@ export default function DuePageClient({
   canTakeDuePayment,
 }: Props) {
   const online = useOnlineStatus();
-  const realtime = useRealtimeStatus();
   const isVisible = usePageVisibility();
   const queryClient = useQueryClient();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
@@ -219,11 +218,6 @@ export default function DuePageClient({
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
   const REFRESH_MIN_INTERVAL_MS = 2_000;
-  const lastEventAtRef = useRef(0);
-  const wasVisibleRef = useRef(isVisible);
-  const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
-  const pollingEnabled = !realtime.connected;
-  const EVENT_DEBOUNCE_MS = 800;
   const [voiceReady, setVoiceReady] = useState(false);
   const [listeningField, setListeningField] = useState<VoiceField | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -596,83 +590,40 @@ export default function DuePageClient({
     [queryClient, shopId]
   );
 
-  useEffect(() => {
-    if (!online) return;
-    if (!lastSyncAt) return;
-    if (syncing) return;
-    if (pendingCount > 0) return;
-    refreshData({ source: "sync" });
-    if (selectedCustomerId) {
-      refreshStatement(selectedCustomerId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online, lastSyncAt, syncing, pendingCount]);
+  const handleSmartRefresh = useCallback(
+    (reason: SmartPollingReason) => {
+      const force = reason === "focus" || reason === "reconnect";
+      refreshData({
+        force,
+        source: reason === "sync" ? "sync" : "refresh",
+      });
+      if (selectedCustomerId) {
+        refreshStatement(selectedCustomerId);
+      }
+    },
+    [refreshData, selectedCustomerId, refreshStatement]
+  );
+
+  const { triggerRefresh } = useSmartPolling({
+    profile: "due",
+    enabled: Boolean(shopId),
+    online,
+    isVisible,
+    blocked: syncing || pendingCount > 0,
+    syncToken: lastSyncAt,
+    canRefresh: () => !refreshInFlightRef.current,
+    onRefresh: handleSmartRefresh,
+  });
 
   useEffect(() => {
     return subscribeDueCustomersEvent((detail) => {
       if (detail.shopId !== shopId) return;
-      const now = detail.at ?? Date.now();
-      if (now - lastEventAtRef.current < EVENT_DEBOUNCE_MS) return;
-      lastEventAtRef.current = now;
-      loadCustomersFromDexie();
-      if (online) {
-        queryClient.invalidateQueries({
-          queryKey: customerQueryKey,
-          refetchType: "active",
-        });
-      }
-      if (selectedCustomerId) {
-        refreshStatement(selectedCustomerId);
-      }
+      triggerRefresh("event", { at: detail.at ?? Date.now() });
     });
   }, [
     shopId,
-    online,
-    loadCustomersFromDexie,
-    queryClient,
-    customerQueryKey,
-    selectedCustomerId,
-    refreshStatement,
+    triggerRefresh,
   ]);
-
-  useEffect(() => {
-    if (!online || !isVisible || !pollingEnabled) return;
-    const intervalId = setInterval(() => {
-      const now = Date.now();
-      if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
-      if (refreshInFlightRef.current) return;
-      if (syncing || pendingCount > 0) return;
-      if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
-      refreshData({ source: "refresh" });
-      if (selectedCustomerId) {
-        refreshStatement(selectedCustomerId);
-      }
-    }, pollIntervalMs);
-
-    return () => clearInterval(intervalId);
-  }, [
-    online,
-    isVisible,
-    pollingEnabled,
-    syncing,
-    pendingCount,
-    refreshData,
-    selectedCustomerId,
-    refreshStatement,
-    pollIntervalMs,
-  ]);
-
-  useEffect(() => {
-    if (!online) return;
-    if (wasVisibleRef.current === isVisible) return;
-    wasVisibleRef.current = isVisible;
-    if (!isVisible) return;
-    lastEventAtRef.current = Date.now();
-    refreshData({ force: true, source: "refresh" });
-    if (selectedCustomerId) {
-      refreshStatement(selectedCustomerId);
-    }
-  }, [online, isVisible, refreshData, selectedCustomerId, refreshStatement]);
 
   async function handleAddCustomer(e: FormEvent) {
     e.preventDefault();

@@ -11,7 +11,7 @@ import { db } from "@/lib/dexie/db";
 import { VoidSaleControls } from "./VoidSaleControls";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
-import { useRealtimeStatus } from "@/lib/realtime/status";
+import { useSmartPolling } from "@/lib/polling/use-smart-polling";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
@@ -106,19 +106,11 @@ export default function SalesListClient({
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
-  const realtime = useRealtimeStatus();
   const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<SaleSummary[]>(sales);
   const serverSnapshotRef = useRef(sales);
   const refreshInFlightRef = useRef(false);
-  const lastRefreshAtRef = useRef(0);
-  const REFRESH_MIN_INTERVAL_MS = 2_000;
-  const lastEventAtRef = useRef(0);
-  const wasVisibleRef = useRef(isVisible);
-  const pollIntervalMs = realtime.connected ? 60_000 : 10_000;
-  const pollingEnabled = !realtime.connected;
-  const EVENT_DEBOUNCE_MS = 800;
 
   useEffect(() => {
     if (serverSnapshotRef.current !== sales) {
@@ -127,15 +119,21 @@ export default function SalesListClient({
     }
   }, [sales]);
 
-  useEffect(() => {
-    if (!online || !lastSyncAt || syncing || pendingCount > 0) return;
-    if (refreshInFlightRef.current) return;
-    const now = Date.now();
-    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
-    lastRefreshAtRef.current = now;
-    refreshInFlightRef.current = true;
-    router.refresh();
-  }, [online, lastSyncAt, syncing, pendingCount, router]);
+  const { triggerRefresh } = useSmartPolling({
+    profile: "salesList",
+    enabled: Boolean(shopId),
+    online,
+    isVisible,
+    blocked: syncing || pendingCount > 0,
+    syncToken: lastSyncAt,
+    canRefresh: () => !refreshInFlightRef.current,
+    markRefreshStarted: () => {
+      refreshInFlightRef.current = true;
+    },
+    onRefresh: () => {
+      router.refresh();
+    },
+  });
 
   useEffect(() => {
     if (!online) return;
@@ -143,14 +141,7 @@ export default function SalesListClient({
     const handleSaleUpdate = (event: ReportEventData) => {
       if (event.shopId !== shopId) return;
       if (event.metadata?.source === "ui") return;
-      const now = event.timestamp ?? Date.now();
-      if (now - lastEventAtRef.current < EVENT_DEBOUNCE_MS) return;
-      if (refreshInFlightRef.current) return;
-      if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
-      lastEventAtRef.current = now;
-      lastRefreshAtRef.current = now;
-      refreshInFlightRef.current = true;
-      router.refresh();
+      triggerRefresh("event", { at: event.timestamp ?? Date.now() });
     };
 
     const listenerId = reportEvents.addListener(
@@ -162,46 +153,7 @@ export default function SalesListClient({
     return () => {
       reportEvents.removeListener(listenerId);
     };
-  }, [online, router, shopId]);
-
-  useEffect(() => {
-    if (!online || !isVisible || !pollingEnabled) return;
-    const intervalId = setInterval(() => {
-      const now = Date.now();
-      if (now - lastEventAtRef.current < pollIntervalMs / 2) return;
-      if (refreshInFlightRef.current) return;
-      if (syncing || pendingCount > 0) return;
-      if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
-      lastRefreshAtRef.current = now;
-      refreshInFlightRef.current = true;
-      router.refresh();
-    }, pollIntervalMs);
-
-    return () => clearInterval(intervalId);
-  }, [
-    online,
-    isVisible,
-    pollingEnabled,
-    router,
-    syncing,
-    pendingCount,
-    pollIntervalMs,
-  ]);
-
-  useEffect(() => {
-    if (!online) return;
-    if (wasVisibleRef.current === isVisible) return;
-    wasVisibleRef.current = isVisible;
-    if (!isVisible) return;
-    const now = Date.now();
-    if (refreshInFlightRef.current) return;
-    if (syncing || pendingCount > 0) return;
-    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
-    lastEventAtRef.current = now;
-    lastRefreshAtRef.current = now;
-    refreshInFlightRef.current = true;
-    router.refresh();
-  }, [online, isVisible, router, syncing, pendingCount]);
+  }, [online, shopId, triggerRefresh]);
 
   // Seed Dexie when online; load from Dexie when offline.
   useEffect(() => {
