@@ -103,7 +103,7 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
                   selectedShopId={selectedShopId}
                 />
                 <DashboardManualRefresh
-                  label="সরবরাহকারী রিফ্রেশ"
+                  label="রিফ্রেশ"
                   className="h-10 px-3"
                 />
               </div>

@@ -1733,7 +1733,7 @@ export default function ReportsClient({
               <RefreshIconButton
                 onClick={handleManualRefresh}
                 loading={summaryLoading}
-                label="রিপোর্ট রিফ্রেশ"
+                label="রিফ্রেশ"
                 className="h-8 px-2.5 text-xs"
               />
             </div>
@@ -1773,7 +1773,7 @@ export default function ReportsClient({
             <RefreshIconButton
               onClick={handleManualRefresh}
               loading={summaryLoading}
-              label="রিপোর্ট রিফ্রেশ"
+              label="রিফ্রেশ"
               className="h-8 px-2.5 text-xs"
             />
           </div>

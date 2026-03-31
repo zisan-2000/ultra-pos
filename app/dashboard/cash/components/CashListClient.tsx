@@ -545,7 +545,7 @@ export function CashListClient({
               <RefreshIconButton
                 onClick={handleManualRefresh}
                 loading={manualRefreshing}
-                label="ক্যাশ রিফ্রেশ"
+                label="রিফ্রেশ"
                 className="h-10 px-3"
               />
               {canCreateCashEntry ? (

@@ -335,7 +335,7 @@ export default function SalesListClient({
           <RefreshIconButton
             onClick={handleManualRefresh}
             loading={manualRefreshing}
-            label="বিক্রি রিফ্রেশ"
+            label="রিফ্রেশ"
             className="h-8 px-2.5 text-xs"
           />
           <span className="text-xs text-muted-foreground">পৃষ্ঠা {page}</span>

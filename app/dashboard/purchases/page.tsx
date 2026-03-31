@@ -228,7 +228,7 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
               সময়: {from === to ? from : `${from} → ${to}`}
             </span>
             <DashboardManualRefresh
-              label="ক্রয় রিফ্রেশ"
+              label="রিফ্রেশ"
               className="h-7 px-2.5 text-xs"
             />
           </div>

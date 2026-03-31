@@ -1136,7 +1136,7 @@ export function PosPageClient({
               <RefreshIconButton
                 onClick={handleProductRefresh}
                 loading={productsRefreshing}
-                label="পণ্য রিফ্রেশ"
+                label="রিফ্রেশ"
                 className="h-7 px-2.5 text-xs"
               />
               {syncing ? (

@@ -474,7 +474,7 @@ export default function OwnerDashboardClient({
             <RefreshIconButton
               onClick={handleManualRefresh}
               loading={manualRefreshing}
-              label="ড্যাশবোর্ড রিফ্রেশ"
+              label="রিফ্রেশ"
               className="h-8 px-2.5 text-xs"
             />
           </div>

@@ -1105,7 +1105,7 @@ export default function DuePageClient({
               <RefreshIconButton
                 onClick={handleManualRefresh}
                 loading={manualRefreshing}
-                label="বাকি রিফ্রেশ"
+                label="রিফ্রেশ"
                 className="h-10 px-3"
               />
               <button

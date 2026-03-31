@@ -545,7 +545,7 @@ export function ExpensesListClient({
               <RefreshIconButton
                 onClick={handleManualRefresh}
                 loading={manualRefreshing}
-                label="খরচ রিফ্রেশ"
+                label="রিফ্রেশ"
                 className="h-11 px-3"
               />
               {canCreateExpense ? (
@@ -607,7 +607,7 @@ export function ExpensesListClient({
               <RefreshIconButton
                 onClick={handleManualRefresh}
                 loading={manualRefreshing}
-                label="খরচ রিফ্রেশ"
+                label="রিফ্রেশ"
                 className="h-10 px-3"
               />
               {canCreateExpense ? (
