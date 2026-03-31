@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import RefreshIconButton from "@/components/ui/refresh-icon-button";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db, type LocalProduct } from "@/lib/dexie/db";
@@ -1053,15 +1054,12 @@ export default function ProductsListClient({
               </span>
             )}
             {online && (
-              <button
-                type="button"
+              <RefreshIconButton
                 onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="inline-flex h-7 items-center gap-1 rounded-full border border-primary/30 bg-primary-soft px-3 font-semibold text-primary shadow-sm hover:bg-primary/15 hover:border-primary/40 transition disabled:opacity-50"
-              >
-                <span className={isRefreshing ? "animate-spin" : ""}>🔄</span>
-                রিফ্রেশ
-              </button>
+                loading={isRefreshing}
+                label="পণ্য রিফ্রেশ"
+                className="h-7 px-2.5 text-xs"
+              />
             )}
           </div>
         </div>

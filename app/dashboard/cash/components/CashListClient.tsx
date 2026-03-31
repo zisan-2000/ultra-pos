@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import RefreshIconButton from "@/components/ui/refresh-icon-button";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
@@ -168,6 +169,7 @@ export function CashListClient({
   const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<CashEntry[]>(rows);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   const [preset, setPreset] = useState<RangePreset>(resolvePreset(from, to));
   const [customFrom, setCustomFrom] = useState<string | undefined>(from);
   const [customTo, setCustomTo] = useState<string | undefined>(to);
@@ -285,6 +287,12 @@ export function CashListClient({
       reportEvents.removeListener(listenerId);
     };
   }, [online, shopId, triggerRefresh]);
+
+  const handleManualRefresh = useCallback(() => {
+    setManualRefreshing(true);
+    triggerRefresh("manual", { force: true });
+    setTimeout(() => setManualRefreshing(false), 1800);
+  }, [triggerRefresh]);
 
   useEffect(() => {
     let cancelled = false;
@@ -533,14 +541,22 @@ export function CashListClient({
                   : rendered.length} এন্ট্রি
               </p>
             </div>
-            {canCreateCashEntry ? (
-              <Link
-                href={`/dashboard/cash/new?shopId=${shopId}`}
-                className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
-              >
-                + নতুন এন্ট্রি
-              </Link>
-            ) : null}
+            <div className="flex items-center gap-2">
+              <RefreshIconButton
+                onClick={handleManualRefresh}
+                loading={manualRefreshing}
+                label="ক্যাশ রিফ্রেশ"
+                className="h-10 px-3"
+              />
+              {canCreateCashEntry ? (
+                <Link
+                  href={`/dashboard/cash/new?shopId=${shopId}`}
+                  className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
+                >
+                  + নতুন এন্ট্রি
+                </Link>
+              ) : null}
+            </div>
           </div>
           <div className="rounded-xl border border-border/70 bg-background/80 p-3 space-y-2">
             <div className="flex items-center justify-between">

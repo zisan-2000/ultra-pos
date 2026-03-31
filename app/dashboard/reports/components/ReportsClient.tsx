@@ -20,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import RefreshIconButton from "@/components/ui/refresh-icon-button";
 import { toast } from "sonner";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
@@ -693,6 +694,10 @@ export default function ReportsClient({
     syncToken: lastSyncAt,
     onRefresh: handleSmartRefresh,
   });
+
+  const handleManualRefresh = useCallback(() => {
+    triggerRefresh("manual", { force: true });
+  }, [triggerRefresh]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1721,6 +1726,17 @@ export default function ReportsClient({
             </div>
           )}
           <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-muted-foreground">
+                সারাংশ সিঙ্ক
+              </span>
+              <RefreshIconButton
+                onClick={handleManualRefresh}
+                loading={summaryLoading}
+                label="রিপোর্ট রিফ্রেশ"
+                className="h-8 px-2.5 text-xs"
+              />
+            </div>
             <div className="rounded-xl border border-primary/30 bg-primary-soft px-3 py-2 text-xs font-semibold text-primary shadow-sm">
               {summarySnapshot}
             </div>
@@ -1752,7 +1768,15 @@ export default function ReportsClient({
         </div>
 
         <div className="rounded-2xl bg-card border border-border shadow-sm px-4 py-3 space-y-4">
-          <p className="text-xs font-semibold text-muted-foreground"> সময়</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-muted-foreground"> সময়</p>
+            <RefreshIconButton
+              onClick={handleManualRefresh}
+              loading={summaryLoading}
+              label="রিপোর্ট রিফ্রেশ"
+              className="h-8 px-2.5 text-xs"
+            />
+          </div>
           <div className="relative">
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar rounded-full bg-muted/70 p-1 pr-12 pb-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
               {PRESETS.map(({ key, label }) => (

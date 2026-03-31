@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
+import RefreshIconButton from "@/components/ui/refresh-icon-button";
 import { VoidSaleControls } from "./VoidSaleControls";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
@@ -109,6 +110,7 @@ export default function SalesListClient({
   const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<SaleSummary[]>(sales);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   const serverSnapshotRef = useRef(sales);
   const refreshInFlightRef = useRef(false);
 
@@ -154,6 +156,12 @@ export default function SalesListClient({
       reportEvents.removeListener(listenerId);
     };
   }, [online, shopId, triggerRefresh]);
+
+  const handleManualRefresh = () => {
+    setManualRefreshing(true);
+    triggerRefresh("manual", { force: true });
+    setTimeout(() => setManualRefreshing(false), 1800);
+  };
 
   // Seed Dexie when online; load from Dexie when offline.
   useEffect(() => {
@@ -323,7 +331,15 @@ export default function SalesListClient({
             </Link>
           )}
         </div>
-        <span className="text-xs text-muted-foreground">পৃষ্ঠা {page}</span>
+        <div className="flex items-center gap-2">
+          <RefreshIconButton
+            onClick={handleManualRefresh}
+            loading={manualRefreshing}
+            label="বিক্রি রিফ্রেশ"
+            className="h-8 px-2.5 text-xs"
+          />
+          <span className="text-xs text-muted-foreground">পৃষ্ঠা {page}</span>
+        </div>
       </div>
 
       {renderedItems.length === 0 ? (

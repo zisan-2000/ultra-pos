@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import RefreshIconButton from "@/components/ui/refresh-icon-button";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdd } from "@/lib/sync/queue";
@@ -222,6 +223,7 @@ export default function DuePageClient({
   const [listeningField, setListeningField] = useState<VoiceField | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
 
   const customerTemplateKey = useMemo(
     () => `due:customerTemplates:${shopId}`,
@@ -614,6 +616,18 @@ export default function DuePageClient({
     canRefresh: () => !refreshInFlightRef.current,
     onRefresh: handleSmartRefresh,
   });
+
+  const handleManualRefresh = useCallback(async () => {
+    setManualRefreshing(true);
+    try {
+      await refreshData({ force: true, source: "refresh" });
+      if (selectedCustomerId) {
+        refreshStatement(selectedCustomerId);
+      }
+    } finally {
+      setTimeout(() => setManualRefreshing(false), 600);
+    }
+  }, [refreshData, selectedCustomerId, refreshStatement]);
 
   useEffect(() => {
     return subscribeDueCustomersEvent((detail) => {
@@ -1087,14 +1101,22 @@ export default function DuePageClient({
                 )}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={openAddTab}
-              disabled={!canCreateCustomer}
-              className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-            >
-              ➕ নতুন গ্রাহক
-            </button>
+            <div className="flex items-center gap-2">
+              <RefreshIconButton
+                onClick={handleManualRefresh}
+                loading={manualRefreshing}
+                label="বাকি রিফ্রেশ"
+                className="h-10 px-3"
+              />
+              <button
+                type="button"
+                onClick={openAddTab}
+                disabled={!canCreateCustomer}
+                className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+              >
+                ➕ নতুন গ্রাহক
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3 text-xs">

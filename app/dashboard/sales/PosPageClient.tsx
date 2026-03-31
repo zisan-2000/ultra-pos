@@ -32,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import RefreshIconButton from "@/components/ui/refresh-icon-button";
 
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { toast } from "sonner";
@@ -1132,18 +1133,12 @@ export function PosPageClient({
                   বাকির বিক্রি নিষ্ক্রিয়
                 </span>
               ) : null}
-              <button
-                type="button"
+              <RefreshIconButton
                 onClick={handleProductRefresh}
-                disabled={productsRefreshing}
-                className={`inline-flex h-7 items-center rounded-full border px-3 transition ${
-                  productsRefreshing
-                    ? "border-primary/40 bg-primary-soft text-primary"
-                    : "border-border bg-card/80 text-muted-foreground hover:border-primary/30"
-                }`}
-              >
-                {productsRefreshing ? "রিফ্রেশ হচ্ছে..." : "রিফ্রেশ"}
-              </button>
+                loading={productsRefreshing}
+                label="পণ্য রিফ্রেশ"
+                className="h-7 px-2.5 text-xs"
+              />
               {syncing ? (
                 <span className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-primary">
                   সিঙ্ক হচ্ছে...

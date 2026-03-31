@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -23,6 +23,7 @@ import {
   formatBanglaMoney,
 } from "@/lib/utils/bangla-money";
 import OfflineAwareLink from "@/components/offline-aware-link";
+import RefreshIconButton from "@/components/ui/refresh-icon-button";
 
 type Summary = {
   sales?: { total?: number } | number;
@@ -114,6 +115,7 @@ export default function OwnerDashboardClient({
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [expandedStatKey, setExpandedStatKey] = useState<string | null>(null);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   const serverSnapshotRef = useRef(initialData);
   const refreshInFlightRef = useRef(false);
 
@@ -208,6 +210,12 @@ export default function OwnerDashboardClient({
       reportEvents.removeListener(cashListener);
     };
   }, [online, selectedShopId, triggerRefresh]);
+
+  const handleManualRefresh = useCallback(() => {
+    setManualRefreshing(true);
+    triggerRefresh("manual", { force: true });
+    setTimeout(() => setManualRefreshing(false), 1800);
+  }, [triggerRefresh]);
 
   const salesTotal = Number(getSummaryTotal(data.summary?.sales));
   const expenseTotal = Number(getSummaryTotal(data.summary?.expenses));
@@ -459,9 +467,17 @@ export default function OwnerDashboardClient({
 
       <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.2em]">
-            হাইলাইটস
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.2em]">
+              হাইলাইটস
+            </span>
+            <RefreshIconButton
+              onClick={handleManualRefresh}
+              loading={manualRefreshing}
+              label="ড্যাশবোর্ড রিফ্রেশ"
+              className="h-8 px-2.5 text-xs"
+            />
+          </div>
           {lastSyncLabel ? (
             <span className="text-xs text-muted-foreground">
               শেষ আপডেট {lastSyncLabel}

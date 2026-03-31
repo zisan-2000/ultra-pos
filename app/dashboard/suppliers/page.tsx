@@ -6,6 +6,7 @@ import { getShopsByUser } from "@/app/actions/shops";
 import { getSuppliersByShop } from "@/app/actions/suppliers";
 import ShopSelectorClient from "../purchases/ShopSelectorClient";
 import SuppliersClient from "./suppliers-client";
+import DashboardManualRefresh from "@/components/dashboard-manual-refresh";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
 
@@ -96,10 +97,16 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
               </p>
             </div>
             <div className="w-full sm:w-auto">
-              <ShopSelectorClient
-                shops={shops}
-                selectedShopId={selectedShopId}
-              />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <ShopSelectorClient
+                  shops={shops}
+                  selectedShopId={selectedShopId}
+                />
+                <DashboardManualRefresh
+                  label="সরবরাহকারী রিফ্রেশ"
+                  className="h-10 px-3"
+                />
+              </div>
             </div>
           </div>
         </div>

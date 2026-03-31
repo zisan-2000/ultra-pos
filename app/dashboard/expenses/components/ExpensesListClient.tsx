@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import RefreshIconButton from "@/components/ui/refresh-icon-button";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
@@ -229,6 +230,7 @@ export function ExpensesListClient({
   const isVisible = usePageVisibility();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<Expense[]>(expenses);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   const [preset, setPreset] = useState<RangePreset>(resolvePreset(from, to));
   const [customFrom, setCustomFrom] = useState<string | undefined>(
     from || undefined
@@ -328,6 +330,12 @@ export function ExpensesListClient({
       reportEvents.removeListener(listenerId);
     };
   }, [online, shopId, triggerRefresh]);
+
+  const handleManualRefresh = useCallback(() => {
+    setManualRefreshing(true);
+    triggerRefresh("manual", { force: true });
+    setTimeout(() => setManualRefreshing(false), 1800);
+  }, [triggerRefresh]);
 
   // Keep Dexie/cache synced for offline use
   useEffect(() => {
@@ -533,6 +541,13 @@ export function ExpensesListClient({
                     : filteredItems.length} খরচ
                 </p>
               </div>
+            <div className="flex items-center gap-2">
+              <RefreshIconButton
+                onClick={handleManualRefresh}
+                loading={manualRefreshing}
+                label="খরচ রিফ্রেশ"
+                className="h-11 px-3"
+              />
               {canCreateExpense ? (
                 <Link
                   href={`/dashboard/expenses/new?shopId=${shopId}`}
@@ -542,6 +557,7 @@ export function ExpensesListClient({
                 </Link>
               ) : null}
             </div>
+          </div>
             <div className="rounded-xl border border-border/70 bg-background/80 p-2 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-semibold text-muted-foreground">📅 সময়</p>
@@ -587,14 +603,22 @@ export function ExpensesListClient({
                   : filteredItems.length} খরচ
               </p>
             </div>
-            {canCreateExpense ? (
-              <Link
-                href={`/dashboard/expenses/new?shopId=${shopId}`}
-                className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
-              >
-                + নতুন খরচ
-              </Link>
-            ) : null}
+            <div className="flex items-center gap-2">
+              <RefreshIconButton
+                onClick={handleManualRefresh}
+                loading={manualRefreshing}
+                label="খরচ রিফ্রেশ"
+                className="h-10 px-3"
+              />
+              {canCreateExpense ? (
+                <Link
+                  href={`/dashboard/expenses/new?shopId=${shopId}`}
+                  className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
+                >
+                  + নতুন খরচ
+                </Link>
+              ) : null}
+            </div>
           </div>
           <div className="rounded-xl border border-border/70 bg-background/80 p-3 space-y-2">
             <div className="flex items-center justify-between">

@@ -8,6 +8,7 @@ import {
   getPurchaseSummaryByRange,
 } from "@/app/actions/purchases";
 import ShopSelectorClient from "./ShopSelectorClient";
+import DashboardManualRefresh from "@/components/dashboard-manual-refresh";
 import { getDhakaDateString } from "@/lib/dhaka-date";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
@@ -226,6 +227,10 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
             <span className="inline-flex h-7 max-w-[200px] items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border truncate">
               সময়: {from === to ? from : `${from} → ${to}`}
             </span>
+            <DashboardManualRefresh
+              label="ক্রয় রিফ্রেশ"
+              className="h-7 px-2.5 text-xs"
+            />
           </div>
         </div>
       </div>
