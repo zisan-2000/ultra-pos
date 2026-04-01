@@ -71,6 +71,7 @@ type ScannerSuspendDetail = {
 const QUICK_LIMIT = 8; // fixed slots so buttons never jump during a session
 const INITIAL_RENDER = 60;
 const RENDER_BATCH = 40;
+const SCANNER_INTERACTION_PAUSE_MS = 2200;
 
 function scheduleIdle(callback: () => void) {
   const g = globalThis as typeof globalThis & {
@@ -429,6 +430,31 @@ export const PosProductSearch = memo(function PosProductSearch({
       );
     };
   }, [clearScanTimers, shopId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !scannerAssistEnabled) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (!target) return;
+      if (target === scanInputRef.current) return;
+      if (scanInputRef.current?.contains(target)) return;
+      if (target.closest("[data-scanner-allow-focus='true']")) return;
+
+      scannerSuspendUntilRef.current =
+        Date.now() + SCANNER_INTERACTION_PAUSE_MS;
+      clearScanTimers();
+
+      if (document.activeElement === scanInputRef.current) {
+        scanInputRef.current?.blur();
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  }, [clearScanTimers, scannerAssistEnabled]);
 
   useEffect(() => {
     if (scannerAssistEnabled) return;
@@ -1266,10 +1292,19 @@ export const PosProductSearch = memo(function PosProductSearch({
                         e.preventDefault();
                         handleScanLookup();
                       }}
-                      onBlur={() => {
+                      onBlur={(e) => {
                         if (isScannerTemporarilySuspended()) return;
+                        const nextTarget = e.relatedTarget as Element | null;
+                        if (
+                          nextTarget &&
+                          nextTarget !== document.body &&
+                          nextTarget !== scanInputRef.current
+                        ) {
+                          return;
+                        }
                         scheduleScanFocus();
                       }}
+                      data-scanner-allow-focus="true"
                       className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                       placeholder="Barcode / SKU স্ক্যান করুন"
                     />
