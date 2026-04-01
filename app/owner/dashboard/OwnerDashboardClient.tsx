@@ -26,10 +26,10 @@ import OfflineAwareLink from "@/components/offline-aware-link";
 import RefreshIconButton from "@/components/ui/refresh-icon-button";
 
 type Summary = {
-  sales?: { total?: number } | number;
-  expenses?: { total?: number; cogs?: number } | number;
+  sales?: { total?: number; count?: number } | number;
+  expenses?: { total?: number; count?: number; cogs?: number } | number;
   profit?: number;
-  cash?: { balance?: number } | null;
+  cash?: { in?: number; out?: number; balance?: number; count?: number } | null;
   balance?: number;
 };
 
@@ -465,7 +465,7 @@ export default function OwnerDashboardClient({
         </div>
       )}
 
-      <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
+        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.2em]">
