@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, GripVertical, Loader2, X } from "lucide-react";
 import CopilotInsightPanel from "@/components/copilot/CopilotInsightPanel";
 import CopilotMoodOrb from "@/components/copilot/CopilotMoodOrb";
+import CopilotVoiceAsk from "@/components/copilot/CopilotVoiceAsk";
 import RefreshIconButton from "@/components/ui/refresh-icon-button";
 import {
   Dialog,
@@ -135,6 +136,7 @@ export default function FloatingCopilotLauncher() {
   const [payload, setPayload] = useState<CopilotPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"insights" | "ask">("insights");
   const dragStateRef = useRef<{
     startX: number;
     startY: number;
@@ -320,6 +322,7 @@ export default function FloatingCopilotLauncher() {
 
   useEffect(() => {
     if (!open) return;
+    setActiveTab("insights");
     void loadCopilot();
   }, [loadCopilot, open]);
 
@@ -489,7 +492,52 @@ export default function FloatingCopilotLauncher() {
               </div>
             ) : null}
 
-            {insight ? <CopilotInsightPanel insight={insight} /> : null}
+            <div className="inline-flex w-full rounded-2xl border border-border/70 bg-muted/35 p-1.5 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
+              <button
+                type="button"
+                onClick={() => setActiveTab("insights")}
+                aria-pressed={activeTab === "insights"}
+                className={`flex-1 rounded-[14px] px-4 py-2.5 text-sm font-semibold transition ${
+                  activeTab === "insights"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Insights
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("ask")}
+                aria-pressed={activeTab === "ask"}
+                className={`flex-1 rounded-[14px] px-4 py-2.5 text-sm font-semibold transition ${
+                  activeTab === "ask"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Ask
+              </button>
+            </div>
+
+            <div
+              className={activeTab === "insights" ? "block" : "hidden"}
+              aria-hidden={activeTab !== "insights"}
+            >
+              {insight ? <CopilotInsightPanel insight={insight} /> : null}
+            </div>
+
+            <div
+              className={activeTab === "ask" ? "block" : "hidden"}
+              aria-hidden={activeTab !== "ask"}
+            >
+              {activeShopId ? (
+                <CopilotVoiceAsk
+                  shopId={activeShopId}
+                  shopName={payload?.snapshot.shopName ?? null}
+                  online={online}
+                />
+              ) : null}
+            </div>
 
             {error ? (
               <div className="rounded-2xl border border-warning/25 bg-warning-soft/50 px-4 py-3 text-sm font-medium text-foreground">

@@ -1,0 +1,348 @@
+import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth-session";
+import { withTracing } from "@/lib/tracing";
+import { prisma } from "@/lib/prisma";
+import { getOwnerCopilotPayload } from "@/lib/owner-copilot-server";
+import { buildOwnerCopilotInsight } from "@/lib/owner-copilot";
+import {
+  COPILOT_QUESTION_SUGGESTIONS,
+  normalizeCopilotQuestion,
+  parseCopilotQuestion,
+} from "@/lib/copilot-ask";
+
+function formatMoney(value: number) {
+  return `৳ ${new Intl.NumberFormat("bn-BD", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value || 0))}`;
+}
+
+function formatCount(value: number) {
+  return new Intl.NumberFormat("bn-BD").format(Number(value || 0));
+}
+
+function normalizeName(value: string) {
+  return normalizeCopilotQuestion(value).replace(/\s+/g, "");
+}
+
+function formatCompactValue(value: number) {
+  return Number.isInteger(value)
+    ? new Intl.NumberFormat("bn-BD").format(value)
+    : new Intl.NumberFormat("bn-BD", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(value);
+}
+
+function scoreCustomerMatch(customerName: string, askedName: string) {
+  const customer = normalizeName(customerName);
+  const asked = normalizeName(askedName);
+  if (!customer || !asked) return 0;
+  if (customer === asked) return 100;
+  if (customer.startsWith(asked)) return 80;
+  if (customer.includes(asked)) return 60;
+  if (asked.includes(customer)) return 40;
+  return 0;
+}
+
+async function findBestCustomer(shopId: string, askedName: string) {
+  const candidates = await prisma.customer.findMany({
+    where: {
+      shopId,
+      name: {
+        contains: askedName.trim(),
+        mode: "insensitive",
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      totalDue: true,
+    },
+    orderBy: [{ totalDue: "desc" }, { name: "asc" }],
+    take: 8,
+  });
+
+  if (candidates.length === 0) return null;
+
+  const scored = candidates
+    .map((candidate) => ({
+      candidate,
+      score: scoreCustomerMatch(candidate.name, askedName),
+    }))
+    .sort((a, b) => b.score - a.score || Number(b.candidate.totalDue) - Number(a.candidate.totalDue));
+
+  return scored[0]?.score > 0 ? scored[0].candidate : null;
+}
+
+function scoreProductMatch(productName: string, askedName: string) {
+  const product = normalizeName(productName);
+  const asked = normalizeName(askedName);
+  if (!product || !asked) return 0;
+  if (product === asked) return 100;
+  if (product.startsWith(asked)) return 85;
+  if (product.includes(asked)) return 65;
+  if (asked.includes(product)) return 45;
+  return 0;
+}
+
+async function findBestProduct(shopId: string, askedName: string) {
+  const candidates = await prisma.product.findMany({
+    where: {
+      shopId,
+      OR: [
+        {
+          name: {
+            contains: askedName.trim(),
+            mode: "insensitive",
+          },
+        },
+        {
+          sku: {
+            contains: askedName.trim(),
+            mode: "insensitive",
+          },
+        },
+        {
+          barcode: {
+            contains: askedName.trim(),
+            mode: "insensitive",
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      sellPrice: true,
+      stockQty: true,
+      baseUnit: true,
+      sku: true,
+      barcode: true,
+      isActive: true,
+      trackStock: true,
+    },
+    orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
+    take: 10,
+  });
+
+  if (candidates.length === 0) return null;
+
+  const scored = candidates
+    .map((candidate) => ({
+      candidate,
+      score: Math.max(
+        scoreProductMatch(candidate.name, askedName),
+        candidate.sku ? scoreProductMatch(candidate.sku, askedName) - 10 : 0,
+        candidate.barcode ? scoreProductMatch(candidate.barcode, askedName) - 10 : 0
+      ),
+    }))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        Number(b.candidate.isActive) - Number(a.candidate.isActive)
+    );
+
+  return scored[0]?.score > 0 ? scored[0].candidate : null;
+}
+
+async function getLowStockPreview(shopId: string) {
+  return prisma.product.findMany({
+    where: {
+      shopId,
+      isActive: true,
+      trackStock: true,
+      stockQty: { lte: 10 },
+    },
+    select: {
+      name: true,
+      stockQty: true,
+      baseUnit: true,
+    },
+    orderBy: [{ stockQty: "asc" }, { updatedAt: "desc" }],
+    take: 3,
+  });
+}
+
+export async function POST(req: Request) {
+  return withTracing(req, "/api/owner/copilot/ask", async () => {
+    try {
+      const body = (await req.json()) as {
+        shopId?: string;
+        question?: string;
+      };
+
+      const shopId = String(body.shopId || "").trim();
+      const question = String(body.question || "").trim();
+
+      if (!shopId || !question) {
+        return NextResponse.json(
+          { error: "shopId and question are required" },
+          { status: 400 }
+        );
+      }
+
+      const user = await requireUser();
+      const payload = await getOwnerCopilotPayload(shopId, user);
+      const intent = parseCopilotQuestion(question);
+
+      if (intent.type === "unsupported") {
+        return NextResponse.json(
+          {
+            supported: false,
+            answer:
+              "আমি এখন sales, profit, expense, cash, due, payable, queue, top item, low stock, আর product stock/details type business প্রশ্ন বুঝি। প্রশ্নটা আরেকটু clear করে বলুন।",
+            suggestions: COPILOT_QUESTION_SUGGESTIONS,
+          },
+          { status: 200, headers: { "Cache-Control": "private, no-store" } }
+        );
+      }
+
+      let answer = "";
+      let matchedCustomerName: string | null = null;
+
+      switch (intent.type) {
+        case "today_status": {
+          const insight = buildOwnerCopilotInsight(
+            shopId,
+            payload.summary,
+            payload.snapshot
+          );
+          answer = `${insight.headline} ${insight.overview}`;
+          break;
+        }
+        case "today_sales":
+          answer = `আজ মোট বিক্রি ${formatMoney(payload.summary.sales.total)}। আজ ${formatCount(payload.summary.sales.count)}টি বিক্রি হয়েছে।`;
+          break;
+        case "today_profit":
+          answer = `আজ মোট লাভ ${formatMoney(payload.summary.profit)}।`;
+          break;
+        case "today_expenses": {
+          const totalExpense =
+            Number(payload.summary.expenses.total) +
+            Number(payload.summary.expenses.cogs ?? 0);
+          answer = `আজ মোট খরচ ${formatMoney(totalExpense)}।`;
+          break;
+        }
+        case "today_cash":
+          answer = `আজ ক্যাশ ব্যালেন্স এখন ${formatMoney(payload.summary.cash.balance)}।`;
+          break;
+        case "yesterday_sales":
+          answer = `গতকাল মোট বিক্রি ছিল ${formatMoney(payload.snapshot.yesterday.sales)}।`;
+          break;
+        case "yesterday_profit":
+          answer = `গতকাল মোট লাভ ছিল ${formatMoney(payload.snapshot.yesterday.profit)}।`;
+          break;
+        case "yesterday_expenses":
+          answer = `গতকাল মোট খরচ ছিল ${formatMoney(payload.snapshot.yesterday.expenses)}।`;
+          break;
+        case "yesterday_cash":
+          answer = `গতকাল ক্যাশ ব্যালেন্স ছিল ${formatMoney(payload.snapshot.yesterday.cashBalance)}।`;
+          break;
+        case "due_total":
+          answer =
+            payload.snapshot.dueTotal > 0
+              ? `মোট বাকি এখন ${formatMoney(payload.snapshot.dueTotal)}। ${formatCount(payload.snapshot.dueCustomerCount)} জন কাস্টমারের কাছে due আছে।`
+              : "এখন কোনো customer due নেই।";
+          break;
+        case "payables_total":
+          answer =
+            payload.snapshot.payablesTotal > 0
+              ? `Supplier payable এখন ${formatMoney(payload.snapshot.payablesTotal)}। ${formatCount(payload.snapshot.payableSupplierCount)} জন supplier-এর কাছে due আছে।`
+              : "এখন কোনো supplier payable নেই।";
+          break;
+        case "queue_pending":
+          answer =
+            payload.snapshot.queuePendingCount > 0
+              ? `এখন queue-তে ${formatCount(payload.snapshot.queuePendingCount)}টি pending token আছে।`
+              : "এখন queue-তে কোনো pending token নেই।";
+          break;
+        case "top_product_today":
+          answer = payload.snapshot.topProductName
+            ? `আজ সবচেয়ে বেশি টানছে ${payload.snapshot.topProductName}। বিক্রি ${formatCompactValue(payload.snapshot.topProductQty)} ইউনিট এবং revenue ${formatMoney(payload.snapshot.topProductRevenue)}।`
+            : "আজ এখনো top-selling item বের করার মতো বিক্রি হয়নি।";
+          break;
+        case "low_stock_list": {
+          const lowStockItems = await getLowStockPreview(shopId);
+          if (lowStockItems.length === 0) {
+            answer = "এখন low stock-এ কোনো active tracked item নেই।";
+            break;
+          }
+          const preview = lowStockItems
+            .map(
+              (item) =>
+                `${item.name} (${formatCompactValue(Number(item.stockQty ?? 0))} ${item.baseUnit || "pcs"})`
+            )
+            .join(", ");
+          answer = `Low stock-এ ${formatCount(payload.snapshot.lowStockCount)}টি item আছে। সবচেয়ে জরুরি: ${preview}।`;
+          break;
+        }
+        case "customer_due": {
+          const customer = await findBestCustomer(shopId, intent.customerName);
+          if (!customer) {
+            answer = `${intent.customerName} নামে কোনো কাস্টমার খুঁজে পাইনি। নামটা আরেকটু স্পষ্ট করে বলুন।`;
+          } else {
+            matchedCustomerName = customer.name;
+            answer =
+              Number(customer.totalDue ?? 0) > 0
+                ? `${customer.name}-এর কাছে এখন মোট বাকি ${formatMoney(Number(customer.totalDue ?? 0))}।`
+                : `${customer.name}-এর কাছে এখন কোনো বাকি নেই।`;
+          }
+          break;
+        }
+        case "product_query": {
+          const product = await findBestProduct(shopId, intent.productName);
+          if (!product) {
+            answer = `${intent.productName} নামে কোনো product খুঁজে পাইনি। নাম, SKU, বা barcode আরেকটু স্পষ্ট করে বলুন।`;
+            break;
+          }
+
+          const stockQty = Number(product.stockQty ?? 0);
+          const stockText = `${formatCompactValue(stockQty)} ${product.baseUnit || "pcs"}`;
+          const lowStockNote =
+            product.trackStock && stockQty <= 10
+              ? " Low stock zone-এ আছে।"
+              : "";
+          const activeText = product.isActive ? "active" : "inactive";
+          const skuText = product.sku ? ` SKU ${product.sku}.` : "";
+          const barcodeText = product.barcode ? ` Barcode ${product.barcode}.` : "";
+
+          if (intent.mode === "exists") {
+            answer = `${product.name} product আছে। এটা ${activeText} এবং বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${product.trackStock ? ` বর্তমান stock ${stockText}.` : " এই item-এ stock tracking চালু নেই."}${lowStockNote}${skuText}${barcodeText}`;
+          } else if (intent.mode === "stock") {
+            answer = product.trackStock
+              ? `${product.name}-এর বর্তমান stock ${stockText}। বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${lowStockNote}${skuText}${barcodeText}`
+              : `${product.name} item-এ stock tracking চালু নেই। বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${skuText}${barcodeText}`;
+          } else {
+            answer = `${product.name} ${product.isActive ? "active" : "inactive"} product। Category ${product.category}. বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${product.trackStock ? ` বর্তমান stock ${stockText}.` : " Stock tracking চালু নেই."}${lowStockNote}${skuText}${barcodeText}`;
+          }
+          break;
+        }
+      }
+
+      return NextResponse.json(
+        {
+          supported: true,
+          normalizedQuestion: normalizeCopilotQuestion(question),
+          intent: intent.type,
+          answer,
+          matchedCustomerName,
+          suggestions: COPILOT_QUESTION_SUGGESTIONS,
+        },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "private, no-store",
+          },
+        }
+      );
+    } catch (error) {
+      console.error("owner copilot ask route error", error);
+      return NextResponse.json(
+        { error: "Failed to answer owner copilot question" },
+        { status: 500 }
+      );
+    }
+  });
+}
