@@ -35,6 +35,8 @@ import {
   CreditCard,
   HandCoins,
   LayoutDashboard,
+  LayoutGrid,
+  List,
   LogOut,
   Menu,
   NotebookText,
@@ -123,7 +125,6 @@ const navItems: { href: string; label: string; Icon: LucideIcon }[] = [
 const bottomNav: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/dashboard", label: "ড্যাশ", Icon: LayoutDashboard },
   { href: "/dashboard/sales", label: "বিক্রি", Icon: ShoppingCart },
-  { href: "/dashboard/queue", label: "টোকেন", Icon: Ticket },
   { href: "/dashboard/products", label: "পণ্য", Icon: Package },
   { href: "/dashboard/expenses", label: "খরচ", Icon: Receipt },
   { href: "/dashboard/reports", label: "রিপোর্ট", Icon: BarChart3 },
@@ -146,13 +147,6 @@ const bottomNavTone: Record<
     iconActive:
       "bg-gradient-to-br from-emerald-500/40 via-emerald-400/25 to-emerald-600/40 text-emerald-700",
     itemActive: "text-emerald-700 bg-emerald-500/10",
-  },
-  "/dashboard/queue": {
-    icon:
-      "bg-gradient-to-br from-cyan-400/25 via-cyan-300/10 to-cyan-600/25 text-cyan-600",
-    iconActive:
-      "bg-gradient-to-br from-cyan-500/40 via-cyan-400/25 to-cyan-600/40 text-cyan-700",
-    itemActive: "text-cyan-700 bg-cyan-500/10",
   },
   "/dashboard/products": {
     icon:
@@ -200,6 +194,7 @@ export function DashboardShell({
   const { shopId, setShop } = useCurrentShop();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarNavLayout, setSidebarNavLayout] = useState<"grid" | "list">("grid");
   const [mounted, setMounted] = useState(false);
   const [isNavigating, startTransition] = useTransition();
   const [showNavSkeleton, setShowNavSkeleton] = useState(false);
@@ -316,6 +311,10 @@ export function DashboardShell({
       const raw = safeLocalStorageGet("dashboard.sidebarCollapsed");
       if (raw === "1") setSidebarCollapsed(true);
       if (raw === "0") setSidebarCollapsed(false);
+      const storedLayout = safeLocalStorageGet("dashboard.sidebarNavLayout");
+      if (storedLayout === "list" || storedLayout === "grid") {
+        setSidebarNavLayout(storedLayout);
+      }
     } catch {
       // ignore
     }
@@ -400,6 +399,15 @@ export function DashboardShell({
     });
   };
 
+  const setNavLayout = (next: "grid" | "list") => {
+    setSidebarNavLayout(next);
+    try {
+      safeLocalStorageSet("dashboard.sidebarNavLayout", next);
+    } catch {
+      // ignore
+    }
+  };
+
 
 
   const routePermissionMap: Record<string, string> = {
@@ -435,17 +443,20 @@ export function DashboardShell({
     [hasInventory, currentQueueTokenEnabled]
   );
 
+  const usingGridNav = !sidebarCollapsed && sidebarNavLayout === "grid";
   const navGroupClass = sidebarCollapsed
     ? "flex flex-col gap-1"
-    : "grid grid-cols-2 gap-2";
+    : usingGridNav
+      ? "grid grid-cols-2 gap-2"
+      : "flex flex-col gap-1.5";
 
   const navItemClass = (active: boolean) => {
-    if (sidebarCollapsed) {
+    if (sidebarCollapsed || sidebarNavLayout === "list") {
       return `group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
         active
           ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
           : "text-sidebar-foreground hover:bg-sidebar-accent"
-      } lg:justify-center`;
+      } ${sidebarCollapsed ? "lg:justify-center" : ""}`;
     }
 
     return `group relative flex flex-col items-start gap-2 rounded-2xl border border-sidebar-border/60 bg-gradient-to-br from-sidebar/80 via-sidebar to-sidebar-accent/40 px-3.5 py-3.5 text-[13px] font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar shadow-[0_8px_18px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] card-lift ${
@@ -480,7 +491,7 @@ export function DashboardShell({
       ring: "ring-sidebar-border",
       icon: "text-sidebar-accent-foreground",
     };
-    if (sidebarCollapsed) {
+    if (sidebarCollapsed || sidebarNavLayout === "list") {
       return `inline-flex h-9 w-9 items-center justify-center rounded-lg ${
         active
           ? "bg-sidebar-primary/20"
@@ -502,7 +513,9 @@ export function DashboardShell({
 
   const navLabelClass = sidebarCollapsed
     ? "lg:hidden truncate"
-    : "truncate text-[13px] leading-snug";
+    : sidebarNavLayout === "list"
+      ? "truncate text-sm font-medium leading-snug"
+      : "truncate text-[13px] leading-snug";
 
   const handleShopChange = (id: string) => {
     if (!id || id === safeShopId) return;
@@ -653,6 +666,39 @@ export function DashboardShell({
               >
                 প্রধান মেনু
               </div>
+
+              {!sidebarCollapsed ? (
+                <div className="mb-3 px-2">
+                  <div className="inline-flex w-full rounded-xl border border-sidebar-border bg-sidebar-accent/70 p-1 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => setNavLayout("grid")}
+                      aria-pressed={sidebarNavLayout === "grid"}
+                      className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                        sidebarNavLayout === "grid"
+                          ? "bg-sidebar text-sidebar-foreground shadow-sm"
+                          : "text-sidebar-accent-foreground hover:text-sidebar-foreground"
+                      }`}
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5" />
+                      <span>Grid</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNavLayout("list")}
+                      aria-pressed={sidebarNavLayout === "list"}
+                      className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                        sidebarNavLayout === "list"
+                          ? "bg-sidebar text-sidebar-foreground shadow-sm"
+                          : "text-sidebar-accent-foreground hover:text-sidebar-foreground"
+                      }`}
+                    >
+                      <List className="h-3.5 w-3.5" />
+                      <span>List</span>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               <div className={navGroupClass}>
                 {visibleNavItems
