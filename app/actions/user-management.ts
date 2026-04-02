@@ -332,7 +332,9 @@ export async function createUserWithRole(
     const preset = getStaffPermissionPreset(
       staffPresetKey ?? DEFAULT_STAFF_PERMISSION_PRESET,
     );
-    const basePermissions = await getBasePermissionsForManagedRole("staff");
+    const basePermissions = await getBasePermissionsForManagedRole("staff", {
+      syncStaffBaseline: true,
+    });
     const permissionIdByName = new Map(
       basePermissions.map((permission) => [permission.name, permission.id]),
     );
@@ -544,7 +546,16 @@ async function requireStaffPermissionAccess(
   return { actorRole, targetRoleName };
 }
 
-async function getBasePermissionsForManagedRole(roleName: "staff" | "manager") {
+type ManagedRolePermission = {
+  id: string;
+  name: string;
+  description: string | null;
+};
+
+async function getBasePermissionsForManagedRole(
+  roleName: "staff" | "manager",
+  options?: { syncStaffBaseline?: boolean },
+) {
   const role = await prisma.role.findUnique({
     where: { name: roleName },
     select: {
@@ -563,9 +574,7 @@ async function getBasePermissionsForManagedRole(roleName: "staff" | "manager") {
 
   const basePermissions = role.rolePermissions
     .map((rp) => rp.permission)
-    .filter((perm): perm is { id: string; name: string; description: string | null } =>
-      Boolean(perm),
-    );
+    .filter((perm): perm is ManagedRolePermission => Boolean(perm));
 
   if (roleName !== "staff") {
     return basePermissions;
@@ -577,12 +586,13 @@ async function getBasePermissionsForManagedRole(roleName: "staff" | "manager") {
   );
 
   if (missingNames.length) {
-    const missingPermissions = await prisma.permission.findMany({
-      where: { name: { in: missingNames } },
-      select: { id: true, name: true, description: true },
-    });
+    const missingPermissions: ManagedRolePermission[] =
+      await prisma.permission.findMany({
+        where: { name: { in: missingNames } },
+        select: { id: true, name: true, description: true },
+      });
 
-    if (missingPermissions.length) {
+    if (missingPermissions.length && options?.syncStaffBaseline) {
       await prisma.rolePermission.createMany({
         data: missingPermissions.map((perm) => ({
           roleId: role.id,
@@ -591,13 +601,14 @@ async function getBasePermissionsForManagedRole(roleName: "staff" | "manager") {
         skipDuplicates: true,
       });
 
-      missingPermissions.forEach((perm) => {
-        if (!existingNames.has(perm.name)) {
-          basePermissions.push(perm);
-          existingNames.add(perm.name);
-        }
-      });
     }
+
+    missingPermissions.forEach((perm) => {
+      if (!existingNames.has(perm.name)) {
+        basePermissions.push(perm);
+        existingNames.add(perm.name);
+      }
+    });
   }
 
   return basePermissions;
@@ -676,7 +687,9 @@ export async function updateStaffPermissions(
     "edit_users_under_me",
   );
 
-  const basePermissions = await getBasePermissionsForManagedRole(targetRoleName);
+  const basePermissions = await getBasePermissionsForManagedRole(targetRoleName, {
+    syncStaffBaseline: true,
+  });
   await saveManagedRolePermissionSelection(
     userId,
     basePermissions,
