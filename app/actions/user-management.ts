@@ -537,10 +537,18 @@ async function requireStaffPermissionAccess(
   }
 
   if (!isSuperAdminRole(actorRole)) {
-    if (actorRole !== "owner") {
-      throw new Error("Forbidden: only owners can manage manager/staff permissions");
+    if (actorRole === "owner") {
+      await ensureOwnerOwnsStaffShop(actor.id, targetUser.staffShopId);
+    } else if (actorRole === "manager") {
+      if (targetRoleName !== "staff") {
+        throw new Error("Forbidden: managers can only manage staff permissions");
+      }
+      await ensureManagerOwnsStaffShop(actor.staffShopId, targetUser.staffShopId);
+    } else {
+      throw new Error(
+        "Forbidden: only owners or managers can manage manager/staff permissions",
+      );
     }
-    await ensureOwnerOwnsStaffShop(actor.id, targetUser.staffShopId);
   }
 
   return { actorRole, targetRoleName };

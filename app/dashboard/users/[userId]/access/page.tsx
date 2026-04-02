@@ -13,7 +13,8 @@ type PageProps = { params: Promise<{ userId: string }> };
 export default async function StaffAccessPage({ params }: PageProps) {
   const actor = await requireUser();
   const canViewUsers = hasPermission(actor, "view_users_under_me");
-  const canManageStaffPermissions = isSuperAdmin(actor) || hasRole(actor, "owner");
+  const canManageStaffPermissions =
+    isSuperAdmin(actor) || hasRole(actor, "owner") || hasRole(actor, "manager");
 
   if (!canViewUsers || !canManageStaffPermissions) {
     return (
@@ -21,7 +22,7 @@ export default async function StaffAccessPage({ params }: PageProps) {
         <h1 className="text-2xl font-bold mb-4 text-foreground">টিম অ্যাকসেস কন্ট্রোল</h1>
         <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
         <p className="mb-6 text-muted-foreground">
-          এই পেজ ব্যবহারের জন্য owner/super admin role এবং{" "}
+          এই পেজ ব্যবহারের জন্য owner/manager/super admin role এবং{" "}
           <code>view_users_under_me</code> permission লাগবে।
         </p>
         <Link
