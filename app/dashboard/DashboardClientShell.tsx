@@ -22,8 +22,10 @@ const AUTO_PREPARE_INTERVAL_MS = 5 * 60 * 1000;
 
 export default function DashboardClientShell({
   children,
+  showCopilot = true,
 }: {
   children: ReactNode;
+  showCopilot?: boolean;
 }) {
   const online = useOnlineStatus();
   const pathname = usePathname();
@@ -90,7 +92,7 @@ export default function DashboardClientShell({
         <SyncHealthBanner />
         <OfflineConflictBanner />
       </div>
-      <FloatingCopilotLauncher />
+      {showCopilot ? <FloatingCopilotLauncher /> : null}
       {children}
     </>
   );

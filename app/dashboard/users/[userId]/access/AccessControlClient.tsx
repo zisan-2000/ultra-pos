@@ -6,6 +6,7 @@ import { updateStaffPermissions } from "@/app/actions/user-management";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { cn } from "@/lib/utils";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { STAFF_PERMISSION_PRESETS } from "@/lib/staff-permission-presets";
 import {
   moduleLabels,
   permissionMeta,
@@ -39,88 +40,6 @@ type AccessControlInnerProps = AccessControlClientProps & {
   initialEnabled: Set<string>;
 };
 
-const presetDefinitions = [
-  {
-    key: "pos-basic",
-    label: "POS বেসিক",
-    description: "বিক্রি + কাস্টমার + বকেয়া ম্যানেজ",
-    permissionNames: [
-      "view_dashboard_summary",
-      "view_products",
-      "view_purchases",
-      "create_purchase",
-      "view_suppliers",
-      "create_supplier",
-      "create_purchase_payment",
-      "view_sales",
-      "view_sale_details",
-      "view_sales_invoice",
-      "view_sale_return",
-      "create_sale",
-      "create_sale_return",
-      "use_pos_barcode_scan",
-      "issue_sales_invoice",
-      "view_queue_board",
-      "create_queue_token",
-      "update_queue_token_status",
-      "print_queue_token",
-      "create_due_sale",
-      "take_due_payment_from_sale",
-      "view_customers",
-      "create_customer",
-      "view_due_summary",
-      "view_customer_due",
-      "take_due_payment",
-      "use_offline_pos",
-      "sync_offline_data",
-    ],
-  },
-  {
-    key: "pos-reports",
-    label: "POS + রিপোর্ট",
-    description: "বিক্রি + রিপোর্ট দেখার অনুমতি",
-    permissionNames: [
-      "view_dashboard_summary",
-      "view_products",
-      "view_purchases",
-      "create_purchase",
-      "view_suppliers",
-      "create_supplier",
-      "create_purchase_payment",
-      "view_sales",
-      "view_sale_details",
-      "view_sales_invoice",
-      "view_sale_return",
-      "create_sale",
-      "create_sale_return",
-      "use_pos_barcode_scan",
-      "issue_sales_invoice",
-      "view_queue_board",
-      "create_queue_token",
-      "update_queue_token_status",
-      "print_queue_token",
-      "create_due_sale",
-      "take_due_payment_from_sale",
-      "view_customers",
-      "create_customer",
-      "view_due_summary",
-      "view_customer_due",
-      "take_due_payment",
-      "view_reports",
-      "view_sales_report",
-      "view_expense_report",
-      "view_cashbook_report",
-      "view_profit_report",
-      "view_payment_method_report",
-      "view_top_products_report",
-      "view_low_stock_report",
-      "export_reports",
-      "use_offline_pos",
-      "sync_offline_data",
-    ],
-  },
-];
-
 function AccessControlInner({
   user,
   permissions,
@@ -145,6 +64,7 @@ function AccessControlInner({
     }
     return "স্টাফ";
   }, [user.roles]);
+  const supportsPresets = targetRoleLabel === "স্টাফ";
 
   const permissionIdByName = useMemo(() => {
     const map = new Map<string, string>();
@@ -401,12 +321,13 @@ function AccessControlInner({
           </div>
         </div>
 
+        {supportsPresets ? (
         <div>
           <div className="text-xs font-semibold text-muted-foreground mb-2">
-            দ্রুত প্রিসেট
+            স্টাফ প্রিসেট
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            {presetDefinitions.map((preset) => (
+            {STAFF_PERMISSION_PRESETS.map((preset) => (
               <button
                 key={preset.key}
                 type="button"
@@ -417,12 +338,12 @@ function AccessControlInner({
                   readOnly && "opacity-60 cursor-not-allowed",
                 )}
               >
-                <div className="text-sm font-semibold text-foreground">
-                  {preset.label}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {preset.description}
-                </div>
+                  <div className="text-sm font-semibold text-foreground">
+                    {preset.label}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {preset.description}
+                  </div>
               </button>
             ))}
             <button
@@ -433,16 +354,17 @@ function AccessControlInner({
                 "rounded-xl border border-border bg-card p-3 text-left shadow-sm hover:bg-muted",
                 readOnly && "opacity-60 cursor-not-allowed",
               )}
-            >
-              <div className="text-sm font-semibold text-foreground">
-                ফুল রোল অ্যাকসেস
+                >
+                  <div className="text-sm font-semibold text-foreground">
+                    ফুল রোল অ্যাকসেস
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    এই রোলের সব অনুমতি চালু করুন
+                  </div>
+                </button>
               </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                এই রোলের সব অনুমতি চালু করুন
-              </div>
-            </button>
-          </div>
         </div>
+        ) : null}
       </div>
 
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">

@@ -171,9 +171,10 @@ export function EditUserDialog({
   if (!isOpen || !user) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40">
-      <div className="w-full max-w-md rounded-lg border border-border bg-card shadow-xl mx-4">
-        <div className="flex items-center justify-between border-b border-border p-6">
+    <div className="fixed inset-0 z-50 bg-foreground/45 sm:flex sm:items-center sm:justify-center">
+      <div className="flex h-full w-full items-end sm:h-auto sm:w-full sm:max-w-lg sm:items-center sm:justify-center sm:px-4">
+        <div className="flex h-[92dvh] w-full flex-col rounded-t-3xl border border-border bg-card shadow-xl sm:h-auto sm:max-h-[88vh] sm:rounded-2xl">
+        <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-6 sm:py-5">
           <h2 className="text-lg font-semibold text-foreground">
             ব্যবহারকারী সম্পাদনা
           </h2>
@@ -186,150 +187,176 @@ export function EditUserDialog({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="rounded-lg border border-danger/30 bg-danger-soft p-3">
-              <p className="text-sm text-danger">{error}</p>
-            </div>
-          )}
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">
-              নাম *
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="ব্যবহারকারীর নাম লিখুন"
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              disabled={loading}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-foreground">
-                নতুন পাসওয়ার্ড
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="ফাঁকা রাখলে পরিবর্তন হবে না"
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 pr-10 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  disabled={loading || !online}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "পাসওয়ার্ড লুকান" : "পাসওয়ার্ড দেখুন"}
-                  disabled={loading || !online}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+            {error && (
+              <div className="rounded-lg border border-danger/30 bg-danger-soft p-3">
+                <p className="text-sm text-danger">{error}</p>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {PASSWORD_POLICY_HELPER_TEXT}
-              </p>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-foreground">
-                কনফার্ম পাসওয়ার্ড
-              </label>
-              <div className="relative">
+            )}
+
+            <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/30 p-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  বেসিক তথ্য
+                </p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  নাম *
+                </label>
                 <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="আবার পাসওয়ার্ড লিখুন"
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 pr-10 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  disabled={loading || !online}
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="ব্যবহারকারীর নাম লিখুন"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  disabled={loading}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword((prev) => !prev)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={
-                    showConfirmPassword
-                      ? "কনফার্ম পাসওয়ার্ড লুকান"
-                      : "কনফার্ম পাসওয়ার্ড দেখুন"
-                  }
-                  disabled={loading || !online}
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  ইমেইল *
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  disabled={loading}
+                />
               </div>
             </div>
-          </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">
-              ইমেইল *
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="user@example.com"
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              disabled={loading}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">
-              ভূমিকা
-            </label>
-            <div className="flex flex-wrap gap-1">
-              {user.roles.length === 0 ? (
-                <span className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
-                  কোনো ভূমিকা নেই
-                </span>
-              ) : (
-                user.roles.map((role) => (
-                  <span
-                    key={role.id}
-                    className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-foreground"
-                  >
-                    {role.name}
-                  </span>
-                ))
-              )}
+            <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/30 p-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  নিরাপত্তা
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-foreground">
+                    নতুন পাসওয়ার্ড
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="ফাঁকা রাখলে পরিবর্তন হবে না"
+                      className="w-full rounded-lg border border-border bg-card px-3 py-2 pr-10 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      disabled={loading || !online}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showPassword ? "পাসওয়ার্ড লুকান" : "পাসওয়ার্ড দেখুন"}
+                      disabled={loading || !online}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {PASSWORD_POLICY_HELPER_TEXT}
+                  </p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-foreground">
+                    কনফার্ম পাসওয়ার্ড
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="আবার পাসওয়ার্ড লিখুন"
+                      className="w-full rounded-lg border border-border bg-card px-3 py-2 pr-10 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      disabled={loading || !online}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={
+                        showConfirmPassword
+                          ? "কনফার্ম পাসওয়ার্ড লুকান"
+                          : "কনফার্ম পাসওয়ার্ড দেখুন"
+                      }
+                      disabled={loading || !online}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              ভূমিকা পরিবর্তন করতে RBAC admin panel ব্যবহার করুন।
-            </p>
+
+            <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/30 p-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  রোল তথ্য
+                </p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  ভূমিকা
+                </label>
+                <div className="flex flex-wrap gap-1">
+                  {user.roles.length === 0 ? (
+                    <span className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
+                      কোনো ভূমিকা নেই
+                    </span>
+                  ) : (
+                    user.roles.map((role) => (
+                      <span
+                        key={role.id}
+                        className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-foreground"
+                      >
+                        {role.name}
+                      </span>
+                    ))
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  ভূমিকা পরিবর্তন করতে RBAC admin panel ব্যবহার করুন।
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-lg border border-border px-4 py-2 font-medium text-foreground hover:bg-muted disabled:opacity-50"
-              disabled={loading}
-            >
-              বাতিল
-            </button>
-            <button
-              type="submit"
-              className="flex-1 rounded-lg border border-primary/30 bg-primary-soft px-4 py-2 font-medium text-primary hover:bg-primary/15 hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={loading}
-            >
-              {loading ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন"}
-            </button>
+          <div className="border-t border-border bg-card/95 px-4 py-4 backdrop-blur sm:px-6">
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 rounded-lg border border-border px-4 py-2 font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                disabled={loading}
+              >
+                বাতিল
+              </button>
+              <button
+                type="submit"
+                className="flex-1 rounded-lg border border-primary/30 bg-primary-soft px-4 py-2 font-medium text-primary hover:bg-primary/15 hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={loading}
+              >
+                {loading ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন"}
+              </button>
+            </div>
           </div>
         </form>
+      </div>
       </div>
     </div>
   );

@@ -17,8 +17,16 @@ export async function DashboardLayoutWrapper({
     redirect("/login");
   }
   const shops = await getShopsByUser();
+  const isPureStaff =
+    user.roles.includes("staff") &&
+    !user.roles.includes("manager") &&
+    !user.roles.includes("owner") &&
+    !user.roles.includes("agent") &&
+    !user.roles.includes("admin") &&
+    !user.roles.includes("super_admin");
+  const showCopilot = !isPureStaff;
   return (
-    <DashboardClientShell>
+    <DashboardClientShell showCopilot={showCopilot}>
       <DashboardShell shops={shops || []} initialUser={user}>
         {children}
       </DashboardShell>

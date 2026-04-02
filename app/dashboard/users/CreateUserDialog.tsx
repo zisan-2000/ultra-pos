@@ -8,6 +8,11 @@ import {
   getPasswordPolicyError,
   PASSWORD_POLICY_HELPER_TEXT,
 } from "@/lib/password-policy";
+import {
+  DEFAULT_STAFF_PERMISSION_PRESET,
+  STAFF_PERMISSION_PRESETS,
+  type StaffPermissionPresetKey,
+} from "@/lib/staff-permission-presets";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { handlePermissionError } from "@/lib/permission-toast";
 
@@ -46,6 +51,8 @@ export function CreateUserDialog({
   );
   const [shops, setShops] = useState<Shop[]>([]);
   const [selectedShopId, setSelectedShopId] = useState("");
+  const [selectedStaffPreset, setSelectedStaffPreset] =
+    useState<StaffPermissionPresetKey>(DEFAULT_STAFF_PERMISSION_PRESET);
   const [shopsLoading, setShopsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +63,7 @@ export function CreateUserDialog({
   );
   const needsShopAssignment =
     selectedRole?.name === "staff" || selectedRole?.name === "manager";
+  const isStaffRole = selectedRole?.name === "staff";
 
   useEffect(() => {
     if (!isOpen || !needsShopAssignment) return;
@@ -131,13 +139,15 @@ export function CreateUserDialog({
         trimmedName,
         trimmedPassword,
         selectedRoleId,
-        needsShopAssignment ? selectedShopId : undefined
+        needsShopAssignment ? selectedShopId : undefined,
+        isStaffRole ? selectedStaffPreset : undefined,
       );
       setName("");
       setEmail("");
       setPassword("");
       setSelectedRoleId(creatableRoles[0]?.id || "");
       setSelectedShopId("");
+      setSelectedStaffPreset(DEFAULT_STAFF_PERMISSION_PRESET);
       onSuccess();
       onClose();
     } catch (err) {
@@ -151,9 +161,10 @@ export function CreateUserDialog({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-foreground/40 flex items-center justify-center z-50">
-      <div className="bg-card rounded-lg shadow-xl w-full max-w-md mx-4">
-        <div className="flex items-center justify-between p-6 border-b border-border">
+    <div className="fixed inset-0 z-50 bg-foreground/45 sm:flex sm:items-center sm:justify-center">
+      <div className="flex h-full w-full items-end sm:h-auto sm:w-full sm:max-w-lg sm:items-center sm:justify-center sm:px-4">
+        <div className="flex h-[92dvh] w-full flex-col rounded-t-3xl border border-border bg-card shadow-xl sm:h-auto sm:max-h-[88vh] sm:rounded-2xl">
+        <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-6 sm:py-5">
           <h2 className="text-lg font-semibold text-foreground">
             নতুন ব্যবহারকারী তৈরি করুন
           </h2>
@@ -166,7 +177,8 @@ export function CreateUserDialog({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
           {isOfflineBlocked && (
             <div className="rounded-lg border border-warning/30 bg-warning-soft text-warning text-xs font-semibold px-3 py-2">
               অফলাইন: নতুন ব্যবহারকারী তৈরি করা যাবে না
@@ -178,7 +190,13 @@ export function CreateUserDialog({
             </div>
           )}
 
-          <div>
+          <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/30 p-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                বেসিক তথ্য
+              </p>
+            </div>
+            <div>
             <label className="block text-sm font-medium text-foreground mb-1">
               নাম *
             </label>
@@ -205,7 +223,14 @@ export function CreateUserDialog({
               disabled={loading}
             />
           </div>
+          </div>
 
+          <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/30 p-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                নিরাপত্তা
+              </p>
+            </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
               পাসওয়ার্ড *
@@ -237,7 +262,14 @@ export function CreateUserDialog({
               {PASSWORD_POLICY_HELPER_TEXT}
             </p>
           </div>
+          </div>
 
+          <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/30 p-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                ভূমিকা ও অ্যাকসেস
+              </p>
+            </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
               ভূমিকা *
@@ -285,7 +317,40 @@ export function CreateUserDialog({
             </div>
           )}
 
-          <div className="flex gap-3 pt-4">
+          {isStaffRole && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                স্টাফ প্রিসেট *
+              </label>
+              <select
+                value={selectedStaffPreset}
+                onChange={(e) =>
+                  setSelectedStaffPreset(e.target.value as StaffPermissionPresetKey)
+                }
+                className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                disabled={loading}
+              >
+                {STAFF_PERMISSION_PRESETS.map((preset) => (
+                  <option key={preset.key} value={preset.key}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {
+                  STAFF_PERMISSION_PRESETS.find(
+                    (preset) => preset.key === selectedStaffPreset,
+                  )?.description
+                }
+              </p>
+            </div>
+          )}
+          </div>
+
+          </div>
+
+          <div className="border-t border-border bg-card/95 px-4 py-4 backdrop-blur sm:px-6">
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -302,7 +367,9 @@ export function CreateUserDialog({
               {loading ? "তৈরি হচ্ছে..." : "তৈরি করুন"}
             </button>
           </div>
+          </div>
         </form>
+      </div>
       </div>
     </div>
   );

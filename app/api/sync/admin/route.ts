@@ -31,6 +31,7 @@ import {
   updateUser,
 } from "@/app/actions/user-management";
 import { getPasswordPolicyError } from "@/lib/password-policy";
+import { STAFF_PERMISSION_PRESET_KEYS } from "@/lib/staff-permission-presets";
 import { businessFieldConfig as STATIC_CONFIGS, type BusinessType } from "@/lib/productFormConfig";
 
 function isBusinessType(value: string): value is BusinessType {
@@ -172,6 +173,7 @@ const userCreateSchema = z.object({
   }),
   roleId: z.string().min(1),
   staffShopId: z.string().optional().nullable(),
+  staffPresetKey: z.enum(STAFF_PERMISSION_PRESET_KEYS).optional().nullable(),
 });
 
 const userUpdateSchema = z.object({
@@ -424,7 +426,8 @@ export async function POST(req: Request) {
                 input.name,
                 input.password,
                 input.roleId,
-                input.staffShopId ?? undefined
+                input.staffShopId ?? undefined,
+                input.staffPresetKey ?? undefined,
               );
               break;
             }

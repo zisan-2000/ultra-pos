@@ -3,6 +3,7 @@ import { hasRole, isSuperAdmin } from "@/lib/rbac";
 import AdminDashboardPage from "../admin/dashboard/page";
 import AgentDashboardPage from "../agent/dashboard/page";
 import OwnerDashboardPage from "../owner/dashboard/page";
+import StaffDashboardPageContent from "../staff/dashboard/StaffDashboardPageContent";
 import SuperAdminDashboardPage from "../super-admin/dashboard/page";
 
 type DashboardPageProps = {
@@ -22,6 +23,14 @@ export default async function DashboardPage(props: DashboardPageProps) {
 
   if (hasRole(user, "agent")) {
     return <AgentDashboardPage />;
+  }
+
+  if (
+    hasRole(user, "staff") &&
+    !hasRole(user, "manager") &&
+    !hasRole(user, "owner")
+  ) {
+    return <StaffDashboardPageContent {...props} />;
   }
 
   return <OwnerDashboardPage {...props} />;

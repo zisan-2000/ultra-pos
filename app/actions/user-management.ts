@@ -8,6 +8,11 @@ import { requirePermission } from "@/lib/rbac";
 import { hashPassword } from "@/lib/password";
 import { assertStrongPassword } from "@/lib/password-policy";
 import { STAFF_BASELINE_PERMISSIONS } from "@/lib/staff-baseline-permissions";
+import {
+  DEFAULT_STAFF_PERMISSION_PRESET,
+  getStaffPermissionPreset,
+  type StaffPermissionPresetKey,
+} from "@/lib/staff-permission-presets";
 
 /**
  * Role hierarchy (lower index = higher privilege):
@@ -214,7 +219,8 @@ export async function createUserWithRole(
   name: string,
   password: string,
   roleId: string,
-  staffShopId?: string | null
+  staffShopId?: string | null,
+  staffPresetKey?: StaffPermissionPresetKey | null,
 ) {
   const creator = await requireUser();
   const creatorRole = getUserPrimaryRole(creator.roles);
@@ -321,6 +327,25 @@ export async function createUserWithRole(
       scope: "email:password",
     },
   });
+
+  if (role.name === "staff") {
+    const preset = getStaffPermissionPreset(
+      staffPresetKey ?? DEFAULT_STAFF_PERMISSION_PRESET,
+    );
+    const basePermissions = await getBasePermissionsForManagedRole("staff");
+    const permissionIdByName = new Map(
+      basePermissions.map((permission) => [permission.name, permission.id]),
+    );
+    const enabledPermissionIds = preset.permissionNames
+      .map((permissionName) => permissionIdByName.get(permissionName))
+      .filter((permissionId): permissionId is string => Boolean(permissionId));
+
+    await saveManagedRolePermissionSelection(
+      newUser.id,
+      basePermissions,
+      enabledPermissionIds,
+    );
+  }
 
   return newUser;
 }
@@ -652,17 +677,31 @@ export async function updateStaffPermissions(
   );
 
   const basePermissions = await getBasePermissionsForManagedRole(targetRoleName);
-  const baseIds = basePermissions.map((p) => p.id);
-  const baseSet = new Set(baseIds);
+  await saveManagedRolePermissionSelection(
+    userId,
+    basePermissions,
+    enabledPermissionIds,
+  );
 
+  return { success: true };
+}
+
+async function saveManagedRolePermissionSelection(
+  userId: string,
+  basePermissions: Array<{ id: string; name: string; description: string | null }>,
+  enabledPermissionIds: string[],
+) {
+  const baseIds = basePermissions.map((permission) => permission.id);
+  const baseSet = new Set(baseIds);
   const uniqueEnabled = Array.from(new Set(enabledPermissionIds));
-  const unknown = uniqueEnabled.filter((id) => !baseSet.has(id));
+  const unknown = uniqueEnabled.filter((permissionId) => !baseSet.has(permissionId));
+
   if (unknown.length > 0) {
     throw new Error("Invalid permission selection");
   }
 
   const enabledSet = new Set(uniqueEnabled);
-  const deniedIds = baseIds.filter((id) => !enabledSet.has(id));
+  const deniedIds = baseIds.filter((permissionId) => !enabledSet.has(permissionId));
 
   await prisma.userPermissionOverride.deleteMany({
     where: { userId, permissionId: { in: baseIds } },
@@ -678,6 +717,4 @@ export async function updateStaffPermissions(
       skipDuplicates: true,
     });
   }
-
-  return { success: true };
 }

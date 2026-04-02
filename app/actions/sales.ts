@@ -2238,7 +2238,7 @@ export async function getSalesSummary({
 // ------------------------------
 export async function voidSale(saleId: string, reason?: string | null) {
   const user = await requireUser();
-  requirePermission(user, "create_sale");
+  requirePermission(user, "cancel_sale");
 
   const sale = await prisma.sale.findUnique({
     where: { id: saleId },
