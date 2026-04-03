@@ -261,6 +261,7 @@ export const PosProductSearch = memo(function PosProductSearch({
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
+  const categoryChipsRef = useRef<HTMLDivElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const cameraScanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -288,6 +289,8 @@ export const PosProductSearch = memo(function PosProductSearch({
     [shopId]
   );
   const [renderCount, setRenderCount] = useState(INITIAL_RENDER);
+  const [showCategoryOverflowCue, setShowCategoryOverflowCue] = useState(false);
+  const [categoryScrollAtEnd, setCategoryScrollAtEnd] = useState(true);
 
   const deferredQuery = useDeferredValue(query);
   const debouncedQuery = useDebounce(deferredQuery, 200);
@@ -762,6 +765,32 @@ export const PosProductSearch = memo(function PosProductSearch({
     () => sortedResults.slice(0, renderCount),
     [sortedResults, renderCount]
   );
+
+  useEffect(() => {
+    const scroller = categoryChipsRef.current;
+    if (!showAllProducts || !scroller) {
+      setShowCategoryOverflowCue(false);
+      setCategoryScrollAtEnd(true);
+      return;
+    }
+
+    const updateScrollCue = () => {
+      const overflow = scroller.scrollWidth - scroller.clientWidth > 12;
+      const atEnd =
+        scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 8;
+      setShowCategoryOverflowCue(overflow);
+      setCategoryScrollAtEnd(!overflow || atEnd);
+    };
+
+    updateScrollCue();
+    scroller.addEventListener("scroll", updateScrollCue, { passive: true });
+    window.addEventListener("resize", updateScrollCue);
+
+    return () => {
+      scroller.removeEventListener("scroll", updateScrollCue);
+      window.removeEventListener("resize", updateScrollCue);
+    };
+  }, [showAllProducts, availableCategories.length]);
 
   const addToCart = useCallback(
     (product: EnrichedProduct) => {
@@ -1441,27 +1470,42 @@ export const PosProductSearch = memo(function PosProductSearch({
         </div>
         {showAllProducts ? (
           <>
-            <div className="bg-muted/40 border border-border rounded-2xl p-3 flex flex-wrap gap-2">
-              {availableCategories.map((cat) => (
-                <button
-                  key={cat.key}
-                  type="button"
-                  onClick={() => {
-                    setActiveCategory(cat.key);
-                    setShowAllProducts(true);
-                  }}
-                  className={`px-3 py-2 rounded-full border text-sm transition-colors ${
-                    activeCategory === cat.key
-                      ? "bg-primary-soft border-primary/40 text-primary"
-                      : "bg-card border-border text-foreground hover:border-primary/30"
-                  }`}
+            <div className="bg-muted/40 border border-border rounded-2xl p-2.5">
+              <div className="relative">
+                <div
+                  ref={categoryChipsRef}
+                  className="flex gap-2 overflow-x-auto no-scrollbar whitespace-nowrap pr-12 sm:flex-wrap sm:overflow-visible sm:whitespace-normal sm:pr-1"
                 >
-                  {cat.label}
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    ({cat.count})
-                  </span>
-                </button>
-              ))}
+                  {availableCategories.map((cat) => (
+                    <button
+                      key={cat.key}
+                      type="button"
+                      onClick={() => {
+                        setActiveCategory(cat.key);
+                        setShowAllProducts(true);
+                      }}
+                      className={`shrink-0 px-3 py-2 rounded-full border text-sm transition-colors ${
+                        activeCategory === cat.key
+                          ? "bg-primary-soft border-primary/40 text-primary"
+                          : "bg-card border-border text-foreground hover:border-primary/30"
+                      }`}
+                    >
+                      {cat.label}
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        ({cat.count})
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {showCategoryOverflowCue && !categoryScrollAtEnd ? (
+                  <>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 w-14 bg-gradient-to-l from-muted/95 via-muted/70 to-transparent sm:hidden" />
+                    <div className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 rounded-full border border-border bg-card/90 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground shadow-sm sm:hidden">
+                      আরও →
+                    </div>
+                  </>
+                ) : null}
+              </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 px-1 pb-1 max-h-[520px] overflow-y-auto pr-2">
               {visibleResults.length === 0 ? (
