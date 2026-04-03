@@ -454,32 +454,32 @@ export default function FloatingCopilotLauncher() {
           overlayClassName="bg-black/55 data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:[animation-duration:260ms] data-[state=closed]:[animation-duration:380ms] data-[state=open]:[animation-timing-function:cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:[animation-timing-function:cubic-bezier(0.22,1,0.36,1)]"
           className="bottom-0 left-0 right-0 top-auto z-[70] max-h-[88vh] w-full max-w-none translate-x-0 translate-y-0 overflow-y-auto rounded-t-[28px] border-border/70 bg-background/95 p-4 shadow-[0_28px_80px_rgba(15,23,42,0.24)] will-change-transform will-change-opacity data-[state=closed]:slide-out-to-bottom-[4%] data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-bottom-[10%] data-[state=open]:fade-in-0 data-[state=open]:[animation-duration:320ms] data-[state=closed]:[animation-duration:520ms] data-[state=open]:[animation-timing-function:cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:[animation-timing-function:cubic-bezier(0.22,1,0.36,1)] sm:bottom-auto sm:left-auto sm:right-4 sm:top-4 sm:h-[calc(100vh-2rem)] sm:w-[min(560px,calc(100vw-2rem))] sm:max-h-none sm:rounded-[28px] sm:border sm:translate-x-0 sm:translate-y-0 sm:data-[state=closed]:slide-out-to-right-[3%] sm:data-[state=closed]:slide-out-to-top-0 sm:data-[state=open]:slide-in-from-right-[7%] sm:data-[state=open]:slide-in-from-top-0"
         >
-          <DialogHeader className="pr-10">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div className="space-y-1">
-                <div className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                  Smart Copilot
-                </div>
-                <DialogTitle className="text-2xl font-extrabold tracking-tight text-foreground">
-                  যেকোনো সময় দোকানের pulse দেখুন
-                </DialogTitle>
-                <DialogDescription className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                  {payload?.snapshot.shopName
-                    ? `${payload.snapshot.shopName}-এর trend, reason, আর action একসাথে দেখুন।`
-                    : "দোকানের trend, reason, আর action একসাথে দেখুন।"}
-                </DialogDescription>
-                {generatedLabel ? (
-                  <div className="text-xs font-medium text-muted-foreground">
-                    সর্বশেষ refresh: {generatedLabel}
-                  </div>
-                ) : null}
+          <DialogHeader className="space-y-1.5">
+            <div className="flex items-start gap-2 pr-10">
+              <div className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+                স্মার্ট কপাইলট
               </div>
               <RefreshIconButton
                 onClick={() => void loadCopilot(true)}
                 loading={loading}
                 label="রিফ্রেশ"
+                showLabelOnMobile
+                className="ml-auto h-10 shrink-0 px-3"
               />
             </div>
+            <DialogTitle className="text-2xl font-extrabold tracking-tight text-foreground">
+              এক নজরে দোকানের অবস্থা দেখুন
+            </DialogTitle>
+            <DialogDescription className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              {payload?.snapshot.shopName
+                ? `${payload.snapshot.shopName}-এর আজকের অবস্থা, কী সমস্যা আর কী করবেন, সব একসাথে দেখুন।`
+                : "আজকের অবস্থা, কী সমস্যা আর কী করবেন, সব একসাথে দেখুন।"}
+            </DialogDescription>
+            {generatedLabel ? (
+              <div className="text-xs font-medium text-muted-foreground">
+                সর্বশেষ আপডেট: {generatedLabel}
+              </div>
+            ) : null}
           </DialogHeader>
 
           <div className="space-y-4 pb-6 pr-1">
