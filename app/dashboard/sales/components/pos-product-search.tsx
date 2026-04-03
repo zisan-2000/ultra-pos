@@ -1395,14 +1395,9 @@ export const PosProductSearch = memo(function PosProductSearch({
       {/* Quick buttons: visible only when not searching to prioritize results */}
       {query.trim().length === 0 && (
         <div className="space-y-3 bg-gradient-to-br from-card via-card to-muted/40 border border-border rounded-2xl p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
-              ⚡ দ্রুত বিক্রি (সেশন-লকড কুইক বাটন)
-            </h3>
-            <span className="text-xs text-muted-foreground">
-              এই বাটনগুলোর অর্ডার সেশনে আর বদলাবে না
-            </span>
-          </div>
+          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+            ⚡ দ্রুত বিক্রি
+          </h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-3.5 px-1 pb-1">
             {quickSlots.map((slot, idx) => renderQuickSlot(slot, idx))}
           </div>
