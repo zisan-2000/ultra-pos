@@ -119,6 +119,14 @@ function parseSpokenNameAndPhone(spoken: string) {
   return { name, phone };
 }
 
+function isNextRedirectError(err: unknown) {
+  if (!err || typeof err !== "object") return false;
+  const maybe = err as { digest?: unknown; message?: unknown };
+  const digest = typeof maybe.digest === "string" ? maybe.digest : "";
+  const message = typeof maybe.message === "string" ? maybe.message : "";
+  return digest.startsWith("NEXT_REDIRECT") || message.includes("NEXT_REDIRECT");
+}
+
 function scheduleStateUpdate(fn: () => void) {
   if (typeof queueMicrotask === "function") {
     queueMicrotask(fn);
@@ -647,6 +655,9 @@ export default function ShopFormClient({
       await action(form);
       router.push(backHref);
     } catch (err) {
+      if (isNextRedirectError(err)) {
+        throw err;
+      }
       handlePermissionError(err);
       setSubmitError(
         err instanceof Error ? err.message : "Shop তৈরি করতে ব্যর্থ"

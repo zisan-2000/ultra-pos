@@ -8,6 +8,7 @@ type RefreshIconButtonProps = {
   disabled?: boolean;
   label?: string;
   className?: string;
+  showLabelOnMobile?: boolean;
 };
 
 export default function RefreshIconButton({
@@ -16,6 +17,7 @@ export default function RefreshIconButton({
   disabled = false,
   label = "রিফ্রেশ",
   className = "",
+  showLabelOnMobile = false,
 }: RefreshIconButtonProps) {
   return (
     <button
@@ -29,7 +31,9 @@ export default function RefreshIconButton({
       <RotateCw
         className={`h-4 w-4 ${loading ? "animate-spin text-primary" : ""}`}
       />
-      <span className="hidden sm:inline">{loading ? "রিফ্রেশ হচ্ছে" : label}</span>
+      <span className={showLabelOnMobile ? "inline" : "hidden sm:inline"}>
+        {loading ? "রিফ্রেশ হচ্ছে" : label}
+      </span>
     </button>
   );
 }

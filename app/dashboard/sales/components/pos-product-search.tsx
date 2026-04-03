@@ -10,11 +10,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { getStockToneClasses } from "@/lib/stock-level";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { Switch } from "@/components/ui/switch";
 import {
   CAMERA_DUPLICATE_WINDOW_MS,
   isEditableElement,
@@ -67,6 +65,7 @@ type ScannerSuspendDetail = {
   shopId?: string;
   ms?: number;
 };
+type PosInputMode = "search" | "scanner";
 
 const QUICK_LIMIT = 8; // fixed slots so buttons never jump during a session
 const INITIAL_RENDER = 60;
@@ -243,12 +242,7 @@ export const PosProductSearch = memo(function PosProductSearch({
   });
   const [showAllProducts, setShowAllProducts] = useState(false);
   const [listening, setListening] = useState(false);
-  const [voiceReady] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const SpeechRecognitionImpl =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    return Boolean(SpeechRecognitionImpl);
-  });
+  const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
   const [cooldownProductId, setCooldownProductId] = useState<string | null>(
@@ -294,15 +288,15 @@ export const PosProductSearch = memo(function PosProductSearch({
     [shopId]
   );
   const [renderCount, setRenderCount] = useState(INITIAL_RENDER);
-  const [mobileScannerExpanded, setMobileScannerExpanded] = useState(false);
 
   const deferredQuery = useDeferredValue(query);
   const debouncedQuery = useDebounce(deferredQuery, 200);
-  const scannerModeStorageKey = useMemo(
-    () => `pos-scan-mode:${shopId}`,
+  const inputModeStorageKey = useMemo(
+    () => `pos-input-mode:${shopId}`,
     [shopId]
   );
-  const [scannerAssistEnabled, setScannerAssistEnabled] = useState(true);
+  const [inputMode, setInputMode] = useState<PosInputMode>("search");
+  const scannerAssistEnabled = canUseBarcodeScan && inputMode === "scanner";
 
   // Persist usage separately to avoid doing localStorage writes in setState updaters
   useEffect(() => {
@@ -324,26 +318,51 @@ export const PosProductSearch = memo(function PosProductSearch({
   }, []);
 
   useEffect(() => {
-    try {
-      const stored = safeLocalStorageGet(scannerModeStorageKey);
-      if (stored === "0") {
-        setScannerAssistEnabled(false);
-      }
-    } catch {
-      // ignore local preference read errors
-    }
-  }, [scannerModeStorageKey]);
+    if (typeof window === "undefined") return;
+    const SpeechRecognitionImpl =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    setVoiceReady(Boolean(SpeechRecognitionImpl));
+  }, []);
 
   useEffect(() => {
     try {
-      safeLocalStorageSet(
-        scannerModeStorageKey,
-        scannerAssistEnabled ? "1" : "0"
-      );
+      const stored = safeLocalStorageGet(inputModeStorageKey);
+      if (stored === "scanner" && canUseBarcodeScan) {
+        setInputMode("scanner");
+        return;
+      }
+      setInputMode("search");
+    } catch {
+      // ignore local preference read errors
+    }
+  }, [inputModeStorageKey, canUseBarcodeScan]);
+
+  useEffect(() => {
+    try {
+      safeLocalStorageSet(inputModeStorageKey, inputMode);
     } catch {
       // ignore local preference write errors
     }
-  }, [scannerAssistEnabled, scannerModeStorageKey]);
+  }, [inputMode, inputModeStorageKey]);
+
+  useEffect(() => {
+    if (!canUseBarcodeScan && inputMode === "scanner") {
+      setInputMode("search");
+    }
+  }, [canUseBarcodeScan, inputMode]);
+
+  useEffect(() => {
+    if (inputMode === "scanner") {
+      setQuery("");
+      setShowAllProducts(false);
+      setRenderCount(INITIAL_RENDER);
+      recognitionRef.current?.stop?.();
+      setListening(false);
+      setVoiceError(null);
+      return;
+    }
+    setScanFeedback(null);
+  }, [inputMode]);
 
   const stopCamera = useCallback(() => {
     if (cameraScanTimerRef.current) {
@@ -380,13 +399,20 @@ export const PosProductSearch = memo(function PosProductSearch({
 
   const focusScanInput = useCallback(() => {
     const input = scanInputRef.current;
-    if (!input || cameraOpen || isScannerTemporarilySuspended()) return;
+    if (
+      !input ||
+      !scannerAssistEnabled ||
+      cameraOpen ||
+      isScannerTemporarilySuspended()
+    )
+      return;
     input.focus();
     input.select();
-  }, [cameraOpen, isScannerTemporarilySuspended]);
+  }, [cameraOpen, isScannerTemporarilySuspended, scannerAssistEnabled]);
 
   const scheduleScanFocus = useCallback(
     (delay = 90) => {
+      if (!scannerAssistEnabled) return;
       if (isScannerTemporarilySuspended()) return;
       if (scanFocusTimerRef.current) {
         clearTimeout(scanFocusTimerRef.current);
@@ -400,7 +426,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         focusScanInput();
       }, delay);
     },
-    [cameraOpen, focusScanInput, isScannerTemporarilySuspended]
+    [cameraOpen, focusScanInput, isScannerTemporarilySuspended, scannerAssistEnabled]
   );
 
   useEffect(() => {
@@ -1162,187 +1188,208 @@ export const PosProductSearch = memo(function PosProductSearch({
 
   const mobileScannerSummary = query.trim()
     ? `খোঁজ: ${query.trim()}`
-    : scannerAssistEnabled
+    : inputMode === "scanner"
     ? "Scanner mode চালু"
-    : "Scanner mode বন্ধ";
-
-  return (
-    <div className="space-y-6">
-      {/* Search + state toggles */}
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)] space-y-3">
-        <div className="flex items-center justify-between gap-3 md:hidden">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-foreground">Search & Scan</p>
-            <p className="truncate text-[11px] text-muted-foreground">
-              {mobileScannerSummary}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMobileScannerExpanded((prev) => !prev)}
-            aria-label={mobileScannerExpanded ? "Search and scan controls লুকান" : "Search and scan controls খুলুন"}
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-sm transition ${
-              mobileScannerExpanded
-                ? "border-primary/40 bg-primary text-primary-foreground shadow-[0_8px_18px_rgba(22,163,74,0.28)]"
-                : "border-primary/25 bg-primary-soft text-primary shadow-[0_6px_14px_rgba(15,23,42,0.10)]"
-            }`}
-          >
-            {mobileScannerExpanded ? (
-              <ChevronUp className="h-4.5 w-4.5" strokeWidth={2.4} />
-            ) : (
-              <ChevronDown className="h-4.5 w-4.5" strokeWidth={2.4} />
-            )}
-          </button>
-        </div>
-
-        <div className={`${mobileScannerExpanded ? "block" : "hidden"} space-y-3 md:block`}>
-          <div className="flex items-center justify-between gap-3 md:hidden">
-            <p className="text-xs font-semibold text-muted-foreground">
-              Search / Scanner controls
-            </p>
+    : "Search mode চালু";
+  const searchModePanel = (
+    <>
+      <div className="flex gap-2 items-center">
+        <div className="relative flex-1">
+          <input
+            className="w-full h-10 rounded-xl border border-border bg-card/80 pl-10 pr-22 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="পণ্য খুঁজুন (নাম/কোড)..."
+            value={query}
+            onFocus={() => setShowAllProducts(true)}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-base">
+            🔍
+          </span>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="সার্চ ক্লিয়ার করুন"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground text-sm hover:bg-muted"
+              >
+                ✕
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={() => setMobileScannerExpanded(false)}
-              className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-card px-3 text-[11px] font-semibold text-muted-foreground"
+              onClick={listening ? stopVoice : startVoice}
+              disabled={!voiceReady}
+              aria-label={listening ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
+              className={`inline-flex h-8 items-center justify-center rounded-lg border px-2.5 text-sm font-semibold transition ${
+                listening
+                  ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
+                  : "bg-primary-soft text-primary border-primary/30 active:scale-95"
+              } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
             >
-              মিনিমাইজ
+              {listening ? "🔴" : "🎤"}
             </button>
           </div>
+        </div>
+      </div>
+      <p className="hidden text-xs text-muted-foreground sm:block">
+        {voiceHint}{" "}
+        {voiceErrorText ? <span className="text-danger">{voiceErrorText}</span> : null}
+      </p>
+      {voiceErrorText ? (
+        <p className="text-[11px] text-danger sm:hidden">{voiceErrorText}</p>
+      ) : null}
+      {canUseBarcodeScan ? (
+        <p className="hidden rounded-lg border border-primary/20 bg-primary-soft/30 px-3 py-2 text-[11px] text-muted-foreground sm:block">
+          দ্রুত স্ক্যান করতে চাইলে উপরের <strong>Scanner</strong> mode-এ যান।
+        </p>
+      ) : null}
+    </>
+  );
 
-          <div className="flex gap-2 items-center">
-            <div className="relative flex-1">
-              <input
-                className="w-full h-11 rounded-xl border border-border bg-card/80 pl-10 pr-24 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="পণ্য খুঁজুন (নাম/কোড)..."
-                value={query}
-                onFocus={() => setShowAllProducts(true)}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-base">
-                🔍
+  return (
+    <div className="space-y-5">
+      {/* Search + state toggles */}
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 p-2.5 sm:p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)] space-y-2.5">
+        {canUseBarcodeScan ? (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-foreground sm:text-xs">
+                  Input Mode
+                </p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {mobileScannerSummary}
+                </p>
+              </div>
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                  inputMode === "scanner"
+                    ? "border-success/30 bg-success-soft text-success"
+                    : "border-border bg-card text-muted-foreground"
+                }`}
+              >
+                {inputMode === "scanner" ? "Scan Ready" : "Search Ready"}
               </span>
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                {query ? (
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-border/80 bg-card/70 p-1">
+              <button
+                type="button"
+                onClick={() => setInputMode("search")}
+                aria-pressed={inputMode === "search"}
+                className={`h-9 rounded-lg border text-sm font-semibold transition ${
+                  inputMode === "search"
+                    ? "border-primary/40 bg-primary-soft text-primary shadow-sm"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                🔎 Search
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode("scanner")}
+                aria-pressed={inputMode === "scanner"}
+                className={`h-9 rounded-lg border text-sm font-semibold transition ${
+                  inputMode === "scanner"
+                    ? "border-success/40 bg-success-soft text-success shadow-sm"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                📷 Scanner
+              </button>
+            </div>
+
+            {inputMode === "search" ? (
+              searchModePanel
+            ) : (
+              <div className="rounded-xl border border-success/20 bg-success-soft/35 p-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">Scanner Mode</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      scan input active, search typing pause করা আছে
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setQuery("")}
-                    aria-label="সার্চ ক্লিয়ার করুন"
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground text-sm hover:bg-muted"
+                    onClick={() => setInputMode("search")}
+                    className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-card px-3 text-[11px] font-semibold text-muted-foreground"
                   >
-                    ✕
+                    Exit Scanner
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={listening ? stopVoice : startVoice}
-                  disabled={!voiceReady}
-                  aria-label={listening ? "ভয়েস বন্ধ করুন" : "ভয়েস ইনপুট চালু করুন"}
-                  className={`inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
-                    listening
-                      ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
-                      : "bg-primary-soft text-primary border-primary/30 active:scale-95"
-                  } ${!voiceReady ? "opacity-60 cursor-not-allowed" : ""}`}
-                >
-                  {listening ? "🔴" : "🎤"}
-                </button>
-              </div>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {voiceHint}{" "}
-            {voiceErrorText ? (
-              <span className="text-danger">{voiceErrorText}</span>
-            ) : null}
-          </p>
-
-          {canUseBarcodeScan ? (
-            <div className="rounded-xl border border-primary/20 bg-primary-soft/40 p-2.5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold text-foreground">Scanner Mode</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    দরকার হলে চালু রাখুন, না হলে বন্ধ করুন
-                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-muted-foreground">
-                    {scannerAssistEnabled ? "চালু" : "বন্ধ"}
-                  </span>
-                  <Switch
-                    checked={scannerAssistEnabled}
-                    onCheckedChange={setScannerAssistEnabled}
-                    aria-label="Scanner mode toggle"
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    ref={scanInputRef}
+                    type="text"
+                    inputMode="text"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    autoComplete="off"
+                    value={scanCode}
+                    onChange={(e) => setScanCode(normalizeCodeInput(e.target.value))}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      handleScanLookup();
+                    }}
+                    onBlur={(e) => {
+                      if (isScannerTemporarilySuspended()) return;
+                      const nextTarget = e.relatedTarget as Element | null;
+                      if (
+                        nextTarget &&
+                        nextTarget !== document.body &&
+                        nextTarget !== scanInputRef.current
+                      ) {
+                        return;
+                      }
+                      scheduleScanFocus();
+                    }}
+                    data-scanner-allow-focus="true"
+                    className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-success/30"
+                    placeholder="Barcode / SKU স্ক্যান করুন"
                   />
-                </div>
-              </div>
-              {scannerAssistEnabled ? (
-                <>
-                  <div className="mt-2 flex items-center gap-2">
-                    <input
-                      ref={scanInputRef}
-                      type="text"
-                      inputMode="text"
-                      autoCapitalize="off"
-                      autoCorrect="off"
-                      autoComplete="off"
-                      value={scanCode}
-                      onChange={(e) => setScanCode(normalizeCodeInput(e.target.value))}
-                      onKeyDown={(e) => {
-                        if (e.key !== "Enter") return;
-                        e.preventDefault();
-                        handleScanLookup();
-                      }}
-                      onBlur={(e) => {
-                        if (isScannerTemporarilySuspended()) return;
-                        const nextTarget = e.relatedTarget as Element | null;
-                        if (
-                          nextTarget &&
-                          nextTarget !== document.body &&
-                          nextTarget !== scanInputRef.current
-                        ) {
-                          return;
-                        }
-                        scheduleScanFocus();
-                      }}
-                      data-scanner-allow-focus="true"
-                      className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      placeholder="Barcode / SKU স্ক্যান করুন"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleScanLookup}
-                      className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-primary-soft px-3 text-xs font-semibold text-primary"
-                    >
-                      Scan যোগ
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openCameraScanner}
-                      className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-card px-3 text-xs font-semibold text-primary"
-                    >
-                      Camera
-                    </button>
-                  </div>
-                  <p
-                    className={`mt-1 text-xs ${
-                      scanFeedback?.type === "error" ? "text-danger" : "text-muted-foreground"
-                    }`}
+                  <button
+                    type="button"
+                    onClick={handleScanLookup}
+                    className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-success/40 bg-success-soft px-3 text-xs font-semibold text-success"
                   >
-                    {scanFeedback?.message ||
-                      "Enter ছাড়াও scanner idle হলেই auto add হবে, beep দিয়ে success বোঝাবে।"}
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    Scan box scanner-ready থাকবে, accidental duplicate খুব দ্রুত এলে ignore হবে।
-                  </p>
-                </>
-              ) : (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Scanner mode বন্ধ আছে। এখন tap/search flow চলবে, scanner automation interfere করবে না।
+                    Scan যোগ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openCameraScanner}
+                    className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-success/40 bg-card px-3 text-xs font-semibold text-success"
+                  >
+                    Camera
+                  </button>
+                </div>
+                <input
+                  disabled
+                  value=""
+                  placeholder="Search input এখন paused (Search mode-এ ফিরলে টাইপ করুন)"
+                  className="mt-2 h-9 w-full rounded-lg border border-border bg-card/70 px-3 text-xs text-muted-foreground opacity-80"
+                />
+                <p
+                  className={`mt-1 text-xs ${
+                    scanFeedback?.type === "error"
+                      ? "text-danger"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {scanFeedback?.message ||
+                    "Enter ছাড়াও scanner idle হলেই auto add হবে, beep দিয়ে success বোঝাবে।"}
                 </p>
-              )}
-            </div>
-          ) : null}
-        </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Scan box scanner-ready থাকবে, accidental duplicate খুব দ্রুত এলে ignore হবে।
+                </p>
+              </div>
+            )}
+          </>
+        ) : (
+          searchModePanel
+        )}
       </div>
 
       {/* Quick buttons: visible only when not searching to prioritize results */}
