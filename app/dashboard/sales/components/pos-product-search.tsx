@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { LayoutGrid, List } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { getStockToneClasses } from "@/lib/stock-level";
 import ConfirmDialog from "@/components/confirm-dialog";
@@ -66,6 +67,7 @@ type ScannerSuspendDetail = {
   ms?: number;
 };
 type PosInputMode = "search" | "scanner";
+type PosProductViewMode = "grid" | "list";
 
 const QUICK_LIMIT = 8; // fixed slots so buttons never jump during a session
 const INITIAL_RENDER = 60;
@@ -291,6 +293,8 @@ export const PosProductSearch = memo(function PosProductSearch({
   const [renderCount, setRenderCount] = useState(INITIAL_RENDER);
   const [showCategoryOverflowCue, setShowCategoryOverflowCue] = useState(false);
   const [categoryScrollAtEnd, setCategoryScrollAtEnd] = useState(true);
+  const [productViewMode, setProductViewMode] =
+    useState<PosProductViewMode>("grid");
 
   const deferredQuery = useDeferredValue(query);
   const debouncedQuery = useDebounce(deferredQuery, 200);
@@ -1193,6 +1197,21 @@ export const PosProductSearch = memo(function PosProductSearch({
     />
   );
 
+  const renderProductListButton = (product: EnrichedProduct) => (
+    <ProductListButton
+      key={`list-${product.id}`}
+      product={product}
+      onAdd={handleAddToCart}
+      isRecentlyAdded={recentlyAdded === product.id}
+      isCooldown={cooldownProductId === product.id}
+    />
+  );
+
+  const renderBrowseProduct = (product: EnrichedProduct) =>
+    productViewMode === "list"
+      ? renderProductListButton(product)
+      : renderProductButton(product);
+
   const renderQuickSlot = (slot: QuickSlot, index: number) => {
     if (!slot) return renderPlaceholderSlot(index);
     return (
@@ -1424,12 +1443,50 @@ export const PosProductSearch = memo(function PosProductSearch({
       {/* Quick buttons: visible only when not searching to prioritize results */}
       {query.trim().length === 0 && (
         <div className="space-y-3 bg-gradient-to-br from-card via-card to-muted/40 border border-border rounded-2xl p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
-          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
-            ⚡ দ্রুত বিক্রি
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-3.5 px-1 pb-1">
-            {quickSlots.map((slot, idx) => renderQuickSlot(slot, idx))}
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+              ⚡ দ্রুত বিক্রি
+            </h3>
+            <div className="inline-flex items-center rounded-full border border-border bg-card/90 p-0.5 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setProductViewMode("grid")}
+                aria-label="Grid view"
+                aria-pressed={productViewMode === "grid"}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
+                  productViewMode === "grid"
+                    ? "bg-primary-soft text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setProductViewMode("list")}
+                aria-label="List view"
+                aria-pressed={productViewMode === "list"}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
+                  productViewMode === "list"
+                    ? "bg-primary-soft text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <List className="h-4 w-4" />
+              </button>
+            </div>
           </div>
+          {productViewMode === "list" ? (
+            <div className="space-y-2 px-1 pb-1">
+              {(quickSlots.filter(Boolean) as EnrichedProduct[]).map((product) =>
+                renderProductListButton(product)
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-3.5 px-1 pb-1">
+              {quickSlots.map((slot, idx) => renderQuickSlot(slot, idx))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1446,22 +1503,62 @@ export const PosProductSearch = memo(function PosProductSearch({
           {smartSuggestions.length === 0 ? (
             <p className="text-sm text-muted-foreground">কোনো সাজেশন নেই।</p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 px-1 pb-1 text-sm">
-              {smartSuggestions.map((p) => renderProductButton(p))}
+            <div
+              className={
+                productViewMode === "list"
+                  ? "space-y-2 px-1 pb-1"
+                  : "grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 px-1 pb-1 text-sm"
+              }
+            >
+              {smartSuggestions.map((p) => renderBrowseProduct(p))}
             </div>
           )}
         </div>
       )}
 
       <div className="space-y-3 bg-gradient-to-br from-card via-card to-muted/40 border border-border rounded-2xl p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
-            সব পণ্য (অটো সাজানো)
-          </h3>
-          {!showAllProducts && (
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+              সব পণ্য
+            </h3>
+            <p className="hidden text-[11px] text-muted-foreground sm:block">
+              অটো সাজানো
+            </p>
+          </div>
+          {showAllProducts ? (
+            <div className="inline-flex items-center rounded-full border border-border bg-card/90 p-0.5 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setProductViewMode("grid")}
+                aria-label="Grid view"
+                aria-pressed={productViewMode === "grid"}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
+                  productViewMode === "grid"
+                    ? "bg-primary-soft text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setProductViewMode("list")}
+                aria-label="List view"
+                aria-pressed={productViewMode === "list"}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
+                  productViewMode === "list"
+                    ? "bg-primary-soft text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <List className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              className="text-xs font-semibold text-primary border border-primary/30 px-3 py-1 rounded-full hover:border-primary/50"
+              className="inline-flex h-8 shrink-0 items-center rounded-full border border-primary/30 bg-primary-soft/20 px-3 text-xs font-semibold text-primary hover:border-primary/50"
               onClick={() => setShowAllProducts(true)}
             >
               সব পণ্য দেখুন
@@ -1507,13 +1604,23 @@ export const PosProductSearch = memo(function PosProductSearch({
                 ) : null}
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 px-1 pb-1 max-h-[520px] overflow-y-auto pr-2">
+            <div
+              className={`px-1 pb-1 max-h-[520px] overflow-y-auto pr-2 ${
+                productViewMode === "list"
+                  ? "space-y-2"
+                  : "grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5"
+              }`}
+            >
               {visibleResults.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8 col-span-full">
+                <p
+                  className={`text-center text-muted-foreground py-8 ${
+                    productViewMode === "list" ? "" : "col-span-full"
+                  }`}
+                >
                   আপনার ফিল্টারে কোনো পণ্য নেই।
                 </p>
               ) : (
-                visibleResults.map((p) => renderProductButton(p))
+                visibleResults.map((p) => renderBrowseProduct(p))
               )}
             </div>
             {renderCount < sortedResults.length ? (
@@ -1522,11 +1629,7 @@ export const PosProductSearch = memo(function PosProductSearch({
               </p>
             ) : null}
           </>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            এই সেকশন অন-ডিমান্ড। উপরের বোতাম বা সার্চে ফোকাস করলেই খুলবে।
-          </p>
-        )}
+        ) : null}
       </div>
       <ConfirmDialog
         open={Boolean(stockConfirm)}
@@ -1612,5 +1715,55 @@ export const PosProductSearch = memo(function PosProductSearch({
         </div>
       ) : null}
     </div>
+  );
+});
+
+const ProductListButton = memo(function ProductListButton({
+  product,
+  onAdd,
+  isRecentlyAdded,
+  isCooldown,
+}: {
+  product: EnrichedProduct;
+  onAdd: (product: EnrichedProduct) => void;
+  isRecentlyAdded: boolean;
+  isCooldown: boolean;
+}) {
+  const tracksStock = product.trackStock === true;
+  const stock = toNumber(product.stockQty);
+  const stockStyle = tracksStock
+    ? getStockToneClasses(stock).badge
+    : "bg-muted text-muted-foreground border border-border/60";
+
+  return (
+    <button
+      type="button"
+      className={`relative w-full rounded-xl border border-border bg-card/90 px-3 py-2.5 text-left shadow-sm transition hover:border-primary/35 hover:bg-primary-soft/20 ${
+        isRecentlyAdded ? "ring-2 ring-success/30" : ""
+      } ${isCooldown ? "border-success/35 bg-success-soft/20" : ""}`}
+      onClick={() => onAdd(product)}
+    >
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">{product.name}</p>
+          <p className="mt-0.5 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            {formatCategoryLabel(product.category)}
+          </p>
+        </div>
+        <span
+          className={`inline-flex h-6 items-center justify-center rounded-full px-2 text-[11px] font-semibold shadow-sm ${stockStyle}`}
+        >
+          {tracksStock ? stock.toFixed(0) : "N/A"}
+        </span>
+        <p className="shrink-0 text-sm font-bold text-foreground">
+          <span className="text-muted-foreground">৳</span> {product.sellPrice}
+        </p>
+      </div>
+      {isRecentlyAdded ? (
+        <span className="absolute -top-1 -right-1 rounded-full bg-success px-2 py-0.5 text-[10px] font-semibold text-primary-foreground pop-badge">
+          +1
+        </span>
+      ) : null}
+    </button>
   );
 });
