@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "My POS",
-    short_name: "POS",
+    name: "SellFlickPos",
+    short_name: "SellFlick",
     id: "/",
     start_url: "/",
     scope: "/",
