@@ -15,6 +15,7 @@ import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
 import { useSmartPolling } from "@/lib/polling/use-smart-polling";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import QuickCashEntrySheet from "./QuickCashEntrySheet";
 import {
   computeRange as computeDhakaRange,
   getDateRangeSpanDays,
@@ -294,6 +295,12 @@ export function CashListClient({
     setTimeout(() => setManualRefreshing(false), 1800);
   }, [triggerRefresh]);
 
+  const handleQuickCashCreated = useCallback(() => {
+    setManualRefreshing(true);
+    triggerRefresh("manual", { force: true });
+    setTimeout(() => setManualRefreshing(false), 1200);
+  }, [triggerRefresh]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -549,12 +556,13 @@ export function CashListClient({
                 className="h-10 px-3"
               />
               {canCreateCashEntry ? (
-                <Link
-                  href={`/dashboard/cash/new?shopId=${shopId}`}
-                  className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
-                >
-                  + নতুন এন্ট্রি
-                </Link>
+                <QuickCashEntrySheet
+                  shopId={shopId}
+                  onCreated={handleQuickCashCreated}
+                  fullFormHref={`/dashboard/cash/new?shopId=${shopId}`}
+                  triggerLabel="নতুন এন্ট্রি"
+                  triggerClassName="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
+                />
               ) : null}
             </div>
           </div>
@@ -817,12 +825,13 @@ export function CashListClient({
             {online ? "প্রথম ক্যাশ এন্ট্রি যোগ করুন" : "Offline: ক্যাশ এন্ট্রি ক্যাশে নেই"}
           </p>
           {online && canCreateCashEntry ? (
-            <Link
-              href={`/dashboard/cash/new?shopId=${shopId}`}
-              className="inline-flex items-center justify-center h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
-            >
-              + নতুন এন্ট্রি
-            </Link>
+            <QuickCashEntrySheet
+              shopId={shopId}
+              onCreated={handleQuickCashCreated}
+              fullFormHref={`/dashboard/cash/new?shopId=${shopId}`}
+              triggerLabel="নতুন এন্ট্রি"
+              triggerClassName="inline-flex items-center justify-center h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
+            />
           ) : null}
         </div>
       )}

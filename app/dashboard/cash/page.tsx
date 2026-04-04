@@ -6,6 +6,7 @@ import { getShopsByUser } from "@/app/actions/shops";
 import { getCashByShopCursorPaginated, getCashSummaryByRange } from "@/app/actions/cash";
 import ShopSelectorClient from "./ShopSelectorClient";
 import { CashListClient } from "./components/CashListClient";
+import QuickCashEntrySheet from "./components/QuickCashEntrySheet";
 import { getDhakaDateString } from "@/lib/dhaka-date";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
@@ -201,12 +202,12 @@ export default async function CashPage({ searchParams }: CashPageProps) {
               </p>
             </div>
             {canCreateCashEntry ? (
-              <Link
-                href={`/dashboard/cash/new?shopId=${selectedShopId}`}
-                className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-              >
-                ➕ নতুন এন্ট্রি
-              </Link>
+              <QuickCashEntrySheet
+                shopId={selectedShopId}
+                fullFormHref={`/dashboard/cash/new?shopId=${selectedShopId}`}
+                triggerLabel="নতুন এন্ট্রি"
+                triggerClassName="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+              />
             ) : null}
           </div>
 
@@ -215,12 +216,12 @@ export default async function CashPage({ searchParams }: CashPageProps) {
               <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
             </div>
             {canCreateCashEntry ? (
-              <Link
-                href={`/dashboard/cash/new?shopId=${selectedShopId}`}
-                className="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-              >
-                ➕ নতুন এন্ট্রি যোগ করুন
-              </Link>
+              <QuickCashEntrySheet
+                shopId={selectedShopId}
+                fullFormHref={`/dashboard/cash/new?shopId=${selectedShopId}`}
+                triggerLabel="নতুন এন্ট্রি"
+                triggerClassName="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+              />
             ) : null}
           </div>
 

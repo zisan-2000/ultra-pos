@@ -15,6 +15,7 @@ import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
 import { useSmartPolling } from "@/lib/polling/use-smart-polling";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import QuickExpenseSheet from "./QuickExpenseSheet";
 import {
   computeRange as computeDhakaRange,
   getDateRangeSpanDays,
@@ -337,6 +338,12 @@ export function ExpensesListClient({
     setTimeout(() => setManualRefreshing(false), 1800);
   }, [triggerRefresh]);
 
+  const handleQuickExpenseCreated = useCallback(() => {
+    setManualRefreshing(true);
+    triggerRefresh("manual", { force: true });
+    setTimeout(() => setManualRefreshing(false), 1200);
+  }, [triggerRefresh]);
+
   // Keep Dexie/cache synced for offline use
   useEffect(() => {
     let cancelled = false;
@@ -546,15 +553,16 @@ export function ExpensesListClient({
                 onClick={handleManualRefresh}
                 loading={manualRefreshing}
                 label="রিফ্রেশ"
-                className="h-11 px-3"
+                className="h-11 w-11 px-0 justify-center"
               />
               {canCreateExpense ? (
-                <Link
-                  href={`/dashboard/expenses/new?shopId=${shopId}`}
-                  className="inline-flex h-11 items-center justify-center rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm"
-                >
-                  + নতুন খরচ
-                </Link>
+                <QuickExpenseSheet
+                  shopId={shopId}
+                  onCreated={handleQuickExpenseCreated}
+                  fullFormHref={`/dashboard/expenses/new?shopId=${shopId}`}
+                  triggerLabel="নতুন খরচ"
+                  triggerClassName="inline-flex h-11 items-center justify-center rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
+                />
               ) : null}
             </div>
           </div>
@@ -611,12 +619,13 @@ export function ExpensesListClient({
                 className="h-10 px-3"
               />
               {canCreateExpense ? (
-                <Link
-                  href={`/dashboard/expenses/new?shopId=${shopId}`}
-                  className="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
-                >
-                  + নতুন খরচ
-                </Link>
+                <QuickExpenseSheet
+                  shopId={shopId}
+                  onCreated={handleQuickExpenseCreated}
+                  fullFormHref={`/dashboard/expenses/new?shopId=${shopId}`}
+                  triggerLabel="নতুন খরচ"
+                  triggerClassName="inline-flex h-10 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40"
+                />
               ) : null}
             </div>
           </div>
@@ -760,12 +769,15 @@ export function ExpensesListClient({
           <p className="text-sm text-muted-foreground">প্রথম খরচ যোগ করুন</p>
 
           {canCreateExpense ? (
-            <Link
-              href={`/dashboard/expenses/new?shopId=${shopId}`}
-              className="inline-flex items-center justify-center h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
-            >
-              + নতুন খরচ
-            </Link>
+            <div className="flex items-center justify-center">
+              <QuickExpenseSheet
+                shopId={shopId}
+                onCreated={handleQuickExpenseCreated}
+                fullFormHref={`/dashboard/expenses/new?shopId=${shopId}`}
+                triggerLabel="নতুন খরচ"
+                triggerClassName="inline-flex items-center justify-center h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40"
+              />
+            </div>
           ) : null}
         </div>
       )}

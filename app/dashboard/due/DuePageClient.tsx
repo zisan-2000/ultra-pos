@@ -19,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import RefreshIconButton from "@/components/ui/refresh-icon-button";
+import QuickDuePaymentSheet from "./QuickDuePaymentSheet";
+import QuickCustomerSheet from "./QuickCustomerSheet";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdd } from "@/lib/sync/queue";
@@ -204,6 +206,8 @@ type Props = {
   canTakeDuePayment: boolean;
 };
 
+type DueTabId = "summary" | "add" | "payment" | "list";
+
 export default function DuePageClient({
   shopId,
   shopName,
@@ -223,6 +227,7 @@ export default function DuePageClient({
   const [listeningField, setListeningField] = useState<VoiceField | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [manualRefreshing, setManualRefreshing] = useState(false);
 
   const customerTemplateKey = useMemo(
@@ -234,9 +239,8 @@ export default function DuePageClient({
     [shopId]
   );
 
-  const [activeTab, setActiveTab] = useState<
-    "summary" | "add" | "payment" | "list"
-  >("summary");
+  const [activeTab, setActiveTab] = useState<DueTabId>("summary");
+  const [mobileAdvancedMode, setMobileAdvancedMode] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>(
     initialCustomers || []
   );
@@ -419,6 +423,15 @@ export default function DuePageClient({
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsMobileViewport(media.matches);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
   }, []);
 
   useEffect(() => {
@@ -628,6 +641,24 @@ export default function DuePageClient({
       setTimeout(() => setManualRefreshing(false), 600);
     }
   }, [refreshData, selectedCustomerId, refreshStatement]);
+
+  const handleQuickPaymentSuccess = useCallback(
+    (customerId: string) => {
+      void refreshData({ force: true, source: "payment" });
+      refreshStatement(customerId);
+    },
+    [refreshData, refreshStatement]
+  );
+
+  const handleQuickCustomerCreated = useCallback(
+    (mode: "online" | "offline") => {
+      void refreshData({
+        force: true,
+        source: mode === "online" ? "create" : "local",
+      });
+    },
+    [refreshData]
+  );
 
   useEffect(() => {
     return subscribeDueCustomersEvent((detail) => {
@@ -962,8 +993,21 @@ export default function DuePageClient({
         })
       : null;
 
+  const handleTabSelect = useCallback(
+    (tabId: DueTabId) => {
+      setActiveTab(tabId);
+      if (!isMobileViewport) return;
+      if (tabId === "add" || tabId === "payment") {
+        setMobileAdvancedMode(true);
+      } else {
+        setMobileAdvancedMode(false);
+      }
+    },
+    [isMobileViewport]
+  );
+
   const openStatementFor = (customerId: string) => {
-    setActiveTab("list");
+    handleTabSelect("list");
     setSelectedCustomerId(customerId);
   };
 
@@ -972,27 +1016,44 @@ export default function DuePageClient({
       alert("গ্রাহক যোগ করার অনুমতি নেই।");
       return;
     }
-    setActiveTab("add");
+    handleTabSelect("add");
   };
 
-  const openPaymentFor = (customerId: string) => {
+  const openPaymentTab = (customerId?: string) => {
     if (!canTakeDuePayment) {
       alert("পেমেন্ট নেওয়ার অনুমতি নেই।");
       return;
     }
-    setActiveTab("payment");
-    setSelectedCustomerId(customerId);
-    setPaymentForm((prev) => ({ ...prev, customerId }));
+    if (customerId) {
+      setPaymentForm((prev) => ({
+        ...prev,
+        customerId,
+      }));
+      setSelectedCustomerId(customerId);
+    }
+    handleTabSelect("payment");
   };
 
   useEffect(() => {
-    if (activeTab === "add" && !canCreateCustomer) {
+    if (
+      activeTab === "add" &&
+      (!canCreateCustomer || (isMobileViewport && !mobileAdvancedMode))
+    ) {
       setActiveTab("summary");
     }
-    if (activeTab === "payment" && !canTakeDuePayment) {
+    if (
+      activeTab === "payment" &&
+      (!canTakeDuePayment || (isMobileViewport && !mobileAdvancedMode))
+    ) {
       setActiveTab("summary");
     }
-  }, [activeTab, canCreateCustomer, canTakeDuePayment]);
+  }, [
+    activeTab,
+    canCreateCustomer,
+    canTakeDuePayment,
+    isMobileViewport,
+    mobileAdvancedMode,
+  ]);
 
   function startVoice(field: VoiceField) {
     if (listeningField === field) return;
@@ -1063,12 +1124,23 @@ export default function DuePageClient({
     setListeningField(null);
   }
 
-  const tabs = [
-    { id: "summary", label: "সারাংশ", enabled: true },
-    { id: "add", label: "গ্রাহক যোগ", enabled: canCreateCustomer },
-    { id: "payment", label: "পেমেন্ট নিন", enabled: canTakeDuePayment },
-    { id: "list", label: "স্টেটমেন্ট", enabled: true },
-  ] as const;
+  const tabs = useMemo(
+    () =>
+      (
+        isMobileViewport && !mobileAdvancedMode
+          ? [
+              { id: "summary", label: "সারাংশ", enabled: true },
+              { id: "list", label: "স্টেটমেন্ট", enabled: true },
+            ]
+          : [
+              { id: "summary", label: "সারাংশ", enabled: true },
+              { id: "add", label: "গ্রাহক যোগ", enabled: canCreateCustomer },
+              { id: "payment", label: "পেমেন্ট নিন", enabled: canTakeDuePayment },
+              { id: "list", label: "স্টেটমেন্ট", enabled: true },
+            ]
+      ).filter((tab) => tab.enabled),
+    [canCreateCustomer, canTakeDuePayment, isMobileViewport, mobileAdvancedMode]
+  );
 
   const topDueName = summary.topDue?.[0]?.name || "";
   const topDueAmount = summary.topDue?.[0]?.totalDue ?? 0;
@@ -1101,7 +1173,34 @@ export default function DuePageClient({
                 )}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full items-center gap-2 md:hidden">
+              <RefreshIconButton
+                onClick={handleManualRefresh}
+                loading={manualRefreshing}
+                label="রিফ্রেশ"
+                className="h-11 w-11 shrink-0 justify-center rounded-2xl border-border/80 bg-card px-0"
+              />
+              {canTakeDuePayment ? (
+                <QuickDuePaymentSheet
+                  shopId={shopId}
+                  customers={customers}
+                  onSuccess={handleQuickPaymentSuccess}
+                  onOpenFullForm={() => openPaymentTab()}
+                  triggerLabel="পেমেন্ট"
+                  triggerClassName="inline-flex h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-2xl border border-success/35 bg-success-soft/70 px-3 text-sm font-semibold leading-none text-success shadow-sm transition-colors hover:border-success/50"
+                />
+              ) : null}
+              {canCreateCustomer ? (
+                <QuickCustomerSheet
+                  shopId={shopId}
+                  onCreated={handleQuickCustomerCreated}
+                  onOpenFullForm={openAddTab}
+                  triggerLabel="নতুন গ্রাহক"
+                  triggerClassName="inline-flex h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-2xl border border-primary/35 bg-primary-soft/75 px-3 text-sm font-semibold leading-none text-primary shadow-sm transition-colors hover:border-primary/50"
+                />
+              ) : null}
+            </div>
+            <div className="hidden items-center gap-2 md:flex">
               <RefreshIconButton
                 onClick={handleManualRefresh}
                 loading={manualRefreshing}
@@ -1110,11 +1209,19 @@ export default function DuePageClient({
               />
               <button
                 type="button"
+                onClick={() => openPaymentTab()}
+                disabled={!canTakeDuePayment}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-success/30 bg-success-soft px-4 text-sm font-semibold text-success shadow-sm transition-colors hover:border-success/40 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                পেমেন্ট নিন
+              </button>
+              <button
+                type="button"
                 onClick={openAddTab}
                 disabled={!canCreateCustomer}
-                className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+                className="inline-flex h-10 items-center justify-center rounded-full border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                ➕ নতুন গ্রাহক
+                নতুন গ্রাহক
               </button>
             </div>
           </div>
@@ -1156,12 +1263,10 @@ export default function DuePageClient({
       <div className="sticky top-0 z-20 bg-card/95 backdrop-blur border-b border-border/70">
         <div className="px-2 py-2">
           <div className="flex gap-2 overflow-x-auto no-scrollbar rounded-full bg-muted/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-            {tabs
-              .filter((tab) => tab.enabled)
-              .map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => handleTabSelect(tab.id as DueTabId)}
                 className={`h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border border-transparent transition-colors ${
                   activeTab === tab.id
                     ? "bg-card text-foreground border-border shadow-sm"
@@ -1197,10 +1302,19 @@ export default function DuePageClient({
                     type="button"
                     onClick={openAddTab}
                     disabled={!canCreateCustomer}
-                    className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
+                    className="mt-3 hidden h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors md:inline-flex"
                   >
                     ➕ প্রথম গ্রাহক যোগ করুন
                   </button>
+                  {canCreateCustomer ? (
+                    <QuickCustomerSheet
+                      shopId={shopId}
+                      onCreated={handleQuickCustomerCreated}
+                      onOpenFullForm={openAddTab}
+                      triggerLabel="➕ প্রথম গ্রাহক যোগ করুন"
+                      triggerClassName="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors md:hidden"
+                    />
+                  ) : null}
                 </div>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -1260,11 +1374,24 @@ export default function DuePageClient({
                           {canTakeDuePayment ? (
                             <button
                               type="button"
-                              onClick={() => openPaymentFor(c.id)}
-                              className="h-9 rounded-full border border-success/30 bg-success-soft px-3 text-xs font-semibold text-success hover:border-success/40 transition-colors"
+                              onClick={() => openPaymentTab(c.id)}
+                              className="hidden h-9 rounded-full border border-success/30 bg-success-soft px-3 text-xs font-semibold text-success hover:border-success/40 transition-colors md:inline-flex"
                             >
-                              পেমেন্ট নিন
+                              পেমেন্ট ফর্ম
                             </button>
+                          ) : null}
+                          {canTakeDuePayment ? (
+                            <QuickDuePaymentSheet
+                              shopId={shopId}
+                              customers={customers}
+                              defaultCustomerId={c.id}
+                              onSuccess={handleQuickPaymentSuccess}
+                              onOpenFullForm={(customerId) =>
+                                openPaymentTab(customerId ?? c.id)
+                              }
+                              triggerLabel="পেমেন্ট নিন"
+                              triggerClassName="h-9 rounded-full border border-success/30 bg-success-soft px-3 text-xs font-semibold text-success hover:border-success/40 transition-colors md:hidden"
+                            />
                           ) : null}
                         </div>
                       </div>
