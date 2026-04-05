@@ -384,6 +384,9 @@ model BusinessProductTemplate {
   name             String
   category         String?
   defaultSellPrice Decimal? @map("default_sell_price") @db.Decimal(12, 2)
+  defaultBaseUnit  String?  @map("default_base_unit") @db.VarChar(40)
+  defaultTrackStock Boolean @default(false) @map("default_track_stock")
+  variantsJson     Json?    @map("variants_json")
   isActive         Boolean  @default(true) @map("is_active")
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)

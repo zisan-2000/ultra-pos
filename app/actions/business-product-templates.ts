@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { isSuperAdmin, requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
+import { Prisma } from "@prisma/client";
 
 type TemplateInput = {
   id?: string;
@@ -13,7 +14,28 @@ type TemplateInput = {
   name: string;
   category?: string | null;
   defaultSellPrice?: string | number | null;
+  defaultBaseUnit?: string | null;
+  defaultTrackStock?: boolean;
+  variants?: TemplateVariantInput[] | null;
   isActive?: boolean;
+};
+
+type TemplateVariantInput = {
+  label?: string | null;
+  sellPrice?: string | number | null;
+  sku?: string | null;
+  barcode?: string | null;
+  sortOrder?: number | null;
+  isActive?: boolean | null;
+};
+
+type NormalizedTemplateVariant = {
+  label: string;
+  sellPrice: string;
+  sku: string | null;
+  barcode: string | null;
+  sortOrder: number;
+  isActive: boolean;
 };
 
 export type BusinessProductTemplateImportItem = {
@@ -21,6 +43,9 @@ export type BusinessProductTemplateImportItem = {
   name?: string | null;
   category?: string | null;
   defaultSellPrice?: string | number | null;
+  defaultBaseUnit?: string | null;
+  defaultTrackStock?: boolean | null;
+  variants?: TemplateVariantInput[] | null;
   isActive?: boolean | null;
 };
 
@@ -41,6 +66,9 @@ type TemplateListRow = {
   name: string;
   category: string | null;
   defaultSellPrice: string | null;
+  defaultBaseUnit: string | null;
+  defaultTrackStock: boolean;
+  variants: NormalizedTemplateVariant[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -78,12 +106,94 @@ function normalizeOptionalMoney(value?: string | number | null) {
   return parsed.toString();
 }
 
+function normalizeProductCodeInput(value?: string | null) {
+  if (value === undefined || value === null) return null;
+  const cleaned = value.toString().trim().replace(/\s+/g, "").toUpperCase();
+  if (!cleaned) return null;
+  return cleaned.slice(0, 80);
+}
+
+function normalizeOptionalUnit(value?: string | null) {
+  if (value === undefined) return undefined;
+  const cleaned = value === null ? "" : value.toString().trim();
+  if (!cleaned) return null;
+  return cleaned.slice(0, 40);
+}
+
+function normalizeTemplateVariants(
+  variants?: TemplateVariantInput[] | null,
+): NormalizedTemplateVariant[] | undefined {
+  if (variants === undefined) return undefined;
+  if (variants === null) return [];
+  if (!Array.isArray(variants)) {
+    throw new Error("Variants must be an array");
+  }
+
+  const normalized: NormalizedTemplateVariant[] = [];
+  const seenLabels = new Set<string>();
+
+  for (let index = 0; index < variants.length; index += 1) {
+    const row = variants[index] ?? {};
+    const label = normalizeRequiredText(String(row.label ?? ""), "Variant label");
+    const labelKey = label.toLowerCase();
+    if (seenLabels.has(labelKey)) {
+      throw new Error(`Duplicate variant label: ${label}`);
+    }
+    seenLabels.add(labelKey);
+
+    const sellPrice = normalizeOptionalMoney(row.sellPrice) ?? "0";
+    const numericPrice = Number(sellPrice);
+    if (!Number.isFinite(numericPrice) || numericPrice < 0) {
+      throw new Error(`Invalid variant sellPrice for ${label}`);
+    }
+
+    normalized.push({
+      label,
+      sellPrice,
+      sku: normalizeProductCodeInput(row.sku),
+      barcode: normalizeProductCodeInput(row.barcode),
+      sortOrder:
+        Number.isFinite(Number(row.sortOrder)) && Number(row.sortOrder) >= 0
+          ? Number(row.sortOrder)
+          : index,
+      isActive: row.isActive !== false,
+    });
+  }
+
+  return normalized;
+}
+
+function parseTemplateVariantsFromJson(value?: unknown): NormalizedTemplateVariant[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    try {
+      return normalizeTemplateVariants(value as TemplateVariantInput[]) ?? [];
+    } catch {
+      return [];
+    }
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      return normalizeTemplateVariants(parsed as TemplateVariantInput[]) ?? [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 function mapTemplateRow(row: {
   id: string;
   businessType: string;
   name: string;
   category: string | null;
   defaultSellPrice: any;
+  defaultBaseUnit: string | null;
+  defaultTrackStock: boolean;
+  variantsJson: unknown;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -94,6 +204,9 @@ function mapTemplateRow(row: {
     name: row.name,
     category: row.category,
     defaultSellPrice: row.defaultSellPrice?.toString?.() ?? null,
+    defaultBaseUnit: row.defaultBaseUnit ?? null,
+    defaultTrackStock: row.defaultTrackStock === true,
+    variants: parseTemplateVariantsFromJson(row.variantsJson),
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -126,6 +239,9 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
   const name = normalizeRequiredText(input.name, "Name");
   const category = normalizeOptionalText(input.category);
   const defaultSellPrice = normalizeOptionalMoney(input.defaultSellPrice);
+  const defaultBaseUnit = normalizeOptionalUnit(input.defaultBaseUnit);
+  const defaultTrackStock = Boolean(input.defaultTrackStock);
+  const variants = normalizeTemplateVariants(input.variants);
   const isActive = input.isActive ?? true;
 
   if (id) {
@@ -137,6 +253,9 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
         name,
         category: category ?? null,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
+        defaultTrackStock,
+        variantsJson: variants === undefined ? [] : variants,
         isActive,
       },
       update: {
@@ -144,6 +263,9 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
         name,
         category: category ?? null,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
+        defaultTrackStock,
+        variantsJson: variants === undefined ? [] : variants,
         isActive,
       },
     });
@@ -154,6 +276,9 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
         name,
         category: category ?? null,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
+        defaultTrackStock,
+        variantsJson: variants === undefined ? [] : variants,
         isActive,
       },
     });
@@ -189,6 +314,15 @@ export async function updateBusinessProductTemplate(
   }
   if (input.defaultSellPrice !== undefined) {
     data.defaultSellPrice = normalizeOptionalMoney(input.defaultSellPrice);
+  }
+  if (input.defaultBaseUnit !== undefined) {
+    data.defaultBaseUnit = normalizeOptionalUnit(input.defaultBaseUnit);
+  }
+  if (input.defaultTrackStock !== undefined) {
+    data.defaultTrackStock = Boolean(input.defaultTrackStock);
+  }
+  if (input.variants !== undefined) {
+    data.variantsJson = normalizeTemplateVariants(input.variants) ?? [];
   }
   if (input.isActive !== undefined) {
     data.isActive = Boolean(input.isActive);
@@ -235,6 +369,9 @@ export async function importBusinessProductTemplates(
     name: string;
     category: string | null;
     defaultSellPrice: string | null;
+    defaultBaseUnit: string | null;
+    defaultTrackStock: boolean;
+    variants: NormalizedTemplateVariant[];
     isActive: boolean;
   }> = [];
 
@@ -251,6 +388,9 @@ export async function importBusinessProductTemplates(
       const name = normalizeRequiredText(String(item.name ?? ""), "Name");
       const category = normalizeOptionalText(item.category);
       const defaultSellPrice = normalizeOptionalMoney(item.defaultSellPrice);
+      const defaultBaseUnit = normalizeOptionalUnit(item.defaultBaseUnit);
+      const defaultTrackStock = item.defaultTrackStock === true;
+      const variants = normalizeTemplateVariants(item.variants) ?? [];
       const isActive = item.isActive ?? true;
 
       normalized.push({
@@ -258,6 +398,9 @@ export async function importBusinessProductTemplates(
         name,
         category: category ?? null,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
+        defaultTrackStock,
+        variants,
         isActive: Boolean(isActive),
       });
     } catch (err) {
@@ -294,6 +437,9 @@ export async function importBusinessProductTemplates(
       name: item.name,
       category: item.category,
       defaultSellPrice: item.defaultSellPrice,
+      defaultBaseUnit: item.defaultBaseUnit,
+      defaultTrackStock: item.defaultTrackStock,
+      variantsJson: item.variants,
       isActive: item.isActive,
     })),
     skipDuplicates: true,
@@ -382,45 +528,138 @@ export async function addBusinessProductTemplatesToShop(input: {
     existing.map((row) => row.name.trim().toLowerCase()),
   );
 
-  const createData: any[] = [];
+  const [productCodes, variantCodes] = await Promise.all([
+    prisma.product.findMany({
+      where: { shopId: shop.id },
+      select: { sku: true, barcode: true },
+    }),
+    prisma.productVariant.findMany({
+      where: { shopId: shop.id },
+      select: { sku: true, barcode: true },
+    }),
+  ]);
+
+  const usedSkus = new Set<string>();
+  const usedBarcodes = new Set<string>();
+  productCodes.forEach((row) => {
+    const sku = normalizeProductCodeInput(row.sku);
+    const barcode = normalizeProductCodeInput(row.barcode);
+    if (sku) usedSkus.add(sku);
+    if (barcode) usedBarcodes.add(barcode);
+  });
+  variantCodes.forEach((row) => {
+    const sku = normalizeProductCodeInput(row.sku);
+    const barcode = normalizeProductCodeInput(row.barcode);
+    if (sku) usedSkus.add(sku);
+    if (barcode) usedBarcodes.add(barcode);
+  });
+
+  let createdCount = 0;
   let inactiveCount = 0;
+  let skippedCount = 0;
+  let adjustedCodeCount = 0;
 
   for (const template of uniqueTemplates) {
     const key = template.name.trim().toLowerCase();
-    if (existingNames.has(key)) continue;
+    if (existingNames.has(key)) {
+      skippedCount += 1;
+      continue;
+    }
 
     const defaultPrice = template.defaultSellPrice?.toString();
     const numericPrice = defaultPrice ? Number(defaultPrice) : 0;
-    const hasValidPrice = Number.isFinite(numericPrice) && numericPrice > 0;
+    const rawVariants = parseTemplateVariantsFromJson(
+      (template as any).variantsJson,
+    );
+    const preparedVariants = rawVariants.map((variant, index) => {
+      let sku = normalizeProductCodeInput(variant.sku);
+      let barcode = normalizeProductCodeInput(variant.barcode);
+      if (sku && usedSkus.has(sku)) {
+        sku = null;
+        adjustedCodeCount += 1;
+      } else if (sku) {
+        usedSkus.add(sku);
+      }
+      if (barcode && usedBarcodes.has(barcode)) {
+        barcode = null;
+        adjustedCodeCount += 1;
+      } else if (barcode) {
+        usedBarcodes.add(barcode);
+      }
+      return {
+        ...variant,
+        sku,
+        barcode,
+        sortOrder:
+          Number.isFinite(Number(variant.sortOrder)) && Number(variant.sortOrder) >= 0
+            ? Number(variant.sortOrder)
+            : index,
+      };
+    });
+    const hasVariantPrice = preparedVariants.some((variant) => {
+      const price = Number(variant.sellPrice);
+      return variant.isActive !== false && Number.isFinite(price) && price > 0;
+    });
+    const hasValidPrice =
+      (Number.isFinite(numericPrice) && numericPrice > 0) || hasVariantPrice;
     if (!hasValidPrice) {
       inactiveCount += 1;
     }
 
-    createData.push({
-      shopId: shop.id,
-      name: template.name,
-      category: template.category || "Uncategorized",
-      buyPrice: null,
-      sellPrice: defaultPrice || "0",
-      stockQty: "0",
-      isActive: hasValidPrice,
-      trackStock: false,
-    });
-  }
+    const defaultUnit = normalizeOptionalUnit(
+      (template as any).defaultBaseUnit,
+    );
+    const resolvedSellPrice =
+      defaultPrice ||
+      preparedVariants.find((variant) => Number(variant.sellPrice) > 0)?.sellPrice ||
+      "0";
 
-  if (createData.length === 0) {
-    return {
-      createdCount: 0,
-      skippedCount: uniqueTemplates.length,
-      inactiveCount,
-    };
-  }
+    try {
+      await prisma.$transaction(async (tx) => {
+        const createdProduct = await tx.product.create({
+          data: {
+            shopId: shop.id,
+            name: template.name,
+            category: template.category || "Uncategorized",
+            buyPrice: null,
+            sellPrice: resolvedSellPrice,
+            stockQty: "0",
+            isActive: hasValidPrice,
+            trackStock: (template as any).defaultTrackStock === true,
+            baseUnit: defaultUnit || "pcs",
+          },
+        });
 
-  await prisma.product.createMany({ data: createData });
+        if (preparedVariants.length > 0) {
+          await tx.productVariant.createMany({
+            data: preparedVariants.map((variant, index) => ({
+              shopId: shop.id,
+              productId: createdProduct.id,
+              label: variant.label,
+              sellPrice: variant.sellPrice,
+              sku: variant.sku,
+              barcode: variant.barcode,
+              sortOrder: variant.sortOrder ?? index,
+              isActive: variant.isActive !== false,
+            })),
+          });
+        }
+      });
+      createdCount += 1;
+      existingNames.add(key);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        skippedCount += 1;
+        continue;
+      }
+      throw err;
+    }
+  }
 
   return {
-    createdCount: createData.length,
-    skippedCount: uniqueTemplates.length - createData.length,
+    createdCount,
+    skippedCount,
     inactiveCount,
+    adjustedCodeCount,
   };
 }

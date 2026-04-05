@@ -72,12 +72,24 @@ const businessTypeStaticSchema = z.object({
   label: z.string().optional(),
 });
 
+const templateVariantSchema = z.object({
+  label: z.string().optional().nullable(),
+  sellPrice: z.union([z.string(), z.number()]).optional().nullable(),
+  sku: z.string().optional().nullable(),
+  barcode: z.string().optional().nullable(),
+  sortOrder: z.number().optional().nullable(),
+  isActive: z.boolean().optional().nullable(),
+});
+
 const templateCreateSchema = z.object({
   id: z.string().optional(),
   businessType: z.string().min(1),
   name: z.string().min(1),
   category: z.string().optional().nullable(),
   defaultSellPrice: z.union([z.string(), z.number()]).optional().nullable(),
+  defaultBaseUnit: z.string().optional().nullable(),
+  defaultTrackStock: z.boolean().optional(),
+  variants: z.array(templateVariantSchema).optional().nullable(),
   isActive: z.boolean().optional(),
 });
 
@@ -87,6 +99,9 @@ const templateUpdateSchema = z.object({
   name: z.string().optional(),
   category: z.string().optional().nullable(),
   defaultSellPrice: z.union([z.string(), z.number()]).optional().nullable(),
+  defaultBaseUnit: z.string().optional().nullable(),
+  defaultTrackStock: z.boolean().optional(),
+  variants: z.array(templateVariantSchema).optional().nullable(),
   isActive: z.boolean().optional(),
 });
 

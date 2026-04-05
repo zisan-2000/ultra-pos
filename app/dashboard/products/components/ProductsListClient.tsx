@@ -59,6 +59,16 @@ type TemplateProduct = {
   name: string;
   category: string | null;
   defaultSellPrice: string | null;
+  defaultBaseUnit?: string | null;
+  defaultTrackStock?: boolean;
+  variants?: Array<{
+    label: string;
+    sellPrice: string | number;
+    sku?: string | null;
+    barcode?: string | null;
+    sortOrder?: number;
+    isActive?: boolean;
+  }>;
 };
 
 type ProductStatusFilter = "all" | "active" | "inactive";
@@ -716,35 +726,66 @@ export default function ProductsListClient({
       let skipped = 0;
       let inactiveCount = 0;
 
-      for (const template of selected) {
-        const key = normalizeText(template.name);
-        if (!key || existingNames.has(key)) {
-          skipped += 1;
-          continue;
-        }
-        existingNames.add(key);
-        const defaultPrice = template.defaultSellPrice?.toString();
-        const numericPrice = defaultPrice ? Number(defaultPrice) : 0;
-        const hasValidPrice =
-          Number.isFinite(numericPrice) && numericPrice > 0;
-        if (!hasValidPrice) inactiveCount += 1;
+        for (const template of selected) {
+          const key = normalizeText(template.name);
+          if (!key || existingNames.has(key)) {
+            skipped += 1;
+            continue;
+          }
+          existingNames.add(key);
+          const defaultPrice = template.defaultSellPrice?.toString();
+          const numericPrice = defaultPrice ? Number(defaultPrice) : 0;
+          const hasVariantPrice = Array.isArray(template.variants)
+            ? template.variants.some((variant) => {
+                const variantPrice = Number(variant.sellPrice ?? 0);
+                return (
+                  variant.isActive !== false &&
+                  Number.isFinite(variantPrice) &&
+                  variantPrice > 0
+                );
+              })
+            : false;
+          const hasValidPrice =
+            (Number.isFinite(numericPrice) && numericPrice > 0) || hasVariantPrice;
+          if (!hasValidPrice) inactiveCount += 1;
+          const variants = Array.isArray(template.variants)
+            ? template.variants
+                .map((variant, index) => ({
+                  label: String(variant.label || "").trim(),
+                  sellPrice: String(variant.sellPrice ?? "0").trim() || "0",
+                  sku: variant.sku ?? null,
+                  barcode: variant.barcode ?? null,
+                  sortOrder:
+                    Number.isFinite(Number(variant.sortOrder)) &&
+                    Number(variant.sortOrder) >= 0
+                      ? Number(variant.sortOrder)
+                      : index,
+                  isActive: variant.isActive !== false,
+                }))
+                .filter((variant) => variant.label.length > 0)
+            : [];
+          const fallbackVariantPrice = variants.find(
+            (variant) => Number(variant.sellPrice) > 0,
+          )?.sellPrice;
 
-        localProducts.push({
-          id: crypto.randomUUID(),
-          shopId: activeShopId,
-          name: template.name,
-          category: template.category || "Uncategorized",
-          sku: null,
-          barcode: null,
-          buyPrice: null,
-          sellPrice: defaultPrice || "0",
-          stockQty: "0",
-          isActive: hasValidPrice,
-          trackStock: false,
-          updatedAt: now,
-          syncStatus: "new",
-        });
-      }
+          localProducts.push({
+            id: crypto.randomUUID(),
+            shopId: activeShopId,
+            name: template.name,
+            category: template.category || "Uncategorized",
+            sku: null,
+            barcode: null,
+            baseUnit: template.defaultBaseUnit || "pcs",
+            buyPrice: null,
+            sellPrice: defaultPrice || fallbackVariantPrice || "0",
+            stockQty: "0",
+            isActive: hasValidPrice,
+            trackStock: template.defaultTrackStock === true,
+            variants,
+            updatedAt: now,
+            syncStatus: "new",
+          });
+        }
 
       if (localProducts.length === 0) {
         alert("All selected items already exist in this shop.");

@@ -20,12 +20,24 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type BusinessTypeRow = { key: string; label: string };
 
+type TemplateVariantDraft = {
+  label: string;
+  sellPrice: string;
+  sku: string | null;
+  barcode: string | null;
+  sortOrder: number;
+  isActive: boolean;
+};
+
 type TemplateRow = {
   id: string;
   businessType: string;
   name: string;
   category?: string | null;
   defaultSellPrice?: string | number | null;
+  defaultBaseUnit?: string | null;
+  defaultTrackStock?: boolean;
+  variants?: TemplateVariantDraft[];
   isActive: boolean;
 };
 
@@ -34,6 +46,9 @@ type ImportTemplateInput = {
   name?: string | null;
   category?: string | null;
   defaultSellPrice?: string | number | null;
+  defaultBaseUnit?: string | null;
+  defaultTrackStock?: boolean | null;
+  variants?: TemplateVariantDraft[] | null;
   isActive?: boolean | null;
 };
 
@@ -58,12 +73,44 @@ type Props = {
 
 const MAX_IMPORT_ERRORS = 4;
 
+const UNIT_OPTIONS = ["pcs", "packet", "box", "dozen", "kg", "gm", "liter", "ml"];
+
 function scheduleStateUpdate(fn: () => void) {
   if (typeof queueMicrotask === "function") {
     queueMicrotask(fn);
     return;
   }
   Promise.resolve().then(fn);
+}
+
+function normalizeCodeInput(value: string) {
+  return value.trim().replace(/\s+/g, "").toUpperCase().slice(0, 80);
+}
+
+function createVariantDraft(seed?: Partial<TemplateVariantDraft>): TemplateVariantDraft {
+  return {
+    label: seed?.label ?? "",
+    sellPrice: seed?.sellPrice ?? "",
+    sku: seed?.sku ?? null,
+    barcode: seed?.barcode ?? null,
+    sortOrder: seed?.sortOrder ?? 0,
+    isActive: seed?.isActive ?? true,
+  };
+}
+
+function sanitizeVariantsForSubmit(variants: TemplateVariantDraft[]) {
+  return variants
+    .map((variant, index) => ({
+      label: variant.label.trim(),
+      sellPrice: String(variant.sellPrice ?? "").trim() || "0",
+      sku: normalizeCodeInput(variant.sku || "") || null,
+      barcode: normalizeCodeInput(variant.barcode || "") || null,
+      sortOrder: Number.isFinite(Number(variant.sortOrder))
+        ? Number(variant.sortOrder)
+        : index,
+      isActive: variant.isActive !== false,
+    }))
+    .filter((variant) => variant.label.length > 0);
 }
 
 function parseImportPayload(raw: string, defaultBusinessType?: string | null) {
@@ -153,6 +200,45 @@ function parseImportPayload(raw: string, defaultBusinessType?: string | null) {
       }
     }
 
+    let defaultBaseUnit: string | null = null;
+    if (record.defaultBaseUnit !== undefined) {
+      if (record.defaultBaseUnit === null || record.defaultBaseUnit === "") {
+        defaultBaseUnit = null;
+      } else if (typeof record.defaultBaseUnit === "string") {
+        const normalizedUnit = record.defaultBaseUnit.trim();
+        defaultBaseUnit = normalizedUnit ? normalizedUnit.slice(0, 40) : null;
+      } else {
+        itemErrors.push("defaultBaseUnit must be a string");
+      }
+    }
+
+    let defaultTrackStock = false;
+    if (record.defaultTrackStock !== undefined && record.defaultTrackStock !== null) {
+      if (typeof record.defaultTrackStock !== "boolean") {
+        itemErrors.push("defaultTrackStock must be boolean");
+      } else {
+        defaultTrackStock = record.defaultTrackStock;
+      }
+    }
+
+    let variants: TemplateVariantDraft[] = [];
+    if (record.variants !== undefined && record.variants !== null) {
+      if (!Array.isArray(record.variants)) {
+        itemErrors.push("variants must be an array");
+      } else {
+        variants = sanitizeVariantsForSubmit(record.variants as TemplateVariantDraft[]).map(
+          (variant) => ({
+            label: variant.label,
+            sellPrice: variant.sellPrice,
+            sku: variant.sku ?? "",
+            barcode: variant.barcode ?? "",
+            sortOrder: variant.sortOrder,
+            isActive: variant.isActive !== false,
+          }),
+        );
+      }
+    }
+
     let isActive = true;
     if (record.isActive !== undefined && record.isActive !== null) {
       if (typeof record.isActive !== "boolean") {
@@ -179,6 +265,9 @@ function parseImportPayload(raw: string, defaultBusinessType?: string | null) {
       name,
       category,
       defaultSellPrice,
+      defaultBaseUnit,
+      defaultTrackStock,
+      variants,
       isActive,
     });
   });
@@ -203,6 +292,11 @@ export default function BusinessProductLibraryClient({
   const [businessTypes, setBusinessTypes] = useState<BusinessTypeRow[]>(
     initialBusinessTypes || []
   );
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const [defaultBaseUnit, setDefaultBaseUnit] = useState("pcs");
+  const [defaultTrackStock, setDefaultTrackStock] = useState(false);
+  const [variantRows, setVariantRows] = useState<TemplateVariantDraft[]>([]);
+  const [showVariantCodeFields, setShowVariantCodeFields] = useState(false);
   const [importPayload, setImportPayload] = useState("");
   const [importBusinessType, setImportBusinessType] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
@@ -233,6 +327,51 @@ export default function BusinessProductLibraryClient({
     [templatesKey],
   );
 
+  const sanitizedVariantPayload = useMemo(
+    () => sanitizeVariantsForSubmit(variantRows),
+    [variantRows],
+  );
+
+  function upsertVariantRow(index: number, patch: Partial<TemplateVariantDraft>) {
+    setVariantRows((prev) =>
+      prev.map((row, current) => (current === index ? { ...row, ...patch } : row)),
+    );
+  }
+
+  function addVariantRow(seed?: Partial<TemplateVariantDraft>) {
+    setVariantRows((prev) => [
+      ...prev,
+      createVariantDraft({
+        ...seed,
+        sortOrder: prev.length,
+      }),
+    ]);
+  }
+
+  function removeVariantRow(index: number) {
+    setVariantRows((prev) =>
+      prev
+        .filter((_, current) => current !== index)
+        .map((row, current) => ({ ...row, sortOrder: current })),
+    );
+  }
+
+  function addPresetVariants(type: "size" | "volume") {
+    const labels = type === "size" ? ["Small", "Medium", "Large"] : ["250ml", "500ml", "1L"];
+    setVariantRows((prev) => {
+      const existing = new Set(prev.map((row) => row.label.trim().toLowerCase()));
+      const additions = labels
+        .filter((label) => !existing.has(label.toLowerCase()))
+        .map((label, index) =>
+          createVariantDraft({
+            label,
+            sortOrder: prev.length + index,
+          }),
+        );
+      return [...prev, ...additions];
+    });
+  }
+
   const handleOfflineCreate = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       if (online) return;
@@ -244,6 +383,25 @@ export default function BusinessProductLibraryClient({
       const category = (formData.get("category") as string | null)?.trim() || null;
       const rawPrice = (formData.get("defaultSellPrice") as string | null)?.trim();
       const defaultSellPrice = rawPrice ? rawPrice : null;
+      const defaultBaseUnit = (formData.get("defaultBaseUnit") as string | null)?.trim() || null;
+      const defaultTrackStock = formData.get("defaultTrackStock") === "on";
+      const rawVariantsJson = (formData.get("variantsJson") as string | null) || "";
+      let variants: TemplateVariantDraft[] = [];
+      if (rawVariantsJson.trim()) {
+        try {
+          const parsed = JSON.parse(rawVariantsJson);
+          if (Array.isArray(parsed)) {
+            variants = parsed.map((row, index) =>
+              createVariantDraft({
+                ...(row as Partial<TemplateVariantDraft>),
+                sortOrder: index,
+              }),
+            );
+          }
+        } catch {
+          variants = [];
+        }
+      }
       const isActive = formData.get("isActive") === "on";
       const id =
         typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -258,6 +416,9 @@ export default function BusinessProductLibraryClient({
           name,
           category,
           defaultSellPrice,
+          defaultBaseUnit,
+          defaultTrackStock,
+          variants,
           isActive,
         },
       ]);
@@ -268,10 +429,16 @@ export default function BusinessProductLibraryClient({
         name,
         category,
         defaultSellPrice,
+        defaultBaseUnit,
+        defaultTrackStock,
+        variants,
         isActive,
       });
       alert("Offline: template queued.");
       event.currentTarget.reset();
+      setDefaultBaseUnit("pcs");
+      setDefaultTrackStock(false);
+      setVariantRows([]);
     },
     [online, updateTemplates],
   );
@@ -379,6 +546,20 @@ export default function BusinessProductLibraryClient({
               : `${businessType}-${Date.now()}`;
           const category = item.category ?? null;
           const defaultSellPrice = item.defaultSellPrice ?? null;
+          const defaultBaseUnit = item.defaultBaseUnit ?? null;
+          const defaultTrackStock = item.defaultTrackStock === true;
+          const variants = Array.isArray(item.variants)
+            ? item.variants.map((variant, index) =>
+                createVariantDraft({
+                  ...variant,
+                  sortOrder:
+                    Number.isFinite(Number(variant.sortOrder)) &&
+                    Number(variant.sortOrder) >= 0
+                      ? Number(variant.sortOrder)
+                      : index,
+                }),
+              )
+            : [];
           const isActive = item.isActive ?? true;
 
           created.push({
@@ -387,6 +568,9 @@ export default function BusinessProductLibraryClient({
             name,
             category,
             defaultSellPrice,
+            defaultBaseUnit,
+            defaultTrackStock,
+            variants,
             isActive,
           });
         }
@@ -401,6 +585,11 @@ export default function BusinessProductLibraryClient({
                 name: item.name,
                 category: item.category ?? null,
                 defaultSellPrice: item.defaultSellPrice ?? null,
+                defaultBaseUnit: item.defaultBaseUnit ?? null,
+                defaultTrackStock: item.defaultTrackStock === true,
+                variants: Array.isArray(item.variants)
+                  ? sanitizeVariantsForSubmit(item.variants)
+                  : [],
                 isActive: item.isActive,
               }),
             ),
@@ -609,44 +798,214 @@ export default function BusinessProductLibraryClient({
           <form
             action={onCreateTemplate}
             onSubmit={handleOfflineCreate}
-            className="grid grid-cols-1 lg:grid-cols-5 gap-3"
+            className="space-y-4"
           >
-            <select
-              name="businessType"
-              required
-              className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              defaultValue=""
-            >
-              <option value="" disabled>
-                Business type
-              </option>
-              {mergedBusinessTypes.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label} ({opt.id})
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+              <select
+                name="businessType"
+                required
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  Business type
                 </option>
-              ))}
-            </select>
-            <input
-              name="name"
-              type="text"
-              required
-              className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="Product name"
-            />
-            <input
-              name="category"
-              type="text"
-              className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="Category (optional)"
-            />
-            <input
-              name="defaultSellPrice"
-              type="number"
-              step="0.01"
-              min="0"
-              className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="Default sell price"
-            />
+                {mergedBusinessTypes.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label} ({opt.id})
+                  </option>
+                ))}
+              </select>
+              <input
+                name="name"
+                type="text"
+                required
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Product name"
+              />
+              <input
+                name="category"
+                type="text"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Category (optional)"
+              />
+              <input
+                name="defaultSellPrice"
+                type="number"
+                step="0.01"
+                min="0"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Default sell price"
+              />
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground">
+                  Mode: {advancedMode ? "Flexible template" : "Simple template"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdvancedMode((prev) => !prev);
+                    if (advancedMode) {
+                      setVariantRows([]);
+                      setShowVariantCodeFields(false);
+                    }
+                  }}
+                  className="inline-flex h-8 items-center justify-center rounded-md border border-border px-3 text-xs font-semibold text-foreground hover:bg-card"
+                >
+                  {advancedMode ? "Use simple" : "Use flexible"}
+                </button>
+              </div>
+
+              {advancedMode ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="space-y-1">
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        Default unit
+                      </span>
+                      <select
+                        name="defaultBaseUnit"
+                        value={defaultBaseUnit}
+                        onChange={(event) => setDefaultBaseUnit(event.currentTarget.value)}
+                        className="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground"
+                      >
+                        {UNIT_OPTIONS.map((unit) => (
+                          <option key={unit} value={unit}>
+                            {unit}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="inline-flex items-center gap-2 pt-5 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        name="defaultTrackStock"
+                        checked={defaultTrackStock}
+                        onChange={(event) => setDefaultTrackStock(event.currentTarget.checked)}
+                        className="h-4 w-4"
+                      />
+                      <span>Track stock by default</span>
+                    </label>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => addPresetVariants("size")}
+                        className="h-8 rounded-full border border-primary/30 bg-primary-soft px-3 text-xs font-semibold text-primary"
+                      >
+                        + Size preset
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addPresetVariants("volume")}
+                        className="h-8 rounded-full border border-primary/30 bg-primary-soft px-3 text-xs font-semibold text-primary"
+                      >
+                        + Volume preset
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addVariantRow()}
+                        className="h-8 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground"
+                      >
+                        + Custom variant
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowVariantCodeFields((prev) => !prev)}
+                        className="h-8 rounded-full border border-border bg-card px-3 text-xs font-semibold text-muted-foreground"
+                      >
+                        {showVariantCodeFields ? "SKU/Barcode hide" : "SKU/Barcode show"}
+                      </button>
+                    </div>
+                    {variantRows.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Optional: variant add করলে template apply করার সময় product + variants তৈরি হবে।
+                      </p>
+                    ) : (
+                      <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                        {variantRows.map((row, index) => (
+                          <div
+                            key={`${row.label}-${index}`}
+                            className="rounded-md border border-border bg-card p-2 space-y-2"
+                          >
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,140px,auto]">
+                              <input
+                                type="text"
+                                value={row.label}
+                                onChange={(event) =>
+                                  upsertVariantRow(index, { label: event.currentTarget.value })
+                                }
+                                placeholder="Label (Small, 500ml)"
+                                className="h-9 rounded-md border border-border bg-card px-3 text-sm"
+                              />
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={row.sellPrice}
+                                onChange={(event) =>
+                                  upsertVariantRow(index, { sellPrice: event.currentTarget.value })
+                                }
+                                placeholder="Price"
+                                className="h-9 rounded-md border border-border bg-card px-3 text-sm"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeVariantRow(index)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-danger/30 bg-danger-soft text-danger"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            {showVariantCodeFields ? (
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <input
+                                  type="text"
+                                  value={row.sku ?? ""}
+                                  onChange={(event) =>
+                                    upsertVariantRow(index, {
+                                      sku: normalizeCodeInput(event.currentTarget.value),
+                                    })
+                                  }
+                                  placeholder="SKU (optional)"
+                                  className="h-9 rounded-md border border-border bg-card px-3 text-xs"
+                                />
+                                <input
+                                  type="text"
+                                  value={row.barcode ?? ""}
+                                  onChange={(event) =>
+                                    upsertVariantRow(index, {
+                                      barcode: normalizeCodeInput(event.currentTarget.value),
+                                    })
+                                  }
+                                  placeholder="Barcode (optional)"
+                                  className="h-9 rounded-md border border-border bg-card px-3 text-xs"
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <input type="hidden" name="defaultBaseUnit" value="" />
+                  <input type="hidden" name="variantsJson" value="[]" />
+                </>
+              )}
+            </div>
+
+            {advancedMode ? (
+              <input type="hidden" name="variantsJson" value={JSON.stringify(sanitizedVariantPayload)} />
+            ) : null}
+
             <div className="flex items-center gap-3">
               <label className="inline-flex items-center gap-2 text-sm text-foreground">
                 <input type="checkbox" name="isActive" className="w-4 h-4" defaultChecked />
@@ -753,6 +1112,23 @@ export default function BusinessProductLibraryClient({
                       key={template.id}
                       className="border border-border rounded-lg p-3 grid grid-cols-1 lg:grid-cols-6 gap-3 items-start"
                     >
+                      <div className="lg:col-span-6 flex flex-wrap items-center gap-2 text-[11px]">
+                        <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">
+                          unit: {template.defaultBaseUnit || "pcs"}
+                        </span>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 ${
+                            template.defaultTrackStock
+                              ? "border-primary/30 bg-primary-soft text-primary"
+                              : "border-border bg-muted/40 text-muted-foreground"
+                          }`}
+                        >
+                          stock: {template.defaultTrackStock ? "track on" : "track off"}
+                        </span>
+                        <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">
+                          variants: {Array.isArray(template.variants) ? template.variants.length : 0}
+                        </span>
+                      </div>
                       <form
                         action={onUpdateTemplate}
                         onSubmit={handleOfflineUpdate}

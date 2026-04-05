@@ -26,6 +26,28 @@ async function handleCreateTemplate(formData: FormData) {
   const name = (formData.get("name") as string | null) || "";
   const category = (formData.get("category") as string | null) || null;
   const defaultSellPrice = formData.get("defaultSellPrice") as string | null;
+  const defaultBaseUnit = (formData.get("defaultBaseUnit") as string | null) || null;
+  const hasDefaultTrackStock = formData.has("defaultTrackStock");
+  const defaultTrackStock = hasDefaultTrackStock
+    ? formData.get("defaultTrackStock") === "on"
+    : undefined;
+  const rawVariantsJson = (formData.get("variantsJson") as string | null) || "";
+  let variants: Array<{
+    label?: string | null;
+    sellPrice?: string | number | null;
+    sku?: string | null;
+    barcode?: string | null;
+    sortOrder?: number | null;
+    isActive?: boolean | null;
+  }> | null = null;
+  if (rawVariantsJson.trim()) {
+    try {
+      const parsed = JSON.parse(rawVariantsJson);
+      variants = Array.isArray(parsed) ? parsed : null;
+    } catch {
+      variants = null;
+    }
+  }
   const isActive = formData.get("isActive") === "on";
 
   await createBusinessProductTemplate({
@@ -33,6 +55,9 @@ async function handleCreateTemplate(formData: FormData) {
     name,
     category,
     defaultSellPrice,
+    defaultBaseUnit,
+    defaultTrackStock,
+    variants,
     isActive,
   });
   revalidatePath("/dashboard/admin/business-product-library");
@@ -44,12 +69,39 @@ async function handleUpdateTemplate(formData: FormData) {
   const name = formData.get("name") as string | null;
   const category = formData.get("category") as string | null;
   const defaultSellPrice = formData.get("defaultSellPrice") as string | null;
+  const defaultBaseUnit = formData.get("defaultBaseUnit") as string | null;
+  const hasDefaultTrackStock = formData.has("defaultTrackStock");
+  const defaultTrackStock = hasDefaultTrackStock
+    ? formData.get("defaultTrackStock") === "on"
+    : undefined;
+  const rawVariantsJson = (formData.get("variantsJson") as string | null) || "";
+  let variants:
+    | Array<{
+        label?: string | null;
+        sellPrice?: string | number | null;
+        sku?: string | null;
+        barcode?: string | null;
+        sortOrder?: number | null;
+        isActive?: boolean | null;
+      }>
+    | undefined;
+  if (rawVariantsJson.trim()) {
+    try {
+      const parsed = JSON.parse(rawVariantsJson);
+      variants = Array.isArray(parsed) ? parsed : undefined;
+    } catch {
+      variants = undefined;
+    }
+  }
   const isActive = formData.get("isActive") === "on";
 
   await updateBusinessProductTemplate(id, {
     name: name ?? undefined,
     category: category ?? undefined,
     defaultSellPrice: defaultSellPrice ?? undefined,
+    defaultBaseUnit: defaultBaseUnit ?? undefined,
+    defaultTrackStock,
+    variants,
     isActive,
   });
   revalidatePath("/dashboard/admin/business-product-library");
