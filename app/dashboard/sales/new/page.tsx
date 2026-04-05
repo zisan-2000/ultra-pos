@@ -115,6 +115,8 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
     const items = JSON.parse(cartJson) as {
       productId: string;
       name: string;
+      variantId?: string | null;
+      variantLabel?: string | null;
       unitPrice: number;
       qty: number;
     }[];

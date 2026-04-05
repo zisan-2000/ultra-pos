@@ -36,6 +36,15 @@ type PosProductSearchProps = {
     stockQty?: string | number;
     category?: string | null;
     trackStock?: boolean | null;
+    variants?: Array<{
+      id: string;
+      label: string;
+      sellPrice: string;
+      sku?: string | null;
+      barcode?: string | null;
+      sortOrder?: number;
+      isActive?: boolean;
+    }>;
   }[];
 };
 
@@ -43,6 +52,7 @@ type UsageEntry = { count: number; lastUsed: number; favorite?: boolean };
 type EnrichedProduct = PosProductSearchProps["products"][number] & {
   category: string;
 };
+type ProductVariantOption = NonNullable<EnrichedProduct["variants"]>[number];
 type QuickSlot = EnrichedProduct | null;
 type SpeechRecognitionInstance = {
   lang: string;
@@ -68,6 +78,13 @@ type ScannerSuspendDetail = {
 };
 type PosInputMode = "search" | "scanner";
 type PosProductViewMode = "grid" | "list";
+type VariantPickerState = {
+  product: EnrichedProduct;
+};
+type CodeLookupMatch = {
+  product: EnrichedProduct;
+  variant?: ProductVariantOption;
+};
 
 const QUICK_LIMIT = 8; // fixed slots so buttons never jump during a session
 const INITIAL_RENDER = 60;
@@ -114,6 +131,30 @@ function toNumber(val: string | number | undefined) {
 
 function normalizeCodeInput(value: string) {
   return value.trim().replace(/\s+/g, "").toUpperCase();
+}
+
+function getActiveVariants(product: EnrichedProduct): ProductVariantOption[] {
+  if (!Array.isArray(product.variants)) return [];
+  return product.variants
+    .filter((variant) => variant && variant.isActive !== false)
+    .sort(
+      (a, b) =>
+        Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0) ||
+        String(a.label || "").localeCompare(String(b.label || ""))
+    );
+}
+
+function buildCartItemName(
+  product: EnrichedProduct,
+  variant?: ProductVariantOption
+) {
+  if (!variant) return product.name;
+  const label = String(variant.label || "").trim();
+  return label ? `${product.name} (${label})` : product.name;
+}
+
+function buildCartItemKey(productId: string, variantId?: string | null) {
+  return variantId ? `${productId}:${variantId}` : productId;
 }
 
 function formatCategoryLabel(raw: string) {
@@ -175,6 +216,7 @@ const ProductButton = memo(function ProductButton({
 }) {
   const tracksStock = product.trackStock === true;
   const stock = toNumber(product.stockQty);
+  const variantCount = getActiveVariants(product).length;
   const stockStyle = tracksStock
     ? getStockToneClasses(stock).badge
     : "bg-muted text-muted-foreground border border-border/60";
@@ -211,6 +253,11 @@ const ProductButton = memo(function ProductButton({
       <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mt-2">
         {formatCategoryLabel(product.category)}
       </p>
+      {variantCount > 0 ? (
+        <p className="mt-1 text-[11px] font-semibold text-primary">
+          {variantCount} variant
+        </p>
+      ) : null}
     </button>
   );
 });
@@ -256,8 +303,12 @@ export const PosProductSearch = memo(function PosProductSearch({
   const [quickSlotsReady, setQuickSlotsReady] = useState(false);
   const [stockConfirm, setStockConfirm] = useState<{
     product: EnrichedProduct;
+    variant?: ProductVariantOption;
     message: string;
   } | null>(null);
+  const [variantPicker, setVariantPicker] = useState<VariantPickerState | null>(
+    null
+  );
 
   const add = useCart((s: any) => s.add);
 
@@ -551,12 +602,23 @@ export const PosProductSearch = memo(function PosProductSearch({
   }, [productsWithCategory]);
 
   const productByCode = useMemo(() => {
-    const byCode = new Map<string, EnrichedProduct>();
+    const byCode = new Map<string, CodeLookupMatch>();
     productsWithCategory.forEach((p) => {
       const normalizedSku = normalizeCodeInput(p.sku || "");
       const normalizedBarcode = normalizeCodeInput(p.barcode || "");
-      if (normalizedSku) byCode.set(normalizedSku, p);
-      if (normalizedBarcode) byCode.set(normalizedBarcode, p);
+      if (normalizedSku) byCode.set(normalizedSku, { product: p });
+      if (normalizedBarcode) byCode.set(normalizedBarcode, { product: p });
+      const variants = getActiveVariants(p);
+      for (const variant of variants) {
+        const variantSku = normalizeCodeInput(variant.sku || "");
+        const variantBarcode = normalizeCodeInput(variant.barcode || "");
+        if (variantSku) {
+          byCode.set(variantSku, { product: p, variant });
+        }
+        if (variantBarcode) {
+          byCode.set(variantBarcode, { product: p, variant });
+        }
+      }
     });
     return byCode;
   }, [productsWithCategory]);
@@ -674,10 +736,19 @@ export const PosProductSearch = memo(function PosProductSearch({
     return filteredByCategory.filter((p) => {
       const normalizedSku = (p.sku || "").toLowerCase();
       const normalizedBarcode = (p.barcode || "").toLowerCase();
+      const variantHit = getActiveVariants(p).some((variant) => {
+        const label = String(variant.label || "").toLowerCase();
+        const sku = String(variant.sku || "").toLowerCase();
+        const barcode = String(variant.barcode || "").toLowerCase();
+        return (
+          label.includes(term) || sku.includes(term) || barcode.includes(term)
+        );
+      });
       return (
         p.name.toLowerCase().includes(term) ||
         normalizedSku.includes(term) ||
-        normalizedBarcode.includes(term)
+        normalizedBarcode.includes(term) ||
+        variantHit
       );
     });
   }, [filteredByCategory, debouncedQuery]);
@@ -797,25 +868,29 @@ export const PosProductSearch = memo(function PosProductSearch({
   }, [showAllProducts, availableCategories.length]);
 
   const addToCart = useCallback(
-    (product: EnrichedProduct) => {
+    (product: EnrichedProduct, variant?: ProductVariantOption) => {
       // Prevent double clicks within 300ms (ref-based, not state-based)
       const now = Date.now();
       if (now - lastAddRef.current < 300) return;
       lastAddRef.current = now;
 
-      const productPrice = Number(product.sellPrice || 0);
+      const productPrice = Number(variant?.sellPrice ?? product.sellPrice ?? 0);
+      const itemKey = buildCartItemKey(product.id, variant?.id ?? null);
 
       add({
+        itemKey,
         shopId,
         productId: product.id,
-        name: product.name,
+        variantId: variant?.id ?? null,
+        variantLabel: variant?.label ?? null,
+        name: buildCartItemName(product, variant),
         unitPrice: productPrice,
       });
 
       // UI feedback
-      setCooldownProductId(product.id);
+      setCooldownProductId(itemKey);
       bumpUsage(product.id);
-      setRecentlyAdded(product.id);
+      setRecentlyAdded(itemKey);
       if (recentlyAddedTimeoutRef.current) {
         clearTimeout(recentlyAddedTimeoutRef.current);
       }
@@ -835,11 +910,12 @@ export const PosProductSearch = memo(function PosProductSearch({
   );
 
   const handleAddToCart = useCallback(
-    (product: EnrichedProduct) => {
+    (product: EnrichedProduct, variant?: ProductVariantOption) => {
       const stock = toNumber(product.stockQty);
       const cartItems = useCart.getState().items;
-      const inCart =
-        cartItems.find((i: any) => i.productId === product.id)?.qty || 0;
+      const inCart = cartItems
+        .filter((i: any) => i.productId === product.id)
+        .reduce((sum: number, item: any) => sum + Number(item.qty || 0), 0);
       const tracksStock = product.trackStock === true;
 
       if (tracksStock && stock <= inCart) {
@@ -847,13 +923,29 @@ export const PosProductSearch = memo(function PosProductSearch({
           stock <= 0
             ? `${product.name} এর স্টক নেই। তবুও যোগ করবেন?`
             : `${product.name} এর মাত্র ${stock}টি আছে। তবুও যোগ করবেন?`;
-        setStockConfirm({ product, message });
+        setStockConfirm({ product, variant, message });
         return;
       }
 
-      addToCart(product);
+      addToCart(product, variant);
     },
     [addToCart]
+  );
+
+  const handleProductTap = useCallback(
+    (product: EnrichedProduct) => {
+      const variants = getActiveVariants(product);
+      if (variants.length === 0) {
+        handleAddToCart(product);
+        return;
+      }
+      if (variants.length === 1) {
+        handleAddToCart(product, variants[0]);
+        return;
+      }
+      setVariantPicker({ product });
+    },
+    [handleAddToCart]
   );
 
   const lookupAndAddByCode = useCallback(
@@ -880,8 +972,8 @@ export const PosProductSearch = memo(function PosProductSearch({
         return false;
       }
 
-      const product = productByCode.get(normalizedCode);
-      if (!product) {
+      const match = productByCode.get(normalizedCode);
+      if (!match) {
         setScanFeedback({
           type: "error",
           message: `কোড ${normalizedCode} পাওয়া যায়নি`,
@@ -891,13 +983,15 @@ export const PosProductSearch = memo(function PosProductSearch({
       }
 
       lastProcessedScanRef.current = { code: normalizedCode, at: Date.now() };
-      handleAddToCart(product);
+      const selectedVariant =
+        match.variant ?? getActiveVariants(match.product)[0] ?? undefined;
+      handleAddToCart(match.product, selectedVariant);
       setScanFeedback({
         type: "success",
         message:
           source === "camera"
-            ? `${product.name} ক্যামেরা স্ক্যানে যোগ হয়েছে`
-            : `${product.name} কার্টে যোগ হয়েছে`,
+            ? `${buildCartItemName(match.product, selectedVariant)} ক্যামেরা স্ক্যানে যোগ হয়েছে`
+            : `${buildCartItemName(match.product, selectedVariant)} কার্টে যোগ হয়েছে`,
       });
       playScannerFeedbackTone("success");
       return true;
@@ -1191,9 +1285,9 @@ export const PosProductSearch = memo(function PosProductSearch({
     <ProductButton
       key={product.id}
       product={product}
-      onAdd={handleAddToCart}
-      isRecentlyAdded={recentlyAdded === product.id}
-      isCooldown={cooldownProductId === product.id}
+      onAdd={handleProductTap}
+      isRecentlyAdded={recentlyAdded?.startsWith(`${product.id}:`) || recentlyAdded === product.id}
+      isCooldown={cooldownProductId?.startsWith(`${product.id}:`) || cooldownProductId === product.id}
     />
   );
 
@@ -1201,9 +1295,9 @@ export const PosProductSearch = memo(function PosProductSearch({
     <ProductListButton
       key={`list-${product.id}`}
       product={product}
-      onAdd={handleAddToCart}
-      isRecentlyAdded={recentlyAdded === product.id}
-      isCooldown={cooldownProductId === product.id}
+      onAdd={handleProductTap}
+      isRecentlyAdded={recentlyAdded?.startsWith(`${product.id}:`) || recentlyAdded === product.id}
+      isCooldown={cooldownProductId?.startsWith(`${product.id}:`) || cooldownProductId === product.id}
     />
   );
 
@@ -1218,9 +1312,9 @@ export const PosProductSearch = memo(function PosProductSearch({
       <ProductButton
         key={`quick-slot-${index}`}
         product={slot}
-        onAdd={handleAddToCart}
-        isRecentlyAdded={recentlyAdded === slot.id}
-        isCooldown={cooldownProductId === slot.id}
+        onAdd={handleProductTap}
+        isRecentlyAdded={recentlyAdded?.startsWith(`${slot.id}:`) || recentlyAdded === slot.id}
+        isCooldown={cooldownProductId?.startsWith(`${slot.id}:`) || cooldownProductId === slot.id}
       />
     );
   };
@@ -1642,11 +1736,65 @@ export const PosProductSearch = memo(function PosProductSearch({
         }}
         onConfirm={() => {
           if (!stockConfirm) return;
-          const { product } = stockConfirm;
+          const { product, variant } = stockConfirm;
           setStockConfirm(null);
-          addToCart(product);
+          addToCart(product, variant);
         }}
       />
+      {variantPicker ? (
+        <div className="fixed inset-0 z-[65] bg-black/40 backdrop-blur-[1px]">
+          <div className="mx-auto flex h-full w-full max-w-md items-end p-3 sm:items-center">
+            <div className="w-full rounded-2xl border border-border bg-card p-4 shadow-[0_20px_45px_rgba(15,23,42,0.25)]">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    ভ্যারিয়েন্ট বাছাই করুন
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {variantPicker.product.name}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVariantPicker(null)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+                {getActiveVariants(variantPicker.product).map((variant) => (
+                  <button
+                    key={variant.id}
+                    type="button"
+                    onClick={() => {
+                      handleAddToCart(variantPicker.product, variant);
+                      setVariantPicker(null);
+                    }}
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2 text-left transition hover:border-primary/35 hover:bg-primary-soft/15"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-semibold text-foreground">
+                        {variant.label}
+                      </span>
+                      <span className="text-sm font-bold text-foreground">
+                        <span className="text-muted-foreground">৳</span>{" "}
+                        {variant.sellPrice}
+                      </span>
+                    </div>
+                    {variant.sku || variant.barcode ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {variant.sku ? `SKU: ${variant.sku}` : ""}{" "}
+                        {variant.barcode ? `Barcode: ${variant.barcode}` : ""}
+                      </p>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {cameraOpen ? (
         <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm">
           <div className="mx-auto flex h-full w-full max-w-md flex-col px-4 py-4">
@@ -1731,6 +1879,7 @@ const ProductListButton = memo(function ProductListButton({
 }) {
   const tracksStock = product.trackStock === true;
   const stock = toNumber(product.stockQty);
+  const variantCount = getActiveVariants(product).length;
   const stockStyle = tracksStock
     ? getStockToneClasses(stock).badge
     : "bg-muted text-muted-foreground border border-border/60";
@@ -1749,6 +1898,11 @@ const ProductListButton = memo(function ProductListButton({
           <p className="mt-0.5 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
             {formatCategoryLabel(product.category)}
           </p>
+          {variantCount > 0 ? (
+            <p className="mt-0.5 text-[11px] font-semibold text-primary">
+              {variantCount} variant
+            </p>
+          ) : null}
         </div>
         <span
           className={`inline-flex h-6 items-center justify-center rounded-full px-2 text-[11px] font-semibold shadow-sm ${stockStyle}`}

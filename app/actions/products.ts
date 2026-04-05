@@ -31,6 +31,7 @@ type CreateProductInput = {
   businessType?: string;
   expiryDate?: string | null;
   size?: string | null;
+  variants?: ProductVariantInput[] | null;
 };
 
 type UpdateProductInput = {
@@ -47,6 +48,17 @@ type UpdateProductInput = {
   businessType?: string;
   expiryDate?: string | null;
   size?: string | null;
+  variants?: ProductVariantInput[] | null;
+};
+
+export type ProductVariantInput = {
+  id?: string;
+  label: string;
+  sellPrice: string | number;
+  sku?: string | null;
+  barcode?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
 };
 
 type ProductListRow = {
@@ -317,6 +329,135 @@ function normalizeDateOnlyInput(value: unknown) {
   return parsed;
 }
 
+type NormalizedProductVariant = {
+  id?: string;
+  label: string;
+  sellPrice: string;
+  sku: string | null;
+  barcode: string | null;
+  sortOrder: number;
+  isActive: boolean;
+};
+
+function normalizeVariantInputs(
+  variants: unknown,
+  options?: { fieldPrefix?: string }
+) {
+  if (variants === undefined) return undefined;
+  if (variants === null) return [] as NormalizedProductVariant[];
+  if (!Array.isArray(variants)) {
+    throw new Error(`${options?.fieldPrefix ?? "Variants"} must be an array`);
+  }
+
+  const normalized: NormalizedProductVariant[] = [];
+  const labelSet = new Set<string>();
+
+  for (let index = 0; index < variants.length; index += 1) {
+    const row = variants[index] as Record<string, unknown>;
+    const label = normalizeNullableTextInput(row?.label, 80) ?? "";
+    if (!label) continue;
+
+    const labelKey = label.toLowerCase();
+    if (labelSet.has(labelKey)) {
+      throw new Error("Variant labels must be unique for a product");
+    }
+    labelSet.add(labelKey);
+
+    const sellPrice = normalizeNumberInput(
+      row?.sellPrice as string | number | null | undefined,
+      {
+      field: `Variant sell price (${label})`,
+      }
+    );
+    const sku = normalizeProductCodeInput(row?.sku) ?? null;
+    const barcode = normalizeProductCodeInput(row?.barcode) ?? null;
+    const sortOrderRaw = Number(row?.sortOrder ?? index);
+    const sortOrder = Number.isFinite(sortOrderRaw)
+      ? Math.max(0, Math.floor(sortOrderRaw))
+      : index;
+    const isActive = row?.isActive === undefined ? true : Boolean(row?.isActive);
+    const id =
+      typeof row?.id === "string" && row.id.trim().length > 0
+        ? row.id.trim()
+        : undefined;
+
+    normalized.push({
+      id,
+      label,
+      sellPrice,
+      sku,
+      barcode,
+      sortOrder,
+      isActive,
+    });
+  }
+
+  return normalized;
+}
+
+async function assertNoCodeCollisionsInShop(params: {
+  shopId: string;
+  excludeProductId?: string;
+  productSku?: string | null;
+  productBarcode?: string | null;
+  variants?: NormalizedProductVariant[] | undefined;
+}) {
+  const codes = new Set<string>();
+  const addCode = (value: string | null | undefined) => {
+    if (!value) return;
+    if (codes.has(value)) {
+      throw new Error(`Duplicate SKU/Barcode "${value}" in this product`);
+    }
+    codes.add(value);
+  };
+
+  addCode(params.productSku ?? null);
+  addCode(params.productBarcode ?? null);
+  for (const variant of params.variants ?? []) {
+    addCode(variant.sku);
+    addCode(variant.barcode);
+  }
+
+  const allCodes = Array.from(codes);
+  if (allCodes.length === 0) return;
+
+  const [productHits, variantHits] = await Promise.all([
+    prisma.product.findMany({
+      where: {
+        shopId: params.shopId,
+        ...(params.excludeProductId ? { id: { not: params.excludeProductId } } : {}),
+        OR: [{ sku: { in: allCodes } }, { barcode: { in: allCodes } }],
+      },
+      select: { sku: true, barcode: true },
+      take: 50,
+    }),
+    prisma.productVariant.findMany({
+      where: {
+        shopId: params.shopId,
+        ...(params.excludeProductId ? { productId: { not: params.excludeProductId } } : {}),
+        OR: [{ sku: { in: allCodes } }, { barcode: { in: allCodes } }],
+      },
+      select: { sku: true, barcode: true },
+      take: 50,
+    }),
+  ]);
+
+  const conflicts = new Set<string>();
+  for (const row of productHits) {
+    if (row.sku && codes.has(row.sku)) conflicts.add(row.sku);
+    if (row.barcode && codes.has(row.barcode)) conflicts.add(row.barcode);
+  }
+  for (const row of variantHits) {
+    if (row.sku && codes.has(row.sku)) conflicts.add(row.sku);
+    if (row.barcode && codes.has(row.barcode)) conflicts.add(row.barcode);
+  }
+
+  if (conflicts.size > 0) {
+    const code = Array.from(conflicts)[0];
+    throw new Error(`SKU/Barcode "${code}" already exists in this shop`);
+  }
+}
+
 function throwFriendlyCodeConflict(err: unknown): never {
   if (
     err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -328,6 +469,16 @@ function throwFriendlyCodeConflict(err: unknown): never {
     }
     if (target.some((item) => String(item).includes("barcode"))) {
       throw new Error("Barcode already exists in this shop");
+    }
+    if (target.some((item) => String(item).includes("product_variants_shop_sku"))) {
+      throw new Error("Variant SKU already exists in this shop");
+    }
+    if (
+      target.some((item) =>
+        String(item).includes("product_variants_shop_barcode")
+      )
+    ) {
+      throw new Error("Variant barcode already exists in this shop");
     }
   }
   throw err instanceof Error ? err : new Error("Product save failed");
@@ -533,6 +684,16 @@ export async function createProduct(input: CreateProductInput) {
   const baseUnit = normalizeBaseUnitInput(input.baseUnit, { defaultValue: "pcs" });
   const expiryDate = normalizeDateOnlyInput(input.expiryDate);
   const size = normalizeNullableTextInput(input.size, 80);
+  const variants = normalizeVariantInputs(input.variants, {
+    fieldPrefix: "Variants",
+  });
+
+  await assertNoCodeCollisionsInShop({
+    shopId: input.shopId,
+    productSku: sku ?? null,
+    productBarcode: barcode ?? null,
+    variants,
+  });
 
   const data: any = {
     shopId: input.shopId,
@@ -556,7 +717,25 @@ export async function createProduct(input: CreateProductInput) {
 
   let created: { id: string };
   try {
-    created = await prisma.product.create({ data });
+    created = await prisma.$transaction(async (tx) => {
+      const createdProduct = await tx.product.create({ data });
+      if (variants && variants.length > 0) {
+        await tx.productVariant.createMany({
+          data: variants.map((variant, index) => ({
+            id: variant.id,
+            shopId: input.shopId,
+            productId: createdProduct.id,
+            label: variant.label,
+            sellPrice: variant.sellPrice,
+            sku: variant.sku,
+            barcode: variant.barcode,
+            sortOrder: variant.sortOrder ?? index,
+            isActive: variant.isActive,
+          })),
+        });
+      }
+      return { id: createdProduct.id };
+    });
   } catch (err) {
     throwFriendlyCodeConflict(err);
   }
@@ -595,9 +774,22 @@ export async function suggestProductSku(
     take: 200,
   });
 
+  const variantRows = await prisma.productVariant.findMany({
+    where: {
+      shopId,
+      ...(excludeProductId ? { productId: { not: excludeProductId } } : {}),
+      sku: {
+        startsWith: base,
+        mode: "insensitive",
+      },
+    },
+    select: { sku: true },
+    take: 200,
+  });
+
   const used = new Set(
-    rows
-      .map((row) => normalizeProductCodeInput(row.sku))
+    [...rows.map((row) => row.sku), ...variantRows.map((row) => row.sku)]
+      .map((code) => normalizeProductCodeInput(code))
       .filter((value): value is string => Boolean(value))
   );
 
@@ -649,9 +841,22 @@ export async function generateProductBarcode(
     take: 500,
   });
 
+  const variantRows = await prisma.productVariant.findMany({
+    where: {
+      shopId,
+      ...(excludeProductId ? { productId: { not: excludeProductId } } : {}),
+      barcode: {
+        startsWith: prefix,
+        mode: "insensitive",
+      },
+    },
+    select: { barcode: true },
+    take: 500,
+  });
+
   const used = new Set(
-    rows
-      .map((row) => normalizeProductCodeInput(row.barcode))
+    [...rows.map((row) => row.barcode), ...variantRows.map((row) => row.barcode)]
+      .map((code) => normalizeProductCodeInput(code))
       .filter((value): value is string => Boolean(value))
   );
 
@@ -1061,6 +1266,11 @@ export async function getProduct(id: string) {
 
   const product = await prisma.product.findUnique({
     where: { id },
+    include: {
+      variants: {
+        orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+      },
+    },
   });
 
   if (!product) throw new Error("Product not found");
@@ -1112,6 +1322,35 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
       : undefined;
   const size =
     data.size !== undefined ? normalizeNullableTextInput(data.size, 80) : undefined;
+  const variants = normalizeVariantInputs(data.variants, {
+    fieldPrefix: "Variants",
+  });
+  const existingVariantsForCollisionCheck =
+    variants === undefined
+      ? await prisma.productVariant.findMany({
+          where: { productId: id },
+          select: {
+            id: true,
+            label: true,
+            sellPrice: true,
+            sku: true,
+            barcode: true,
+            sortOrder: true,
+            isActive: true,
+          },
+        })
+      : [];
+  const collisionVariants =
+    variants ??
+    existingVariantsForCollisionCheck.map((variant) => ({
+      id: variant.id,
+      label: variant.label,
+      sellPrice: variant.sellPrice.toString(),
+      sku: variant.sku ?? null,
+      barcode: variant.barcode ?? null,
+      sortOrder: variant.sortOrder,
+      isActive: variant.isActive,
+    }));
   const resolvedStockQty = trackStockFlag ? stockQty : "0";
   const payload: Record<string, any> = {};
 
@@ -1128,10 +1367,39 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   if (sellPrice !== undefined) payload.sellPrice = sellPrice;
   if (resolvedStockQty !== undefined) payload.stockQty = resolvedStockQty;
 
+  await assertNoCodeCollisionsInShop({
+    shopId: product.shopId,
+    excludeProductId: id,
+    productSku: sku !== undefined ? sku : product.sku,
+    productBarcode: barcode !== undefined ? barcode : product.barcode,
+    variants: collisionVariants,
+  });
+
   try {
-    await prisma.product.update({
-      where: { id },
-      data: payload,
+    await prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id },
+        data: payload,
+      });
+
+      if (variants !== undefined) {
+        await tx.productVariant.deleteMany({ where: { productId: id } });
+        if (variants.length > 0) {
+          await tx.productVariant.createMany({
+            data: variants.map((variant, index) => ({
+              id: variant.id,
+              shopId: product.shopId,
+              productId: id,
+              label: variant.label,
+              sellPrice: variant.sellPrice,
+              sku: variant.sku,
+              barcode: variant.barcode,
+              sortOrder: variant.sortOrder ?? index,
+              isActive: variant.isActive,
+            })),
+          });
+        }
+      }
     });
   } catch (err) {
     throwFriendlyCodeConflict(err);
@@ -1207,6 +1475,19 @@ export async function getActiveProductsByShop(shopId: string) {
       sellPrice: true,
       stockQty: true,
       trackStock: true,
+      variants: {
+        where: { isActive: true },
+        orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+        select: {
+          id: true,
+          label: true,
+          sellPrice: true,
+          sku: true,
+          barcode: true,
+          sortOrder: true,
+          isActive: true,
+        },
+      },
     },
   });
 
@@ -1223,5 +1504,14 @@ export async function getActiveProductsByShop(shopId: string) {
     sellPrice: p.sellPrice.toString(),
     stockQty: p.stockQty?.toString() ?? "0",
     trackStock: p.trackStock,
+    variants: (p.variants || []).map((variant) => ({
+      id: variant.id,
+      label: variant.label,
+      sellPrice: variant.sellPrice.toString(),
+      sku: variant.sku ?? null,
+      barcode: variant.barcode ?? null,
+      sortOrder: variant.sortOrder,
+      isActive: variant.isActive,
+    })),
   }));
 }

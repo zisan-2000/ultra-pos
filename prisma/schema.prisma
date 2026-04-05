@@ -186,6 +186,7 @@ model Shop {
 
   owner            User                    @relation("OwnerShops", fields: [ownerId], references: [id])
   products         Product[]
+  productVariants  ProductVariant[]
   queueTokens      QueueToken[]
   sales            Sale[]
   saleReturns      SaleReturn[]
@@ -412,6 +413,7 @@ model Product {
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   shop            Shop             @relation(fields: [shopId], references: [id])
+  variants        ProductVariant[]
   saleItems       SaleItem[]
   purchaseItems   PurchaseItem[]
   queueTokenItems QueueTokenItem[]
@@ -426,6 +428,30 @@ model Product {
   @@unique([shopId, sku], map: "uq_products_shop_sku")
   @@unique([shopId, barcode], map: "uq_products_shop_barcode")
   @@map("products")
+}
+
+model ProductVariant {
+  id         String   @id @default(uuid()) @db.Uuid
+  shopId     String   @map("shop_id") @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  label      String   @db.VarChar(80)
+  sellPrice  Decimal  @map("sell_price") @db.Decimal(12, 2)
+  sku        String?  @db.VarChar(80)
+  barcode    String?  @db.VarChar(80)
+  sortOrder  Int      @default(0) @map("sort_order")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  shop    Shop    @relation(fields: [shopId], references: [id])
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, productId], map: "idx_product_variants_shop_product")
+  @@index([productId, isActive, sortOrder], map: "idx_product_variants_product_active_order")
+  @@unique([productId, label], map: "uq_product_variants_product_label")
+  @@unique([shopId, sku], map: "uq_product_variants_shop_sku")
+  @@unique([shopId, barcode], map: "uq_product_variants_shop_barcode")
+  @@map("product_variants")
 }
 
 enum SaleReturnType {

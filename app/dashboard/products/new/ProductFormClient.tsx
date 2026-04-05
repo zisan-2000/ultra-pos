@@ -78,6 +78,16 @@ type TemplateItem = {
   lastUsed: number;
 };
 
+type VariantDraft = {
+  id?: string;
+  label: string;
+  sellPrice: string;
+  sku: string;
+  barcode: string;
+  sortOrder: number;
+  isActive: boolean;
+};
+
 const TEMPLATE_LIMIT = 25;
 
 const KEYWORD_CATEGORY_RULES: { keywords: string[]; category: string }[] = [
@@ -181,6 +191,18 @@ function normalizeCodeInput(value: string) {
   return value.trim().replace(/\s+/g, "").toUpperCase().slice(0, 80);
 }
 
+function createVariantDraft(seed?: Partial<VariantDraft>): VariantDraft {
+  return {
+    id: seed?.id,
+    label: seed?.label ?? "",
+    sellPrice: seed?.sellPrice ?? "",
+    sku: seed?.sku ?? "",
+    barcode: seed?.barcode ?? "",
+    sortOrder: seed?.sortOrder ?? 0,
+    isActive: seed?.isActive ?? true,
+  };
+}
+
 
 
 function suggestCategoryByName(name: string, businessCategory?: string) {
@@ -253,10 +275,18 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   const fallbackName = businessAssist?.fallbackName || "";
   const [name, setName] = useState(fallbackName);
   const [sellPrice, setSellPrice] = useState("");
+  const [variantModeEnabled, setVariantModeEnabled] = useState(false);
+  const [showVariantCodeFields, setShowVariantCodeFields] = useState(false);
+  const [variants, setVariants] = useState<VariantDraft[]>([]);
+  const [variantPreviewIndex, setVariantPreviewIndex] = useState<number | null>(null);
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
   const [skuLoading, setSkuLoading] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
+  const [variantSkuLoadingIndex, setVariantSkuLoadingIndex] = useState<number | null>(null);
+  const [variantBarcodeLoadingIndex, setVariantBarcodeLoadingIndex] = useState<number | null>(
+    null
+  );
   const [skuManuallyEdited, setSkuManuallyEdited] = useState(false);
   const [scanCode, setScanCode] = useState("");
   const [scanTarget, setScanTarget] = useState<"barcode" | "sku">("barcode");
@@ -771,6 +801,174 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
     }
   }
 
+  function upsertVariant(index: number, patch: Partial<VariantDraft>) {
+    setVariants((prev) =>
+      prev.map((variant, current) =>
+        current === index ? { ...variant, ...patch } : variant
+      )
+    );
+  }
+
+  function addVariant(seed?: Partial<VariantDraft>) {
+    setVariants((prev) => {
+      const next = [
+        ...prev,
+        createVariantDraft({
+          ...seed,
+          sortOrder: prev.length,
+          sellPrice: seed?.sellPrice ?? sellPrice,
+        }),
+      ];
+      if (variantPreviewIndex === null) {
+        setVariantPreviewIndex(next.length - 1);
+      }
+      return next;
+    });
+  }
+
+  function removeVariant(index: number) {
+    setVariants((prev) =>
+      prev
+        .filter((_, current) => current !== index)
+        .map((variant, current) => ({ ...variant, sortOrder: current }))
+    );
+  }
+
+  function addPresetVariants(type: "size" | "volume") {
+    const presetLabels =
+      type === "size" ? ["Small", "Medium", "Large"] : ["250ml", "500ml", "1L"];
+    setVariants((prev) => {
+      const existing = new Set(
+        prev.map((variant) => variant.label.trim().toLowerCase())
+      );
+      const added = presetLabels
+        .filter((label) => !existing.has(label.toLowerCase()))
+        .map((label, idx) =>
+          createVariantDraft({
+            label,
+            sellPrice,
+            sortOrder: prev.length + idx,
+          })
+        );
+      return [...prev, ...added];
+    });
+    setVariantModeEnabled(true);
+  }
+
+  function collectReservedVariantCodes(
+    excludeIndex: number,
+    field: "sku" | "barcode"
+  ): Set<string> {
+    const reserved = new Set<string>();
+    const mainCode = normalizeCodeInput(field === "sku" ? sku : barcode);
+    if (mainCode) {
+      reserved.add(mainCode);
+    }
+
+    variants.forEach((variant, current) => {
+      if (current === excludeIndex) return;
+      const value = normalizeCodeInput(field === "sku" ? variant.sku : variant.barcode);
+      if (value) {
+        reserved.add(value);
+      }
+    });
+
+    return reserved;
+  }
+
+  function resolveUniqueVariantCode(baseCode: string, reserved: Set<string>) {
+    const normalized = normalizeCodeInput(baseCode);
+    if (!normalized) return "";
+    if (!reserved.has(normalized)) return normalized;
+
+    const match = normalized.match(/^(.*)-(\d+)$/);
+    const stem = match ? match[1] : normalized;
+    const width = match ? Math.max(match[2].length, 2) : 3;
+    let sequence = match ? Number(match[2]) + 1 : 2;
+
+    while (sequence <= 9999) {
+      const candidate = `${stem}-${String(sequence).padStart(width, "0")}`;
+      if (!reserved.has(candidate)) {
+        return candidate;
+      }
+      sequence += 1;
+    }
+
+    return `${stem}-${Date.now().toString().slice(-6)}`;
+  }
+
+  async function autoGenerateVariantSku(index: number) {
+    const target = variants[index];
+    if (!target) return;
+    const seed = (target.label || name).trim();
+    if (!seed) return;
+
+    try {
+      setVariantSkuLoadingIndex(index);
+      const result = await suggestProductSku(shop.id, seed);
+      const suggested = normalizeCodeInput(result?.sku ?? "");
+      if (!suggested) return;
+      const reserved = collectReservedVariantCodes(index, "sku");
+      const resolved = resolveUniqueVariantCode(suggested, reserved);
+      upsertVariant(index, { sku: resolved });
+    } catch {
+      // Variant SKU suggestion failure should not block product form usage.
+    } finally {
+      setVariantSkuLoadingIndex((current) => (current === index ? null : current));
+    }
+  }
+
+  async function autoGenerateVariantBarcode(index: number) {
+    const target = variants[index];
+    if (!target) return;
+    const seed = (target.label || name).trim();
+    if (!seed) return;
+
+    try {
+      setVariantBarcodeLoadingIndex(index);
+      const result = await generateProductBarcode(shop.id, seed);
+      const suggested = normalizeCodeInput(result?.barcode ?? "");
+      if (!suggested) return;
+      const reserved = collectReservedVariantCodes(index, "barcode");
+      const resolved = resolveUniqueVariantCode(suggested, reserved);
+      upsertVariant(index, { barcode: resolved });
+    } catch {
+      // Variant barcode generation failure should not block product form usage.
+    } finally {
+      setVariantBarcodeLoadingIndex((current) => (current === index ? null : current));
+    }
+  }
+
+  const resolvedVariantPreviewIndex =
+    variantPreviewIndex !== null && variantPreviewIndex >= 0 && variantPreviewIndex < variants.length
+      ? variantPreviewIndex
+      : variants.length > 0
+      ? 0
+      : null;
+
+  const activeVariantPreview =
+    resolvedVariantPreviewIndex !== null ? variants[resolvedVariantPreviewIndex] : null;
+
+  useEffect(() => {
+    if (variants.length === 0) {
+      if (variantPreviewIndex !== null) {
+        setVariantPreviewIndex(null);
+      }
+      return;
+    }
+    if (variantPreviewIndex === null) return;
+    if (variantPreviewIndex >= variants.length) {
+      setVariantPreviewIndex(variants.length - 1);
+    }
+  }, [variantPreviewIndex, variants.length]);
+
+  useEffect(() => {
+    if (!showVariantCodeFields || variants.length === 0) return;
+    if (variantPreviewIndex === null) {
+      setVariantPreviewIndex(0);
+    }
+  }, [showVariantCodeFields, variantPreviewIndex, variants.length]);
+
   useEffect(() => {
     if (!name.trim()) return;
     if (skuManuallyEdited) return;
@@ -1145,14 +1343,43 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       ? ((form.get("size") as string) || "").toString().trim() || null
       : null;
 
-    const resolvedSellPrice = (form.get("sellPrice") as string) || sellPrice;
+    const requestedSellPrice = (form.get("sellPrice") as string) || sellPrice;
     const resolvedSku = normalizeCodeInput((form.get("sku") as string) || sku);
     const resolvedBarcode = normalizeCodeInput(
       (form.get("barcode") as string) || barcode
     );
     const resolvedName = isFieldVisible("name")
       ? (form.get("name") as string) || name || fallbackName || "Unnamed product"
-      : name || fallbackName || (resolvedSellPrice ? `Item ${resolvedSellPrice}` : "Unnamed product");
+      : name || fallbackName || (requestedSellPrice ? `Item ${requestedSellPrice}` : "Unnamed product");
+    const resolvedVariants = variantModeEnabled
+      ? variants
+          .map((variant, index) => ({
+            id: variant.id,
+            label: variant.label.trim(),
+            sellPrice: variant.sellPrice.trim(),
+            sku: normalizeCodeInput(variant.sku || ""),
+            barcode: normalizeCodeInput(variant.barcode || ""),
+            sortOrder: index,
+            isActive: variant.isActive !== false,
+          }))
+          .filter((variant) => variant.label.length > 0 && variant.sellPrice.length > 0)
+          .map((variant) => ({
+            ...variant,
+            sku: variant.sku || null,
+            barcode: variant.barcode || null,
+          }))
+      : [];
+
+    if (variantModeEnabled && resolvedVariants.length === 0) {
+      toast.error("ভ্যারিয়েন্ট চালু থাকলে অন্তত ১টি label + price দিন।");
+      return;
+    }
+    const resolvedSellPrice =
+      requestedSellPrice || resolvedVariants[0]?.sellPrice || "";
+    if (!resolvedSellPrice) {
+      toast.error("বিক্রয় মূল্য দিন।");
+      return;
+    }
 
     const payload: LocalProduct = {
       id: crypto.randomUUID(),
@@ -1170,6 +1397,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       businessType,
       expiryDate,
       size,
+      variants: resolvedVariants,
       updatedAt: Date.now(),
       syncStatus: "new",
     };
@@ -1368,6 +1596,209 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
             </p>
           </div>
 
+          <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  ভ্যারিয়েন্ট (Size/ML/Custom)
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  যেসব পণ্যের একাধিক অপশন/দাম আছে, সেগুলোর জন্য
+                </p>
+              </div>
+              <Switch
+                checked={variantModeEnabled}
+                onCheckedChange={setVariantModeEnabled}
+                aria-label="Variant mode toggle"
+              />
+            </div>
+
+            {variantModeEnabled ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => addPresetVariants("size")}
+                    className="h-8 rounded-full border border-primary/30 bg-primary-soft/80 px-3 text-xs font-semibold text-primary"
+                  >
+                    + Size preset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addPresetVariants("volume")}
+                    className="h-8 rounded-full border border-primary/30 bg-primary-soft/80 px-3 text-xs font-semibold text-primary"
+                  >
+                    + Volume preset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addVariant()}
+                    className="h-8 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground"
+                  >
+                    + Custom option
+                  </button>
+                  {canUseBarcodeScan ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowVariantCodeFields((prev) => {
+                          const next = !prev;
+                          if (next && variants.length > 0 && variantPreviewIndex === null) {
+                            setVariantPreviewIndex(0);
+                          }
+                          return next;
+                        })
+                      }
+                      className="h-8 rounded-full border border-border bg-card px-3 text-xs font-semibold text-muted-foreground"
+                    >
+                      {showVariantCodeFields ? "SKU/Barcode লুকান" : "SKU/Barcode দেখান"}
+                    </button>
+                  ) : null}
+                </div>
+
+                {variants.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Preset বা custom option দিয়ে ভ্যারিয়েন্ট যোগ করুন।
+                  </p>
+                ) : (
+                  <div className="max-h-[340px] space-y-2 overflow-y-auto pr-1">
+                    {variants.map((variant, index) => (
+                      <div
+                        key={`${variant.id || "new"}-${index}`}
+                        className="rounded-xl border border-border bg-card p-3 shadow-sm space-y-2"
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-border bg-muted px-1 text-[11px] font-semibold text-muted-foreground">
+                              {index + 1}
+                            </span>
+                            <input
+                              type="text"
+                              value={variant.label}
+                              onChange={(e) =>
+                                upsertVariant(index, { label: e.target.value })
+                              }
+                              placeholder="Label (যেমন: Small, 500ml)"
+                              className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 text-sm"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2 sm:w-auto">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={variant.sellPrice}
+                              onChange={(e) =>
+                                upsertVariant(index, { sellPrice: e.target.value })
+                              }
+                              placeholder="Price"
+                              className="h-9 w-full min-w-0 rounded-lg border border-border bg-card px-3 text-sm sm:w-36"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeVariant(index)}
+                              aria-label="ভ্যারিয়েন্ট মুছুন"
+                              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-danger/30 bg-danger-soft text-sm font-bold text-danger"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                        {canUseBarcodeScan && showVariantCodeFields ? (
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={variant.sku}
+                                onChange={(e) =>
+                                  upsertVariant(index, {
+                                    sku: normalizeCodeInput(e.target.value),
+                                  })
+                                }
+                                placeholder="SKU (optional)"
+                                className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 text-xs"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void autoGenerateVariantSku(index);
+                                }}
+                                disabled={
+                                  variantSkuLoadingIndex === index ||
+                                  (!(variant.label || "").trim() && !name.trim())
+                                }
+                                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card px-3 text-[11px] font-semibold text-foreground disabled:opacity-50"
+                              >
+                                {variantSkuLoadingIndex === index ? "..." : "Auto"}
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={variant.barcode}
+                                onChange={(e) =>
+                                  upsertVariant(index, {
+                                    barcode: normalizeCodeInput(e.target.value),
+                                  })
+                                }
+                                onFocus={() => setVariantPreviewIndex(index)}
+                                placeholder="Barcode (optional)"
+                                className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 text-xs"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setVariantPreviewIndex(index)}
+                                className={`inline-flex h-9 shrink-0 items-center justify-center rounded-lg border px-3 text-[11px] font-semibold ${
+                                  variantPreviewIndex === index
+                                    ? "border-primary/40 bg-primary-soft text-primary"
+                                    : "border-border bg-card text-foreground"
+                                }`}
+                              >
+                                Preview
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVariantPreviewIndex(index);
+                                  void autoGenerateVariantBarcode(index);
+                                }}
+                                disabled={
+                                  variantBarcodeLoadingIndex === index ||
+                                  (!(variant.label || "").trim() && !name.trim())
+                                }
+                                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card px-3 text-[11px] font-semibold text-foreground disabled:opacity-50"
+                              >
+                                {variantBarcodeLoadingIndex === index ? "..." : "Generate"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {canUseBarcodeScan && showVariantCodeFields && activeVariantPreview ? (
+                  <div className="rounded-xl border border-border/70 bg-card/60 p-2">
+                    <BarcodePreviewCard
+                      value={activeVariantPreview.barcode}
+                      productName={
+                        [name.trim(), activeVariantPreview.label.trim()]
+                          .filter(Boolean)
+                          .join(" - ") || name
+                      }
+                      sellPrice={activeVariantPreview.sellPrice || sellPrice}
+                      generating={variantBarcodeLoadingIndex === resolvedVariantPreviewIndex}
+                      onGenerate={() => {
+                        if (resolvedVariantPreviewIndex === null) return;
+                        void autoGenerateVariantBarcode(resolvedVariantPreviewIndex);
+                      }}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
           {canUseBarcodeScan ? (
             <div className="rounded-xl border border-primary/20 bg-primary-soft/40 p-3 space-y-2">
               <div className="flex items-center justify-between gap-3">
@@ -1473,70 +1904,75 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
           ) : null}
 
           {canUseBarcodeScan ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-foreground">
-                  SKU (ঐচ্ছিক)
-                </label>
-                <input
-                  name="sku"
-                  type="text"
-                  value={sku}
-                  onChange={(e) => {
-                    setSku(normalizeCodeInput(e.target.value));
-                    setSkuManuallyEdited(true);
-                  }}
-                  className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="যেমন: VEG-001"
-                  maxLength={80}
-                  autoComplete="off"
-                />
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    {skuLoading
-                      ? "SKU suggest করা হচ্ছে..."
-                      : skuManuallyEdited
-                      ? "Manual SKU চালু আছে, চাইলে আবার auto-generate করতে পারেন।"
-                      : "নাম অনুযায়ী auto-suggest হবে, চাইলে edit করতে পারবেন।"}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSkuManuallyEdited(false);
-                      void autoGenerateSku(true);
+            <details className="rounded-xl border border-border/70 bg-card/60 p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                SKU / Barcode (ঐচ্ছিক)
+              </summary>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-foreground">
+                    SKU (ঐচ্ছিক)
+                  </label>
+                  <input
+                    name="sku"
+                    type="text"
+                    value={sku}
+                    onChange={(e) => {
+                      setSku(normalizeCodeInput(e.target.value));
+                      setSkuManuallyEdited(true);
                     }}
-                    disabled={!name.trim() || skuLoading}
-                    className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-3 text-xs font-semibold text-foreground transition hover:bg-muted disabled:opacity-50"
-                  >
-                    Auto SKU
-                  </button>
+                    className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="যেমন: VEG-001"
+                    maxLength={80}
+                    autoComplete="off"
+                  />
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      {skuLoading
+                        ? "SKU suggest করা হচ্ছে..."
+                        : skuManuallyEdited
+                        ? "Manual SKU চালু আছে, চাইলে আবার auto-generate করতে পারেন।"
+                        : "নাম অনুযায়ী auto-suggest হবে, চাইলে edit করতে পারবেন।"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSkuManuallyEdited(false);
+                        void autoGenerateSku(true);
+                      }}
+                      disabled={!name.trim() || skuLoading}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-3 text-xs font-semibold text-foreground transition hover:bg-muted disabled:opacity-50"
+                    >
+                      Auto SKU
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-foreground">
+                    Barcode (ঐচ্ছিক)
+                  </label>
+                  <input
+                    name="barcode"
+                    type="text"
+                    value={barcode}
+                    onChange={(e) => setBarcode(normalizeCodeInput(e.target.value))}
+                    className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="যেমন: 8901234567890"
+                    maxLength={80}
+                    autoComplete="off"
+                  />
+                  <BarcodePreviewCard
+                    value={barcode}
+                    productName={name}
+                    sellPrice={sellPrice}
+                    generating={barcodeLoading}
+                    onGenerate={() => {
+                      void autoGenerateBarcode();
+                    }}
+                  />
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-foreground">
-                  Barcode (ঐচ্ছিক)
-                </label>
-                <input
-                  name="barcode"
-                  type="text"
-                  value={barcode}
-                  onChange={(e) => setBarcode(normalizeCodeInput(e.target.value))}
-                  className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="যেমন: 8901234567890"
-                  maxLength={80}
-                  autoComplete="off"
-                />
-                <BarcodePreviewCard
-                  value={barcode}
-                  productName={name}
-                  sellPrice={sellPrice}
-                  generating={barcodeLoading}
-                  onGenerate={() => {
-                    void autoGenerateBarcode();
-                  }}
-                />
-              </div>
-            </div>
+            </details>
           ) : null}
         </div>
 

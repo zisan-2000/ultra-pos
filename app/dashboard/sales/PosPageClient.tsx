@@ -63,6 +63,15 @@ type ProductOption = {
   stockQty?: string | number;
   category?: string | null;
   trackStock?: boolean | null;
+  variants?: Array<{
+    id: string;
+    label: string;
+    sellPrice: string;
+    sku?: string | null;
+    barcode?: string | null;
+    sortOrder?: number;
+    isActive?: boolean;
+  }>;
 };
 
 type PosPageClientProps = {
@@ -75,6 +84,15 @@ type PosPageClientProps = {
     stockQty?: string | number;
     category?: string | null;
     trackStock?: boolean | null;
+    variants?: Array<{
+      id: string;
+      label: string;
+      sellPrice: string | number;
+      sku?: string | null;
+      barcode?: string | null;
+      sortOrder?: number;
+      isActive?: boolean;
+    }>;
   }[];
   customers: {
     id: string;
@@ -157,6 +175,14 @@ export function PosPageClient({
         sku: p.sku ?? null,
         barcode: p.barcode ?? null,
         sellPrice: p.sellPrice.toString(),
+        variants: Array.isArray(p.variants)
+          ? p.variants.map((variant) => ({
+              ...variant,
+              sellPrice: variant.sellPrice.toString(),
+              sku: variant.sku ?? null,
+              barcode: variant.barcode ?? null,
+            }))
+          : [],
       })) as ProductOption[]
   );
   const [customerList, setCustomerList] = useState(customers);
@@ -361,6 +387,22 @@ export function PosPageClient({
         stockQty: p.stockQty?.toString(),
         category: p.category,
         trackStock: p.trackStock,
+        variants: Array.isArray((p as any).variants)
+          ? (p as any).variants
+              .filter((variant: any) => variant?.isActive !== false)
+              .map((variant: any) => ({
+                id: String(variant.id),
+                label: String(variant.label || "").trim(),
+                sellPrice: String(variant.sellPrice ?? "0"),
+                sku: variant.sku ?? null,
+                barcode: variant.barcode ?? null,
+                sortOrder:
+                  Number.isFinite(Number(variant.sortOrder))
+                    ? Number(variant.sortOrder)
+                    : 0,
+                isActive: variant.isActive !== false,
+              }))
+          : [],
       }));
       setProductOptions(mapped);
       return mapped;
@@ -498,6 +540,14 @@ export function PosPageClient({
           sku: p.sku ?? null,
           barcode: p.barcode ?? null,
           sellPrice: p.sellPrice.toString(),
+          variants: Array.isArray(p.variants)
+            ? p.variants.map((variant) => ({
+                ...variant,
+                sellPrice: variant.sellPrice.toString(),
+                sku: variant.sku ?? null,
+                barcode: variant.barcode ?? null,
+              }))
+            : [],
         }))
       );
       const rows = products.map((p) => ({
@@ -511,6 +561,20 @@ export function PosPageClient({
         stockQty: (p.stockQty ?? "0").toString(),
         isActive: true,
         trackStock: Boolean(p.trackStock),
+        variants: Array.isArray(p.variants)
+          ? p.variants.map((variant) => ({
+              id: variant.id,
+              label: variant.label,
+              sellPrice: variant.sellPrice.toString(),
+              sku: variant.sku ?? null,
+              barcode: variant.barcode ?? null,
+              sortOrder:
+                Number.isFinite(Number(variant.sortOrder))
+                  ? Number(variant.sortOrder)
+                  : 0,
+              isActive: variant.isActive !== false,
+            }))
+          : [],
         updatedAt: Date.now(),
         syncStatus: "synced" as const,
       }));
@@ -661,6 +725,8 @@ export function PosPageClient({
       items: items.map((i) => ({
         productId: i.productId,
         name: i.name,
+        variantId: i.variantId ?? null,
+        variantLabel: i.variantLabel ?? null,
         unitPrice: i.unitPrice,
         qty: i.qty,
       })),
@@ -804,7 +870,7 @@ export function PosPageClient({
     [items]
   );
   const cartList = useMemo(
-    () => items.map((i) => <PosCartItem key={i.productId} item={i} />),
+    () => items.map((i) => <PosCartItem key={i.itemKey} item={i} />),
     [items]
   );
   const customerOptions = useMemo(

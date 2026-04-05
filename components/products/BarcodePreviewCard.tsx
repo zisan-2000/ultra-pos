@@ -53,7 +53,7 @@ export default function BarcodePreviewCard({
     try {
       JsBarcode(svgRef.current, trimmedValue, {
         format: "CODE128",
-        displayValue: true,
+        displayValue: false,
         lineColor: "#0f172a",
         background: "#ffffff",
         width: 1.6,

@@ -22,6 +22,15 @@ export type LocalProduct = {
   businessType?: string;
   expiryDate?: string | null;
   size?: string | null;
+  variants?: Array<{
+    id?: string;
+    label: string;
+    sellPrice: string | number;
+    sku?: string | null;
+    barcode?: string | null;
+    sortOrder?: number;
+    isActive?: boolean;
+  }>;
   updatedAt: number; // timestamp for sync
   syncStatus: "new" | "updated" | "deleted" | "synced" | "conflict";
   conflictAction?: "update" | "delete";

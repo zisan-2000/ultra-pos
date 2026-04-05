@@ -2,8 +2,11 @@
 import { create } from "zustand";
 
 export type CartItem = {
+  itemKey: string;
   shopId: string;
   productId: string;
+  variantId?: string | null;
+  variantLabel?: string | null;
   name: string;
   unitPrice: number;
   qty: number;
@@ -14,10 +17,18 @@ type CartState = {
   currentShopId: string | null;
   items: CartItem[];
   setShop: (shopId: string) => void;
-  add: (item: { shopId: string; productId: string; name: string; unitPrice: number }) => void;
-  remove: (productId: string) => void;
-  increase: (productId: string) => void;
-  decrease: (productId: string) => void;
+  add: (item: {
+    itemKey: string;
+    shopId: string;
+    productId: string;
+    variantId?: string | null;
+    variantLabel?: string | null;
+    name: string;
+    unitPrice: number;
+  }) => void;
+  remove: (itemKey: string) => void;
+  increase: (itemKey: string) => void;
+  decrease: (itemKey: string) => void;
   clear: () => void;
   totalAmount: () => number;
 };
@@ -53,12 +64,12 @@ export const useCart = create<CartState>((set, get) => ({
       });
     }
 
-    const existing = items.find((i) => i.productId === item.productId);
+    const existing = items.find((i) => i.itemKey === item.itemKey);
 
     if (existing) {
       return set({
         items: items.map((i) =>
-          i.productId === item.productId
+          i.itemKey === item.itemKey
             ? {
                 ...i,
                 qty: i.qty + 1,
@@ -81,15 +92,15 @@ export const useCart = create<CartState>((set, get) => ({
     });
   },
 
-  remove: (productId) =>
+  remove: (itemKey) =>
     set({
-      items: get().items.filter((i) => i.productId !== productId),
+      items: get().items.filter((i) => i.itemKey !== itemKey),
     }),
 
-  increase: (productId) =>
+  increase: (itemKey) =>
     set({
       items: get().items.map((i) =>
-        i.productId === productId
+        i.itemKey === itemKey
           ? {
               ...i,
               qty: i.qty + 1,
@@ -99,11 +110,11 @@ export const useCart = create<CartState>((set, get) => ({
       ),
     }),
 
-  decrease: (productId) =>
+  decrease: (itemKey) =>
     set({
       items: get()
         .items.map((i) =>
-          i.productId === productId
+          i.itemKey === itemKey
             ? {
                 ...i,
                 qty: i.qty - 1,

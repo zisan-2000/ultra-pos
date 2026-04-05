@@ -22,6 +22,20 @@ const productCreateSchema = z.object({
   baseUnit: z.string().optional().nullable(),
   expiryDate: z.union([z.string(), z.date()]).optional().nullable(),
   size: z.string().optional().nullable(),
+  variants: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        label: z.string(),
+        sellPrice: z.union([z.string(), z.number()]),
+        sku: z.string().optional().nullable(),
+        barcode: z.string().optional().nullable(),
+        sortOrder: z.number().int().nonnegative().optional(),
+        isActive: z.boolean().optional(),
+      })
+    )
+    .optional()
+    .nullable(),
   buyPrice: z.union([z.string(), z.number()]).optional().nullable(),
   sellPrice: z.union([z.string(), z.number()]).optional(),
   stockQty: z.union([z.string(), z.number()]).optional(),
@@ -114,6 +128,64 @@ function normalizeDateOnly(value: unknown) {
   return parsed;
 }
 
+function sanitizeVariants(value: unknown) {
+  if (value === undefined) return undefined;
+  if (value === null) return [] as Array<{
+    id?: string;
+    label: string;
+    sellPrice: string;
+    sku: string | null;
+    barcode: string | null;
+    sortOrder: number;
+    isActive: boolean;
+  }>;
+  if (!Array.isArray(value)) {
+    throw new Error("variants must be an array");
+  }
+
+  const normalized: Array<{
+    id?: string;
+    label: string;
+    sellPrice: string;
+    sku: string | null;
+    barcode: string | null;
+    sortOrder: number;
+    isActive: boolean;
+  }> = [];
+  const seenLabels = new Set<string>();
+
+  for (let index = 0; index < value.length; index += 1) {
+    const row = value[index] as Record<string, unknown>;
+    const label = normalizeNullableText(row?.label, 80) ?? "";
+    if (!label) continue;
+    const labelKey = label.toLowerCase();
+    if (seenLabels.has(labelKey)) {
+      throw new Error("variant labels must be unique");
+    }
+    seenLabels.add(labelKey);
+    const sortOrderRaw = Number(row?.sortOrder ?? index);
+    normalized.push({
+      id:
+        typeof row?.id === "string" && row.id.trim().length > 0
+          ? row.id.trim()
+          : undefined,
+      label,
+      sellPrice: toMoneyString(
+        row?.sellPrice as string | number | null | undefined,
+        "variant sellPrice"
+      ) as string,
+      sku: normalizeCode(row?.sku as string | null | undefined) ?? null,
+      barcode: normalizeCode(row?.barcode as string | null | undefined) ?? null,
+      sortOrder: Number.isFinite(sortOrderRaw)
+        ? Math.max(0, Math.floor(sortOrderRaw))
+        : index,
+      isActive: row?.isActive === undefined ? true : Boolean(row?.isActive),
+    });
+  }
+
+  return normalized;
+}
+
 function sanitizeCreate(item: IncomingProduct) {
   const shopId = item.shopId;
   if (!shopId) throw new Error("shopId is required");
@@ -130,6 +202,7 @@ function sanitizeCreate(item: IncomingProduct) {
   const baseUnit = normalizeBaseUnit(item.baseUnit, "pcs");
   const expiryDate = normalizeDateOnly(item.expiryDate);
   const size = normalizeNullableText(item.size, 80);
+  const variants = sanitizeVariants(item.variants);
 
   return {
     id: item.id, // keep client-generated id when present
@@ -146,6 +219,7 @@ function sanitizeCreate(item: IncomingProduct) {
     stockQty,
     trackStock: Boolean(item.trackStock),
     isActive: item.isActive !== false,
+    variants,
   };
 }
 
@@ -175,7 +249,7 @@ function sanitizeUpdate(item: IncomingProduct) {
     payload.stockQty = toMoneyString(item.stockQty, "stockQty", { defaultValue: "0.00" });
   }
 
-  return { id, data: payload };
+  return { id, data: payload, variants: sanitizeVariants(item.variants) };
 }
 
 function toDateOrUndefined(value?: string | number | Date | null) {
@@ -287,7 +361,42 @@ export async function POST(req: Request) {
       // Insert new
       if (Array.isArray(newItems) && newItems.length > 0) {
         const sanitized = newItems.map(sanitizeCreate);
-        await prisma.product.createMany({ data: sanitized as any, skipDuplicates: true });
+        await prisma.product.createMany({
+          data: sanitized.map(({ variants: _variants, ...row }) => row) as any,
+          skipDuplicates: true,
+        });
+
+        const withVariants = sanitized.filter(
+          (item) => item.id && item.variants !== undefined
+        ) as Array<
+          ReturnType<typeof sanitizeCreate> & { id: string }
+        >;
+        for (const item of withVariants) {
+          const existing = await prisma.product.findUnique({
+            where: { id: item.id },
+            select: { id: true, shopId: true },
+          });
+          if (!existing || existing.shopId !== item.shopId) continue;
+          await prisma.productVariant.deleteMany({
+            where: { productId: existing.id },
+          });
+          if (item.variants && item.variants.length > 0) {
+            await prisma.productVariant.createMany({
+              data: item.variants.map((variant, index) => ({
+                id: variant.id,
+                shopId: item.shopId,
+                productId: existing.id,
+                label: variant.label,
+                sellPrice: variant.sellPrice,
+                sku: variant.sku,
+                barcode: variant.barcode,
+                sortOrder: variant.sortOrder ?? index,
+                isActive: variant.isActive,
+              })),
+            });
+          }
+        }
+
         const newIds = sanitized.map((item) => item.id).filter(Boolean) as string[];
         if (newIds.length > 0) {
           const rows = await prisma.product.findMany({
@@ -328,12 +437,30 @@ export async function POST(req: Request) {
               continue;
             }
           }
-          const { id, data } = sanitizeUpdate(item);
+          const { id, data, variants } = sanitizeUpdate(item);
           const updated = await prisma.product.update({
             where: { id },
             data,
             select: { id: true, updatedAt: true, isActive: true, trackStock: true },
           });
+          if (variants !== undefined && existing?.shopId) {
+            await prisma.productVariant.deleteMany({ where: { productId: id } });
+            if (variants.length > 0) {
+              await prisma.productVariant.createMany({
+                data: variants.map((variant, index) => ({
+                  id: variant.id,
+                  shopId: existing.shopId,
+                  productId: id,
+                  label: variant.label,
+                  sellPrice: variant.sellPrice,
+                  sku: variant.sku,
+                  barcode: variant.barcode,
+                  sortOrder: variant.sortOrder ?? index,
+                  isActive: variant.isActive,
+                })),
+              });
+            }
+          }
           updatedRows.push({
             id: updated.id,
             updatedAt: updated.updatedAt.toISOString(),

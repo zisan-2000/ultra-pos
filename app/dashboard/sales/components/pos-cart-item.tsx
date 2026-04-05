@@ -35,16 +35,16 @@ export const PosCartItem = memo(function PosCartItem({
   }, []);
 
   const handleIncrease = useCallback(() => {
-    runOncePerFrame(() => increase(item.productId));
-  }, [increase, item.productId, runOncePerFrame]);
+    runOncePerFrame(() => increase(item.itemKey));
+  }, [increase, item.itemKey, runOncePerFrame]);
 
   const handleDecrease = useCallback(() => {
-    runOncePerFrame(() => decrease(item.productId));
-  }, [decrease, item.productId, runOncePerFrame]);
+    runOncePerFrame(() => decrease(item.itemKey));
+  }, [decrease, item.itemKey, runOncePerFrame]);
 
   const handleRemove = useCallback(() => {
-    runOncePerFrame(() => remove(item.productId));
-  }, [remove, item.productId, runOncePerFrame]);
+    runOncePerFrame(() => remove(item.itemKey));
+  }, [remove, item.itemKey, runOncePerFrame]);
 
   return (
     <div className="bg-card border border-border rounded-2xl p-3 shadow-sm space-y-3 text-foreground">

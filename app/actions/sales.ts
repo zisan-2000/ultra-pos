@@ -40,6 +40,8 @@ const logPerf = (...args: unknown[]) => {
 type CartItemInput = {
   productId: string;
   name: string;
+  variantId?: string | null;
+  variantLabel?: string | null;
   unitPrice: number;
   qty: number;
 };
