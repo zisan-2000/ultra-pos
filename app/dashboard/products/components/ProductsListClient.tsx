@@ -1297,19 +1297,29 @@ export default function ProductsListClient({
                         )
                     : [];
                   const variantCount = activeVariants.length;
-                  const variantPreview = activeVariants
-                    .slice(0, 2)
-                    .map((variant) => {
-                      const label = String(variant.label || "").trim();
-                      const price = formatTemplatePrice(variant.sellPrice ?? "");
-                      return price ? `${label} ৳${price}` : label;
-                    })
-                    .filter(Boolean)
-                    .join(" • ");
+                  const minVariantPrice =
+                    variantCount > 0
+                      ? Math.min(
+                          ...activeVariants
+                            .map((variant) => Number(variant.sellPrice ?? 0))
+                            .filter((value) => Number.isFinite(value) && value > 0),
+                        )
+                      : NaN;
+                  const hasVariantStartingPrice =
+                    Number.isFinite(minVariantPrice) && minVariantPrice > 0;
+                  const priceLabel = hasPrice
+                    ? `৳ ${formatTemplatePrice(template.defaultSellPrice)}`
+                    : hasVariantStartingPrice
+                    ? `শুরু ৳${formatTemplatePrice(minVariantPrice)}`
+                    : "দাম নেই";
+                  const priceTone = hasPrice || hasVariantStartingPrice
+                    ? "border-primary/20 bg-primary-soft text-primary"
+                    : "border-warning/30 bg-warning/10 text-warning";
+                  const unitLabel = (template.defaultBaseUnit || "pcs").toLowerCase();
                   return (
                     <label
                       key={template.id}
-                      className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 transition ${
+                      className={`block rounded-xl border p-3 transition ${
                         disabled
                           ? "border-border bg-muted/50 text-muted-foreground"
                           : checked
@@ -1317,60 +1327,85 @@ export default function ProductsListClient({
                           : "border-border bg-card hover:border-primary/40"
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) =>
-                          toggleTemplateSelection(template.id, event.target.checked)
-                        }
-                        disabled={disabled}
-                        className="h-4 w-4"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-foreground truncate">
-                            {template.name}
-                          </span>
-                          {template.alreadyExists && (
-                            <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              আগে থেকেই আছে
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {template.category || "Uncategorized"}
-                        </div>
-                        {variantCount > 0 ? (
-                          <div className="mt-1 space-y-1">
-                            <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
-                              {variantCount} ভ্যারিয়েন্ট
-                            </span>
-                            {variantPreview ? (
-                              <div className="text-[10px] text-muted-foreground leading-snug">
-                                {variantPreview}
-                                {variantCount > 2 ? ` +${variantCount - 2} আরো` : ""}
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) =>
+                            toggleTemplateSelection(template.id, event.target.checked)
+                          }
+                          disabled={disabled}
+                          className="mt-1 h-4 w-4 shrink-0"
+                        />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {template.name}
+                              </p>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  {template.category || "Uncategorized"}
+                                </span>
+                                <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  ইউনিট: {unitLabel}
+                                </span>
+                                <span
+                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                                    template.defaultTrackStock
+                                      ? "border-primary/20 bg-primary-soft text-primary"
+                                      : "border-border bg-muted/40 text-muted-foreground"
+                                  }`}
+                                >
+                                  {template.defaultTrackStock ? "স্টক অন" : "স্টক অফ"}
+                                </span>
                               </div>
-                            ) : null}
+                            </div>
+                            <div className="shrink-0 space-y-1 text-right">
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${priceTone}`}
+                              >
+                                {priceLabel}
+                              </span>
+                              {template.alreadyExists ? (
+                                <span className="block text-[10px] font-semibold text-muted-foreground">
+                                  আগে থেকেই আছে
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
-                        ) : null}
-                      </div>
-                      <div className="flex flex-col items-end gap-1 text-[11px] font-semibold">
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 ${
-                            hasPrice
-                              ? "border-primary/20 bg-primary-soft text-primary"
-                              : "border-warning/30 bg-warning/10 text-warning"
-                          }`}
-                        >
-                          {hasPrice
-                            ? `BDT ${template.defaultSellPrice}`
-                            : "দাম নেই"}
-                        </span>
-                        {!hasPrice && (
-                          <span className="inline-flex items-center rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[9px] font-semibold text-muted-foreground">
-                            নিষ্ক্রিয়
-                          </span>
-                        )}
+                          {variantCount > 0 ? (
+                            <div className="rounded-lg border border-border/70 bg-background/70 p-2">
+                              <div className="mb-1 flex items-center justify-between">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  ভ্যারিয়েন্ট
+                                </span>
+                                <span className="text-[10px] font-semibold text-foreground">
+                                  {variantCount} টি
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {activeVariants.slice(0, 3).map((variant, index) => {
+                                  const label = String(variant.label || "").trim();
+                                  const price = formatTemplatePrice(variant.sellPrice ?? "");
+                                  return (
+                                    <span
+                                      key={`${template.id}-variant-${index}`}
+                                      className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft/70 px-2 py-0.5 text-[10px] font-medium text-primary"
+                                    >
+                                      {price ? `${label} ৳${price}` : label}
+                                    </span>
+                                  );
+                                })}
+                                {variantCount > 3 ? (
+                                  <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    +{variantCount - 3} আরো
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     </label>
                   );
