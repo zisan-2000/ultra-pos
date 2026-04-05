@@ -165,6 +165,16 @@ function formatDateTime(value?: string | null) {
   });
 }
 
+function formatTemplatePrice(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") return "";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return String(value);
+  return numeric.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
 function emptyMetrics(): ProductCardMetrics {
   return {
     soldQtyToday: "0.00",
@@ -1277,6 +1287,25 @@ export default function ProductsListClient({
                     : 0;
                   const hasPrice =
                     Number.isFinite(numericPrice) && numericPrice > 0;
+                  const activeVariants = Array.isArray(template.variants)
+                    ? template.variants
+                        .filter((variant) => variant?.isActive !== false)
+                        .sort(
+                          (left, right) =>
+                            (Number(left.sortOrder ?? 0) || 0) -
+                            (Number(right.sortOrder ?? 0) || 0),
+                        )
+                    : [];
+                  const variantCount = activeVariants.length;
+                  const variantPreview = activeVariants
+                    .slice(0, 2)
+                    .map((variant) => {
+                      const label = String(variant.label || "").trim();
+                      const price = formatTemplatePrice(variant.sellPrice ?? "");
+                      return price ? `${label} ৳${price}` : label;
+                    })
+                    .filter(Boolean)
+                    .join(" • ");
                   return (
                     <label
                       key={template.id}
@@ -1311,6 +1340,19 @@ export default function ProductsListClient({
                         <div className="text-[11px] text-muted-foreground truncate">
                           {template.category || "Uncategorized"}
                         </div>
+                        {variantCount > 0 ? (
+                          <div className="mt-1 space-y-1">
+                            <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                              {variantCount} ভ্যারিয়েন্ট
+                            </span>
+                            {variantPreview ? (
+                              <div className="text-[10px] text-muted-foreground leading-snug">
+                                {variantPreview}
+                                {variantCount > 2 ? ` +${variantCount - 2} আরো` : ""}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="flex flex-col items-end gap-1 text-[11px] font-semibold">
                         <span
