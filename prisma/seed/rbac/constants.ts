@@ -29,6 +29,8 @@ export const PERMISSION_NAMES: string[] = [
   "manage_shop_sms_feature",
   "view_feature_access_requests",
   "manage_feature_access_requests",
+  "view_shop_creation_requests",
+  "manage_shop_creation_requests",
   "delete_shop",
   "switch_shop",
   "view_products",

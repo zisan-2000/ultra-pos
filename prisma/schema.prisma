@@ -60,6 +60,7 @@ model User {
   passwordHash  String?  @map("password_hash")
   name          String?
   image         String?
+  shopLimit     Int      @default(1) @map("shop_limit")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -74,6 +75,9 @@ model User {
   ownedSubscriptions  ShopSubscription[]       @relation("OwnerSubscriptions")
   ownedInvoices       Invoice[]                @relation("OwnerInvoices")
   paymentRequests     BillingPaymentRequest[]  @relation("OwnerPaymentRequests")
+  shopCreationRequestsOwned ShopCreationRequest[] @relation("ShopCreationRequestOwner")
+  shopCreationRequestsMade ShopCreationRequest[] @relation("ShopCreationRequestRequester")
+  shopCreationRequestsDecided ShopCreationRequest[] @relation("ShopCreationRequestDecider")
   featureAccessRequests FeatureAccessRequest[] @relation("FeatureAccessRequestRequester")
   decidedFeatureAccessRequests FeatureAccessRequest[] @relation("FeatureAccessRequestDecider")
   ownedFeatureAccessRequests FeatureAccessRequest[] @relation("FeatureAccessRequestOwner")
@@ -398,6 +402,31 @@ model FeatureAccessRequest {
   @@index([ownerId, status], map: "idx_feature_access_requests_owner_status")
   @@index([featureKey, status], map: "idx_feature_access_requests_feature_status")
   @@map("feature_access_requests")
+}
+
+model ShopCreationRequest {
+  id                  String                     @id @default(uuid()) @db.Uuid
+  ownerId             String                     @map("owner_id")
+  requestedByUserId   String                     @map("requested_by_user_id")
+  currentShopCount    Int                        @default(0) @map("current_shop_count")
+  primaryShopIdSnapshot String?                  @map("primary_shop_id_snapshot") @db.Uuid
+  primaryShopNameSnapshot String?                @map("primary_shop_name_snapshot")
+  primaryShopPhoneSnapshot String?               @map("primary_shop_phone_snapshot")
+  reason              String?
+  status              FeatureAccessRequestStatus @default(pending)
+  decisionNote        String?                    @map("decision_note")
+  decidedByUserId     String?                    @map("decided_by_user_id")
+  approvedLimitAfter  Int?                       @map("approved_limit_after")
+  createdAt           DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  decidedAt           DateTime?                  @map("decided_at") @db.Timestamptz(6)
+
+  owner               User                       @relation("ShopCreationRequestOwner", fields: [ownerId], references: [id])
+  requestedByUser     User                       @relation("ShopCreationRequestRequester", fields: [requestedByUserId], references: [id])
+  decidedByUser       User?                      @relation("ShopCreationRequestDecider", fields: [decidedByUserId], references: [id])
+
+  @@index([ownerId, status], map: "idx_shop_creation_requests_owner_status")
+  @@index([status, createdAt], map: "idx_shop_creation_requests_status_created")
+  @@map("shop_creation_requests")
 }
 
 model BusinessType {

@@ -130,6 +130,15 @@ export const permissionMeta: Record<string, PermissionMeta> = {
     module: "shops",
     critical: true,
   },
+  view_shop_creation_requests: {
+    label: "নতুন দোকান request দেখা",
+    module: "shops",
+  },
+  manage_shop_creation_requests: {
+    label: "নতুন দোকান request অনুমোদন/রিজেক্ট",
+    module: "shops",
+    critical: true,
+  },
   delete_shop: { label: "দোকান মুছে ফেলা", module: "shops", critical: true },
   switch_shop: { label: "শপ সুইচ", module: "shops" },
   view_products: { label: "পণ্য দেখা", module: "products" },

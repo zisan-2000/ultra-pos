@@ -352,7 +352,9 @@ export function DashboardShell({
   const canAccessRbacAdmin = hasPermission("access_rbac_admin");
   const canViewFeatureAccessRequests =
     hasPermission("view_feature_access_requests") ||
-    hasPermission("manage_feature_access_requests");
+    hasPermission("manage_feature_access_requests") ||
+    hasPermission("view_shop_creation_requests") ||
+    hasPermission("manage_shop_creation_requests");
   const userCreationLogHref = "/dashboard/admin/user-creation-log";
   const featureAccessHref = "/dashboard/admin/feature-access";
   const systemSettingsHref = "/super-admin/system-settings";

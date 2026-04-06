@@ -130,10 +130,15 @@ export async function createShop(data: {
     const existingCount = await prisma.shop.count({
       where: { ownerId: user.id, deletedAt: null },
     });
+    const ownerRecord = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { shopLimit: true },
+    });
+    const allowedShopCount = Math.max(1, ownerRecord?.shopLimit ?? 1);
 
-    if (existingCount > 0) {
+    if (existingCount >= allowedShopCount) {
       throw new Error(
-        "Owner can only create the first shop. Please contact super admin to create additional shops."
+        "Shop limit reached. Please request additional shop access from super admin."
       );
     }
   }
