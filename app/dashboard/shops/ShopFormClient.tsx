@@ -10,6 +10,12 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { queueAdminAction } from "@/lib/sync/queue";
 import { db } from "@/lib/dexie/db";
 import { handlePermissionError } from "@/lib/permission-toast";
+import { requestFeatureAccess } from "@/app/actions/feature-access-requests";
+import {
+  FEATURE_ACCESS_META,
+  type FeatureAccessKey,
+  type FeatureAccessRequestStatus,
+} from "@/lib/feature-access";
 import {
   getSpeechRecognitionCtor,
   mapVoiceErrorBangla,
@@ -44,6 +50,16 @@ type ShopTemplate = {
 };
 
 type VoiceField = "name" | "address" | "phone";
+
+type FeatureAccessRequestSnapshot = {
+  id: string;
+  featureKey: FeatureAccessKey;
+  status: FeatureAccessRequestStatus;
+  reason: string | null;
+  decisionNote: string | null;
+  createdAtIso: string;
+  decidedAtIso: string | null;
+};
 
 type Props = {
   backHref: string;
@@ -89,6 +105,9 @@ type Props = {
   canEditBarcodeEntitlement?: boolean;
   showSmsSummarySettings?: boolean;
   canEditSmsSummaryEntitlement?: boolean;
+  featureAccessRequestByKey?: Partial<
+    Record<FeatureAccessKey, FeatureAccessRequestSnapshot>
+  >;
 };
 
 const SHOP_TEMPLATE_KEY = "shopTemplates:v1";
@@ -166,6 +185,7 @@ export default function ShopFormClient({
   canEditBarcodeEntitlement = false,
   showSmsSummarySettings = false,
   canEditSmsSummaryEntitlement = false,
+  featureAccessRequestByKey = {},
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -176,6 +196,17 @@ export default function ShopFormClient({
   const [listeningField, setListeningField] = useState<VoiceField | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [featureAccessRequests, setFeatureAccessRequests] = useState<
+    Partial<Record<FeatureAccessKey, FeatureAccessRequestSnapshot>>
+  >(featureAccessRequestByKey);
+  const [featureRequestReasonByKey, setFeatureRequestReasonByKey] = useState<
+    Partial<Record<FeatureAccessKey, string>>
+  >({});
+  const [featureRequestBusyKey, setFeatureRequestBusyKey] =
+    useState<FeatureAccessKey | null>(null);
+  const [featureRequestMessageByKey, setFeatureRequestMessageByKey] = useState<
+    Partial<Record<FeatureAccessKey, string>>
+  >({});
 
   const [name, setName] = useState(initial?.name || "");
   const [address, setAddress] = useState(initial?.address || "");
@@ -306,6 +337,10 @@ export default function ShopFormClient({
     };
   }, [ownerOptions]);
 
+  useEffect(() => {
+    setFeatureAccessRequests(featureAccessRequestByKey);
+  }, [featureAccessRequestByKey]);
+
   const frequentTemplates = useMemo(
     () => templates.slice().sort((a, b) => b.count - a.count || b.lastUsed - a.lastUsed),
     [templates]
@@ -408,6 +443,68 @@ export default function ShopFormClient({
     setAddress(t.address || "");
     setPhone(t.phone || "");
     setBusinessType(t.businessType || "tea_stall");
+  }
+
+  function formatRequestDateTime(iso: string | null | undefined) {
+    if (!iso) return null;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat("bn-BD", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(date);
+  }
+
+  function getRequestStatusLabel(status: FeatureAccessRequestStatus | undefined) {
+    if (status === "approved") return "Approved";
+    if (status === "rejected") return "Rejected";
+    return "Pending";
+  }
+
+  function getRequestStatusClass(status: FeatureAccessRequestStatus | undefined) {
+    if (status === "approved") return "text-success";
+    if (status === "rejected") return "text-danger";
+    return "text-warning";
+  }
+
+  async function handleFeatureAccessRequest(featureKey: FeatureAccessKey) {
+    if (!shopId) {
+      return;
+    }
+    setFeatureRequestBusyKey(featureKey);
+    setFeatureRequestMessageByKey((prev) => ({ ...prev, [featureKey]: "" }));
+    try {
+      const result = await requestFeatureAccess({
+        shopId,
+        featureKey,
+        reason: featureRequestReasonByKey[featureKey] || "",
+      });
+      if (result.request) {
+        setFeatureAccessRequests((prev) => ({
+          ...prev,
+          [featureKey]: result.request,
+        }));
+      }
+      setFeatureRequestMessageByKey((prev) => ({
+        ...prev,
+        [featureKey]:
+          result.status === "already_enabled"
+            ? "এই ফিচারের entitlement আগে থেকেই চালু আছে।"
+            : "রিকোয়েস্ট পাঠানো হয়েছে। Super Admin review করলে enable হবে।",
+      }));
+      setFeatureRequestReasonByKey((prev) => ({ ...prev, [featureKey]: "" }));
+    } catch (err) {
+      handlePermissionError(err);
+      setFeatureRequestMessageByKey((prev) => ({
+        ...prev,
+        [featureKey]:
+          err instanceof Error
+            ? err.message
+            : "রিকোয়েস্ট পাঠানো যায়নি। আবার চেষ্টা করুন।",
+      }));
+    } finally {
+      setFeatureRequestBusyKey(null);
+    }
   }
 
   function startVoice(field: "name" | "address" | "phone") {
@@ -698,6 +795,79 @@ export default function ShopFormClient({
     }
   }
 
+  function renderFeatureAccessRequestCard(
+    featureKey: FeatureAccessKey,
+    entitlementEnabled: boolean,
+    canEditEntitlement: boolean
+  ) {
+    if (!shopId || canEditEntitlement || entitlementEnabled) return null;
+    const featureMeta = FEATURE_ACCESS_META[featureKey];
+    const requestSnapshot = featureAccessRequests[featureKey];
+    const status = requestSnapshot?.status;
+    const createdAtLabel = formatRequestDateTime(requestSnapshot?.createdAtIso);
+    const decidedAtLabel = formatRequestDateTime(requestSnapshot?.decidedAtIso);
+    const message = featureRequestMessageByKey[featureKey];
+    const reasonInput = featureRequestReasonByKey[featureKey] || "";
+    const isPending = status === "pending";
+
+    return (
+      <div className="rounded-xl border border-primary/20 bg-primary-soft/50 p-3 space-y-2">
+        <p className="text-xs text-muted-foreground">
+          এই ফিচার চালু করতে Super Admin approval লাগবে।
+        </p>
+        {requestSnapshot ? (
+          <div className="rounded-lg border border-border bg-card px-3 py-2 space-y-1">
+            <p className="text-xs text-muted-foreground">
+              সর্বশেষ রিকোয়েস্ট:{" "}
+              <span className={`font-semibold ${getRequestStatusClass(status)}`}>
+                {getRequestStatusLabel(status)}
+              </span>
+            </p>
+            {createdAtLabel ? (
+              <p className="text-xs text-muted-foreground">
+                Requested: {createdAtLabel}
+              </p>
+            ) : null}
+            {decidedAtLabel && status !== "pending" ? (
+              <p className="text-xs text-muted-foreground">
+                Reviewed: {decidedAtLabel}
+              </p>
+            ) : null}
+            {requestSnapshot.decisionNote ? (
+              <p className="text-xs text-muted-foreground">
+                Admin note: {requestSnapshot.decisionNote}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="space-y-2">
+          <textarea
+            value={reasonInput}
+            onChange={(e) =>
+              setFeatureRequestReasonByKey((prev) => ({
+                ...prev,
+                [featureKey]: e.target.value.slice(0, 500),
+              }))
+            }
+            className="w-full min-h-[76px] rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-y"
+            placeholder={`${featureMeta.banglaTitle} ফিচার কেন দরকার, সংক্ষেপে লিখুন (ঐচ্ছিক)`}
+          />
+          <button
+            type="button"
+            onClick={() => handleFeatureAccessRequest(featureKey)}
+            disabled={featureRequestBusyKey === featureKey || isPending}
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-primary/40 bg-card px-3 text-sm font-semibold text-primary hover:bg-primary-soft disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isPending ? "রিকোয়েস্ট পেন্ডিং" : `${featureMeta.title} Request Access`}
+          </button>
+          {message ? (
+            <p className="text-xs text-primary font-medium">{message}</p>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card p-4 sm:p-6 space-y-4 shadow-sm">
       {ownerOptions ? (
@@ -920,6 +1090,11 @@ export default function ShopFormClient({
               প্রথমে entitlement চালু না হলে Sales Invoice toggle activate হবে না।
             </p>
           ) : null}
+          {renderFeatureAccessRequestCard(
+            "sales_invoice",
+            salesInvoiceEntitled,
+            canEditSalesInvoiceEntitlement
+          )}
           <div className="space-y-2">
             <label className="block text-xs font-semibold text-muted-foreground">
               ইনভয়েস প্রিফিক্স
@@ -1013,6 +1188,11 @@ export default function ShopFormClient({
               প্রথমে entitlement চালু না হলে Queue Token toggle activate হবে না।
             </p>
           ) : null}
+          {renderFeatureAccessRequestCard(
+            "queue_token",
+            queueTokenEntitled,
+            canEditQueueTokenEntitlement
+          )}
           <div className="space-y-2">
             <label className="block text-xs font-semibold text-muted-foreground">
               টোকেন প্রিফিক্স
@@ -1103,6 +1283,11 @@ export default function ShopFormClient({
               প্রথমে entitlement চালু না হলে discount toggle activate হবে না।
             </p>
           ) : null}
+          {renderFeatureAccessRequestCard(
+            "discount",
+            discountFeatureEntitled,
+            canEditDiscountEntitlement
+          )}
         </div>
       ) : null}
 
@@ -1155,6 +1340,11 @@ export default function ShopFormClient({
               প্রথমে entitlement চালু না হলে VAT/Tax toggle activate হবে না।
             </p>
           ) : null}
+          {renderFeatureAccessRequestCard(
+            "tax",
+            taxFeatureEntitled,
+            canEditTaxEntitlement
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
@@ -1245,6 +1435,11 @@ export default function ShopFormClient({
               প্রথমে entitlement চালু না হলে scan toggle activate হবে না।
             </p>
           ) : null}
+          {renderFeatureAccessRequestCard(
+            "barcode",
+            barcodeFeatureEntitled,
+            canEditBarcodeEntitlement
+          )}
         </div>
       ) : null}
 
@@ -1297,6 +1492,11 @@ export default function ShopFormClient({
               প্রথমে entitlement চালু না হলে SMS toggle activate হবে না।
             </p>
           ) : null}
+          {renderFeatureAccessRequestCard(
+            "sms_summary",
+            smsSummaryEntitled,
+            canEditSmsSummaryEntitlement
+          )}
         </div>
       ) : null}
 

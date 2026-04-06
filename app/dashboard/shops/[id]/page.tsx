@@ -1,6 +1,7 @@
 // app/dashboard/shops/[id]/page.tsx
 
 import { getShop, updateShop } from "@/app/actions/shops";
+import { getLatestFeatureAccessRequestSnapshots } from "@/app/actions/feature-access-requests";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ShopFormClient from "../ShopFormClient";
@@ -143,6 +144,9 @@ export default async function EditShop({ params }: PageProps) {
   }
 
   const dbBusinessTypes = await listActiveBusinessTypes().catch(() => []);
+  const featureAccessRequests = await getLatestFeatureAccessRequestSnapshots(id).catch(
+    () => ({})
+  );
   const businessTypeOptions = [
     ...dbBusinessTypes.map((t) => ({ id: t.key, label: t.label })),
     ...businessOptions.filter((opt) => !dbBusinessTypes.some((t) => t.key === opt.id)),
@@ -320,6 +324,7 @@ export default async function EditShop({ params }: PageProps) {
         canEditBarcodeEntitlement={canManageBarcodeEntitlement}
         showSmsSummarySettings={canManageSmsEntitlement || canManageSmsFeature}
         canEditSmsSummaryEntitlement={canManageSmsEntitlement}
+        featureAccessRequestByKey={featureAccessRequests}
       />
     </div>
   );

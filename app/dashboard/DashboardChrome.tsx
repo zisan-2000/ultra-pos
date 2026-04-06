@@ -45,6 +45,7 @@ import {
   Plus,
   Receipt,
   Settings,
+  ShieldCheck,
   ShoppingCart,
   Store,
   Ticket,
@@ -349,7 +350,11 @@ export function DashboardShell({
   const effectiveDashboardHref = "/dashboard";
 
   const canAccessRbacAdmin = hasPermission("access_rbac_admin");
+  const canViewFeatureAccessRequests =
+    hasPermission("view_feature_access_requests") ||
+    hasPermission("manage_feature_access_requests");
   const userCreationLogHref = "/dashboard/admin/user-creation-log";
+  const featureAccessHref = "/dashboard/admin/feature-access";
   const systemSettingsHref = "/super-admin/system-settings";
 
   const buildShopHref = useMemo(() => {
@@ -747,7 +752,9 @@ export function DashboardShell({
                   })}
               </div>
 
-              {(canAccessRbacAdmin || canViewUserCreationLog) && (
+              {(canAccessRbacAdmin ||
+                canViewUserCreationLog ||
+                canViewFeatureAccessRequests) && (
                 <div className="mt-5">
                   <div
                     className={`px-2 pb-2 text-[11px] font-semibold text-sidebar-accent-foreground uppercase tracking-wider ${
@@ -790,6 +797,42 @@ export function DashboardShell({
 
                         <span className={navLabelClass}>
                           ব্যবহারকারী তৈরি লগ
+                        </span>
+                      </Link>
+                    )}
+
+                    {canViewFeatureAccessRequests && (
+                      <Link
+                        href={buildShopHref(featureAccessHref)}
+                        prefetch={false}
+                        onClick={(event) => {
+                          setDrawerOpen(false);
+                          handleNavClick(event, featureAccessHref);
+                        }}
+                        onMouseEnter={() =>
+                          handleNavPrefetch(featureAccessHref)
+                        }
+                        onTouchStart={() =>
+                          handleNavPrefetch(featureAccessHref)
+                        }
+                        className={navItemClass(isActive(featureAccessHref))}
+                      >
+                        <span
+                          className={navIconWrapClass(
+                            featureAccessHref,
+                            isActive(featureAccessHref)
+                          )}
+                        >
+                          <ShieldCheck
+                            className={`h-4 w-4 ${navIconClass(
+                              featureAccessHref,
+                              isActive(featureAccessHref)
+                            )}`}
+                          />
+                        </span>
+
+                        <span className={navLabelClass}>
+                          Feature Requests
                         </span>
                       </Link>
                     )}

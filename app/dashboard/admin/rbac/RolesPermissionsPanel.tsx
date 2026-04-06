@@ -121,6 +121,15 @@ export const permissionMeta: Record<string, PermissionMeta> = {
     label: "দোকান SMS summary ফিচার ম্যানেজ",
     module: "shops",
   },
+  view_feature_access_requests: {
+    label: "ফিচার অ্যাক্সেস রিকোয়েস্ট দেখা",
+    module: "shops",
+  },
+  manage_feature_access_requests: {
+    label: "ফিচার অ্যাক্সেস রিকোয়েস্ট অনুমোদন/রিজেক্ট",
+    module: "shops",
+    critical: true,
+  },
   delete_shop: { label: "দোকান মুছে ফেলা", module: "shops", critical: true },
   switch_shop: { label: "শপ সুইচ", module: "shops" },
   view_products: { label: "পণ্য দেখা", module: "products" },
