@@ -36,6 +36,13 @@ import {
 import { handlePermissionError } from "@/lib/permission-toast";
 import { subscribeProductEvent } from "@/lib/products/product-events";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import {
+  getSpeechRecognitionCtor,
+  mapVoiceErrorBangla,
+  startDualLanguageVoice,
+  type VoiceSession,
+} from "@/lib/voice-recognition";
+import { matchesProductSearchQuery } from "@/lib/product-search";
 
 type Shop = { id: string; name: string };
 type Product = {
@@ -218,6 +225,7 @@ export default function ProductsListClient({
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const { setShop } = useCurrentShop();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const voiceSessionRef = useRef<VoiceSession | null>(null);
   const serverSnapshotRef = useRef(serverProducts);
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
@@ -299,13 +307,11 @@ export default function ProductsListClient({
   }, [online, page]);
 
   useEffect(() => {
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? (window as any).SpeechRecognition ||
-          (window as any).webkitSpeechRecognition
-        : null;
+    const SpeechRecognitionImpl = getSpeechRecognitionCtor();
     setVoiceReady(Boolean(SpeechRecognitionImpl));
     return () => {
+      voiceSessionRef.current?.stop();
+      voiceSessionRef.current = null;
       recognitionRef.current?.stop?.();
       recognitionRef.current?.abort?.();
     };
@@ -551,13 +557,12 @@ export default function ProductsListClient({
 
   const filteredProducts = useMemo(() => {
     if (online) return products;
-    const normalizedQuery = normalizeText(query);
     return products.filter((product) => {
       if (status === "active" && !product.isActive) return false;
       if (status === "inactive" && product.isActive) return false;
-      if (normalizedQuery) {
+      if (query.trim()) {
         const haystack = `${product.name} ${product.category} ${product.sku ?? ""} ${product.barcode ?? ""}`;
-        if (!normalizeText(haystack).includes(normalizedQuery)) return false;
+        if (!matchesProductSearchQuery(query, haystack)) return false;
       }
       return true;
     });
@@ -969,49 +974,39 @@ export default function ProductsListClient({
   function startListening() {
     setVoiceError(null);
     triggerHaptic("light");
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? (window as any).SpeechRecognition ||
-          (window as any).webkitSpeechRecognition
-        : null;
-
-    if (!SpeechRecognitionImpl) {
-      setVoiceReady(false);
-      setVoiceError("এই ব্রাউজারে ভয়েস সার্চ সমর্থিত নয়।");
-      return;
-    }
-
-    recognitionRef.current?.abort?.();
-    recognitionRef.current?.stop?.();
-
-    const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
-    recognition.lang = "bn-BD";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onerror = (event: any) => {
-      const code = event?.error ? ` (${event.error})` : "";
-      setVoiceError(`ভয়েস ইনপুট পাওয়া যায়নি, আবার চেষ্টা করুন।${code}`);
-      recognitionRef.current = null;
-      setListening(false);
-    };
-    recognition.onend = () => {
-      recognitionRef.current = null;
-      setListening(false);
-    };
-    recognition.onresult = (event: any) => {
-      const transcript = event?.results?.[0]?.[0]?.transcript?.trim?.() || "";
-      if (!transcript) return;
-      setQuery(transcript);
-      triggerHaptic("medium");
-      recognition.stop();
-    };
-
-    recognitionRef.current = recognition;
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = startDualLanguageVoice({
+      onRecognitionRef: (recognition) => {
+        recognitionRef.current = recognition;
+      },
+      onTranscript: (transcript) => {
+        if (!transcript) return;
+        setQuery(transcript);
+        triggerHaptic("medium");
+      },
+      onError: (kind, errorCode) => {
+        if (kind === "aborted") return;
+        if (kind === "not_supported") {
+          setVoiceReady(false);
+          setVoiceError("এই ব্রাউজারে ভয়েস সার্চ সমর্থিত নয়।");
+          return;
+        }
+        const message = mapVoiceErrorBangla(kind);
+        const codeSuffix = errorCode ? ` (${errorCode})` : "";
+        setVoiceError(`${message}${codeSuffix}`);
+      },
+      onEnd: () => {
+        setListening(false);
+        voiceSessionRef.current = null;
+      },
+    });
+    if (!voiceSessionRef.current) return;
     setListening(true);
-    recognition.start();
   }
 
   function stopListening() {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = null;
     recognitionRef.current?.stop?.();
     recognitionRef.current?.abort?.();
     setListening(false);

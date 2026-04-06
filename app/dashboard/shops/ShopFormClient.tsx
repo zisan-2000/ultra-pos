@@ -11,6 +11,12 @@ import { queueAdminAction } from "@/lib/sync/queue";
 import { db } from "@/lib/dexie/db";
 import { handlePermissionError } from "@/lib/permission-toast";
 import {
+  getSpeechRecognitionCtor,
+  mapVoiceErrorBangla,
+  startDualLanguageVoice,
+  type VoiceSession,
+} from "@/lib/voice-recognition";
+import {
   DEFAULT_SALES_INVOICE_PRINT_SIZE,
   SALES_INVOICE_PRINT_SIZE_OPTIONS,
   sanitizeSalesInvoicePrintSize,
@@ -158,6 +164,7 @@ export default function ShopFormClient({
   const router = useRouter();
   const online = useOnlineStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const voiceSessionRef = useRef<VoiceSession | null>(null);
   const [templates, setTemplates] = useState<ShopTemplate[]>([]);
   const [voiceReady, setVoiceReady] = useState(false);
   const [listeningField, setListeningField] = useState<VoiceField | null>(null);
@@ -250,10 +257,7 @@ export default function ShopFormClient({
   }, []);
 
   useEffect(() => {
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-        : null;
+    const SpeechRecognitionImpl = getSpeechRecognitionCtor();
     let cancelled = false;
     scheduleStateUpdate(() => {
       if (cancelled) return;
@@ -261,6 +265,8 @@ export default function ShopFormClient({
     });
     return () => {
       cancelled = true;
+      voiceSessionRef.current?.stop();
+      voiceSessionRef.current = null;
       recognitionRef.current?.stop?.();
     };
   }, []);
@@ -393,51 +399,43 @@ export default function ShopFormClient({
   function startVoice(field: "name" | "address" | "phone") {
     if (listeningField === field) return;
     if (listeningField) stopVoice();
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? ((window as any).SpeechRecognition ||
-            (window as any).webkitSpeechRecognition)
-        : null;
-
-    if (!SpeechRecognitionImpl) {
-      setVoiceReady(false);
-      setVoiceError("ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না");
-      return;
-    }
-
-    const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
-    recognition.lang = "bn-BD";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onerror = () => {
-      setListeningField(null);
-      setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
-    };
-    recognition.onend = () => setListeningField(null);
-    recognition.onresult = (event: any) => {
-      const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
-      if (spoken) {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = startDualLanguageVoice({
+      onRecognitionRef: (recognition) => {
+        recognitionRef.current = recognition;
+      },
+      onTranscript: (spoken) => {
         if (field === "name") {
           const parsed = parseSpokenNameAndPhone(spoken);
           if (parsed.name) setName(parsed.name);
           if (parsed.phone) setPhone(parsed.phone);
-        } else if (field === "address") {
-          setAddress(spoken);
-        } else if (field === "phone") {
-          const parsedPhone = parsePhone(spoken);
-          if (parsedPhone) setPhone(parsedPhone);
+          return;
         }
-      }
-      setListeningField(null);
-    };
-
-    recognitionRef.current = recognition;
+        if (field === "address") {
+          setAddress(spoken);
+          return;
+        }
+        const parsedPhone = parsePhone(spoken);
+        if (parsedPhone) setPhone(parsedPhone);
+      },
+      onError: (kind) => {
+        if (kind === "aborted") return;
+        if (kind === "not_supported") setVoiceReady(false);
+        setVoiceError(mapVoiceErrorBangla(kind));
+      },
+      onEnd: () => {
+        setListeningField(null);
+        voiceSessionRef.current = null;
+      },
+    });
+    if (!voiceSessionRef.current) return;
     setVoiceError(null);
     setListeningField(field);
-    recognition.start();
   }
 
   function stopVoice() {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = null;
     recognitionRef.current?.stop?.();
     setListeningField(null);
   }

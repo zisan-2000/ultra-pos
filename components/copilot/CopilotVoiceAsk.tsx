@@ -6,6 +6,12 @@ import {
   COPILOT_GROUPED_QUESTION_SUGGESTIONS,
   COPILOT_QUESTION_SUGGESTIONS,
 } from "@/lib/copilot-ask";
+import {
+  getSpeechRecognitionCtor,
+  mapVoiceErrorBangla,
+  startDualLanguageVoice,
+  type VoiceSession,
+} from "@/lib/voice-recognition";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -51,16 +57,13 @@ export default function CopilotVoiceAsk({
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false);
   const [openSuggestionGroup, setOpenSuggestionGroup] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const voiceSessionRef = useRef<VoiceSession | null>(null);
 
   const primarySuggestions = COPILOT_QUESTION_SUGGESTIONS.slice(0, 4);
   const extraSuggestions = COPILOT_QUESTION_SUGGESTIONS.slice(4);
 
   useEffect(() => {
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? ((window as any).SpeechRecognition ||
-            (window as any).webkitSpeechRecognition)
-        : null;
+    const SpeechRecognitionImpl = getSpeechRecognitionCtor();
     setVoiceReady(Boolean(SpeechRecognitionImpl));
     setSpeechReady(
       typeof window !== "undefined" &&
@@ -69,6 +72,8 @@ export default function CopilotVoiceAsk({
     );
 
     return () => {
+      voiceSessionRef.current?.stop();
+      voiceSessionRef.current = null;
       recognitionRef.current?.stop?.();
       stopSpeaking();
     };
@@ -139,6 +144,8 @@ export default function CopilotVoiceAsk({
   );
 
   const stopListening = useCallback(() => {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = null;
     recognitionRef.current?.stop?.();
     setListening(false);
   }, []);
@@ -148,47 +155,40 @@ export default function CopilotVoiceAsk({
       stopListening();
       return;
     }
-
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? ((window as any).SpeechRecognition ||
-            (window as any).webkitSpeechRecognition)
-        : null;
-
-    if (!SpeechRecognitionImpl) {
-      setVoiceReady(false);
-      setError("এই ডিভাইসে voice recognition সাপোর্ট নেই।");
-      return;
-    }
-
-    const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
-    recognition.lang = "bn-BD";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onresult = (event: any) => {
-      const transcript = String(event?.results?.[0]?.[0]?.transcript || "").trim();
-      if (!transcript) {
-        setError("কথা পরিষ্কার পাওয়া যায়নি। আবার বলুন।");
-        return;
-      }
-      setQuestion(transcript);
-      void askCopilot(transcript, { speak: true });
-    };
-    recognition.onerror = (event: any) => {
-      if (event?.error === "not-allowed") {
-        setError("মাইক্রোফোন permission প্রয়োজন।");
-      } else {
-        setError("ভয়েস শোনা যায়নি। আবার চেষ্টা করুন।");
-      }
-    };
-    recognition.onend = () => {
-      setListening(false);
-    };
-
-    recognitionRef.current = recognition;
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = startDualLanguageVoice({
+      onRecognitionRef: (recognition) => {
+        recognitionRef.current = recognition;
+      },
+      onTranscript: (transcript) => {
+        if (!transcript) {
+          setError("কথা পরিষ্কার পাওয়া যায়নি। আবার বলুন।");
+          return;
+        }
+        setQuestion(transcript);
+        void askCopilot(transcript, { speak: true });
+      },
+      onError: (kind) => {
+        if (kind === "aborted") return;
+        if (kind === "not_supported") {
+          setVoiceReady(false);
+          setError("এই ডিভাইসে voice recognition সাপোর্ট নেই।");
+          return;
+        }
+        if (kind === "permission_denied") {
+          setError("মাইক্রোফোন permission প্রয়োজন।");
+          return;
+        }
+        setError(mapVoiceErrorBangla(kind));
+      },
+      onEnd: () => {
+        setListening(false);
+        voiceSessionRef.current = null;
+      },
+    });
+    if (!voiceSessionRef.current) return;
     setError(null);
     setListening(true);
-    recognition.start();
   }, [askCopilot, listening, stopListening]);
 
   const helperText = useMemo(() => {

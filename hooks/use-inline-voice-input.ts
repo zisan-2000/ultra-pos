@@ -1,6 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  getSpeechRecognitionCtor,
+  mapVoiceErrorBangla,
+  startDualLanguageVoice,
+  type VoiceSession,
+} from "@/lib/voice-recognition";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -61,23 +67,25 @@ function transformTranscript(mode: VoiceMode, transcript: string) {
 
 export function useInlineVoiceInput() {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const voiceSessionRef = useRef<VoiceSession | null>(null);
   const [voiceReady] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return Boolean(
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    );
+    return Boolean(getSpeechRecognitionCtor());
   });
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [listeningField, setListeningField] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
+      voiceSessionRef.current?.stop();
+      voiceSessionRef.current = null;
       recognitionRef.current?.stop?.();
       recognitionRef.current?.abort?.();
     };
   }, []);
 
   const stopListening = useCallback(() => {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = null;
     recognitionRef.current?.stop?.();
     recognitionRef.current?.abort?.();
     setListeningField(null);
@@ -85,66 +93,51 @@ export function useInlineVoiceInput() {
 
   const startListening = useCallback(
     ({ field, mode, onValue }: StartVoiceInput) => {
-      const SpeechRecognitionImpl =
-        typeof window !== "undefined"
-          ? ((window as any).SpeechRecognition ||
-              (window as any).webkitSpeechRecognition)
-          : null;
-
-      if (!SpeechRecognitionImpl) {
-        setVoiceError("ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না");
-        return;
-      }
-
       if (listeningField === field) {
         stopListening();
         return;
       }
 
+      voiceSessionRef.current?.stop();
+      voiceSessionRef.current = null;
       recognitionRef.current?.stop?.();
       recognitionRef.current?.abort?.();
       setVoiceError(null);
 
-      const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
-      recognitionRef.current = recognition;
-      recognition.lang = "bn-BD";
-      recognition.interimResults = false;
-      recognition.continuous = false;
-
-      recognition.onresult = (event) => {
-        const transcript = Array.from(event.results || [])
-          .map((result: any) => result?.[0]?.transcript || "")
-          .join(" ")
-          .trim();
-        const transformed = transformTranscript(mode, transcript);
-        if (!transformed && mode !== "text") {
-          setVoiceError("সংখ্যা ঠিকমতো বোঝা যায়নি");
-          return;
-        }
-        onValue(transformed || transcript);
-      };
-
-      recognition.onerror = (event: any) => {
-        if (event?.error === "not-allowed") {
-          setVoiceError("মাইক্রোফোন permission দিন");
-        } else if (event?.error === "no-speech") {
-          setVoiceError("কিছু শোনা যায়নি, আবার বলুন");
-        } else {
-          setVoiceError("ভয়েস ইনপুট নেওয়া যায়নি");
-        }
-      };
-
-      recognition.onend = () => {
-        setListeningField((current) => (current === field ? null : current));
-      };
-
-      setListeningField(field);
-      try {
-        recognition.start();
-      } catch {
-        setListeningField(null);
-        setVoiceError("ভয়েস ইনপুট চালু করা যায়নি");
+      voiceSessionRef.current = startDualLanguageVoice({
+        onRecognitionRef: (recognition) => {
+          recognitionRef.current = recognition;
+        },
+        onTranscript: (transcript) => {
+          const transformed = transformTranscript(mode, transcript);
+          if (!transformed && mode !== "text") {
+            setVoiceError("সংখ্যা ঠিকমতো বোঝা যায়নি");
+            return;
+          }
+          onValue(transformed || transcript);
+        },
+        onError: (kind) => {
+          if (kind === "aborted") return;
+          if (kind === "permission_denied") {
+            setVoiceError("মাইক্রোফোন permission দিন");
+            return;
+          }
+          if (kind === "no_speech") {
+            setVoiceError("কিছু শোনা যায়নি, আবার বলুন");
+            return;
+          }
+          setVoiceError(mapVoiceErrorBangla(kind));
+        },
+        onEnd: () => {
+          setListeningField((current) => (current === field ? null : current));
+          voiceSessionRef.current = null;
+        },
+      });
+      if (!voiceSessionRef.current) {
+        setVoiceError("ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না");
+        return;
       }
+      setListeningField(field);
     },
     [listeningField, stopListening]
   );

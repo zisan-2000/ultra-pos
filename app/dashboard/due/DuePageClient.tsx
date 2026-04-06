@@ -33,6 +33,12 @@ import {
 } from "@/lib/due/customer-events";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import {
+  getSpeechRecognitionCtor,
+  mapVoiceErrorBangla,
+  startDualLanguageVoice,
+  type VoiceSession,
+} from "@/lib/voice-recognition";
+import {
   db,
   type LocalDueCustomer,
   type LocalDueLedger,
@@ -220,6 +226,7 @@ export default function DuePageClient({
   const queryClient = useQueryClient();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const voiceSessionRef = useRef<VoiceSession | null>(null);
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
   const REFRESH_MIN_INTERVAL_MS = 2_000;
@@ -412,13 +419,13 @@ export default function DuePageClient({
   }
 
   useEffect(() => {
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? (window as any).SpeechRecognition ||
-          (window as any).webkitSpeechRecognition
-        : null;
+    const SpeechRecognitionImpl = getSpeechRecognitionCtor();
     setVoiceReady(Boolean(SpeechRecognitionImpl));
-    return () => recognitionRef.current?.stop?.();
+    return () => {
+      voiceSessionRef.current?.stop();
+      voiceSessionRef.current = null;
+      recognitionRef.current?.stop?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -1058,68 +1065,66 @@ export default function DuePageClient({
   function startVoice(field: VoiceField) {
     if (listeningField === field) return;
     if (listeningField) stopVoice();
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? (window as any).SpeechRecognition ||
-          (window as any).webkitSpeechRecognition
-        : null;
-
-    if (!SpeechRecognitionImpl) {
-      setVoiceReady(false);
-      setVoiceError("ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না");
-      return;
-    }
-
-    const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
-    recognition.lang = "bn-BD";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onerror = () => {
-      setListeningField(null);
-      setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
-    };
-    recognition.onend = () => setListeningField(null);
-    recognition.onresult = (event: any) => {
-      const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
-      if (spoken) {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = startDualLanguageVoice({
+      onRecognitionRef: (recognition) => {
+        recognitionRef.current = recognition;
+      },
+      onTranscript: (spoken) => {
         if (field === "customerName") {
           const phone = parsePhone(spoken);
           const name = phone ? spoken.replace(phone, "").trim() : spoken;
           setNewCustomer((p) => ({ ...p, name }));
-          if (phone && !newCustomer.phone)
+          if (phone && !newCustomer.phone) {
             setNewCustomer((p) => ({ ...p, phone }));
-        } else if (field === "customerPhone") {
+          }
+          return;
+        }
+        if (field === "customerPhone") {
           const phone = parsePhone(spoken);
           if (phone) setNewCustomer((p) => ({ ...p, phone }));
-        } else if (field === "customerAddress") {
+          return;
+        }
+        if (field === "customerAddress") {
           setNewCustomer((p) => ({ ...p, address: spoken }));
-        } else if (field === "paymentAmount") {
+          return;
+        }
+        if (field === "paymentAmount") {
           const amt = parseAmount(spoken);
           if (amt) setPaymentForm((p) => ({ ...p, amount: amt }));
           const leftover = amt ? spoken.replace(amt, "").trim() : spoken;
           if (leftover && !paymentForm.description) {
             setPaymentForm((p) => ({ ...p, description: leftover }));
           }
-        } else if (field === "paymentDescription") {
-          setPaymentForm((p) => ({
-            ...p,
-            description: p.description ? `${p.description} ${spoken}` : spoken,
-          }));
-          const amt = parseAmount(spoken);
-          if (amt && !paymentForm.amount)
-            setPaymentForm((p) => ({ ...p, amount: amt }));
+          return;
         }
-      }
-      setListeningField(null);
-    };
-
-    recognitionRef.current = recognition;
+        setPaymentForm((p) => ({
+          ...p,
+          description: p.description ? `${p.description} ${spoken}` : spoken,
+        }));
+        const amt = parseAmount(spoken);
+        if (amt && !paymentForm.amount) {
+          setPaymentForm((p) => ({ ...p, amount: amt }));
+        }
+      },
+      onError: (kind) => {
+        if (kind === "aborted") return;
+        if (kind === "not_supported") setVoiceReady(false);
+        setVoiceError(mapVoiceErrorBangla(kind));
+      },
+      onEnd: () => {
+        setListeningField(null);
+        voiceSessionRef.current = null;
+      },
+    });
+    if (!voiceSessionRef.current) return;
     setVoiceError(null);
     setListeningField(field);
-    recognition.start();
   }
 
   function stopVoice() {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = null;
     recognitionRef.current?.stop?.();
     setListeningField(null);
   }

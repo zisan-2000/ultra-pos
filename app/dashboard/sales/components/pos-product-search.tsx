@@ -90,6 +90,26 @@ const QUICK_LIMIT = 8; // fixed slots so buttons never jump during a session
 const INITIAL_RENDER = 60;
 const RENDER_BATCH = 40;
 const SCANNER_INTERACTION_PAUSE_MS = 2200;
+const PRIMARY_VOICE_LANG = "bn-BD";
+const FALLBACK_VOICE_LANG = "en-US";
+const VOICE_SEARCH_ALIAS_MAP: Record<string, string[]> = {
+  orange: ["কমলা", "কমলারস", "orange juice", "orenge"],
+  "কমলা": ["orange", "orange juice", "কমলার রস", "কমলারস"],
+  juice: ["জুস", "রস"],
+  "জুস": ["juice", "রস"],
+  "রস": ["juice", "জুস"],
+  shake: ["শেক", "milkshake", "milk shake"],
+  "শেক": ["shake", "milkshake"],
+  tea: ["চা"],
+  "চা": ["tea"],
+  coffee: ["কফি"],
+  "কফি": ["coffee"],
+  coke: ["কোক", "cola", "coca cola"],
+  "কোক": ["coke", "cola"],
+  water: ["পানি", "জল"],
+  "পানি": ["water", "জল"],
+  "জল": ["water", "পানি"],
+};
 
 function scheduleIdle(callback: () => void) {
   const g = globalThis as typeof globalThis & {
@@ -131,6 +151,79 @@ function toNumber(val: string | number | undefined) {
 
 function normalizeCodeInput(value: string) {
   return value.trim().replace(/\s+/g, "").toUpperCase();
+}
+
+function normalizeVoiceTranscript(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function foldSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenizeSearchText(value: string) {
+  const folded = foldSearchText(value);
+  return folded ? folded.split(" ") : [];
+}
+
+function levenshteinWithin(a: string, b: string, maxDistance: number) {
+  if (a === b) return true;
+  const aLen = a.length;
+  const bLen = b.length;
+  if (!aLen || !bLen) return false;
+  if (Math.abs(aLen - bLen) > maxDistance) return false;
+
+  let prev = Array.from({ length: bLen + 1 }, (_, i) => i);
+  for (let i = 1; i <= aLen; i += 1) {
+    const curr = [i];
+    let minInRow = curr[0];
+    for (let j = 1; j <= bLen; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const next = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + cost
+      );
+      curr.push(next);
+      if (next < minInRow) minInRow = next;
+    }
+    if (minInRow > maxDistance) return false;
+    prev = curr;
+  }
+  return prev[bLen] <= maxDistance;
+}
+
+function isFuzzyTokenMatch(queryToken: string, candidateToken: string) {
+  if (!queryToken || !candidateToken) return false;
+  if (candidateToken.includes(queryToken)) return true;
+  if (queryToken.length < 3 || candidateToken.length < 3) return false;
+  if (Math.abs(queryToken.length - candidateToken.length) > 3) return false;
+
+  const maxDistance =
+    queryToken.length <= 4 ? 1 : queryToken.length <= 7 ? 2 : 3;
+  return levenshteinWithin(queryToken, candidateToken, maxDistance);
+}
+
+function expandAliasTokens(token: string) {
+  const foldedToken = foldSearchText(token);
+  if (!foldedToken) return [] as string[];
+  const terms = new Set<string>([foldedToken]);
+  const aliases = VOICE_SEARCH_ALIAS_MAP[foldedToken] || [];
+  for (const alias of aliases) {
+    const aliasFolded = foldSearchText(alias);
+    if (!aliasFolded) continue;
+    terms.add(aliasFolded);
+    for (const part of aliasFolded.split(" ")) {
+      if (part) terms.add(part);
+    }
+  }
+  return Array.from(terms);
 }
 
 function getActiveVariants(product: EnrichedProduct): ProductVariantOption[] {
@@ -313,6 +406,7 @@ export const PosProductSearch = memo(function PosProductSearch({
   const add = useCart((s: any) => s.add);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const voiceCancelRequestedRef = useRef(false);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
   const categoryChipsRef = useRef<HTMLDivElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -371,6 +465,7 @@ export const PosProductSearch = memo(function PosProductSearch({
 
   useEffect(() => {
     return () => {
+      voiceCancelRequestedRef.current = true;
       recognitionRef.current?.stop?.();
     };
   }, []);
@@ -414,6 +509,7 @@ export const PosProductSearch = memo(function PosProductSearch({
       setQuery("");
       setShowAllProducts(false);
       setRenderCount(INITIAL_RENDER);
+      voiceCancelRequestedRef.current = true;
       recognitionRef.current?.stop?.();
       setListening(false);
       setVoiceError(null);
@@ -730,26 +826,56 @@ export const PosProductSearch = memo(function PosProductSearch({
   );
 
   const filteredByQuery = useMemo(() => {
-    const term = debouncedQuery.trim().toLowerCase();
-    if (!term) return filteredByCategory;
+    const foldedTerm = foldSearchText(debouncedQuery);
+    const queryTokens = tokenizeSearchText(debouncedQuery);
+    if (!foldedTerm) return filteredByCategory;
+
+    const expandedTokenMap = new Map<string, string[]>();
+    for (const token of queryTokens) {
+      expandedTokenMap.set(token, expandAliasTokens(token));
+    }
 
     return filteredByCategory.filter((p) => {
-      const normalizedSku = (p.sku || "").toLowerCase();
-      const normalizedBarcode = (p.barcode || "").toLowerCase();
-      const variantHit = getActiveVariants(p).some((variant) => {
-        const label = String(variant.label || "").toLowerCase();
-        const sku = String(variant.sku || "").toLowerCase();
-        const barcode = String(variant.barcode || "").toLowerCase();
-        return (
-          label.includes(term) || sku.includes(term) || barcode.includes(term)
+      const fields: string[] = [
+        p.name,
+        String(p.sku || ""),
+        String(p.barcode || ""),
+      ];
+      for (const variant of getActiveVariants(p)) {
+        fields.push(
+          String(variant.label || ""),
+          String(variant.sku || ""),
+          String(variant.barcode || "")
         );
+      }
+
+      const foldedFields = fields
+        .map((field) => foldSearchText(field))
+        .filter(Boolean);
+      if (!foldedFields.length) return false;
+
+      // Fast exact/substring path
+      if (foldedFields.some((field) => field.includes(foldedTerm))) {
+        return true;
+      }
+
+      const candidateTokens = foldedFields.flatMap((field) => field.split(" "));
+      if (!candidateTokens.length) return false;
+
+      // Fuzzy + alias path: every query token should match by token/alias.
+      return queryTokens.every((token) => {
+        const expanded = expandedTokenMap.get(token) || [token];
+        return expanded.some((queryCandidate) => {
+          if (
+            foldedFields.some((field) => field.includes(queryCandidate))
+          ) {
+            return true;
+          }
+          return candidateTokens.some((candidateToken) =>
+            isFuzzyTokenMatch(queryCandidate, candidateToken)
+          );
+        });
       });
-      return (
-        p.name.toLowerCase().includes(term) ||
-        normalizedSku.includes(term) ||
-        normalizedBarcode.includes(term) ||
-        variantHit
-      );
     });
   }, [filteredByCategory, debouncedQuery]);
 
@@ -1239,46 +1365,113 @@ export const PosProductSearch = memo(function PosProductSearch({
       return;
     }
 
-    const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
-    recognition.lang = "bn-BD";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onerror = (e: any) => {
-      setListening(false);
-      const errorCode = e?.error;
-      if (errorCode === "not-allowed" || errorCode === "denied") {
-        setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
-      } else {
-        setVoiceError("ভয়েস সার্চ ব্যর্থ হয়েছে। পরে আবার চেষ্টা করুন।");
-      }
-    };
-    recognition.onend = () => {
-      setListening(false);
-      recognitionRef.current = null;
-    };
-    recognition.onresult = (event: any) => {
-      const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
-      if (spoken) {
-        setQuery((prev) => (prev ? `${prev} ${spoken}` : spoken));
-      }
-      setListening(false);
-    };
+    const runVoiceAttempt = (
+      lang: string
+    ): Promise<{ spoken: string | null; errorCode: string | null }> =>
+      new Promise((resolve) => {
+        const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
+        let settled = false;
+        const finish = (result: { spoken: string | null; errorCode: string | null }) => {
+          if (settled) return;
+          settled = true;
+          if (recognitionRef.current === recognition) {
+            recognitionRef.current = null;
+          }
+          resolve(result);
+        };
 
-    recognitionRef.current = recognition;
+        recognition.lang = lang;
+        recognition.interimResults = false;
+        recognition.continuous = false;
+        recognition.onerror = (e: any) => {
+          const code = typeof e?.error === "string" ? e.error : "unknown";
+          finish({ spoken: null, errorCode: code });
+        };
+        recognition.onend = () => {
+          finish({ spoken: null, errorCode: null });
+        };
+        recognition.onresult = (event: any) => {
+          const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
+          const normalizedSpoken = spoken
+            ? normalizeVoiceTranscript(spoken)
+            : "";
+          finish({
+            spoken: normalizedSpoken || null,
+            errorCode: null,
+          });
+        };
+
+        recognitionRef.current = recognition;
+        try {
+          recognition.start();
+        } catch {
+          finish({ spoken: null, errorCode: "start-failed" });
+        }
+      });
+
+    const blockedCodes = new Set(["not-allowed", "denied", "service-not-allowed"]);
+    const userStoppedCodes = new Set(["aborted"]);
+    const tryFallback = (errorCode: string | null) =>
+      !errorCode || (!blockedCodes.has(errorCode) && !userStoppedCodes.has(errorCode));
+
+    voiceCancelRequestedRef.current = false;
     setVoiceError(null);
     setListening(true);
-    recognition.start();
+    void (async () => {
+      const primary = await runVoiceAttempt(PRIMARY_VOICE_LANG);
+      if (voiceCancelRequestedRef.current || userStoppedCodes.has(primary.errorCode || "")) {
+        setListening(false);
+        return;
+      }
+
+      const primarySpoken = primary.spoken;
+      if (primarySpoken) {
+        setQuery((prev) => (prev ? `${prev} ${primarySpoken}` : primarySpoken));
+        setListening(false);
+        return;
+      }
+
+      if (blockedCodes.has(primary.errorCode || "")) {
+        setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
+        setListening(false);
+        return;
+      }
+
+      if (!tryFallback(primary.errorCode)) {
+        setVoiceError("ভয়েস সার্চ ব্যর্থ হয়েছে। পরে আবার চেষ্টা করুন।");
+        setListening(false);
+        return;
+      }
+
+      const fallback = await runVoiceAttempt(FALLBACK_VOICE_LANG);
+      if (voiceCancelRequestedRef.current || userStoppedCodes.has(fallback.errorCode || "")) {
+        setListening(false);
+        return;
+      }
+
+      const fallbackSpoken = fallback.spoken;
+      if (fallbackSpoken) {
+        setQuery((prev) => (prev ? `${prev} ${fallbackSpoken}` : fallbackSpoken));
+      } else if (blockedCodes.has(fallback.errorCode || "")) {
+        setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
+      } else {
+        setVoiceError("কথা পরিষ্কার শোনা যায়নি। বাংলা বা ইংরেজিতে আবার বলুন।");
+      }
+      setListening(false);
+    })();
   };
 
   const stopVoice = () => {
+    voiceCancelRequestedRef.current = true;
+    recognitionRef.current?.abort?.();
     recognitionRef.current?.stop?.();
     setListening(false);
   };
   const voiceErrorText = voiceError ? `(${voiceError})` : "";
   const voiceHint = listening
-    ? "শুনছে... পণ্যের নাম বলুন।"
+    ? "শুনছে... বাংলা বা ইংরেজিতে পণ্যের নাম বলুন।"
     : voiceReady
-    ? "ভয়েসে পণ্যের নাম বলুন।"
+    ? "ভয়েসে বাংলা বা ইংরেজি পণ্যের নাম বলুন।"
     : "ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না";
 
   const renderProductButton = (product: EnrichedProduct) => (

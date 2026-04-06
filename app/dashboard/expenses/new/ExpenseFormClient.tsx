@@ -13,6 +13,12 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getDhakaDateString } from "@/lib/reporting-range";
+import {
+  getSpeechRecognitionCtor,
+  mapVoiceErrorBangla,
+  startDualLanguageVoice,
+  type VoiceSession,
+} from "@/lib/voice-recognition";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -130,6 +136,7 @@ export default function ExpenseFormClient({
   const realtime = useRealtimeStatus();
   const router = useRouter();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const voiceSessionRef = useRef<VoiceSession | null>(null);
   const amountInputRef = useRef<HTMLInputElement | null>(null);
   const [listeningField, setListeningField] = useState<"amount" | "note" | null>(
     null
@@ -148,10 +155,7 @@ export default function ExpenseFormClient({
   );
 
   useEffect(() => {
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-        : null;
+    const SpeechRecognitionImpl = getSpeechRecognitionCtor();
     let cancelled = false;
     scheduleStateUpdate(() => {
       if (cancelled) return;
@@ -159,6 +163,8 @@ export default function ExpenseFormClient({
     });
     return () => {
       cancelled = true;
+      voiceSessionRef.current?.stop();
+      voiceSessionRef.current = null;
       recognitionRef.current?.stop?.();
     };
   }, []);
@@ -307,52 +313,41 @@ export default function ExpenseFormClient({
 
   function startVoice(field: "amount" | "note") {
     if (isVoiceListening) return;
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? ((window as any).SpeechRecognition ||
-            (window as any).webkitSpeechRecognition)
-        : null;
-
-    if (!SpeechRecognitionImpl) {
-      setVoiceReady(false);
-      setVoiceError("ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না");
-      return;
-    }
-
-    const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
-    recognition.lang = "bn-BD";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onerror = () => {
-      setListeningField(null);
-      setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
-    };
-    recognition.onend = () => setListeningField(null);
-    recognition.onresult = (event: any) => {
-      const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
-      if (spoken) {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = startDualLanguageVoice({
+      onRecognitionRef: (recognition) => {
+        recognitionRef.current = recognition;
+      },
+      onTranscript: (spoken) => {
         if (field === "amount") {
           const parsed = parseAmount(spoken);
           if (parsed) setAmount(parsed);
-          // also capture note text if included
           const leftover = parsed ? spoken.replace(parsed, "").trim() : spoken;
           if (leftover && !note) setNote(leftover);
-        } else {
-          setNote((prev) => (prev ? `${prev} ${spoken}` : spoken));
-          const parsed = parseAmount(spoken);
-          if (parsed && !amount) setAmount(parsed);
+          return;
         }
-      }
-      setListeningField(null);
-    };
-
-    recognitionRef.current = recognition;
+        setNote((prev) => (prev ? `${prev} ${spoken}` : spoken));
+        const parsed = parseAmount(spoken);
+        if (parsed && !amount) setAmount(parsed);
+      },
+      onError: (kind) => {
+        if (kind === "aborted") return;
+        if (kind === "not_supported") setVoiceReady(false);
+        setVoiceError(mapVoiceErrorBangla(kind));
+      },
+      onEnd: () => {
+        setListeningField(null);
+        voiceSessionRef.current = null;
+      },
+    });
+    if (!voiceSessionRef.current) return;
     setVoiceError(null);
     setListeningField(field);
-    recognition.start();
   }
 
   function stopVoice() {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = null;
     recognitionRef.current?.stop?.();
     setListeningField(null);
   }

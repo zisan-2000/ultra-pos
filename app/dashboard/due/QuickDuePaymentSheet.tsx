@@ -10,6 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  getSpeechRecognitionCtor,
+  mapVoiceErrorBangla,
+  startDualLanguageVoice,
+  type VoiceSession,
+} from "@/lib/voice-recognition";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -55,6 +61,7 @@ export default function QuickDuePaymentSheet({
 }: QuickDuePaymentSheetProps) {
   const online = useOnlineStatus();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const voiceSessionRef = useRef<VoiceSession | null>(null);
   const [open, setOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
@@ -108,13 +115,11 @@ export default function QuickDuePaymentSheet({
       : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
 
   useEffect(() => {
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? ((window as any).SpeechRecognition ||
-            (window as any).webkitSpeechRecognition)
-        : null;
+    const SpeechRecognitionImpl = getSpeechRecognitionCtor();
     setVoiceReady(Boolean(SpeechRecognitionImpl));
     return () => {
+      voiceSessionRef.current?.stop();
+      voiceSessionRef.current = null;
       recognitionRef.current?.stop?.();
       recognitionRef.current?.abort?.();
     };
@@ -130,6 +135,8 @@ export default function QuickDuePaymentSheet({
   }, []);
 
   function stopVoice() {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = null;
     recognitionRef.current?.stop?.();
     recognitionRef.current?.abort?.();
     setListeningField(null);
@@ -138,47 +145,35 @@ export default function QuickDuePaymentSheet({
   function startVoice(field: "paymentAmount" | "paymentDescription") {
     if (listeningField === field) return;
     if (listeningField) stopVoice();
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? ((window as any).SpeechRecognition ||
-            (window as any).webkitSpeechRecognition)
-        : null;
-
-    if (!SpeechRecognitionImpl) {
-      setVoiceError("ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না");
-      return;
-    }
-
-    const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
-    recognition.lang = "bn-BD";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onerror = () => {
-      setListeningField(null);
-      setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
-    };
-    recognition.onend = () => setListeningField(null);
-    recognition.onresult = (event: any) => {
-      const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
-      if (spoken) {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = startDualLanguageVoice({
+      onRecognitionRef: (recognition) => {
+        recognitionRef.current = recognition;
+      },
+      onTranscript: (spoken) => {
         if (field === "paymentAmount") {
           const parsed = parseAmount(spoken);
           if (parsed) setAmount(parsed);
           const leftover = parsed ? spoken.replace(parsed, "").trim() : spoken;
           if (leftover && !description) setDescription(leftover);
-        } else {
-          setDescription((prev) => (prev ? `${prev} ${spoken}` : spoken));
-          const parsed = parseAmount(spoken);
-          if (parsed && !amount) setAmount(parsed);
+          return;
         }
-      }
-      setListeningField(null);
-    };
-
-    recognitionRef.current = recognition;
+        setDescription((prev) => (prev ? `${prev} ${spoken}` : spoken));
+        const parsed = parseAmount(spoken);
+        if (parsed && !amount) setAmount(parsed);
+      },
+      onError: (kind) => {
+        if (kind === "aborted") return;
+        setVoiceError(mapVoiceErrorBangla(kind));
+      },
+      onEnd: () => {
+        setListeningField(null);
+        voiceSessionRef.current = null;
+      },
+    });
+    if (!voiceSessionRef.current) return;
     setVoiceError(null);
     setListeningField(field);
-    recognition.start();
   }
 
   const resetForm = () => {

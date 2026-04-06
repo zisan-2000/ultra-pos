@@ -9,6 +9,7 @@ import { assertShopAccess } from "@/lib/shop-access";
 import { Prisma } from "@prisma/client";
 import { revalidateReportsForProduct } from "@/lib/reports/revalidate";
 import { getDhakaBusinessDate } from "@/lib/dhaka-date";
+import { buildProductSearchTerms } from "@/lib/product-search";
 
 import { type CursorToken } from "@/lib/cursor-pagination";
 
@@ -923,6 +924,7 @@ export async function getProductsByShopPaginated({
   const safePage = Math.max(1, Math.floor(page));
   const safePageSize = Math.max(1, Math.min(Math.floor(pageSize), 100));
   const normalizedQuery = (query || "").trim();
+  const searchTerms = buildProductSearchTerms(normalizedQuery);
   const where: any = { shopId };
 
   if (status === "active") {
@@ -931,13 +933,13 @@ export async function getProductsByShopPaginated({
     where.isActive = false;
   }
 
-  if (normalizedQuery) {
-    where.OR = [
-      { name: { contains: normalizedQuery, mode: "insensitive" } },
-      { category: { contains: normalizedQuery, mode: "insensitive" } },
-      { sku: { contains: normalizedQuery, mode: "insensitive" } },
-      { barcode: { contains: normalizedQuery, mode: "insensitive" } },
-    ];
+  if (searchTerms.length > 0) {
+    where.OR = searchTerms.flatMap((term) => [
+      { name: { contains: term, mode: "insensitive" } },
+      { category: { contains: term, mode: "insensitive" } },
+      { sku: { contains: term, mode: "insensitive" } },
+      { barcode: { contains: term, mode: "insensitive" } },
+    ]);
   }
 
   const totalCount = await prisma.product.count({ where });
@@ -1018,6 +1020,7 @@ export async function getProductsByShopCursorPaginated({
 
   const safeLimit = Math.max(1, Math.min(Math.floor(limit), 100));
   const normalizedQuery = (query || "").trim();
+  const searchTerms = buildProductSearchTerms(normalizedQuery);
 
   const baseWhere: any = { shopId };
   if (status === "active") {
@@ -1026,13 +1029,13 @@ export async function getProductsByShopCursorPaginated({
     baseWhere.isActive = false;
   }
 
-  if (normalizedQuery) {
-    baseWhere.OR = [
-      { name: { contains: normalizedQuery, mode: "insensitive" } },
-      { category: { contains: normalizedQuery, mode: "insensitive" } },
-      { sku: { contains: normalizedQuery, mode: "insensitive" } },
-      { barcode: { contains: normalizedQuery, mode: "insensitive" } },
-    ];
+  if (searchTerms.length > 0) {
+    baseWhere.OR = searchTerms.flatMap((term) => [
+      { name: { contains: term, mode: "insensitive" } },
+      { category: { contains: term, mode: "insensitive" } },
+      { sku: { contains: term, mode: "insensitive" } },
+      { barcode: { contains: term, mode: "insensitive" } },
+    ]);
   }
 
   const where: any = { ...baseWhere };

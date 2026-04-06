@@ -25,6 +25,12 @@ import {
   SCAN_IDLE_SUBMIT_MS,
 } from "@/lib/scanner/ux";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import {
+  getSpeechRecognitionCtor,
+  mapVoiceErrorBangla,
+  startDualLanguageVoice,
+  type VoiceSession,
+} from "@/lib/voice-recognition";
 
 type Props = {
   product: any;
@@ -225,6 +231,7 @@ export default function EditProductClient({
   const online = useOnlineStatus();
   const businessType = (shop.businessType as BusinessType) || "tea_stall";
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const voiceSessionRef = useRef<VoiceSession | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
@@ -467,10 +474,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
   // Voice availability
   useEffect(() => {
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-        : null;
+    const SpeechRecognitionImpl = getSpeechRecognitionCtor();
     let cancelled = false;
     scheduleStateUpdate(() => {
       if (cancelled) return;
@@ -479,6 +483,8 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
     return () => {
       cancelled = true;
+      voiceSessionRef.current?.stop();
+      voiceSessionRef.current = null;
       recognitionRef.current?.stop?.();
       stopCamera();
     };
@@ -916,42 +922,32 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
   function startVoice() {
     if (listening) return;
-    const SpeechRecognitionImpl =
-      typeof window !== "undefined"
-        ? ((window as any).SpeechRecognition ||
-            (window as any).webkitSpeechRecognition)
-        : null;
-
-    if (!SpeechRecognitionImpl) {
-      setVoiceReady(false);
-      setVoiceError("ব্রাউজার মাইক্রোফোন সাপোর্ট দিচ্ছে না");
-      return;
-    }
-
-    const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
-    recognition.lang = "bn-BD";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onerror = () => {
-      setListening(false);
-      setVoiceError("মাইক্রোফোন অ্যাক্সেস মেলেনি");
-    };
-    recognition.onend = () => setListening(false);
-    recognition.onresult = (event: any) => {
-      const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
-      if (spoken) {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = startDualLanguageVoice({
+      onRecognitionRef: (recognition) => {
+        recognitionRef.current = recognition;
+      },
+      onTranscript: (spoken) => {
         handleVoiceResult(spoken);
-      }
-      setListening(false);
-    };
-
-    recognitionRef.current = recognition;
+      },
+      onError: (kind) => {
+        if (kind === "aborted") return;
+        if (kind === "not_supported") setVoiceReady(false);
+        setVoiceError(mapVoiceErrorBangla(kind));
+      },
+      onEnd: () => {
+        setListening(false);
+        voiceSessionRef.current = null;
+      },
+    });
+    if (!voiceSessionRef.current) return;
     setVoiceError(null);
     setListening(true);
-    recognition.start();
   }
 
   function stopVoice() {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = null;
     recognitionRef.current?.stop?.();
     setListening(false);
   }
