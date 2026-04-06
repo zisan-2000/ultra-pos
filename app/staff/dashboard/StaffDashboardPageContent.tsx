@@ -79,7 +79,11 @@ export default async function StaffDashboardPageContent({
   addQuickAction("view_cashbook", "/dashboard/cash", "ক্যাশবুক", "লেনদেন মিলিয়ে নিন", "💵");
   addQuickAction("view_products", "/dashboard/products", "পণ্য", "স্টক ও পণ্য দেখুন", "📦");
 
-  if (selectedShop.queueTokenEnabled && hasPermission(user, "view_queue_board")) {
+  if (
+    Boolean((selectedShop as any).queueTokenEntitled) &&
+    Boolean(selectedShop.queueTokenEnabled) &&
+    hasPermission(user, "view_queue_board")
+  ) {
     quickActions.push({
       href: `/dashboard/queue?shopId=${selectedShopId}`,
       label: "টোকেন",

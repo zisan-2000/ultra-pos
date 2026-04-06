@@ -55,9 +55,11 @@ type Props = {
     address?: string;
     phone?: string;
     businessType?: string;
+    salesInvoiceEntitled?: boolean;
     salesInvoiceEnabled?: boolean;
     salesInvoicePrefix?: string | null;
     salesInvoicePrintSize?: string | null;
+    queueTokenEntitled?: boolean;
     queueTokenEnabled?: boolean;
     queueTokenPrefix?: string | null;
     queueWorkflow?: string | null;
@@ -76,7 +78,9 @@ type Props = {
   ownerOptions?: Array<{ id: string; name: string | null; email: string | null }>;
   businessTypeOptions?: Array<{ id: string; label: string }>;
   showSalesInvoiceSettings?: boolean;
+  canEditSalesInvoiceEntitlement?: boolean;
   showQueueTokenSettings?: boolean;
+  canEditQueueTokenEntitlement?: boolean;
   showDiscountSettings?: boolean;
   canEditDiscountEntitlement?: boolean;
   showTaxSettings?: boolean;
@@ -151,7 +155,9 @@ export default function ShopFormClient({
   ownerOptions,
   businessTypeOptions,
   showSalesInvoiceSettings = false,
+  canEditSalesInvoiceEntitlement = false,
   showQueueTokenSettings = false,
+  canEditQueueTokenEntitlement = false,
   showDiscountSettings = false,
   canEditDiscountEntitlement = false,
   showTaxSettings = false,
@@ -178,8 +184,12 @@ export default function ShopFormClient({
   const [businessType, setBusinessType] = useState<string>(
     initial?.businessType || availableBusinessTypes[0]?.id || "tea_stall"
   );
+  const [salesInvoiceEntitled, setSalesInvoiceEntitled] = useState<boolean>(
+    Boolean(initial?.salesInvoiceEntitled ?? false)
+  );
   const [salesInvoiceEnabled, setSalesInvoiceEnabled] = useState<boolean>(
-    Boolean(initial?.salesInvoiceEnabled ?? false)
+    Boolean(initial?.salesInvoiceEntitled ?? false) &&
+      Boolean(initial?.salesInvoiceEnabled ?? false)
   );
   const [salesInvoicePrefix, setSalesInvoicePrefix] = useState<string>(
     initial?.salesInvoicePrefix || "INV"
@@ -189,8 +199,12 @@ export default function ShopFormClient({
       initial?.salesInvoicePrintSize || DEFAULT_SALES_INVOICE_PRINT_SIZE
     )
   );
+  const [queueTokenEntitled, setQueueTokenEntitled] = useState<boolean>(
+    Boolean(initial?.queueTokenEntitled ?? false)
+  );
   const [queueTokenEnabled, setQueueTokenEnabled] = useState<boolean>(
-    Boolean(initial?.queueTokenEnabled ?? false)
+    Boolean(initial?.queueTokenEntitled ?? false) &&
+      Boolean(initial?.queueTokenEnabled ?? false)
   );
   const [queueTokenPrefix, setQueueTokenPrefix] = useState<string>(
     initial?.queueTokenPrefix || "TK"
@@ -459,7 +473,10 @@ export default function ShopFormClient({
     const payloadAddress = ((form.get("address") as string) || address).trim();
     const payloadPhone = ((form.get("phone") as string) || phone).trim();
     const payloadBusinessType = (form.get("businessType") as string) || businessType;
-    const payloadSalesInvoiceEnabled = Boolean(salesInvoiceEnabled);
+    const payloadSalesInvoiceEntitled = Boolean(salesInvoiceEntitled);
+    const payloadSalesInvoiceEnabled = payloadSalesInvoiceEntitled
+      ? Boolean(salesInvoiceEnabled)
+      : false;
     const payloadSalesInvoicePrefix = salesInvoicePrefix
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, "")
@@ -467,7 +484,10 @@ export default function ShopFormClient({
     const payloadSalesInvoicePrintSize = sanitizeSalesInvoicePrintSize(
       salesInvoicePrintSize
     );
-    const payloadQueueTokenEnabled = Boolean(queueTokenEnabled);
+    const payloadQueueTokenEntitled = Boolean(queueTokenEntitled);
+    const payloadQueueTokenEnabled = payloadQueueTokenEntitled
+      ? Boolean(queueTokenEnabled)
+      : false;
     const payloadQueueTokenPrefix = queueTokenPrefix
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, "")
@@ -499,11 +519,20 @@ export default function ShopFormClient({
     form.set("phone", payloadPhone);
     form.set("businessType", payloadBusinessType);
     if (showSalesInvoiceSettings) {
+      if (canEditSalesInvoiceEntitlement) {
+        form.set(
+          "salesInvoiceEntitled",
+          payloadSalesInvoiceEntitled ? "1" : "0"
+        );
+      }
       form.set("salesInvoiceEnabled", payloadSalesInvoiceEnabled ? "1" : "0");
       form.set("salesInvoicePrefix", payloadSalesInvoicePrefix);
       form.set("salesInvoicePrintSize", payloadSalesInvoicePrintSize);
     }
     if (showQueueTokenSettings) {
+      if (canEditQueueTokenEntitlement) {
+        form.set("queueTokenEntitled", payloadQueueTokenEntitled ? "1" : "0");
+      }
       form.set("queueTokenEnabled", payloadQueueTokenEnabled ? "1" : "0");
       form.set("queueTokenPrefix", payloadQueueTokenPrefix);
       form.set("queueWorkflow", payloadQueueWorkflow);
@@ -566,6 +595,9 @@ export default function ShopFormClient({
           businessType: payloadBusinessType,
           ...(showSalesInvoiceSettings
             ? {
+                ...(canEditSalesInvoiceEntitlement
+                  ? { salesInvoiceEntitled: payloadSalesInvoiceEntitled }
+                  : {}),
                 salesInvoiceEnabled: payloadSalesInvoiceEnabled,
                 salesInvoicePrefix: payloadSalesInvoicePrefix || null,
                 salesInvoicePrintSize: payloadSalesInvoicePrintSize,
@@ -573,6 +605,9 @@ export default function ShopFormClient({
             : {}),
           ...(showQueueTokenSettings
             ? {
+                ...(canEditQueueTokenEntitlement
+                  ? { queueTokenEntitled: payloadQueueTokenEntitled }
+                  : {}),
                 queueTokenEnabled: payloadQueueTokenEnabled,
                 queueTokenPrefix: payloadQueueTokenPrefix || null,
                 queueWorkflow: payloadQueueWorkflow || null,
@@ -852,12 +887,39 @@ export default function ShopFormClient({
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
               type="checkbox"
+              checked={salesInvoiceEntitled}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setSalesInvoiceEntitled(next);
+                if (!next) {
+                  setSalesInvoiceEnabled(false);
+                }
+              }}
+              disabled={!canEditSalesInvoiceEntitlement}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+            />
+            এই দোকানে Sales Invoice entitlement চালু
+          </label>
+          {!canEditSalesInvoiceEntitlement ? (
+            <p className="text-xs text-muted-foreground">
+              এই entitlement শুধু super-admin পরিবর্তন করতে পারবেন।
+            </p>
+          ) : null}
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
               checked={salesInvoiceEnabled}
               onChange={(e) => setSalesInvoiceEnabled(e.target.checked)}
+              disabled={!salesInvoiceEntitled}
               className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
             />
             এই দোকানে Sales Invoice চালু
           </label>
+          {!salesInvoiceEntitled ? (
+            <p className="text-xs text-warning">
+              প্রথমে entitlement চালু না হলে Sales Invoice toggle activate হবে না।
+            </p>
+          ) : null}
           <div className="space-y-2">
             <label className="block text-xs font-semibold text-muted-foreground">
               ইনভয়েস প্রিফিক্স
@@ -918,12 +980,39 @@ export default function ShopFormClient({
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
               type="checkbox"
+              checked={queueTokenEntitled}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setQueueTokenEntitled(next);
+                if (!next) {
+                  setQueueTokenEnabled(false);
+                }
+              }}
+              disabled={!canEditQueueTokenEntitlement}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+            />
+            এই দোকানে Queue Token entitlement চালু
+          </label>
+          {!canEditQueueTokenEntitlement ? (
+            <p className="text-xs text-muted-foreground">
+              এই entitlement শুধু super-admin পরিবর্তন করতে পারবেন।
+            </p>
+          ) : null}
+          <label className="inline-flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
               checked={queueTokenEnabled}
               onChange={(e) => setQueueTokenEnabled(e.target.checked)}
+              disabled={!queueTokenEntitled}
               className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
             />
             এই দোকানে Queue Token চালু
           </label>
+          {!queueTokenEntitled ? (
+            <p className="text-xs text-warning">
+              প্রথমে entitlement চালু না হলে Queue Token toggle activate হবে না।
+            </p>
+          ) : null}
           <div className="space-y-2">
             <label className="block text-xs font-semibold text-muted-foreground">
               টোকেন প্রিফিক্স

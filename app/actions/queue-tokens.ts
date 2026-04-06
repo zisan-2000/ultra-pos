@@ -129,6 +129,7 @@ type QueueBoardSnapshot = {
     name: string;
     businessType: string | null;
     queueWorkflow: string | null;
+    queueTokenEntitled: boolean;
     queueTokenEnabled: boolean;
     queueTokenPrefix: string | null;
   };
@@ -162,6 +163,13 @@ type QueueBoardSnapshot = {
     updatedAt: Date;
   }>;
 };
+
+function isQueueTokenFeatureEnabled(shop: unknown) {
+  return (
+    Boolean((shop as any).queueTokenEntitled) &&
+    Boolean((shop as any).queueTokenEnabled)
+  );
+}
 
 export async function getQueueProductOptions(
   shopId: string
@@ -273,7 +281,8 @@ export async function getQueueBoardSnapshot(
       name: shop.name,
       businessType: (shop as any).businessType ?? null,
       queueWorkflow: (shop as any).queueWorkflow ?? null,
-      queueTokenEnabled: Boolean((shop as any).queueTokenEnabled),
+      queueTokenEntitled: Boolean((shop as any).queueTokenEntitled),
+      queueTokenEnabled: isQueueTokenFeatureEnabled(shop),
       queueTokenPrefix: (shop as any).queueTokenPrefix ?? null,
     },
     businessDate,
@@ -321,7 +330,7 @@ export async function createQueueToken(input: {
   requirePermission(user, "create_queue_token");
   const shop = await assertShopAccess(input.shopId, user);
 
-  if (!(shop as any).queueTokenEnabled) {
+  if (!isQueueTokenFeatureEnabled(shop)) {
     throw new Error("Queue token feature is disabled for this shop");
   }
 
@@ -446,7 +455,7 @@ export async function callNextQueueToken(
   requirePermission(user, "update_queue_token_status");
   const shop = await assertShopAccess(shopId, user);
 
-  if (!(shop as any).queueTokenEnabled) {
+  if (!isQueueTokenFeatureEnabled(shop)) {
     throw new Error("Queue token feature is disabled for this shop");
   }
 
@@ -658,7 +667,7 @@ export async function closeQueueBusinessDay(input: {
   requirePermission(user, "update_queue_token_status");
   const shop = await assertShopAccess(input.shopId, user);
 
-  if (!(shop as any).queueTokenEnabled) {
+  if (!isQueueTokenFeatureEnabled(shop)) {
     throw new Error("Queue token feature is disabled for this shop");
   }
 

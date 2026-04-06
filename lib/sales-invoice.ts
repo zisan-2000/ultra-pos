@@ -34,9 +34,14 @@ export function formatSalesInvoiceNo(
 
 export function canIssueSalesInvoice(
   user: UserContext,
+  salesInvoiceEntitled?: boolean | null,
   salesInvoiceEnabled?: boolean | null
 ) {
-  return Boolean(salesInvoiceEnabled) && hasPermission(user, "issue_sales_invoice");
+  return (
+    Boolean(salesInvoiceEntitled) &&
+    Boolean(salesInvoiceEnabled) &&
+    hasPermission(user, "issue_sales_invoice")
+  );
 }
 
 export function canViewSalesInvoice(user: UserContext) {

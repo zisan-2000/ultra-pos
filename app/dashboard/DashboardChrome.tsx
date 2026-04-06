@@ -66,6 +66,7 @@ type Shop = {
   name: string;
   closingTime?: string | null;
   businessType?: string | null;
+  queueTokenEntitled?: boolean | null;
   queueTokenEnabled?: boolean | null;
 };
 
@@ -228,7 +229,8 @@ export function DashboardShell({
 
   const currentQueueTokenEnabled = useMemo(() => {
     if (!safeShopId) return false;
-    return Boolean(shops.find((s) => s.id === safeShopId)?.queueTokenEnabled);
+    const shop = shops.find((s) => s.id === safeShopId);
+    return Boolean(shop?.queueTokenEntitled) && Boolean(shop?.queueTokenEnabled);
   }, [safeShopId, shops]);
 
   // Sync URL ?shopId with global shop store & cookie

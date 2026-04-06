@@ -13,12 +13,22 @@ export default async function NewShopPage() {
   const user = await getCurrentUser();
   const isSuperAdmin = user?.roles?.includes("super_admin") ?? false;
   const isOwner = user?.roles?.includes("owner") ?? false;
-  const canManageSalesInvoice = Boolean(
+  const canManageSalesInvoiceEntitlement = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_invoice_entitlement"))
+  );
+  const canManageSalesInvoiceFeature = Boolean(
     user &&
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_invoice_feature"))
   );
-  const canManageQueueToken = Boolean(
+  const canManageQueueTokenEntitlement = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_queue_entitlement"))
+  );
+  const canManageQueueTokenFeature = Boolean(
     user &&
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_queue_feature"))
@@ -105,8 +115,14 @@ export default async function NewShopPage() {
         cacheUserId={user?.id ?? "anon"}
         ownerOptions={ownerOptions}
         businessTypeOptions={mergedBusinessTypes}
-        showSalesInvoiceSettings={canManageSalesInvoice}
-        showQueueTokenSettings={canManageQueueToken}
+        showSalesInvoiceSettings={
+          canManageSalesInvoiceEntitlement || canManageSalesInvoiceFeature
+        }
+        canEditSalesInvoiceEntitlement={canManageSalesInvoiceEntitlement}
+        showQueueTokenSettings={
+          canManageQueueTokenEntitlement || canManageQueueTokenFeature
+        }
+        canEditQueueTokenEntitlement={canManageQueueTokenEntitlement}
         showDiscountSettings={canManageDiscountEntitlement || canManageDiscountFeature}
         canEditDiscountEntitlement={canManageDiscountEntitlement}
         showTaxSettings={canManageTaxEntitlement || canManageTaxFeature}

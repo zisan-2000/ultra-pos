@@ -94,9 +94,11 @@ export async function createShop(data: {
   phone?: string;
   businessType?: string;
   ownerId?: string;
+  salesInvoiceEntitled?: boolean;
   salesInvoiceEnabled?: boolean;
   salesInvoicePrefix?: string | null;
   salesInvoicePrintSize?: string | null;
+  queueTokenEntitled?: boolean;
   queueTokenEnabled?: boolean;
   queueTokenPrefix?: string | null;
   queueWorkflow?: string | null;
@@ -148,12 +150,20 @@ export async function createShop(data: {
 
   const targetOwnerId = isSuperAdmin ? requestedOwnerId ?? user.id : user.id;
 
+  const wantsInvoiceEntitlementChange = data.salesInvoiceEntitled === true;
+  if (wantsInvoiceEntitlementChange) {
+    requirePermission(user, "manage_shop_invoice_entitlement");
+  }
   const wantsInvoiceFeatureChange =
     data.salesInvoiceEnabled !== undefined ||
     data.salesInvoicePrefix !== undefined ||
     data.salesInvoicePrintSize !== undefined;
   if (wantsInvoiceFeatureChange) {
     requirePermission(user, "manage_shop_invoice_feature");
+  }
+  const wantsQueueEntitlementChange = data.queueTokenEntitled === true;
+  if (wantsQueueEntitlementChange) {
+    requirePermission(user, "manage_shop_queue_entitlement");
   }
   const wantsQueueFeatureChange =
     data.queueTokenEnabled !== undefined ||
@@ -202,6 +212,20 @@ export async function createShop(data: {
     data.salesInvoicePrintSize !== undefined
       ? sanitizeSalesInvoicePrintSize(data.salesInvoicePrintSize)
       : undefined;
+  const resolvedSalesInvoiceEntitled = Boolean(data.salesInvoiceEntitled ?? false);
+  const resolvedSalesInvoiceEnabled = Boolean(data.salesInvoiceEnabled ?? false);
+  if (resolvedSalesInvoiceEnabled && !resolvedSalesInvoiceEntitled) {
+    throw new Error(
+      "Sales invoice cannot be enabled before super-admin entitlement is turned on"
+    );
+  }
+  const resolvedQueueEntitled = Boolean(data.queueTokenEntitled ?? false);
+  const resolvedQueueEnabled = Boolean(data.queueTokenEnabled ?? false);
+  if (resolvedQueueEnabled && !resolvedQueueEntitled) {
+    throw new Error(
+      "Queue token cannot be enabled before super-admin entitlement is turned on"
+    );
+  }
 
   const resolvedBarcodeEntitled = Boolean(data.barcodeFeatureEntitled ?? false);
   const resolvedBarcodeScanEnabled = Boolean(data.barcodeScanEnabled ?? false);
@@ -244,6 +268,12 @@ export async function createShop(data: {
       address: data.address || "",
       phone: data.phone || "",
       businessType: data.businessType || "tea_stall",
+      salesInvoiceEntitled: resolvedSalesInvoiceEntitled,
+      salesInvoiceEnabled: resolvedSalesInvoiceEntitled
+        ? resolvedSalesInvoiceEnabled
+        : false,
+      queueTokenEntitled: resolvedQueueEntitled,
+      queueTokenEnabled: resolvedQueueEntitled ? resolvedQueueEnabled : false,
       discountFeatureEntitled: resolvedDiscountEntitled,
       discountEnabled: resolvedDiscountEntitled ? resolvedDiscountEnabled : false,
       taxFeatureEntitled: resolvedTaxEntitled,
@@ -260,14 +290,8 @@ export async function createShop(data: {
         : false,
       smsSummaryEntitled: resolvedSmsEntitled,
       smsSummaryEnabled: resolvedSmsEntitled ? resolvedSmsEnabled : false,
-      ...(data.salesInvoiceEnabled !== undefined
-        ? { salesInvoiceEnabled: Boolean(data.salesInvoiceEnabled) }
-        : {}),
       ...(data.salesInvoicePrefix !== undefined
         ? { salesInvoicePrefix: sanitizeSalesInvoicePrefix(data.salesInvoicePrefix) }
-        : {}),
-      ...(data.queueTokenEnabled !== undefined
-        ? { queueTokenEnabled: Boolean(data.queueTokenEnabled) }
         : {}),
       ...(data.queueTokenPrefix !== undefined
         ? { queueTokenPrefix: sanitizeQueueTokenPrefix(data.queueTokenPrefix) }
@@ -378,6 +402,12 @@ export async function updateShop(id: string, data: any) {
     ...(data.closingTime !== undefined ? { closingTime: data.closingTime } : {}),
   };
 
+  const wantsInvoiceEntitlementChange = data.salesInvoiceEntitled !== undefined;
+  if (wantsInvoiceEntitlementChange) {
+    requirePermission(user, "manage_shop_invoice_entitlement");
+    (updateData as any).salesInvoiceEntitled = Boolean(data.salesInvoiceEntitled);
+  }
+
   const wantsInvoiceFeatureChange =
     data.salesInvoiceEnabled !== undefined ||
     data.salesInvoicePrefix !== undefined ||
@@ -385,6 +415,15 @@ export async function updateShop(id: string, data: any) {
   if (wantsInvoiceFeatureChange) {
     requirePermission(user, "manage_shop_invoice_feature");
     if (data.salesInvoiceEnabled !== undefined) {
+      const effectiveEntitlement =
+        data.salesInvoiceEntitled !== undefined
+          ? Boolean(data.salesInvoiceEntitled)
+          : Boolean((shop as any).salesInvoiceEntitled);
+      if (Boolean(data.salesInvoiceEnabled) && !effectiveEntitlement) {
+        throw new Error(
+          "Sales invoice cannot be enabled before super-admin entitlement is turned on"
+        );
+      }
       updateData.salesInvoiceEnabled = Boolean(data.salesInvoiceEnabled);
     }
     if (data.salesInvoicePrefix !== undefined) {
@@ -393,6 +432,11 @@ export async function updateShop(id: string, data: any) {
       );
     }
   }
+  const wantsQueueEntitlementChange = data.queueTokenEntitled !== undefined;
+  if (wantsQueueEntitlementChange) {
+    requirePermission(user, "manage_shop_queue_entitlement");
+    (updateData as any).queueTokenEntitled = Boolean(data.queueTokenEntitled);
+  }
   const wantsQueueFeatureChange =
     data.queueTokenEnabled !== undefined ||
     data.queueTokenPrefix !== undefined ||
@@ -400,6 +444,15 @@ export async function updateShop(id: string, data: any) {
   if (wantsQueueFeatureChange) {
     requirePermission(user, "manage_shop_queue_feature");
     if (data.queueTokenEnabled !== undefined) {
+      const effectiveEntitlement =
+        data.queueTokenEntitled !== undefined
+          ? Boolean(data.queueTokenEntitled)
+          : Boolean((shop as any).queueTokenEntitled);
+      if (Boolean(data.queueTokenEnabled) && !effectiveEntitlement) {
+        throw new Error(
+          "Queue token cannot be enabled before super-admin entitlement is turned on"
+        );
+      }
       updateData.queueTokenEnabled = Boolean(data.queueTokenEnabled);
     }
     if (data.queueTokenPrefix !== undefined) {
@@ -538,6 +591,15 @@ export async function updateShop(id: string, data: any) {
 
   if (data.barcodeFeatureEntitled !== undefined && !Boolean(data.barcodeFeatureEntitled)) {
     (updateData as any).barcodeScanEnabled = false;
+  }
+  if (
+    data.salesInvoiceEntitled !== undefined &&
+    !Boolean(data.salesInvoiceEntitled)
+  ) {
+    (updateData as any).salesInvoiceEnabled = false;
+  }
+  if (data.queueTokenEntitled !== undefined && !Boolean(data.queueTokenEntitled)) {
+    (updateData as any).queueTokenEnabled = false;
   }
   if (data.discountFeatureEntitled !== undefined && !Boolean(data.discountFeatureEntitled)) {
     (updateData as any).discountEnabled = false;

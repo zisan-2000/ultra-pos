@@ -130,9 +130,11 @@ const shopCreateSchema = z.object({
   address: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
   businessType: z.string().optional(),
+  salesInvoiceEntitled: z.boolean().optional(),
   salesInvoiceEnabled: z.boolean().optional(),
   salesInvoicePrefix: z.string().optional().nullable(),
   salesInvoicePrintSize: z.string().optional().nullable(),
+  queueTokenEntitled: z.boolean().optional(),
   queueTokenEnabled: z.boolean().optional(),
   queueTokenPrefix: z.string().optional().nullable(),
   discountFeatureEntitled: z.boolean().optional(),
@@ -155,9 +157,11 @@ const shopUpdateSchema = z.object({
   phone: z.string().optional().nullable(),
   businessType: z.string().optional(),
   closingTime: z.string().optional().nullable(),
+  salesInvoiceEntitled: z.boolean().optional(),
   salesInvoiceEnabled: z.boolean().optional(),
   salesInvoicePrefix: z.string().optional().nullable(),
   salesInvoicePrintSize: z.string().optional().nullable(),
+  queueTokenEntitled: z.boolean().optional(),
   queueTokenEnabled: z.boolean().optional(),
   queueTokenPrefix: z.string().optional().nullable(),
   discountFeatureEntitled: z.boolean().optional(),
@@ -353,9 +357,11 @@ export async function POST(req: Request) {
                 address: input.address ?? "",
                 phone: input.phone ?? "",
                 businessType: input.businessType ?? "tea_stall",
+                salesInvoiceEntitled: input.salesInvoiceEntitled,
                 salesInvoiceEnabled: input.salesInvoiceEnabled,
                 salesInvoicePrefix: input.salesInvoicePrefix ?? undefined,
                 salesInvoicePrintSize: input.salesInvoicePrintSize ?? undefined,
+                queueTokenEntitled: input.queueTokenEntitled,
                 queueTokenEnabled: input.queueTokenEnabled,
                 queueTokenPrefix: input.queueTokenPrefix ?? undefined,
                 discountFeatureEntitled: input.discountFeatureEntitled,
@@ -388,6 +394,9 @@ export async function POST(req: Request) {
                 ...(data.salesInvoiceEnabled !== undefined
                   ? { salesInvoiceEnabled: data.salesInvoiceEnabled }
                   : {}),
+                ...(data.salesInvoiceEntitled !== undefined
+                  ? { salesInvoiceEntitled: data.salesInvoiceEntitled }
+                  : {}),
                 ...(data.salesInvoicePrefix !== undefined
                   ? { salesInvoicePrefix: data.salesInvoicePrefix }
                   : {}),
@@ -396,6 +405,9 @@ export async function POST(req: Request) {
                   : {}),
                 ...(data.queueTokenEnabled !== undefined
                   ? { queueTokenEnabled: data.queueTokenEnabled }
+                  : {}),
+                ...(data.queueTokenEntitled !== undefined
+                  ? { queueTokenEntitled: data.queueTokenEntitled }
                   : {}),
                 ...(data.queueTokenPrefix !== undefined
                   ? { queueTokenPrefix: data.queueTokenPrefix }

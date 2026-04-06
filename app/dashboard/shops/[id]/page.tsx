@@ -18,12 +18,22 @@ export default async function EditShop({ params }: PageProps) {
   const canManageShopSettings = Boolean(
     user && (user.roles?.includes("super_admin") || user.roles?.includes("owner"))
   );
-  const canManageSalesInvoice = Boolean(
+  const canManageSalesInvoiceEntitlement = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_invoice_entitlement"))
+  );
+  const canManageSalesInvoiceFeature = Boolean(
     user &&
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_invoice_feature"))
   );
-  const canManageQueueToken = Boolean(
+  const canManageQueueTokenEntitlement = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") ||
+        user.permissions?.includes("manage_shop_queue_entitlement"))
+  );
+  const canManageQueueTokenFeature = Boolean(
     user &&
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_queue_feature"))
@@ -148,25 +158,44 @@ export default async function EditShop({ params }: PageProps) {
       address: formData.get("address"),
       phone: formData.get("phone"),
       businessType: (formData.get("businessType") as any) || "tea_stall",
-      ...(canManageSalesInvoice
+      ...(canManageSalesInvoiceEntitlement || canManageSalesInvoiceFeature
         ? {
-            salesInvoiceEnabled: formData.get("salesInvoiceEnabled") === "1",
-            salesInvoicePrefix:
-              ((formData.get("salesInvoicePrefix") as string) || "").trim() ||
-              null,
-            salesInvoicePrintSize:
-              ((formData.get("salesInvoicePrintSize") as string) || "").trim() ||
-              null,
+            ...(canManageSalesInvoiceEntitlement
+              ? {
+                  salesInvoiceEntitled:
+                    formData.get("salesInvoiceEntitled") === "1",
+                }
+              : {}),
+            ...(canManageSalesInvoiceFeature
+              ? {
+                  salesInvoiceEnabled: formData.get("salesInvoiceEnabled") === "1",
+                  salesInvoicePrefix:
+                    ((formData.get("salesInvoicePrefix") as string) || "").trim() ||
+                    null,
+                  salesInvoicePrintSize:
+                    ((formData.get("salesInvoicePrintSize") as string) || "").trim() ||
+                    null,
+                }
+              : {}),
           }
         : {}),
-      ...(canManageQueueToken
+      ...(canManageQueueTokenEntitlement || canManageQueueTokenFeature
         ? {
-            queueTokenEnabled: formData.get("queueTokenEnabled") === "1",
-            queueTokenPrefix:
-              ((formData.get("queueTokenPrefix") as string) || "").trim() ||
-              null,
-            queueWorkflow:
-              ((formData.get("queueWorkflow") as string) || "").trim() || null,
+            ...(canManageQueueTokenEntitlement
+              ? {
+                  queueTokenEntitled: formData.get("queueTokenEntitled") === "1",
+                }
+              : {}),
+            ...(canManageQueueTokenFeature
+              ? {
+                  queueTokenEnabled: formData.get("queueTokenEnabled") === "1",
+                  queueTokenPrefix:
+                    ((formData.get("queueTokenPrefix") as string) || "").trim() ||
+                    null,
+                  queueWorkflow:
+                    ((formData.get("queueWorkflow") as string) || "").trim() || null,
+                }
+              : {}),
           }
         : {}),
       ...(canManageDiscountEntitlement || canManageDiscountFeature
@@ -254,9 +283,11 @@ export default async function EditShop({ params }: PageProps) {
           address: shop.address || "",
           phone: shop.phone || "",
           businessType: (shop.businessType as any) || "tea_stall",
+          salesInvoiceEntitled: Boolean((shop as any).salesInvoiceEntitled),
           salesInvoiceEnabled: Boolean((shop as any).salesInvoiceEnabled),
           salesInvoicePrefix: (shop as any).salesInvoicePrefix || "INV",
           salesInvoicePrintSize,
+          queueTokenEntitled: Boolean((shop as any).queueTokenEntitled),
           queueTokenEnabled: Boolean((shop as any).queueTokenEnabled),
           queueTokenPrefix: (shop as any).queueTokenPrefix || "TK",
           queueWorkflow: (shop as any).queueWorkflow || null,
@@ -273,8 +304,14 @@ export default async function EditShop({ params }: PageProps) {
         }}
         submitLabel="সংরক্ষণ করুন"
         businessTypeOptions={businessTypeOptions}
-        showSalesInvoiceSettings={canManageSalesInvoice}
-        showQueueTokenSettings={canManageQueueToken}
+        showSalesInvoiceSettings={
+          canManageSalesInvoiceEntitlement || canManageSalesInvoiceFeature
+        }
+        canEditSalesInvoiceEntitlement={canManageSalesInvoiceEntitlement}
+        showQueueTokenSettings={
+          canManageQueueTokenEntitlement || canManageQueueTokenFeature
+        }
+        canEditQueueTokenEntitlement={canManageQueueTokenEntitlement}
         showDiscountSettings={canManageDiscountEntitlement || canManageDiscountFeature}
         canEditDiscountEntitlement={canManageDiscountEntitlement}
         showTaxSettings={canManageTaxEntitlement || canManageTaxFeature}

@@ -6,10 +6,12 @@ import { redirect } from "next/navigation";
 
 export async function handleCreateShop(formData: FormData) {
   const hasInvoiceSettings =
+    formData.has("salesInvoiceEntitled") ||
     formData.has("salesInvoiceEnabled") ||
     formData.has("salesInvoicePrefix") ||
     formData.has("salesInvoicePrintSize");
   const hasQueueSettings =
+    formData.has("queueTokenEntitled") ||
     formData.has("queueTokenEnabled") ||
     formData.has("queueTokenPrefix") ||
     formData.has("queueWorkflow");
@@ -33,6 +35,7 @@ export async function handleCreateShop(formData: FormData) {
     ownerId: (formData.get("ownerId") as string) || undefined,
     ...(hasInvoiceSettings
       ? {
+          salesInvoiceEntitled: formData.get("salesInvoiceEntitled") === "1",
           salesInvoiceEnabled: formData.get("salesInvoiceEnabled") === "1",
           salesInvoicePrefix:
             ((formData.get("salesInvoicePrefix") as string) || "").trim() ||
@@ -44,6 +47,7 @@ export async function handleCreateShop(formData: FormData) {
       : {}),
     ...(hasQueueSettings
       ? {
+          queueTokenEntitled: formData.get("queueTokenEntitled") === "1",
           queueTokenEnabled: formData.get("queueTokenEnabled") === "1",
           queueTokenPrefix:
             ((formData.get("queueTokenPrefix") as string) || "").trim() ||

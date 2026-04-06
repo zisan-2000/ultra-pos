@@ -90,6 +90,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
     Boolean((selectedShop as any).taxFeatureEntitled) &&
     Boolean((selectedShop as any).taxEnabled);
   const canIssueSalesInvoice =
+    Boolean((selectedShop as any).salesInvoiceEntitled) &&
     Boolean((selectedShop as any).salesInvoiceEnabled) &&
     canIssueSalesInvoicePermission;
   const saleTaxLabel = String((selectedShop as any).taxLabel || "VAT");

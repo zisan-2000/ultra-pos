@@ -966,6 +966,7 @@ export async function createSale(input: CreateSaleInput) {
   const shop = await assertShopAccess(input.shopId, user);
   const shouldIssueSalesInvoice = canIssueSalesInvoice(
     user,
+    (shop as any).salesInvoiceEntitled,
     (shop as any).salesInvoiceEnabled
   );
   const needsCogs = await shopNeedsCogs(input.shopId);

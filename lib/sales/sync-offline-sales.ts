@@ -109,9 +109,14 @@ function toDhakaBusinessDate(input?: Date | string | number | null) {
 
 function canIssueSalesInvoice(
   user: SalesFlowUser,
+  salesInvoiceEntitled?: boolean | null,
   salesInvoiceEnabled?: boolean | null
 ) {
-  return Boolean(salesInvoiceEnabled) && hasPermission(user, "issue_sales_invoice");
+  return (
+    Boolean(salesInvoiceEntitled) &&
+    Boolean(salesInvoiceEnabled) &&
+    hasPermission(user, "issue_sales_invoice")
+  );
 }
 
 async function allocateSalesInvoiceNumber(
@@ -272,6 +277,7 @@ export async function syncOfflineSalesBatch({
 
     const shouldIssueSalesInvoice = canIssueSalesInvoice(
       user,
+      (shop as any).salesInvoiceEntitled,
       (shop as any).salesInvoiceEnabled
     );
     const requestedInvoiceNo =
