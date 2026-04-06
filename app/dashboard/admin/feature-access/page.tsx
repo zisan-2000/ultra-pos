@@ -52,7 +52,7 @@ export default async function FeatureAccessRequestsPage() {
       ? await prisma.featureAccessRequest.findMany({
           where: { status: "pending" },
           include: {
-            shop: { select: { id: true, name: true } },
+            shop: { select: { id: true, name: true, phone: true } },
             owner: { select: { id: true, name: true, email: true } },
             requestedByUser: { select: { id: true, name: true, email: true } },
           },
@@ -65,7 +65,7 @@ export default async function FeatureAccessRequestsPage() {
       ? await prisma.featureAccessRequest.findMany({
           where: { status: { in: ["approved", "rejected"] } },
           include: {
-            shop: { select: { id: true, name: true } },
+            shop: { select: { id: true, name: true, phone: true } },
             owner: { select: { id: true, name: true, email: true } },
             requestedByUser: { select: { id: true, name: true, email: true } },
             decidedByUser: { select: { id: true, name: true, email: true } },
@@ -315,6 +315,9 @@ export default async function FeatureAccessRequestsPage() {
                         Owner: {ownerLabel} | Requested by: {requesterLabel}
                       </p>
                       <p className="text-xs text-muted-foreground">
+                        Owner contact: {request.shop.phone || "ফোন নম্বর নেই"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
                         Requested: {formatDateTime(request.createdAt)}
                       </p>
                     </div>
@@ -406,7 +409,14 @@ export default async function FeatureAccessRequestsPage() {
                       key={request.id}
                       className="border-t border-border/60 align-top text-foreground"
                     >
-                      <td className="py-2 pr-3">{request.shop.name}</td>
+                      <td className="py-2 pr-3">
+                        <div className="space-y-0.5">
+                          <p>{request.shop.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {request.shop.phone || "ফোন নম্বর নেই"}
+                          </p>
+                        </div>
+                      </td>
                       <td className="py-2 pr-3">{featureLabel}</td>
                       <td className="py-2 pr-3">
                         <span

@@ -266,6 +266,7 @@ export async function createShop(data: {
     );
   }
 
+  let createdShopId: string | null = null;
   await prisma.$transaction(async (tx) => {
     const createData: any = {
       ownerId: targetOwnerId,
@@ -309,6 +310,7 @@ export async function createShop(data: {
     const shop = await tx.shop.create({
       data: createData,
     });
+    createdShopId = shop.id;
 
     if (resolvedSalesInvoicePrintSize !== undefined) {
       await tx.$executeRaw(
@@ -323,7 +325,11 @@ export async function createShop(data: {
     await createShopSubscription(tx, { id: shop.id, ownerId: shop.ownerId });
   });
 
-  return { success: true };
+  if (!createdShopId) {
+    throw new Error("Shop create failed unexpectedly");
+  }
+
+  return { success: true, shopId: createdShopId };
 }
 
 // ------------------------------

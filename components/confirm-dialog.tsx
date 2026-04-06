@@ -13,6 +13,7 @@ type Props = {
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onOpenChange: (open: boolean) => void;
 };
@@ -23,6 +24,7 @@ export default function ConfirmDialog({
   description,
   confirmLabel = "নিশ্চিত",
   cancelLabel = "বাতিল",
+  confirmDisabled = false,
   onConfirm,
   onOpenChange,
 }: Props) {
@@ -46,7 +48,8 @@ export default function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            className="h-10 px-4 rounded-xl bg-danger text-primary-foreground text-sm font-semibold hover:bg-danger/90"
+            disabled={confirmDisabled}
+            className="h-10 px-4 rounded-xl bg-danger text-primary-foreground text-sm font-semibold hover:bg-danger/90 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {confirmLabel}
           </button>

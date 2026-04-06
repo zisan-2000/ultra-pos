@@ -164,6 +164,23 @@ function scheduleStateUpdate(fn: () => void) {
   Promise.resolve().then(fn);
 }
 
+const EMPTY_FEATURE_ACCESS_REQUESTS: Partial<
+  Record<FeatureAccessKey, FeatureAccessRequestSnapshot>
+> = {};
+
+const FEATURE_SECTION_META: Array<{
+  key: FeatureAccessKey;
+  title: string;
+  anchorId: string;
+}> = [
+  { key: "sales_invoice", title: "Sales Invoice", anchorId: "feature-sales-invoice" },
+  { key: "queue_token", title: "Queue Token", anchorId: "feature-queue-token" },
+  { key: "discount", title: "Discount", anchorId: "feature-discount" },
+  { key: "tax", title: "VAT/Tax", anchorId: "feature-tax" },
+  { key: "barcode", title: "Barcode", anchorId: "feature-barcode" },
+  { key: "sms_summary", title: "SMS Summary", anchorId: "feature-sms-summary" },
+];
+
 export default function ShopFormClient({
   backHref,
   action,
@@ -185,7 +202,7 @@ export default function ShopFormClient({
   canEditBarcodeEntitlement = false,
   showSmsSummarySettings = false,
   canEditSmsSummaryEntitlement = false,
-  featureAccessRequestByKey = {},
+  featureAccessRequestByKey = EMPTY_FEATURE_ACCESS_REQUESTS,
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -338,7 +355,9 @@ export default function ShopFormClient({
   }, [ownerOptions]);
 
   useEffect(() => {
-    setFeatureAccessRequests(featureAccessRequestByKey);
+    setFeatureAccessRequests((prev) =>
+      prev === featureAccessRequestByKey ? prev : featureAccessRequestByKey
+    );
   }, [featureAccessRequestByKey]);
 
   const frequentTemplates = useMemo(
@@ -391,6 +410,90 @@ export default function ShopFormClient({
     : voiceReady
     ? "ভয়েসে নম্বর বলুন"
     : "এই ডিভাইসে ভয়েস সাপোর্ট নেই";
+
+  const featureSetupSections = useMemo(
+    () => [
+      {
+        ...FEATURE_SECTION_META[0],
+        show: Boolean(showSalesInvoiceSettings),
+        entitled: Boolean(salesInvoiceEntitled),
+        canEdit: Boolean(canEditSalesInvoiceEntitlement),
+      },
+      {
+        ...FEATURE_SECTION_META[1],
+        show: Boolean(showQueueTokenSettings),
+        entitled: Boolean(queueTokenEntitled),
+        canEdit: Boolean(canEditQueueTokenEntitlement),
+      },
+      {
+        ...FEATURE_SECTION_META[2],
+        show: Boolean(showDiscountSettings),
+        entitled: Boolean(discountFeatureEntitled),
+        canEdit: Boolean(canEditDiscountEntitlement),
+      },
+      {
+        ...FEATURE_SECTION_META[3],
+        show: Boolean(showTaxSettings),
+        entitled: Boolean(taxFeatureEntitled),
+        canEdit: Boolean(canEditTaxEntitlement),
+      },
+      {
+        ...FEATURE_SECTION_META[4],
+        show: Boolean(showBarcodeSettings),
+        entitled: Boolean(barcodeFeatureEntitled),
+        canEdit: Boolean(canEditBarcodeEntitlement),
+      },
+      {
+        ...FEATURE_SECTION_META[5],
+        show: Boolean(showSmsSummarySettings),
+        entitled: Boolean(smsSummaryEntitled),
+        canEdit: Boolean(canEditSmsSummaryEntitlement),
+      },
+    ],
+    [
+      showSalesInvoiceSettings,
+      salesInvoiceEntitled,
+      canEditSalesInvoiceEntitlement,
+      showQueueTokenSettings,
+      queueTokenEntitled,
+      canEditQueueTokenEntitlement,
+      showDiscountSettings,
+      discountFeatureEntitled,
+      canEditDiscountEntitlement,
+      showTaxSettings,
+      taxFeatureEntitled,
+      canEditTaxEntitlement,
+      showBarcodeSettings,
+      barcodeFeatureEntitled,
+      canEditBarcodeEntitlement,
+      showSmsSummarySettings,
+      smsSummaryEntitled,
+      canEditSmsSummaryEntitlement,
+    ]
+  );
+
+  const visibleFeatureSections = useMemo(
+    () => featureSetupSections.filter((section) => section.show),
+    [featureSetupSections]
+  );
+
+  const requestableFeatureSections = useMemo(
+    () => visibleFeatureSections.filter((section) => !section.canEdit && !section.entitled),
+    [visibleFeatureSections]
+  );
+
+  const featureRequestOverview = useMemo(() => {
+    let pending = 0;
+    let approved = 0;
+    let rejected = 0;
+    visibleFeatureSections.forEach((section) => {
+      const status = featureAccessRequests[section.key]?.status;
+      if (status === "approved") approved += 1;
+      else if (status === "rejected") rejected += 1;
+      else if (status === "pending") pending += 1;
+    });
+    return { pending, approved, rejected };
+  }, [visibleFeatureSections, featureAccessRequests]);
 
   function persistTemplates(next: ShopTemplate[]) {
     setTemplates(next);
@@ -1044,16 +1147,80 @@ export default function ShopFormClient({
         <p className="text-sm text-muted-foreground">সর্বশেষ ব্যবহারকৃত টাইপগুলো উপরে দেখাচ্ছে</p>
       </div>
 
-      {showSalesInvoiceSettings ? (
-        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
-          <div className="space-y-1">
-            <label className="block text-sm font-semibold text-foreground">
-              বিক্রির ইনভয়েস ফিচার
-            </label>
-            <p className="text-xs text-muted-foreground">
-              এই দোকানে ফিচার চালু থাকলে এবং ইউজারের পারমিশন থাকলে sales invoice issue হবে।
-            </p>
+      {shopId && visibleFeatureSections.length > 0 ? (
+        <div className="rounded-2xl border border-primary/20 bg-primary-soft/35 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Feature Access Center</p>
+              <p className="text-xs text-muted-foreground">
+                যেসব ফিচার locked, সেগুলোতে দ্রুত request পাঠান।
+              </p>
+            </div>
+            <span className="inline-flex items-center rounded-full border border-primary/30 bg-card px-2.5 py-1 text-xs font-semibold text-primary">
+              Total: {visibleFeatureSections.length}
+            </span>
           </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg border border-border bg-card px-3 py-2 text-center">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pending</p>
+              <p className="text-sm font-semibold text-warning">{featureRequestOverview.pending}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-card px-3 py-2 text-center">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Approved</p>
+              <p className="text-sm font-semibold text-success">{featureRequestOverview.approved}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-card px-3 py-2 text-center">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Rejected</p>
+              <p className="text-sm font-semibold text-danger">{featureRequestOverview.rejected}</p>
+            </div>
+          </div>
+          {requestableFeatureSections.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Quick access: নিচের feature-এ tap করলে সরাসরি সেই section-এ যাবে।
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {requestableFeatureSections.map((section) => {
+                  const status = featureAccessRequests[section.key]?.status;
+                  return (
+                    <a
+                      key={section.key}
+                      href={`#${section.anchorId}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-card px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary-soft"
+                    >
+                      {section.title}
+                      {status === "pending" ? (
+                        <span className="text-warning">• pending</span>
+                      ) : null}
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-success/30 bg-success-soft px-3 py-2 text-xs font-semibold text-success">
+              সব visible feature entitlement ready আছে।
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {showSalesInvoiceSettings ? (
+        <details id="feature-sales-invoice" className="group scroll-mt-28 rounded-2xl border border-border bg-muted/40 p-4">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+            <div className="space-y-1">
+              <p className="block text-sm font-semibold text-foreground">
+                বিক্রির ইনভয়েস ফিচার
+              </p>
+              <p className="text-xs text-muted-foreground">
+                এই দোকানে ফিচার চালু থাকলে এবং ইউজারের পারমিশন থাকলে sales invoice issue হবে।
+              </p>
+            </div>
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${salesInvoiceEntitled ? "border-success/30 bg-success-soft text-success" : "border-warning/30 bg-warning-soft text-warning"}`}>
+              {salesInvoiceEntitled ? "Enabled" : "Locked"}
+            </span>
+          </summary>
+          <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
               type="checkbox"
@@ -1139,19 +1306,26 @@ export default function ShopFormClient({
               }
             </p>
           </div>
-        </div>
+          </div>
+        </details>
       ) : null}
 
       {showQueueTokenSettings ? (
-        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
-          <div className="space-y-1">
-            <label className="block text-sm font-semibold text-foreground">
-              Queue টোকেন ফিচার
-            </label>
-            <p className="text-xs text-muted-foreground">
-              চালু থাকলে queue board থেকে serial token issue করা যাবে।
-            </p>
-          </div>
+        <details id="feature-queue-token" className="group scroll-mt-28 rounded-2xl border border-border bg-muted/40 p-4">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+            <div className="space-y-1">
+              <p className="block text-sm font-semibold text-foreground">
+                Queue টোকেন ফিচার
+              </p>
+              <p className="text-xs text-muted-foreground">
+                চালু থাকলে queue board থেকে serial token issue করা যাবে।
+              </p>
+            </div>
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${queueTokenEntitled ? "border-success/30 bg-success-soft text-success" : "border-warning/30 bg-warning-soft text-warning"}`}>
+              {queueTokenEntitled ? "Enabled" : "Locked"}
+            </span>
+          </summary>
+          <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
               type="checkbox"
@@ -1232,19 +1406,26 @@ export default function ShopFormClient({
               Auto দিলে ব্যবসার ধরন দেখে status label/flow ঠিক হবে।
             </p>
           </div>
-        </div>
+          </div>
+        </details>
       ) : null}
 
       {showDiscountSettings ? (
-        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
-          <div className="space-y-1">
-            <label className="block text-sm font-semibold text-foreground">
-              Sale Discount ফিচার
-            </label>
-            <p className="text-xs text-muted-foreground">
-              Super-admin entitlement + owner toggle true হলে POS-এ sale-level discount দেখা যাবে।
-            </p>
-          </div>
+        <details id="feature-discount" className="group scroll-mt-28 rounded-2xl border border-border bg-muted/40 p-4">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+            <div className="space-y-1">
+              <p className="block text-sm font-semibold text-foreground">
+                Sale Discount ফিচার
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Super-admin entitlement + owner toggle true হলে POS-এ sale-level discount দেখা যাবে।
+              </p>
+            </div>
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${discountFeatureEntitled ? "border-success/30 bg-success-soft text-success" : "border-warning/30 bg-warning-soft text-warning"}`}>
+              {discountFeatureEntitled ? "Enabled" : "Locked"}
+            </span>
+          </summary>
+          <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
 
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
@@ -1288,20 +1469,27 @@ export default function ShopFormClient({
             discountFeatureEntitled,
             canEditDiscountEntitlement
           )}
-        </div>
+          </div>
+        </details>
       ) : null}
 
       {showTaxSettings ? (
-        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
-          <div className="space-y-1">
-            <label className="block text-sm font-semibold text-foreground">
-              VAT / Tax ফিচার
-            </label>
-            <p className="text-xs text-muted-foreground">
-              Super-admin entitlement + owner toggle true হলে sale, invoice, report-এ
-              per-shop exclusive VAT/Tax apply হবে।
-            </p>
-          </div>
+        <details id="feature-tax" className="group scroll-mt-28 rounded-2xl border border-border bg-muted/40 p-4">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+            <div className="space-y-1">
+              <p className="block text-sm font-semibold text-foreground">
+                VAT / Tax ফিচার
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Super-admin entitlement + owner toggle true হলে sale, invoice, report-এ
+                per-shop exclusive VAT/Tax apply হবে।
+              </p>
+            </div>
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${taxFeatureEntitled ? "border-success/30 bg-success-soft text-success" : "border-warning/30 bg-warning-soft text-warning"}`}>
+              {taxFeatureEntitled ? "Enabled" : "Locked"}
+            </span>
+          </summary>
+          <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
 
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
@@ -1383,20 +1571,27 @@ export default function ShopFormClient({
               </p>
             </div>
           </div>
-        </div>
+          </div>
+        </details>
       ) : null}
 
       {showBarcodeSettings ? (
-        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
-          <div className="space-y-1">
-            <label className="block text-sm font-semibold text-foreground">
-              Barcode / SKU Scan ফিচার
-            </label>
-            <p className="text-xs text-muted-foreground">
-              Super-admin entitlement + owner toggle + staff permission একসাথে
-              true হলে POS scan দেখাবে।
-            </p>
-          </div>
+        <details id="feature-barcode" className="group scroll-mt-28 rounded-2xl border border-border bg-muted/40 p-4">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+            <div className="space-y-1">
+              <p className="block text-sm font-semibold text-foreground">
+                Barcode / SKU Scan ফিচার
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Super-admin entitlement + owner toggle + staff permission একসাথে
+                true হলে POS scan দেখাবে।
+              </p>
+            </div>
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${barcodeFeatureEntitled ? "border-success/30 bg-success-soft text-success" : "border-warning/30 bg-warning-soft text-warning"}`}>
+              {barcodeFeatureEntitled ? "Enabled" : "Locked"}
+            </span>
+          </summary>
+          <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
 
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
@@ -1440,20 +1635,27 @@ export default function ShopFormClient({
             barcodeFeatureEntitled,
             canEditBarcodeEntitlement
           )}
-        </div>
+          </div>
+        </details>
       ) : null}
 
       {showSmsSummarySettings ? (
-        <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
-          <div className="space-y-1">
-            <label className="block text-sm font-semibold text-foreground">
-              Daily SMS Summary ফিচার
-            </label>
-            <p className="text-xs text-muted-foreground">
-              Super-admin entitlement + owner toggle true হলে এই দোকানে SMS summary
-              চালু করা যাবে।
-            </p>
-          </div>
+        <details id="feature-sms-summary" className="group scroll-mt-28 rounded-2xl border border-border bg-muted/40 p-4">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+            <div className="space-y-1">
+              <p className="block text-sm font-semibold text-foreground">
+                Daily SMS Summary ফিচার
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Super-admin entitlement + owner toggle true হলে এই দোকানে SMS summary
+                চালু করা যাবে।
+              </p>
+            </div>
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${smsSummaryEntitled ? "border-success/30 bg-success-soft text-success" : "border-warning/30 bg-warning-soft text-warning"}`}>
+              {smsSummaryEntitled ? "Enabled" : "Locked"}
+            </span>
+          </summary>
+          <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
 
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
@@ -1497,7 +1699,8 @@ export default function ShopFormClient({
             smsSummaryEntitled,
             canEditSmsSummaryEntitlement
           )}
-        </div>
+          </div>
+        </details>
       ) : null}
 
       {/* Recent Templates */}

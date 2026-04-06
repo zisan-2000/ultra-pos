@@ -63,6 +63,16 @@ function normalizeText(value: string | null | undefined) {
   return (value || "").toLowerCase().trim();
 }
 
+function formatDateTimeBn(iso?: string | null) {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("bn-BD", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 export default function ShopsClient({
   initialShops,
   user,
@@ -86,6 +96,7 @@ export default function ShopsClient({
     () => Boolean(user?.roles?.includes("super_admin"))
   );
   const [requestLoading, setRequestLoading] = useState(false);
+  const [requestConfirmOpen, setRequestConfirmOpen] = useState(false);
   const [ownerRequestState, setOwnerRequestState] = useState(ownerOverview || null);
   const [requestFeedback, setRequestFeedback] = useState<string | null>(null);
 
@@ -164,10 +175,41 @@ export default function ShopsClient({
   const canCreateShop =
     isSuperAdmin || (isOwner && ownerActiveShopCount < ownerShopLimit);
   const viewModeLabel = isSuperAdmin ? "Super admin view" : "Owner view";
+  const latestOwnerRequest = isOwner ? ownerRequestState?.latestRequest ?? null : null;
+  const requestConfirmDescription = useMemo(() => {
+    const primaryShopName = shops[0]?.name?.trim();
+    const summary = `আপনার active shop ${ownerActiveShopCount}/${ownerShopLimit}. এই request Super Admin-এর কাছে যাবে।`;
+    if (!primaryShopName) {
+      return `${summary} এখন request পাঠাতে চান?`;
+    }
+    return `${summary} Primary shop: ${primaryShopName}. এখন request পাঠাতে চান?`;
+  }, [shops, ownerActiveShopCount, ownerShopLimit]);
+  const latestRequestStatusLabel =
+    latestOwnerRequest?.status === "approved"
+      ? "Approved"
+      : latestOwnerRequest?.status === "rejected"
+        ? "Rejected"
+        : latestOwnerRequest?.status === "pending"
+          ? "Pending"
+          : null;
+  const latestRequestStatusTone =
+    latestOwnerRequest?.status === "approved"
+      ? "border-success/35 bg-success-soft text-success"
+      : latestOwnerRequest?.status === "rejected"
+        ? "border-danger/35 bg-danger-soft text-danger"
+        : "border-warning/35 bg-warning-soft text-warning";
+  const latestRequestedAt = formatDateTimeBn(latestOwnerRequest?.createdAtIso);
+  const latestReviewedAt = formatDateTimeBn(latestOwnerRequest?.decidedAtIso);
 
   useEffect(() => {
     setOwnerRequestState(ownerOverview || null);
   }, [ownerOverview]);
+
+  useEffect(() => {
+    if (ownerHasPendingRequest) {
+      setRequestConfirmOpen(false);
+    }
+  }, [ownerHasPendingRequest]);
 
   const handleRequestAdditionalShopAccess = useCallback(async () => {
     if (requestLoading) return;
@@ -584,6 +626,35 @@ export default function ShopsClient({
                 <span>+</span>
                 দোকান তৈরি করুন
               </Link>
+              {latestOwnerRequest && latestRequestStatusLabel ? (
+                <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Last request
+                    </p>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${latestRequestStatusTone}`}
+                    >
+                      {latestRequestStatusLabel}
+                    </span>
+                  </div>
+                  {latestRequestedAt ? (
+                    <p className="text-xs text-muted-foreground">
+                      Requested: {latestRequestedAt}
+                    </p>
+                  ) : null}
+                  {latestReviewedAt && latestOwnerRequest.status !== "pending" ? (
+                    <p className="text-xs text-muted-foreground">
+                      Reviewed: {latestReviewedAt}
+                    </p>
+                  ) : null}
+                  {latestOwnerRequest.decisionNote ? (
+                    <p className="rounded-md border border-border bg-card px-2.5 py-2 text-xs text-foreground">
+                      Admin note: {latestOwnerRequest.decisionNote}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="space-y-3 rounded-xl border border-warning/30 bg-warning-soft/40 p-4">
@@ -606,7 +677,7 @@ export default function ShopsClient({
               {isOwner ? (
                 <button
                   type="button"
-                  onClick={handleRequestAdditionalShopAccess}
+                  onClick={() => setRequestConfirmOpen(true)}
                   disabled={requestLoading || ownerHasPendingRequest}
                   className="
                     w-full
@@ -648,6 +719,36 @@ export default function ShopsClient({
 
               {requestFeedback ? (
                 <p className="text-xs font-medium text-primary">{requestFeedback}</p>
+              ) : null}
+
+              {latestOwnerRequest && latestRequestStatusLabel ? (
+                <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Latest request update
+                    </p>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${latestRequestStatusTone}`}
+                    >
+                      {latestRequestStatusLabel}
+                    </span>
+                  </div>
+                  {latestRequestedAt ? (
+                    <p className="text-xs text-muted-foreground">
+                      Requested: {latestRequestedAt}
+                    </p>
+                  ) : null}
+                  {latestReviewedAt && latestOwnerRequest.status !== "pending" ? (
+                    <p className="text-xs text-muted-foreground">
+                      Reviewed: {latestReviewedAt}
+                    </p>
+                  ) : null}
+                  {latestOwnerRequest.decisionNote ? (
+                    <p className="rounded-md border border-border bg-card px-2.5 py-2 text-xs text-foreground">
+                      Admin note: {latestOwnerRequest.decisionNote}
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
 
               <div className="space-y-1.5 border-t border-warning/30 pt-2 text-xs text-muted-foreground">
@@ -759,6 +860,19 @@ export default function ShopsClient({
           const id = confirmDeleteId;
           setConfirmDeleteId(null);
           handleDelete(id);
+        }}
+      />
+      <ConfirmDialog
+        open={requestConfirmOpen}
+        title="Shop access request পাঠাবেন?"
+        description={requestConfirmDescription}
+        confirmLabel={requestLoading ? "Request পাঠানো হচ্ছে..." : "Send Request"}
+        cancelLabel="বাতিল"
+        confirmDisabled={requestLoading}
+        onOpenChange={setRequestConfirmOpen}
+        onConfirm={() => {
+          setRequestConfirmOpen(false);
+          void handleRequestAdditionalShopAccess();
         }}
       />
     </div>

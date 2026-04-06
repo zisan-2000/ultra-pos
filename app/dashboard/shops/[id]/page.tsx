@@ -11,10 +11,15 @@ import { getCurrentUser } from "@/lib/auth-session";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_SALES_INVOICE_PRINT_SIZE } from "@/lib/sales-invoice-print";
 
-type PageProps = { params: Promise<{ id: string }> };
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ setup?: string } | undefined>;
+};
 
-export default async function EditShop({ params }: PageProps) {
+export default async function EditShop({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const resolvedSearchParams = await searchParams;
+  const setupMode = resolvedSearchParams?.setup === "1";
   const user = await getCurrentUser();
   const canManageShopSettings = Boolean(
     user && (user.roles?.includes("super_admin") || user.roles?.includes("owner"))
@@ -273,9 +278,25 @@ export default async function EditShop({ params }: PageProps) {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">দোকানের তথ্য সম্পাদনা</h1>
-        <p className="text-muted-foreground mt-2">নাম + ঠিকানা আপডেট করুন</p>
+        <h1 className="text-3xl font-bold text-foreground">
+          {setupMode ? "দোকান সেটআপ সম্পন্ন করুন" : "দোকানের তথ্য সম্পাদনা"}
+        </h1>
+        <p className="text-muted-foreground mt-2">
+          {setupMode
+            ? "এখন প্রয়োজনীয় feature-গুলোর Access Request দিন। Approve হলে সঙ্গে সঙ্গে চালু করতে পারবেন।"
+            : "নাম + ঠিকানা আপডেট করুন"}
+        </p>
       </div>
+      {setupMode ? (
+        <div className="mb-4 rounded-xl border border-success/30 bg-success-soft p-4">
+          <p className="text-sm font-semibold text-success">
+            দোকান সফলভাবে তৈরি হয়েছে।
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            নিচের Feature Settings থেকে প্রয়োজনীয় ফিচারে `Request Access` দিন।
+          </p>
+        </div>
+      ) : null}
 
       <ShopFormClient
         backHref={backHref}

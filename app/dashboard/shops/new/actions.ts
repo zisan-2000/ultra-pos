@@ -27,7 +27,7 @@ export async function handleCreateShop(formData: FormData) {
   const hasSmsSettings =
     formData.has("smsSummaryEntitled") || formData.has("smsSummaryEnabled");
 
-  await createShop({
+  const result = await createShop({
     name: formData.get("name") as string,
     address: formData.get("address") as string,
     phone: formData.get("phone") as string,
@@ -86,5 +86,5 @@ export async function handleCreateShop(formData: FormData) {
       : {}),
   });
 
-  redirect("/dashboard/shops");
+  redirect(`/dashboard/shops/${result.shopId}?setup=1`);
 }
