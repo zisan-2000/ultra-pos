@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteShop } from "@/app/actions/shops";
+import { requestAdditionalShopSlot } from "@/app/actions/shop-creation-requests";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
@@ -41,13 +42,33 @@ type Props = {
   initialShops: Shop[];
   user: UserSummary | null;
   support: SupportContact;
+  ownerOverview?: {
+    shopLimit: number;
+    activeShopCount: number;
+    hasPendingRequest: boolean;
+    latestRequest: {
+      id: string;
+      status: "pending" | "approved" | "rejected";
+      reason: string | null;
+      decisionNote: string | null;
+      primaryShopNameSnapshot: string | null;
+      primaryShopPhoneSnapshot: string | null;
+      createdAtIso: string;
+      decidedAtIso: string | null;
+    } | null;
+  } | null;
 };
 
 function normalizeText(value: string | null | undefined) {
   return (value || "").toLowerCase().trim();
 }
 
-export default function ShopsClient({ initialShops, user, support }: Props) {
+export default function ShopsClient({
+  initialShops,
+  user,
+  support,
+  ownerOverview,
+}: Props) {
   const online = useOnlineStatus();
   const router = useRouter();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
@@ -64,6 +85,9 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
   const [groupByOwner, setGroupByOwner] = useState<boolean>(
     () => Boolean(user?.roles?.includes("super_admin"))
   );
+  const [requestLoading, setRequestLoading] = useState(false);
+  const [ownerRequestState, setOwnerRequestState] = useState(ownerOverview || null);
+  const [requestFeedback, setRequestFeedback] = useState<string | null>(null);
 
   const cacheKey = useMemo(
     () => `cachedShops:${user?.id || "anon"}`,
@@ -134,7 +158,57 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
   const isSuperAdmin = user?.roles?.includes("super_admin") ?? false;
   const isOwner = user?.roles?.includes("owner") ?? false;
   const canManageShopSettings = isSuperAdmin || isOwner;
-  const canCreateShop = isSuperAdmin || (isOwner && shops.length === 0);
+  const ownerActiveShopCount = ownerRequestState?.activeShopCount ?? shops.length;
+  const ownerShopLimit = ownerRequestState?.shopLimit ?? 1;
+  const ownerHasPendingRequest = ownerRequestState?.hasPendingRequest ?? false;
+  const canCreateShop =
+    isSuperAdmin || (isOwner && ownerActiveShopCount < ownerShopLimit);
+  const viewModeLabel = isSuperAdmin ? "Super admin view" : "Owner view";
+
+  useEffect(() => {
+    setOwnerRequestState(ownerOverview || null);
+  }, [ownerOverview]);
+
+  const handleRequestAdditionalShopAccess = useCallback(async () => {
+    if (requestLoading) return;
+    setRequestLoading(true);
+    setRequestFeedback(null);
+    try {
+      const result = await requestAdditionalShopSlot();
+      if (result.status === "requested" || result.status === "pending_exists") {
+        setOwnerRequestState((prev) => ({
+          shopLimit: prev?.shopLimit ?? ownerShopLimit,
+          activeShopCount: prev?.activeShopCount ?? ownerActiveShopCount,
+          hasPendingRequest: true,
+          latestRequest: {
+            id: prev?.latestRequest?.id ?? "pending-local",
+            status: "pending",
+            reason: prev?.latestRequest?.reason ?? "Owner requested additional shop slot",
+            decisionNote: null,
+            primaryShopNameSnapshot: prev?.latestRequest?.primaryShopNameSnapshot ?? null,
+            primaryShopPhoneSnapshot: prev?.latestRequest?.primaryShopPhoneSnapshot ?? null,
+            createdAtIso: new Date().toISOString(),
+            decidedAtIso: null,
+          },
+        }));
+      }
+      if (result.status === "already_has_capacity") {
+        setRequestFeedback("আপনার কাছে আগেই shop create করার capacity আছে।");
+      } else if (result.status === "pending_exists") {
+        setRequestFeedback("আগের request এখনো pending আছে।");
+      } else {
+        setRequestFeedback("Request পাঠানো হয়েছে। Super admin review করলে approve হবে।");
+      }
+      router.refresh();
+    } catch (err) {
+      handlePermissionError(err);
+      setRequestFeedback(
+        err instanceof Error ? err.message : "Request পাঠানো যায়নি। আবার চেষ্টা করুন।"
+      );
+    } finally {
+      setRequestLoading(false);
+    }
+  }, [requestLoading, ownerShopLimit, ownerActiveShopCount, router]);
 
   const ownerOptions = useMemo(() => {
     const byOwner = new Map<string, string>();
@@ -379,148 +453,239 @@ export default function ShopsClient({ initialShops, user, support }: Props) {
           অফলাইন: আগের দোকানের ডাটা দেখানো হচ্ছে।
         </div>
       )}
-      {/* HEADER */}
-      <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-primary">
-              🏪
-            </span>
-            <h1 className="text-xl md:text-3xl font-bold text-foreground">
-              দোকানসমূহ
-            </h1>
+      {/* TOP STRIP */}
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <div className="space-y-4">
+          <div className="h-fit rounded-2xl border border-border/80 bg-card p-4 md:p-5 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-primary">
+                    🏪
+                  </span>
+                  <h1 className="text-xl md:text-2xl font-bold text-foreground">
+                    দোকানসমূহ
+                  </h1>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  আপনার সব দোকান এক জায়গা থেকে দেখুন, সেটিংস আপডেট করুন, নতুন দোকান যোগ করুন।
+                </p>
+              </div>
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/25 bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary">
+                <span className="inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                Active: {shops.length}
+              </div>
+            </div>
           </div>
+
+          {shops.length > 0 ? (
+            <div className="space-y-3 rounded-2xl border border-border/80 bg-card p-3 md:p-4 shadow-sm">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+                <div className="relative min-w-0 flex-1">
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Shop/Owner খুঁজুন..."
+                    className="h-10 w-full rounded-lg border border-border bg-card pl-4 pr-10 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  {query ? (
+                    <button
+                      type="button"
+                      onClick={() => setQuery("")}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card text-xs text-muted-foreground hover:bg-muted"
+                      aria-label="Clear search"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+
+                {isSuperAdmin ? (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:w-auto">
+                    <select
+                      value={ownerFilter}
+                      onChange={(e) => setOwnerFilter(e.target.value)}
+                      className="h-10 min-w-[170px] rounded-lg border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="all">সব Owner</option>
+                      {ownerOptions.map((owner) => (
+                        <option key={owner.id} value={owner.id}>
+                          {owner.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setGroupByOwner((prev) => !prev)}
+                      className="h-10 min-w-[160px] rounded-lg border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted"
+                    >
+                      {groupByOwner ? "Ungroup view" : "Group by owner"}
+                    </button>
+                    <div className="h-10 min-w-[110px] rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground flex items-center justify-center font-medium">
+                      Total: {filteredShops.length}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 lg:flex lg:items-center">
+                    <div className="h-10 rounded-lg border border-border bg-muted/50 px-3 text-sm text-muted-foreground flex items-center justify-center">
+                      {viewModeLabel}
+                    </div>
+                    <div className="h-10 rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground flex items-center justify-center font-medium">
+                      Total: {filteredShops.length}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <p className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2.5 py-1">
+                  Showing {filteredShops.length} / {shops.length} shops
+                </p>
+                {query ? (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    className="inline-flex h-8 items-center rounded-full border border-border bg-card px-3 font-semibold text-primary hover:bg-primary-soft"
+                  >
+                    Clear filter
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </div>
 
-        {/* CREATE SHOP */}
-        {canCreateShop ? (
-          <Link
-            href="/dashboard/shops/new"
-            className="
-              w-full md:w-auto
-              inline-flex items-center justify-center gap-2
-              bg-primary-soft border border-primary/30
-              text-primary font-bold
-              py-3 px-6
-              rounded-lg
-              hover:bg-primary/20 hover:border-primary/50
-              transition
-            "
-          >
-            <span>+</span>
-            দোকান তৈরি করুন
-          </Link>
-        ) : (
-          <div className="w-full md:w-auto bg-muted border border-border rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2 font-semibold text-foreground">
-              আপনি আর নতুন দোকান তৈরি করতে পারবেন না
+        <div className="h-fit rounded-2xl border border-border/80 bg-card p-4 shadow-sm xl:sticky xl:top-20">
+          {canCreateShop ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground">Shop Action</p>
+                <span className="inline-flex items-center rounded-full border border-success/30 bg-success-soft px-2.5 py-1 text-xs font-semibold text-success">
+                  Ready
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                নতুন দোকান যোগ করতে নিচের বাটনে ক্লিক করুন।
+              </p>
+              <Link
+                href="/dashboard/shops/new"
+                className="
+                  w-full
+                  inline-flex items-center justify-center gap-2
+                  bg-primary-soft border border-primary/30
+                  text-primary font-bold
+                  py-3 px-6
+                  rounded-lg
+                  hover:bg-primary/20 hover:border-primary/50
+                  transition
+                "
+              >
+                <span>+</span>
+                দোকান তৈরি করুন
+              </Link>
             </div>
-
-            <p className="text-sm text-muted-foreground">
-              প্রয়োজনে সাপোর্ট টিমের সাথে যোগাযোগ করুন।
-            </p>
-
-            {/* DISABLED DEMO BUTTON */}
-            <button
-              disabled
-              className="
-                w-full
-                inline-flex items-center justify-center gap-2
-                bg-primary-soft border border-primary/30
-                text-primary font-semibold
-                py-3
-                rounded-lg
-                opacity-60
-                cursor-not-allowed
-              "
-            >
-              <span>+</span>
-              দোকান তৈরি করা যাবে না
-            </button>
-
-            {/* SUPPORT */}
-            <div className="pt-1 space-y-1 text-sm">
-              <div className="flex items-center gap-2">
-                📞
-                {phoneHref ? (
-                  <a
-                    href={phoneHref}
-                    className="font-semibold text-primary hover:underline"
-                  >
-                    {phoneDisplay}
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">{phoneDisplay}</span>
-                )}
+          ) : (
+            <div className="space-y-3 rounded-xl border border-warning/30 bg-warning-soft/40 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-foreground">
+                    নতুন দোকান যোগ করতে approval লাগবে
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Shop limit পূর্ণ হয়েছে। Super Admin approve করলে limit বাড়বে।
+                  </p>
+                </div>
+                {isOwner ? (
+                  <span className="shrink-0 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground">
+                    {ownerActiveShopCount}/{ownerShopLimit}
+                  </span>
+                ) : null}
               </div>
 
-              <div className="flex items-center gap-2">
-                💬
-                {whatsappHref ? (
-                  <a
-                    href={whatsappHref}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold text-success hover:underline"
-                  >
-                    {waDisplay}
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">{waDisplay}</span>
-                )}
+              {isOwner ? (
+                <button
+                  type="button"
+                  onClick={handleRequestAdditionalShopAccess}
+                  disabled={requestLoading || ownerHasPendingRequest}
+                  className="
+                    w-full
+                    inline-flex items-center justify-center gap-2
+                    bg-card border border-primary/40
+                    text-primary font-semibold
+                    py-3
+                    rounded-lg
+                    hover:bg-primary-soft
+                    disabled:opacity-60
+                    disabled:cursor-not-allowed
+                  "
+                >
+                  <span>+</span>
+                  {ownerHasPendingRequest
+                    ? "Request Pending"
+                    : requestLoading
+                      ? "Request পাঠানো হচ্ছে..."
+                      : "Request Additional Shop Access"}
+                </button>
+              ) : (
+                <button
+                  disabled
+                  className="
+                    w-full
+                    inline-flex items-center justify-center gap-2
+                    bg-card border border-primary/40
+                    text-primary font-semibold
+                    py-3
+                    rounded-lg
+                    opacity-60
+                    cursor-not-allowed
+                  "
+                >
+                  <span>+</span>
+                  দোকান তৈরি করা যাবে না
+                </button>
+              )}
+
+              {requestFeedback ? (
+                <p className="text-xs font-medium text-primary">{requestFeedback}</p>
+              ) : null}
+
+              <div className="space-y-1.5 border-t border-warning/30 pt-2 text-xs text-muted-foreground">
+                <p>
+                  Support:
+                  {" "}
+                  {phoneHref ? (
+                    <a
+                      href={phoneHref}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      {phoneDisplay}
+                    </a>
+                  ) : (
+                    phoneDisplay
+                  )}
+                </p>
+                <p>
+                  WhatsApp:
+                  {" "}
+                  {whatsappHref ? (
+                    <a
+                      href={whatsappHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-semibold text-success hover:underline"
+                    >
+                      {waDisplay}
+                    </a>
+                  ) : (
+                    waDisplay
+                  )}
+                </p>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-
-      {shops.length > 0 ? (
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-3">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Shop/Owner খুঁজুন..."
-              className="h-11 rounded-lg border border-border bg-card px-4 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-            {isSuperAdmin ? (
-              <select
-                value={ownerFilter}
-                onChange={(e) => setOwnerFilter(e.target.value)}
-                className="h-11 rounded-lg border border-border bg-card px-4 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                <option value="all">সব Owner</option>
-                {ownerOptions.map((owner) => (
-                  <option key={owner.id} value={owner.id}>
-                    {owner.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="h-11 rounded-lg border border-border bg-muted/50 px-4 text-sm text-muted-foreground flex items-center">
-                Owner view
-              </div>
-            )}
-            {isSuperAdmin ? (
-              <button
-                type="button"
-                onClick={() => setGroupByOwner((prev) => !prev)}
-                className="h-11 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
-              >
-                {groupByOwner ? "Ungroup view" : "Group by owner"}
-              </button>
-            ) : (
-              <div className="h-11 rounded-lg border border-border bg-muted/50 px-4 text-sm text-muted-foreground flex items-center">
-                Total: {filteredShops.length}
-              </div>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Showing {filteredShops.length} / {shops.length} shops
-          </p>
-        </div>
-      ) : null}
 
       {/* EMPTY STATE */}
       {shops.length === 0 ? (
