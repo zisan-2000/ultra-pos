@@ -167,6 +167,10 @@ model Shop {
   address             String?
   phone               String?
   businessType        String   @default("tea_stall") @map("business_type")
+  inventoryFeatureEntitled Boolean @default(false) @map("inventory_feature_entitled")
+  inventoryEnabled    Boolean  @default(false) @map("inventory_enabled")
+  cogsFeatureEntitled Boolean @default(false) @map("cogs_feature_entitled")
+  cogsEnabled         Boolean @default(false) @map("cogs_enabled")
   closingTime         String?  @map("closing_time")
   salesInvoiceEntitled Boolean @default(false) @map("sales_invoice_entitled")
   salesInvoiceEnabled Boolean  @default(false) @map("sales_invoice_enabled")

@@ -26,6 +26,10 @@ export async function handleCreateShop(formData: FormData) {
     formData.has("barcodeFeatureEntitled") || formData.has("barcodeScanEnabled");
   const hasSmsSettings =
     formData.has("smsSummaryEntitled") || formData.has("smsSummaryEnabled");
+  const hasInventorySettings =
+    formData.has("inventoryFeatureEntitled") || formData.has("inventoryEnabled");
+  const hasCogsSettings =
+    formData.has("cogsFeatureEntitled") || formData.has("cogsEnabled");
 
   const result = await createShop({
     name: formData.get("name") as string,
@@ -82,6 +86,19 @@ export async function handleCreateShop(formData: FormData) {
       ? {
           smsSummaryEntitled: formData.get("smsSummaryEntitled") === "1",
           smsSummaryEnabled: formData.get("smsSummaryEnabled") === "1",
+        }
+      : {}),
+    ...(hasInventorySettings
+      ? {
+          inventoryFeatureEntitled:
+            formData.get("inventoryFeatureEntitled") === "1",
+          inventoryEnabled: formData.get("inventoryEnabled") === "1",
+        }
+      : {}),
+    ...(hasCogsSettings
+      ? {
+          cogsFeatureEntitled: formData.get("cogsFeatureEntitled") === "1",
+          cogsEnabled: formData.get("cogsEnabled") === "1",
         }
       : {}),
   });

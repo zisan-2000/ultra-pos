@@ -10,6 +10,13 @@ type PurchaseDetailPageProps = {
   searchParams?: Promise<{ shopId?: string; page?: string }>;
 };
 
+function isInventoryModuleDisabledError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const maybe = error as { message?: unknown };
+  const message = typeof maybe.message === "string" ? maybe.message : "";
+  return message.includes("Purchases/Suppliers module is disabled");
+}
+
 export default async function PurchaseDetailPage({
   params,
   searchParams,
@@ -42,10 +49,32 @@ export default async function PurchaseDetailPage({
 
   const shopId = resolvedSearch?.shopId ?? "";
   const page = Number(resolvedSearch?.page ?? 1);
-  const purchase = await getPurchaseWithPayments(purchaseId, {
-    page: Number.isFinite(page) && page > 0 ? page : 1,
-    pageSize: 10,
-  });
+  let purchase: Awaited<ReturnType<typeof getPurchaseWithPayments>>;
+  try {
+    purchase = await getPurchaseWithPayments(purchaseId, {
+      page: Number.isFinite(page) && page > 0 ? page : 1,
+      pageSize: 10,
+    });
+  } catch (error) {
+    if (isInventoryModuleDisabledError(error)) {
+      return (
+        <div className="text-center py-12">
+          <h1 className="text-2xl font-bold mb-4 text-foreground">ক্রয় বিস্তারিত</h1>
+          <p className="mb-2 text-warning font-semibold">মডিউল বন্ধ আছে</p>
+          <p className="mb-6 text-muted-foreground">
+            এই দোকানে <code>Purchases/Suppliers</code> module চালু না থাকায় ক্রয় history দেখা যাবে না।
+          </p>
+          <Link
+            href={shopId ? `/dashboard/shops/${shopId}` : "/dashboard/shops"}
+            className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+          >
+            দোকানের সেটিংসে যান
+          </Link>
+        </div>
+      );
+    }
+    throw error;
+  }
   const dueAmount = Number(purchase.dueAmount ?? 0);
 
   const totalPages = purchase.paymentMeta?.totalPages ?? 1;

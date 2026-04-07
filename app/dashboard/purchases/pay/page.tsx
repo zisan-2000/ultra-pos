@@ -8,6 +8,7 @@ import { getSuppliersByShop } from "@/app/actions/suppliers";
 import PurchasePaymentClient from "./purchase-payment-client";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
+import { resolveInventoryModuleEnabled } from "@/lib/accounting/cogs";
 
 type PurchasePayPageProps = {
   searchParams?: Promise<{
@@ -96,6 +97,25 @@ export default async function PurchasePayPage({
     shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
       : cookieSelectedShopId ?? shops[0].id;
+  const selectedShop = shops.find((s) => s.id === selectedShopId)!;
+  const hasInventoryModule = resolveInventoryModuleEnabled(selectedShop);
+  if (!hasInventoryModule) {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold mb-4 text-foreground">বাকি পরিশোধ</h1>
+        <p className="mb-2 text-warning font-semibold">মডিউল বন্ধ আছে</p>
+        <p className="mb-6 text-muted-foreground">
+          এই দোকানে <code>Purchases/Suppliers</code> module চালু না থাকায় supplier payment করা যাবে না।
+        </p>
+        <Link
+          href={`/dashboard/shops/${selectedShopId}`}
+          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
+        >
+          দোকানের সেটিংসে যান
+        </Link>
+      </div>
+    );
+  }
 
   const suppliers = await getSuppliersByShop(selectedShopId);
 

@@ -5,6 +5,8 @@ export const FEATURE_ACCESS_KEYS = [
   "tax",
   "barcode",
   "sms_summary",
+  "inventory_cogs",
+  "cogs_analytics",
 ] as const;
 
 export type FeatureAccessKey = (typeof FEATURE_ACCESS_KEYS)[number];
@@ -17,7 +19,9 @@ export type ShopEntitlementField =
   | "discountFeatureEntitled"
   | "taxFeatureEntitled"
   | "barcodeFeatureEntitled"
-  | "smsSummaryEntitled";
+  | "smsSummaryEntitled"
+  | "inventoryFeatureEntitled"
+  | "cogsFeatureEntitled";
 
 export const FEATURE_ACCESS_META: Record<
   FeatureAccessKey,
@@ -56,6 +60,16 @@ export const FEATURE_ACCESS_META: Record<
     title: "SMS Summary",
     banglaTitle: "SMS Summary",
     entitlementField: "smsSummaryEntitled",
+  },
+  inventory_cogs: {
+    title: "Purchases + Suppliers",
+    banglaTitle: "পণ্য ক্রয় + সরবরাহকারী",
+    entitlementField: "inventoryFeatureEntitled",
+  },
+  cogs_analytics: {
+    title: "COGS Analytics",
+    banglaTitle: "COGS লাভ বিশ্লেষণ",
+    entitlementField: "cogsFeatureEntitled",
   },
 };
 

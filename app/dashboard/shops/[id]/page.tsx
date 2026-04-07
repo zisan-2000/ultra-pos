@@ -84,6 +84,20 @@ export default async function EditShop({ params, searchParams }: PageProps) {
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_sms_feature"))
   );
+  const canManageInventoryEntitlement = Boolean(
+    user && user.roles?.includes("super_admin")
+  );
+  const canManageInventoryFeature = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") || user.roles?.includes("owner"))
+  );
+  const canManageCogsEntitlement = Boolean(
+    user && user.roles?.includes("super_admin")
+  );
+  const canManageCogsFeature = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") || user.roles?.includes("owner"))
+  );
   let shop: Awaited<ReturnType<typeof getShop>> | null = null;
   try {
     shop = await getShop(id);
@@ -270,6 +284,36 @@ export default async function EditShop({ params, searchParams }: PageProps) {
               : {}),
           }
         : {}),
+      ...(canManageInventoryEntitlement || canManageInventoryFeature
+        ? {
+            ...(canManageInventoryEntitlement
+              ? {
+                  inventoryFeatureEntitled:
+                    formData.get("inventoryFeatureEntitled") === "1",
+                }
+              : {}),
+            ...(canManageInventoryFeature
+              ? {
+                  inventoryEnabled: formData.get("inventoryEnabled") === "1",
+                }
+              : {}),
+          }
+        : {}),
+      ...(canManageCogsEntitlement || canManageCogsFeature
+        ? {
+            ...(canManageCogsEntitlement
+              ? {
+                  cogsFeatureEntitled:
+                    formData.get("cogsFeatureEntitled") === "1",
+                }
+              : {}),
+            ...(canManageCogsFeature
+              ? {
+                  cogsEnabled: formData.get("cogsEnabled") === "1",
+                }
+              : {}),
+          }
+        : {}),
     });
 
     redirect("/dashboard/shops");
@@ -326,6 +370,10 @@ export default async function EditShop({ params, searchParams }: PageProps) {
           barcodeScanEnabled: Boolean((shop as any).barcodeScanEnabled),
           smsSummaryEntitled: Boolean((shop as any).smsSummaryEntitled),
           smsSummaryEnabled: Boolean((shop as any).smsSummaryEnabled),
+          inventoryFeatureEntitled: Boolean((shop as any).inventoryFeatureEntitled),
+          inventoryEnabled: Boolean((shop as any).inventoryEnabled),
+          cogsFeatureEntitled: Boolean((shop as any).cogsFeatureEntitled),
+          cogsEnabled: Boolean((shop as any).cogsEnabled),
         }}
         submitLabel="সংরক্ষণ করুন"
         businessTypeOptions={businessTypeOptions}
@@ -345,6 +393,12 @@ export default async function EditShop({ params, searchParams }: PageProps) {
         canEditBarcodeEntitlement={canManageBarcodeEntitlement}
         showSmsSummarySettings={canManageSmsEntitlement || canManageSmsFeature}
         canEditSmsSummaryEntitlement={canManageSmsEntitlement}
+        showInventorySettings={
+          canManageInventoryEntitlement || canManageInventoryFeature
+        }
+        canEditInventoryEntitlement={canManageInventoryEntitlement}
+        showCogsSettings={canManageCogsEntitlement || canManageCogsFeature}
+        canEditCogsEntitlement={canManageCogsEntitlement}
         featureAccessRequestByKey={featureAccessRequests}
       />
     </div>

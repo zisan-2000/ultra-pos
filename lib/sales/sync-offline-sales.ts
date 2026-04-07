@@ -10,6 +10,7 @@ import {
   resolveSalesInvoicePrefix,
   sanitizeSalesInvoicePrefix,
 } from "@/lib/sales/invoice-format";
+import { resolveCogsEnabled } from "@/lib/accounting/cogs";
 
 export type IncomingSaleItem = {
   productId: string;
@@ -63,14 +64,6 @@ export type SyncOfflineSalesResult = {
   saleIds: string[];
   effects: SyncedSaleEffect[];
 };
-
-const SHOP_TYPES_WITH_COGS = new Set([
-  "mini_grocery",
-  "pharmacy",
-  "clothing",
-  "cosmetics_gift",
-  "mini_wholesale",
-]);
 
 function hasPermission(user: SalesFlowUser, permission: string) {
   if (user.roles.includes("super_admin")) return true;
@@ -205,10 +198,16 @@ async function assertShopAccess(
 async function shopNeedsCogs(db: PrismaClient, shopId: string) {
   const shop = await db.shop.findUnique({
     where: { id: shopId },
-    select: { businessType: true },
+    select: {
+      businessType: true,
+      cogsFeatureEntitled: true,
+      cogsEnabled: true,
+      inventoryFeatureEntitled: true,
+      inventoryEnabled: true,
+    },
   });
-  if (!shop?.businessType) return false;
-  return SHOP_TYPES_WITH_COGS.has(shop.businessType);
+  if (!shop) return false;
+  return resolveCogsEnabled(shop);
 }
 
 export async function syncOfflineSalesBatch({

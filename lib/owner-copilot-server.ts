@@ -1,6 +1,6 @@
 import { getPayablesSummary } from "@/app/actions/purchases";
 import { resolveBillingStatus } from "@/lib/billing";
-import { SHOP_TYPES_WITH_COGS } from "@/lib/accounting/cogs";
+import { resolveCogsEnabled } from "@/lib/accounting/cogs";
 import {
   getDhakaDateOnlyRange,
   getDhakaDateString,
@@ -34,7 +34,13 @@ async function computeSummaryForRange(
   shopId: string,
   from: string,
   to: string,
-  businessType?: string | null
+  shopConfig?: {
+    businessType?: string | null;
+    cogsFeatureEntitled?: boolean | null;
+    cogsEnabled?: boolean | null;
+    inventoryFeatureEntitled?: boolean | null;
+    inventoryEnabled?: boolean | null;
+  } | null
 ): Promise<RangeSummary> {
   const { start, end } = parseDhakaDateOnlyRange(from, to, true);
   const [salesAgg, saleReturnAgg, expenseAgg, cashAgg] = await Promise.all([
@@ -74,10 +80,9 @@ async function computeSummaryForRange(
   const sales =
     Number(salesAgg._sum.totalAmount ?? 0) + Number(saleReturnAgg._sum.netAmount ?? 0);
   const rawExpenses = Number(expenseAgg._sum.amount ?? 0);
-  const cogs =
-    businessType && SHOP_TYPES_WITH_COGS.has(businessType)
-      ? await getCogsTotalRaw(shopId, start, end)
-      : 0;
+  const cogs = shopConfig && resolveCogsEnabled(shopConfig)
+    ? await getCogsTotalRaw(shopId, start, end)
+    : 0;
   const cashIn = cashAgg
     .filter((row) => row.entryType === "IN")
     .reduce((sum, row) => sum + Number(row._sum.amount ?? 0), 0);
@@ -118,6 +123,10 @@ async function buildOwnerCopilotSnapshot(shopId: string) {
       select: {
         name: true,
         businessType: true,
+        cogsFeatureEntitled: true,
+        cogsEnabled: true,
+        inventoryFeatureEntitled: true,
+        inventoryEnabled: true,
         queueTokenEnabled: true,
       },
     }),
@@ -190,9 +199,18 @@ async function buildOwnerCopilotSnapshot(shopId: string) {
     : null;
 
   const businessType = shopMeta?.businessType ?? null;
+  const inventoryConfig = shopMeta
+    ? {
+        businessType: shopMeta.businessType ?? null,
+        cogsFeatureEntitled: shopMeta.cogsFeatureEntitled,
+        cogsEnabled: shopMeta.cogsEnabled,
+        inventoryFeatureEntitled: shopMeta.inventoryFeatureEntitled,
+        inventoryEnabled: shopMeta.inventoryEnabled,
+      }
+    : null;
   const [yesterdaySummary, trailingSummary] = await Promise.all([
-    computeSummaryForRange(shopId, yesterdayKey, yesterdayKey, businessType),
-    computeSummaryForRange(shopId, trailingStartKey, yesterdayKey, businessType),
+    computeSummaryForRange(shopId, yesterdayKey, yesterdayKey, inventoryConfig),
+    computeSummaryForRange(shopId, trailingStartKey, yesterdayKey, inventoryConfig),
   ]);
 
   return {

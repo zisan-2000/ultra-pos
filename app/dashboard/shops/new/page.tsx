@@ -93,6 +93,20 @@ export default async function NewShopPage({ searchParams }: PageProps) {
       (user.roles?.includes("super_admin") ||
         user.permissions?.includes("manage_shop_sms_feature"))
   );
+  const canManageInventoryEntitlement = Boolean(
+    user && user.roles?.includes("super_admin")
+  );
+  const canManageInventoryFeature = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") || user.roles?.includes("owner"))
+  );
+  const canManageCogsEntitlement = Boolean(
+    user && user.roles?.includes("super_admin")
+  );
+  const canManageCogsFeature = Boolean(
+    user &&
+      (user.roles?.includes("super_admin") || user.roles?.includes("owner"))
+  );
   const shops = isSuperAdmin ? [] : await getShopsByUser();
 
   if (!isSuperAdmin && !isOwner) {
@@ -266,6 +280,12 @@ export default async function NewShopPage({ searchParams }: PageProps) {
         canEditBarcodeEntitlement={canManageBarcodeEntitlement}
         showSmsSummarySettings={canManageSmsEntitlement || canManageSmsFeature}
         canEditSmsSummaryEntitlement={canManageSmsEntitlement}
+        showInventorySettings={
+          canManageInventoryEntitlement || canManageInventoryFeature
+        }
+        canEditInventoryEntitlement={canManageInventoryEntitlement}
+        showCogsSettings={canManageCogsEntitlement || canManageCogsFeature}
+        canEditCogsEntitlement={canManageCogsEntitlement}
       />
     </div>
   );

@@ -130,6 +130,10 @@ const shopCreateSchema = z.object({
   address: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
   businessType: z.string().optional(),
+  inventoryFeatureEntitled: z.boolean().optional(),
+  inventoryEnabled: z.boolean().optional(),
+  cogsFeatureEntitled: z.boolean().optional(),
+  cogsEnabled: z.boolean().optional(),
   salesInvoiceEntitled: z.boolean().optional(),
   salesInvoiceEnabled: z.boolean().optional(),
   salesInvoicePrefix: z.string().optional().nullable(),
@@ -157,6 +161,10 @@ const shopUpdateSchema = z.object({
   phone: z.string().optional().nullable(),
   businessType: z.string().optional(),
   closingTime: z.string().optional().nullable(),
+  inventoryFeatureEntitled: z.boolean().optional(),
+  inventoryEnabled: z.boolean().optional(),
+  cogsFeatureEntitled: z.boolean().optional(),
+  cogsEnabled: z.boolean().optional(),
   salesInvoiceEntitled: z.boolean().optional(),
   salesInvoiceEnabled: z.boolean().optional(),
   salesInvoicePrefix: z.string().optional().nullable(),
@@ -357,6 +365,10 @@ export async function POST(req: Request) {
                 address: input.address ?? "",
                 phone: input.phone ?? "",
                 businessType: input.businessType ?? "tea_stall",
+                inventoryFeatureEntitled: input.inventoryFeatureEntitled,
+                inventoryEnabled: input.inventoryEnabled,
+                cogsFeatureEntitled: input.cogsFeatureEntitled,
+                cogsEnabled: input.cogsEnabled,
                 salesInvoiceEntitled: input.salesInvoiceEntitled,
                 salesInvoiceEnabled: input.salesInvoiceEnabled,
                 salesInvoicePrefix: input.salesInvoicePrefix ?? undefined,
@@ -390,6 +402,18 @@ export async function POST(req: Request) {
                   : {}),
                 ...(data.closingTime !== undefined
                   ? { closingTime: data.closingTime }
+                  : {}),
+                ...(data.inventoryFeatureEntitled !== undefined
+                  ? { inventoryFeatureEntitled: data.inventoryFeatureEntitled }
+                  : {}),
+                ...(data.inventoryEnabled !== undefined
+                  ? { inventoryEnabled: data.inventoryEnabled }
+                  : {}),
+                ...(data.cogsFeatureEntitled !== undefined
+                  ? { cogsFeatureEntitled: data.cogsFeatureEntitled }
+                  : {}),
+                ...(data.cogsEnabled !== undefined
+                  ? { cogsEnabled: data.cogsEnabled }
                   : {}),
                 ...(data.salesInvoiceEnabled !== undefined
                   ? { salesInvoiceEnabled: data.salesInvoiceEnabled }

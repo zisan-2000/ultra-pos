@@ -13,6 +13,7 @@ import { sanitizeSalesInvoicePrintSize } from "@/lib/sales-invoice-print";
 import { sanitizeQueueTokenPrefix } from "@/lib/queue-token";
 import { sanitizeQueueWorkflow } from "@/lib/queue-workflow";
 import { sanitizeSaleTaxLabel, sanitizeSaleTaxRate } from "@/lib/sales/tax";
+import { isLegacyCogsBusinessType } from "@/lib/accounting/cogs-types";
 
 async function getCurrentUser() {
   return requireUser();
@@ -93,6 +94,10 @@ export async function createShop(data: {
   address?: string;
   phone?: string;
   businessType?: string;
+  inventoryFeatureEntitled?: boolean;
+  inventoryEnabled?: boolean;
+  cogsFeatureEntitled?: boolean;
+  cogsEnabled?: boolean;
   ownerId?: string;
   salesInvoiceEntitled?: boolean;
   salesInvoiceEnabled?: boolean;
@@ -154,6 +159,7 @@ export async function createShop(data: {
   }
 
   const targetOwnerId = isSuperAdmin ? requestedOwnerId ?? user.id : user.id;
+  const resolvedBusinessType = data.businessType || "tea_stall";
 
   const wantsInvoiceEntitlementChange = data.salesInvoiceEntitled === true;
   if (wantsInvoiceEntitlementChange) {
@@ -213,6 +219,22 @@ export async function createShop(data: {
   if (wantsSmsFeatureChange) {
     requirePermission(user, "manage_shop_sms_feature");
   }
+  const wantsInventoryEntitlementChange = data.inventoryFeatureEntitled === true;
+  if (wantsInventoryEntitlementChange && !isSuperAdmin) {
+    throw new Error("Only super admin can enable inventory entitlement");
+  }
+  const wantsInventoryFeatureChange = data.inventoryEnabled !== undefined;
+  if (wantsInventoryFeatureChange && !isSuperAdmin && !isOwner) {
+    throw new Error("Unauthorized inventory feature change");
+  }
+  const wantsCogsEntitlementChange = data.cogsFeatureEntitled === true;
+  if (wantsCogsEntitlementChange && !isSuperAdmin) {
+    throw new Error("Only super admin can enable COGS entitlement");
+  }
+  const wantsCogsFeatureChange = data.cogsEnabled !== undefined;
+  if (wantsCogsFeatureChange && !isSuperAdmin && !isOwner) {
+    throw new Error("Unauthorized COGS feature change");
+  }
   const resolvedSalesInvoicePrintSize =
     data.salesInvoicePrintSize !== undefined
       ? sanitizeSalesInvoicePrintSize(data.salesInvoicePrintSize)
@@ -265,6 +287,38 @@ export async function createShop(data: {
       "SMS summary cannot be enabled before super-admin entitlement is turned on"
     );
   }
+  const defaultInventoryEnabled = isLegacyCogsBusinessType(resolvedBusinessType);
+  const useOwnerLegacyInventoryDefault =
+    !isSuperAdmin && data.inventoryFeatureEntitled === undefined;
+  const resolvedInventoryEntitled = Boolean(
+    data.inventoryFeatureEntitled ?? defaultInventoryEnabled
+  );
+  const resolvedInventoryEnabled = resolvedInventoryEntitled
+    ? useOwnerLegacyInventoryDefault
+      ? defaultInventoryEnabled
+      : Boolean(data.inventoryEnabled ?? defaultInventoryEnabled)
+    : false;
+  if (Boolean(data.inventoryEnabled) && !resolvedInventoryEntitled) {
+    throw new Error(
+      "Purchases/Suppliers cannot be enabled before super-admin entitlement is turned on"
+    );
+  }
+  const resolvedCogsEntitled = Boolean(
+    data.cogsFeatureEntitled ?? resolvedInventoryEntitled
+  );
+  const resolvedCogsEnabled = resolvedCogsEntitled
+    ? Boolean(data.cogsEnabled ?? resolvedInventoryEnabled)
+    : false;
+  if (Boolean(data.cogsEnabled) && !resolvedCogsEntitled) {
+    throw new Error(
+      "COGS analytics cannot be enabled before super-admin entitlement is turned on"
+    );
+  }
+  if (resolvedCogsEnabled && !resolvedInventoryEnabled) {
+    throw new Error(
+      "Enable Purchases/Suppliers first before turning on COGS analytics"
+    );
+  }
 
   let createdShopId: string | null = null;
   await prisma.$transaction(async (tx) => {
@@ -273,7 +327,11 @@ export async function createShop(data: {
       name: data.name,
       address: data.address || "",
       phone: data.phone || "",
-      businessType: data.businessType || "tea_stall",
+      businessType: resolvedBusinessType,
+      inventoryFeatureEntitled: resolvedInventoryEntitled,
+      inventoryEnabled: resolvedInventoryEnabled,
+      cogsFeatureEntitled: resolvedCogsEntitled,
+      cogsEnabled: resolvedCogsEnabled,
       salesInvoiceEntitled: resolvedSalesInvoiceEntitled,
       salesInvoiceEnabled: resolvedSalesInvoiceEntitled
         ? resolvedSalesInvoiceEnabled
@@ -599,6 +657,63 @@ export async function updateShop(id: string, data: any) {
 
     (updateData as any).smsSummaryEnabled = Boolean(data.smsSummaryEnabled);
   }
+  const wantsInventoryEntitlementChange = data.inventoryFeatureEntitled !== undefined;
+  if (wantsInventoryEntitlementChange) {
+    if (!isSuperAdmin) {
+      throw new Error("Only super admin can change inventory entitlement");
+    }
+    (updateData as any).inventoryFeatureEntitled = Boolean(
+      data.inventoryFeatureEntitled
+    );
+  }
+
+  const wantsInventoryFeatureChange = data.inventoryEnabled !== undefined;
+  if (wantsInventoryFeatureChange) {
+    const effectiveEntitlement =
+      data.inventoryFeatureEntitled !== undefined
+        ? Boolean(data.inventoryFeatureEntitled)
+        : Boolean((shop as any).inventoryFeatureEntitled);
+
+    if (Boolean(data.inventoryEnabled) && !effectiveEntitlement) {
+      throw new Error(
+        "Purchases/Suppliers cannot be enabled before super-admin entitlement is turned on"
+      );
+    }
+
+    (updateData as any).inventoryEnabled = Boolean(data.inventoryEnabled);
+  }
+  const wantsCogsEntitlementChange = data.cogsFeatureEntitled !== undefined;
+  if (wantsCogsEntitlementChange) {
+    if (!isSuperAdmin) {
+      throw new Error("Only super admin can change COGS entitlement");
+    }
+    (updateData as any).cogsFeatureEntitled = Boolean(data.cogsFeatureEntitled);
+  }
+
+  const wantsCogsFeatureChange = data.cogsEnabled !== undefined;
+  if (wantsCogsFeatureChange) {
+    const effectiveEntitlement =
+      data.cogsFeatureEntitled !== undefined
+        ? Boolean(data.cogsFeatureEntitled)
+        : Boolean((shop as any).cogsFeatureEntitled);
+    const effectiveInventoryEnabled =
+      data.inventoryEnabled !== undefined
+        ? Boolean(data.inventoryEnabled)
+        : Boolean((shop as any).inventoryEnabled);
+
+    if (Boolean(data.cogsEnabled) && !effectiveEntitlement) {
+      throw new Error(
+        "COGS analytics cannot be enabled before super-admin entitlement is turned on"
+      );
+    }
+    if (Boolean(data.cogsEnabled) && !effectiveInventoryEnabled) {
+      throw new Error(
+        "Enable Purchases/Suppliers first before turning on COGS analytics"
+      );
+    }
+
+    (updateData as any).cogsEnabled = Boolean(data.cogsEnabled);
+  }
 
   if (data.barcodeFeatureEntitled !== undefined && !Boolean(data.barcodeFeatureEntitled)) {
     (updateData as any).barcodeScanEnabled = false;
@@ -622,6 +737,16 @@ export async function updateShop(id: string, data: any) {
   }
   if (data.smsSummaryEntitled !== undefined && !Boolean(data.smsSummaryEntitled)) {
     (updateData as any).smsSummaryEnabled = false;
+  }
+  if (
+    data.inventoryFeatureEntitled !== undefined &&
+    !Boolean(data.inventoryFeatureEntitled)
+  ) {
+    (updateData as any).inventoryEnabled = false;
+    (updateData as any).cogsEnabled = false;
+  }
+  if (data.cogsFeatureEntitled !== undefined && !Boolean(data.cogsFeatureEntitled)) {
+    (updateData as any).cogsEnabled = false;
   }
 
   await prisma.shop.update({

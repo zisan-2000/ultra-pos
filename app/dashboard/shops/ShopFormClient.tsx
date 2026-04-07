@@ -89,6 +89,10 @@ type Props = {
     barcodeScanEnabled?: boolean;
     smsSummaryEntitled?: boolean;
     smsSummaryEnabled?: boolean;
+    inventoryFeatureEntitled?: boolean;
+    inventoryEnabled?: boolean;
+    cogsFeatureEntitled?: boolean;
+    cogsEnabled?: boolean;
   };
   submitLabel?: string;
   ownerOptions?: Array<{ id: string; name: string | null; email: string | null }>;
@@ -105,6 +109,10 @@ type Props = {
   canEditBarcodeEntitlement?: boolean;
   showSmsSummarySettings?: boolean;
   canEditSmsSummaryEntitlement?: boolean;
+  showInventorySettings?: boolean;
+  canEditInventoryEntitlement?: boolean;
+  showCogsSettings?: boolean;
+  canEditCogsEntitlement?: boolean;
   featureAccessRequestByKey?: Partial<
     Record<FeatureAccessKey, FeatureAccessRequestSnapshot>
   >;
@@ -178,6 +186,8 @@ const FEATURE_SECTION_META: Array<{
   { key: "discount", title: "Discount", anchorId: "feature-discount" },
   { key: "tax", title: "VAT/Tax", anchorId: "feature-tax" },
   { key: "barcode", title: "Barcode", anchorId: "feature-barcode" },
+  { key: "inventory_cogs", title: "Purchases + Suppliers", anchorId: "feature-inventory-cogs" },
+  { key: "cogs_analytics", title: "COGS Analytics", anchorId: "feature-cogs-analytics" },
   { key: "sms_summary", title: "SMS Summary", anchorId: "feature-sms-summary" },
 ];
 
@@ -202,6 +212,10 @@ export default function ShopFormClient({
   canEditBarcodeEntitlement = false,
   showSmsSummarySettings = false,
   canEditSmsSummaryEntitlement = false,
+  showInventorySettings = false,
+  canEditInventoryEntitlement = false,
+  showCogsSettings = false,
+  canEditCogsEntitlement = false,
   featureAccessRequestByKey = EMPTY_FEATURE_ACCESS_REQUESTS,
 }: Props) {
   const router = useRouter();
@@ -287,6 +301,18 @@ export default function ShopFormClient({
   );
   const [smsSummaryEnabled, setSmsSummaryEnabled] = useState<boolean>(
     Boolean(initial?.smsSummaryEnabled ?? false)
+  );
+  const [inventoryFeatureEntitled, setInventoryFeatureEntitled] = useState<boolean>(
+    Boolean(initial?.inventoryFeatureEntitled ?? false)
+  );
+  const [inventoryEnabled, setInventoryEnabled] = useState<boolean>(
+    Boolean(initial?.inventoryEnabled ?? false)
+  );
+  const [cogsFeatureEntitled, setCogsFeatureEntitled] = useState<boolean>(
+    Boolean(initial?.cogsFeatureEntitled ?? false)
+  );
+  const [cogsEnabled, setCogsEnabled] = useState<boolean>(
+    Boolean(initial?.cogsEnabled ?? false)
   );
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const hasOwnerOptions = Boolean(ownerOptions && ownerOptions.length > 0);
@@ -445,6 +471,18 @@ export default function ShopFormClient({
       },
       {
         ...FEATURE_SECTION_META[5],
+        show: Boolean(showInventorySettings),
+        entitled: Boolean(inventoryFeatureEntitled),
+        canEdit: Boolean(canEditInventoryEntitlement),
+      },
+      {
+        ...FEATURE_SECTION_META[6],
+        show: Boolean(showCogsSettings),
+        entitled: Boolean(cogsFeatureEntitled),
+        canEdit: Boolean(canEditCogsEntitlement),
+      },
+      {
+        ...FEATURE_SECTION_META[7],
         show: Boolean(showSmsSummarySettings),
         entitled: Boolean(smsSummaryEntitled),
         canEdit: Boolean(canEditSmsSummaryEntitlement),
@@ -466,6 +504,12 @@ export default function ShopFormClient({
       showBarcodeSettings,
       barcodeFeatureEntitled,
       canEditBarcodeEntitlement,
+      showInventorySettings,
+      inventoryFeatureEntitled,
+      canEditInventoryEntitlement,
+      showCogsSettings,
+      cogsFeatureEntitled,
+      canEditCogsEntitlement,
       showSmsSummarySettings,
       smsSummaryEntitled,
       canEditSmsSummaryEntitlement,
@@ -713,6 +757,15 @@ export default function ShopFormClient({
     const payloadSmsSummaryEnabled = payloadSmsSummaryEntitled
       ? Boolean(smsSummaryEnabled)
       : false;
+    const payloadInventoryFeatureEntitled = Boolean(inventoryFeatureEntitled);
+    const payloadInventoryEnabled = payloadInventoryFeatureEntitled
+      ? Boolean(inventoryEnabled)
+      : false;
+    const payloadCogsFeatureEntitled = Boolean(cogsFeatureEntitled);
+    const payloadCogsEnabled =
+      payloadCogsFeatureEntitled && payloadInventoryEnabled
+        ? Boolean(cogsEnabled)
+        : false;
 
     form.set("name", payloadName);
     form.set("address", payloadAddress);
@@ -771,6 +824,24 @@ export default function ShopFormClient({
         );
       }
       form.set("smsSummaryEnabled", payloadSmsSummaryEnabled ? "1" : "0");
+    }
+    if (showInventorySettings) {
+      if (canEditInventoryEntitlement) {
+        form.set(
+          "inventoryFeatureEntitled",
+          payloadInventoryFeatureEntitled ? "1" : "0"
+        );
+      }
+      form.set("inventoryEnabled", payloadInventoryEnabled ? "1" : "0");
+    }
+    if (showCogsSettings) {
+      if (canEditCogsEntitlement) {
+        form.set(
+          "cogsFeatureEntitled",
+          payloadCogsFeatureEntitled ? "1" : "0"
+        );
+      }
+      form.set("cogsEnabled", payloadCogsEnabled ? "1" : "0");
     }
     if (ownerOptions) {
       form.set("ownerId", selectedOwnerId);
@@ -845,6 +916,22 @@ export default function ShopFormClient({
                   ? { smsSummaryEntitled: payloadSmsSummaryEntitled }
                   : {}),
                 smsSummaryEnabled: payloadSmsSummaryEnabled,
+              }
+            : {}),
+          ...(showInventorySettings
+            ? {
+                ...(canEditInventoryEntitlement
+                  ? { inventoryFeatureEntitled: payloadInventoryFeatureEntitled }
+                  : {}),
+                inventoryEnabled: payloadInventoryEnabled,
+              }
+            : {}),
+          ...(showCogsSettings
+            ? {
+                ...(canEditCogsEntitlement
+                  ? { cogsFeatureEntitled: payloadCogsFeatureEntitled }
+                  : {}),
+                cogsEnabled: payloadCogsEnabled,
               }
             : {}),
           ownerId: ownerOptions ? selectedOwnerId || null : null,
@@ -1635,6 +1722,140 @@ export default function ShopFormClient({
             barcodeFeatureEntitled,
             canEditBarcodeEntitlement
           )}
+          </div>
+        </details>
+      ) : null}
+
+      {showInventorySettings ? (
+        <details id="feature-inventory-cogs" className="group scroll-mt-28 rounded-2xl border border-border bg-muted/40 p-4">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+            <div className="space-y-1">
+              <p className="block text-sm font-semibold text-foreground">
+                Purchases + Suppliers ফিচার
+              </p>
+              <p className="text-xs text-muted-foreground">
+                চালু থাকলে Purchase ও Supplier management module unlock হবে।
+              </p>
+            </div>
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${inventoryFeatureEntitled ? "border-success/30 bg-success-soft text-success" : "border-warning/30 bg-warning-soft text-warning"}`}>
+              {inventoryFeatureEntitled ? "Enabled" : "Locked"}
+            </span>
+          </summary>
+          <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
+            <label className="inline-flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={inventoryFeatureEntitled}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setInventoryFeatureEntitled(next);
+                  if (!next) {
+                    setInventoryEnabled(false);
+                  }
+                }}
+                disabled={!canEditInventoryEntitlement}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+              />
+              এই দোকানে Purchases/Suppliers entitlement চালু
+            </label>
+            {!canEditInventoryEntitlement ? (
+              <p className="text-xs text-muted-foreground">
+                এই entitlement শুধু super-admin পরিবর্তন করতে পারবেন।
+              </p>
+            ) : null}
+
+            <label className="inline-flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={inventoryEnabled}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setInventoryEnabled(next);
+                  if (!next) {
+                    setCogsEnabled(false);
+                  }
+                }}
+                disabled={!inventoryFeatureEntitled}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+              />
+              Purchases/Suppliers module চালু
+            </label>
+            {!inventoryFeatureEntitled ? (
+              <p className="text-xs text-warning">
+                প্রথমে entitlement চালু না হলে Purchases/Suppliers module activate হবে না।
+              </p>
+            ) : null}
+            {renderFeatureAccessRequestCard(
+              "inventory_cogs",
+              inventoryFeatureEntitled,
+              canEditInventoryEntitlement
+            )}
+          </div>
+        </details>
+      ) : null}
+
+      {showCogsSettings ? (
+        <details id="feature-cogs-analytics" className="group scroll-mt-28 rounded-2xl border border-border bg-muted/40 p-4">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+            <div className="space-y-1">
+              <p className="block text-sm font-semibold text-foreground">
+                COGS Analytics ফিচার
+              </p>
+              <p className="text-xs text-muted-foreground">
+                চালু থাকলে রিপোর্ট/কপাইলটে COGS-ভিত্তিক profit analytics apply হবে।
+              </p>
+            </div>
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${cogsFeatureEntitled ? "border-success/30 bg-success-soft text-success" : "border-warning/30 bg-warning-soft text-warning"}`}>
+              {cogsFeatureEntitled ? "Enabled" : "Locked"}
+            </span>
+          </summary>
+          <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
+            <label className="inline-flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={cogsFeatureEntitled}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setCogsFeatureEntitled(next);
+                  if (!next) {
+                    setCogsEnabled(false);
+                  }
+                }}
+                disabled={!canEditCogsEntitlement}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+              />
+              এই দোকানে COGS analytics entitlement চালু
+            </label>
+            {!canEditCogsEntitlement ? (
+              <p className="text-xs text-muted-foreground">
+                এই entitlement শুধু super-admin পরিবর্তন করতে পারবেন।
+              </p>
+            ) : null}
+
+            <label className="inline-flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={cogsEnabled}
+                onChange={(e) => setCogsEnabled(e.target.checked)}
+                disabled={!cogsFeatureEntitled || !inventoryEnabled}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 disabled:opacity-60"
+              />
+              COGS profit analytics চালু
+            </label>
+            {!inventoryEnabled ? (
+              <p className="text-xs text-warning">
+                আগে Purchases/Suppliers module চালু করতে হবে, তারপর COGS analytics চালু হবে।
+              </p>
+            ) : !cogsFeatureEntitled ? (
+              <p className="text-xs text-warning">
+                প্রথমে entitlement চালু না হলে COGS analytics activate হবে না।
+              </p>
+            ) : null}
+            {renderFeatureAccessRequestCard(
+              "cogs_analytics",
+              cogsFeatureEntitled,
+              canEditCogsEntitlement
+            )}
           </div>
         </details>
       ) : null}

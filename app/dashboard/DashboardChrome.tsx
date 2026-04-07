@@ -25,7 +25,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import OwnerSummaryVoice from "@/components/voice/OwnerSummaryVoice";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useCurrentShop } from "@/hooks/use-current-shop";
-import { SHOP_TYPES_WITH_COGS } from "@/lib/accounting/cogs-types";
+import { resolveInventoryModuleEnabled } from "@/lib/accounting/cogs-types";
 import { isOfflineCapableRoute } from "@/lib/offline/offline-capable-routes";
 import { getOfflineRouteFallbackHref } from "@/lib/offline/route-readiness";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
@@ -54,6 +54,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -67,6 +68,8 @@ type Shop = {
   name: string;
   closingTime?: string | null;
   businessType?: string | null;
+  inventoryFeatureEntitled?: boolean | null;
+  inventoryEnabled?: boolean | null;
   queueTokenEntitled?: boolean | null;
   queueTokenEnabled?: boolean | null;
 };
@@ -219,13 +222,14 @@ export function DashboardShell({
     );
   }, [safeShopId, shops]);
 
-  const currentBusinessType = useMemo(() => {
+  const currentShop = useMemo(() => {
     if (!safeShopId) return null;
-    return shops.find((s) => s.id === safeShopId)?.businessType ?? null;
+    return shops.find((s) => s.id === safeShopId) ?? null;
   }, [safeShopId, shops]);
 
-  const hasInventory = Boolean(
-    currentBusinessType && SHOP_TYPES_WITH_COGS.has(currentBusinessType)
+  const hasInventory = useMemo(
+    () => (currentShop ? resolveInventoryModuleEnabled(currentShop) : false),
+    [currentShop]
   );
 
   const currentQueueTokenEnabled = useMemo(() => {
@@ -528,10 +532,13 @@ export function DashboardShell({
 
   const handleShopChange = (id: string) => {
     if (!id || id === safeShopId) return;
+    const nextShopName =
+      shops.find((shop) => shop.id === id)?.name || "নির্বাচিত দোকান";
     setShop(id);
     document.cookie = `activeShopId=${id}; path=/; max-age=${
       60 * 60 * 24 * 30
     }`;
+    toast.success(`দোকান পরিবর্তন হয়েছে: ${nextShopName}`);
 
     const params = new URLSearchParams(searchParams?.toString() || "");
     params.set("shopId", id);

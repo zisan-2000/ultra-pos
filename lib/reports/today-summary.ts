@@ -5,7 +5,7 @@ import { getDhakaDateOnlyRange } from "@/lib/dhaka-date";
 import { assertShopAccess } from "@/lib/shop-access";
 import type { UserContext } from "@/lib/rbac";
 import { REPORTS_CACHE_TAGS } from "@/lib/reports/cache-tags";
-import { SHOP_TYPES_WITH_COGS } from "@/lib/accounting/cogs";
+import { resolveCogsEnabled } from "@/lib/accounting/cogs";
 
 export type TodaySummary = {
   sales: { total: number; count: number };
@@ -16,19 +16,31 @@ export type TodaySummary = {
 
 async function computeTodaySummary(
   shopId: string,
-  businessType?: string | null
+  shopConfig?: {
+    businessType?: string | null;
+    cogsFeatureEntitled?: boolean | null;
+    cogsEnabled?: boolean | null;
+    inventoryFeatureEntitled?: boolean | null;
+    inventoryEnabled?: boolean | null;
+  } | null
 ): Promise<TodaySummary> {
   const { start: todayStart, end: todayEnd } = getDhakaDateOnlyRange();
 
-  const [resolvedShopType, salesAgg, saleReturnAgg, expenseAgg, cashAgg] = await Promise.all([
-    businessType
-      ? Promise.resolve(businessType)
+  const [resolvedShopConfig, salesAgg, saleReturnAgg, expenseAgg, cashAgg] = await Promise.all([
+    shopConfig
+      ? Promise.resolve(shopConfig)
       : prisma.shop
           .findUnique({
             where: { id: shopId },
-            select: { businessType: true },
+            select: {
+              businessType: true,
+              cogsFeatureEntitled: true,
+              cogsEnabled: true,
+              inventoryFeatureEntitled: true,
+              inventoryEnabled: true,
+            },
           })
-          .then((shop) => shop?.businessType ?? null),
+          .then((shop) => shop ?? null),
     prisma.sale.aggregate({
       where: {
         shopId,
@@ -59,8 +71,8 @@ async function computeTodaySummary(
     }),
   ]);
 
-  const needsCogs = resolvedShopType
-    ? SHOP_TYPES_WITH_COGS.has(resolvedShopType)
+  const needsCogs = resolvedShopConfig
+    ? resolveCogsEnabled(resolvedShopConfig)
     : false;
 
   const salesTotal =
@@ -115,8 +127,21 @@ async function computeTodaySummary(
 }
 
 const getTodaySummaryCached = unstable_cache(
-  async (shopId: string, businessType?: string | null) =>
-    computeTodaySummary(shopId, businessType),
+  async (
+    shopId: string,
+    businessType?: string | null,
+    cogsFeatureEntitled?: boolean | null,
+    cogsEnabled?: boolean | null,
+    inventoryFeatureEntitled?: boolean | null,
+    inventoryEnabled?: boolean | null
+  ) =>
+    computeTodaySummary(shopId, {
+      businessType: businessType ?? null,
+      cogsFeatureEntitled: cogsFeatureEntitled ?? null,
+      cogsEnabled: cogsEnabled ?? null,
+      inventoryFeatureEntitled: inventoryFeatureEntitled ?? null,
+      inventoryEnabled: inventoryEnabled ?? null,
+    }),
   ["today-summary"],
   {
     revalidate: 30,
@@ -129,5 +154,12 @@ export async function getTodaySummaryForShop(
   user: UserContext
 ): Promise<TodaySummary> {
   const shop = await assertShopAccess(shopId, user);
-  return getTodaySummaryCached(shopId, shop.businessType);
+  return getTodaySummaryCached(
+    shopId,
+    shop.businessType,
+    (shop as any).cogsFeatureEntitled ?? null,
+    (shop as any).cogsEnabled ?? null,
+    (shop as any).inventoryFeatureEntitled ?? null,
+    (shop as any).inventoryEnabled ?? null
+  );
 }

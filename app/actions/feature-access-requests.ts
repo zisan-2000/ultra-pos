@@ -96,6 +96,8 @@ export async function requestFeatureAccess(input: {
       taxFeatureEntitled: true,
       barcodeFeatureEntitled: true,
       smsSummaryEntitled: true,
+      inventoryFeatureEntitled: true,
+      cogsFeatureEntitled: true,
     },
   });
 

@@ -7,6 +7,16 @@ import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
 import { parseDhakaDateOnlyRange } from "@/lib/dhaka-date";
+import { shopHasInventoryModule } from "@/lib/accounting/cogs";
+
+async function assertInventoryModuleEnabled(shopId: string) {
+  const enabled = await shopHasInventoryModule(shopId);
+  if (!enabled) {
+    throw new Error(
+      "Purchases/Suppliers module is disabled for this shop. Enable it from shop settings first."
+    );
+  }
+}
 
 export async function createSupplier(input: {
   shopId: string;
@@ -17,6 +27,7 @@ export async function createSupplier(input: {
   const user = await requireUser();
   requirePermission(user, "create_supplier");
   await assertShopAccess(input.shopId, user);
+  await assertInventoryModuleEnabled(input.shopId);
 
   const name = input.name.trim();
   if (!name) throw new Error("Supplier name is required");
@@ -46,6 +57,7 @@ export async function getSuppliersByShop(shopId: string) {
   const user = await requireUser();
   requirePermission(user, "view_suppliers");
   await assertShopAccess(shopId, user);
+  await assertInventoryModuleEnabled(shopId);
 
   const suppliers = await prisma.supplier.findMany({
     where: { shopId },
@@ -96,6 +108,7 @@ export async function getSupplierStatement(input: {
   const user = await requireUser();
   requirePermission(user, "view_suppliers");
   await assertShopAccess(input.shopId, user);
+  await assertInventoryModuleEnabled(input.shopId);
 
   const supplier = await prisma.supplier.findFirst({
     where: { id: input.supplierId, shopId: input.shopId },

@@ -8,6 +8,7 @@ import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
 import { revalidatePath } from "next/cache";
 import { revalidateReportsForProduct } from "@/lib/reports/revalidate";
+import { shopHasInventoryModule } from "@/lib/accounting/cogs";
 import {
   getDhakaDateString,
   parseDhakaDateOnlyRange,
@@ -46,10 +47,20 @@ function normalizePurchaseDate(raw?: string | null) {
   return start ?? new Date(`${day}T00:00:00.000Z`);
 }
 
+async function assertInventoryModuleEnabled(shopId: string) {
+  const enabled = await shopHasInventoryModule(shopId);
+  if (!enabled) {
+    throw new Error(
+      "Purchases/Suppliers module is disabled for this shop. Enable it from shop settings first."
+    );
+  }
+}
+
 export async function createPurchase(input: CreatePurchaseInput) {
   const user = await requireUser();
   requirePermission(user, "create_purchase");
   await assertShopAccess(input.shopId, user);
+  await assertInventoryModuleEnabled(input.shopId);
 
   if (!Array.isArray(input.items) || input.items.length === 0) {
     throw new Error("At least one item is required");
@@ -258,6 +269,7 @@ export async function recordPurchasePayment(input: {
   const user = await requireUser();
   requirePermission(user, "create_purchase_payment");
   await assertShopAccess(input.shopId, user);
+  await assertInventoryModuleEnabled(input.shopId);
 
   const amount = toMoney(input.amount, "Amount");
   if (amount <= 0) throw new Error("Amount must be greater than 0");
@@ -357,6 +369,7 @@ export async function getPurchasesByShopPaginated({
   const user = await requireUser();
   requirePermission(user, "view_purchases");
   await assertShopAccess(shopId, user);
+  await assertInventoryModuleEnabled(shopId);
 
   const safePage = Math.max(1, Math.floor(page));
   const safeSize = Math.max(1, Math.min(Math.floor(pageSize), 100));
@@ -430,6 +443,7 @@ export async function getPurchaseSummaryByRange(
   const user = await requireUser();
   requirePermission(user, "view_purchases");
   await assertShopAccess(shopId, user);
+  await assertInventoryModuleEnabled(shopId);
 
   const start = from ? normalizePurchaseDate(from) : undefined;
   const end = to ? normalizePurchaseDate(to) : undefined;
@@ -490,6 +504,7 @@ export async function getPurchaseWithPayments(
 
   if (!purchase) throw new Error("Purchase not found");
   await assertShopAccess(purchase.shopId, user);
+  await assertInventoryModuleEnabled(purchase.shopId);
 
   const totalPayments = await prisma.purchasePayment.count({
     where: { purchaseId },
@@ -533,6 +548,7 @@ export async function getPayablesSummary(shopId: string) {
   const user = await requireUser();
   requirePermission(user, "view_suppliers");
   await assertShopAccess(shopId, user);
+  await assertInventoryModuleEnabled(shopId);
 
   const [agg, supplierGroups] = await Promise.all([
     prisma.purchase.aggregate({
