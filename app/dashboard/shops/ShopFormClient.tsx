@@ -66,6 +66,7 @@ type Props = {
   action: (formData: FormData) => Promise<void>;
   cacheUserId?: string | null;
   shopId?: string | null;
+  initialSection?: "overview" | "features";
   initial?: {
     name?: string;
     address?: string;
@@ -196,6 +197,7 @@ export default function ShopFormClient({
   action,
   cacheUserId,
   shopId,
+  initialSection = "overview",
   initial,
   submitLabel = "+ নতুন দোকান তৈরি করুন",
   ownerOptions,
@@ -315,6 +317,11 @@ export default function ShopFormClient({
     Boolean(initial?.cogsEnabled ?? false)
   );
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
+  const isEditMode = Boolean(shopId);
+  const [createStep, setCreateStep] = useState<1 | 2>(1);
+  const [activeSection, setActiveSection] = useState<"overview" | "features">(
+    initialSection
+  );
   const hasOwnerOptions = Boolean(ownerOptions && ownerOptions.length > 0);
   const cacheKey = useMemo(
     () => `cachedShops:${cacheUserId || "anon"}`,
@@ -538,6 +545,186 @@ export default function ShopFormClient({
     });
     return { pending, approved, rejected };
   }, [visibleFeatureSections, featureAccessRequests]);
+
+  const enabledFeatureCount = useMemo(() => {
+    let count = 0;
+    if (showSalesInvoiceSettings && salesInvoiceEnabled) count += 1;
+    if (showQueueTokenSettings && queueTokenEnabled) count += 1;
+    if (showDiscountSettings && discountEnabled) count += 1;
+    if (showTaxSettings && taxEnabled) count += 1;
+    if (showBarcodeSettings && barcodeScanEnabled) count += 1;
+    if (showInventorySettings && inventoryEnabled) count += 1;
+    if (showCogsSettings && cogsEnabled) count += 1;
+    if (showSmsSummarySettings && smsSummaryEnabled) count += 1;
+    return count;
+  }, [
+    showSalesInvoiceSettings,
+    salesInvoiceEnabled,
+    showQueueTokenSettings,
+    queueTokenEnabled,
+    showDiscountSettings,
+    discountEnabled,
+    showTaxSettings,
+    taxEnabled,
+    showBarcodeSettings,
+    barcodeScanEnabled,
+    showInventorySettings,
+    inventoryEnabled,
+    showCogsSettings,
+    cogsEnabled,
+    showSmsSummarySettings,
+    smsSummaryEnabled,
+  ]);
+
+  const featureCards = useMemo(
+    () =>
+      [
+        {
+          show: showSalesInvoiceSettings,
+          key: "sales_invoice",
+          title: "Sales Invoice",
+          subtitle: "Invoice, prefix, print size",
+          enabled: salesInvoiceEnabled,
+          entitled: salesInvoiceEntitled,
+          anchorId: "feature-sales-invoice",
+        },
+        {
+          show: showQueueTokenSettings,
+          key: "queue_token",
+          title: "Queue Token",
+          subtitle: "Counter flow, workflow, prefix",
+          enabled: queueTokenEnabled,
+          entitled: queueTokenEntitled,
+          anchorId: "feature-queue-token",
+        },
+        {
+          show: showDiscountSettings,
+          key: "discount",
+          title: "Discount",
+          subtitle: "Sale-level discount controls",
+          enabled: discountEnabled,
+          entitled: discountFeatureEntitled,
+          anchorId: "feature-discount",
+        },
+        {
+          show: showTaxSettings,
+          key: "tax",
+          title: "VAT / Tax",
+          subtitle: "Tax label and rate",
+          enabled: taxEnabled,
+          entitled: taxFeatureEntitled,
+          anchorId: "feature-tax",
+        },
+        {
+          show: showBarcodeSettings,
+          key: "barcode",
+          title: "Barcode",
+          subtitle: "Scan-ready POS lookup",
+          enabled: barcodeScanEnabled,
+          entitled: barcodeFeatureEntitled,
+          anchorId: "feature-barcode",
+        },
+        {
+          show: showInventorySettings,
+          key: "inventory_cogs",
+          title: "Purchases + Suppliers",
+          subtitle: "Stock-in and supplier tracking",
+          enabled: inventoryEnabled,
+          entitled: inventoryFeatureEntitled,
+          anchorId: "feature-inventory-cogs",
+        },
+        {
+          show: showCogsSettings,
+          key: "cogs_analytics",
+          title: "COGS Analytics",
+          subtitle: "Cost-based profit analytics",
+          enabled: cogsEnabled,
+          entitled: cogsFeatureEntitled,
+          anchorId: "feature-cogs-analytics",
+        },
+        {
+          show: showSmsSummarySettings,
+          key: "sms_summary",
+          title: "SMS Summary",
+          subtitle: "Daily owner summary",
+          enabled: smsSummaryEnabled,
+          entitled: smsSummaryEntitled,
+          anchorId: "feature-sms-summary",
+        },
+      ].filter((item) => item.show),
+    [
+      showSalesInvoiceSettings,
+      salesInvoiceEnabled,
+      salesInvoiceEntitled,
+      showQueueTokenSettings,
+      queueTokenEnabled,
+      queueTokenEntitled,
+      showDiscountSettings,
+      discountEnabled,
+      discountFeatureEntitled,
+      showTaxSettings,
+      taxEnabled,
+      taxFeatureEntitled,
+      showBarcodeSettings,
+      barcodeScanEnabled,
+      barcodeFeatureEntitled,
+      showInventorySettings,
+      inventoryEnabled,
+      inventoryFeatureEntitled,
+      showCogsSettings,
+      cogsEnabled,
+      cogsFeatureEntitled,
+      showSmsSummarySettings,
+      smsSummaryEnabled,
+      smsSummaryEntitled,
+    ]
+  );
+
+  const showOverviewPanel = isEditMode
+    ? activeSection === "overview"
+    : createStep === 1;
+  const showFeaturePanel = visibleFeatureSections.length > 0
+    ? isEditMode
+      ? activeSection === "features"
+      : createStep === 2
+    : false;
+  const hasFeatureStep = visibleFeatureSections.length > 0;
+
+  function getFeatureCardStatus(card: {
+    key: string;
+    enabled: boolean;
+    entitled: boolean;
+  }) {
+    if (card.enabled) {
+      return {
+        label: "চালু",
+        className: "border-success/30 bg-success-soft text-success",
+      };
+    }
+    if (card.entitled) {
+      return {
+        label: "প্রস্তুত",
+        className: "border-primary/30 bg-primary-soft text-primary",
+      };
+    }
+    const requestStatus = featureAccessRequests[card.key as FeatureAccessKey]?.status;
+    if (requestStatus === "pending") {
+      return {
+        label: "পেন্ডিং",
+        className: "border-warning/30 bg-warning-soft text-warning",
+      };
+    }
+    if (requestStatus === "rejected") {
+      return {
+        label: "রিজেক্টেড",
+        className: "border-danger/30 bg-danger-soft text-danger",
+      };
+    }
+    return {
+      label: "লকড",
+      className: "border-border bg-card text-muted-foreground",
+    };
+  }
 
   function persistTemplates(next: ShopTemplate[]) {
     setTemplates(next);
@@ -1059,7 +1246,122 @@ export default function ShopFormClient({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card p-4 sm:p-6 space-y-4 shadow-sm">
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="rounded-[28px] border border-border/80 bg-card p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-xs font-semibold tracking-[0.24em] text-primary">
+              {isEditMode ? "SHOP SETTINGS" : "NEW SHOP SETUP"}
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-xl font-semibold text-foreground sm:text-2xl">
+                {isEditMode ? "কম ধাপে পরিষ্কার সেটিংস" : "দুই ধাপে নতুন দোকান তৈরি করুন"}
+              </h2>
+              <p className="max-w-3xl text-sm text-muted-foreground sm:text-base">
+                {isEditMode
+                  ? "প্রথমে basic তথ্য দেখুন, তারপর feature setup-এ গিয়ে শুধু প্রয়োজনীয় জিনিস চালু করুন।"
+                  : "আগে দোকানের basic তথ্য দিন। পরে চাইলে optional feature setup ঠিক করুন।"}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:min-w-[380px]">
+            <div className="rounded-2xl border border-border bg-muted/30 px-3 py-3">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                Business Type
+              </p>
+              <p className="mt-1 text-sm font-semibold text-foreground">
+                {availableBusinessTypes.find((b) => b.id === businessType)?.label ||
+                  businessType}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-muted/30 px-3 py-3">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                Features
+              </p>
+              <p className="mt-1 text-sm font-semibold text-foreground">
+                {enabledFeatureCount}/{visibleFeatureSections.length || 0} চালু
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-muted/30 px-3 py-3">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                Access
+              </p>
+              <p className="mt-1 text-sm font-semibold text-foreground">
+                {featureRequestOverview.pending} pending
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-muted/30 px-3 py-3">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                Mode
+              </p>
+              <p className="mt-1 text-sm font-semibold text-foreground">
+                {isEditMode ? "Settings" : `Step ${createStep}/2`}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {isEditMode ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setActiveSection("overview")}
+                className={`inline-flex h-11 items-center rounded-full border px-4 text-sm font-semibold transition ${
+                  activeSection === "overview"
+                    ? "border-primary/40 bg-primary-soft text-primary"
+                    : "border-border bg-card text-foreground hover:border-primary/30"
+                }`}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection("features")}
+                className={`inline-flex h-11 items-center rounded-full border px-4 text-sm font-semibold transition ${
+                  activeSection === "features"
+                    ? "border-primary/40 bg-primary-soft text-primary"
+                    : "border-border bg-card text-foreground hover:border-primary/30"
+                }`}
+              >
+                Features
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setCreateStep(1)}
+                className={`inline-flex h-11 items-center rounded-full border px-4 text-sm font-semibold transition ${
+                  createStep === 1
+                    ? "border-primary/40 bg-primary-soft text-primary"
+                    : "border-border bg-card text-foreground hover:border-primary/30"
+                }`}
+              >
+                1. Basic Info
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateStep(2)}
+                disabled={!hasFeatureStep}
+                className={`inline-flex h-11 items-center rounded-full border px-4 text-sm font-semibold transition ${
+                  createStep === 2
+                    ? "border-primary/40 bg-primary-soft text-primary"
+                    : "border-border bg-card text-foreground hover:border-primary/30"
+                } disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                2. Optional Features
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {showOverviewPanel ? (
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.75fr)]">
+          <div className="rounded-[28px] border border-border/80 bg-card p-4 shadow-sm sm:p-5">
+            <div className="space-y-5">
       {ownerOptions ? (
         <div className="space-y-2">
           <label className="block text-sm font-semibold text-foreground">মালিক নির্বাচন করুন *</label>
@@ -1233,6 +1535,147 @@ export default function ShopFormClient({
         </select>
         <p className="text-sm text-muted-foreground">সর্বশেষ ব্যবহারকৃত টাইপগুলো উপরে দেখাচ্ছে</p>
       </div>
+            </div>
+          </div>
+
+          <aside className="space-y-4">
+            <div className="rounded-[28px] border border-border/80 bg-card p-4 shadow-sm sm:p-5">
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
+                    Setup Snapshot
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold text-foreground">
+                    {name.trim() || "নতুন দোকান"}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {address.trim() || "ঠিকানা এখনও যোগ করা হয়নি"}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-border bg-muted/30 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                      Phone
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {phone.trim() || "নেই"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-muted/30 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                      Features
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {visibleFeatureSections.length || 0} available
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-primary/20 bg-primary-soft/40 p-4">
+                  <p className="text-sm font-semibold text-foreground">
+                    {isEditMode
+                      ? "Overview আগে, setup পরে"
+                      : "Basic info শেষ করে feature step-এ যান"}
+                  </p>
+                  <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                    {isEditMode
+                      ? "এই panel শুধু shop identity-এর জন্য। Feature tab-এ গিয়ে module গুলো খুলুন।"
+                      : "Form-টা একবারে বড় না দেখিয়ে দুই ধাপে রাখা হয়েছে, যাতে basic input হারিয়ে না যায়।"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                  <p className="text-sm font-semibold text-foreground">ভয়েস শর্টকাট</p>
+                  <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                    বলুন: “নিউ রহমান স্টোর 017…”. নাম আর ফোন auto-fill হবে।
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {recentTemplates.length > 0 ? (
+              <div className="rounded-[28px] border border-primary/20 bg-primary-soft p-4 shadow-sm sm:p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-primary">রিসেন্ট দোকান</p>
+                    <p className="text-xs text-primary/80">এক ট্যাপে basic info বসিয়ে দিন</p>
+                  </div>
+                  <span className="rounded-full border border-primary/20 bg-card px-2.5 py-1 text-xs font-semibold text-primary">
+                    {Math.min(recentTemplates.length, 4)} ready
+                  </span>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {recentTemplates.slice(0, 4).map((t) => (
+                    <button
+                      key={`${t.name}-${t.lastUsed}`}
+                      type="button"
+                      onClick={() => applyTemplate(t)}
+                      className="w-full rounded-2xl border border-primary/20 bg-card px-3 py-3 text-left transition hover:border-primary/45"
+                    >
+                      <p className="font-semibold text-foreground">{t.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t.address || "ঠিকানা নেই"} • {t.phone || "ফোন নেই"}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </aside>
+        </div>
+      ) : null}
+
+      {showFeaturePanel ? (
+        <div className="space-y-4">
+          {featureCards.length > 0 ? (
+            <div className="rounded-[28px] border border-border/80 bg-card p-4 shadow-sm sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
+                    Feature Deck
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold text-foreground">
+                    Optional module গুলো এক নজরে
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    আগে card দেখে অবস্থা বুঝুন, তারপর দরকার হলে নিচের detail section খুলুন।
+                  </p>
+                </div>
+                <span className="rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-xs font-semibold text-primary">
+                  {enabledFeatureCount} active
+                </span>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {featureCards.map((card) => {
+                  const status = getFeatureCardStatus(card);
+                  return (
+                    <a
+                      key={card.key}
+                      href={`#${card.anchorId}`}
+                      className="rounded-2xl border border-border bg-muted/30 p-4 transition hover:border-primary/35 hover:bg-primary-soft/20"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            {card.title}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            {card.subtitle}
+                          </p>
+                        </div>
+                        <span
+                          className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${status.className}`}
+                        >
+                          {status.label}
+                        </span>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
       {shopId && visibleFeatureSections.length > 0 ? (
         <div className="rounded-2xl border border-primary/20 bg-primary-soft/35 p-4 space-y-3">
@@ -1923,36 +2366,8 @@ export default function ShopFormClient({
           </div>
         </details>
       ) : null}
-
-      {/* Recent Templates */}
-      {recentTemplates.length > 0 && (
-        <div className="rounded-2xl border border-primary/20 bg-primary-soft p-4 space-y-2 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-primary">রিসেন্ট দোকান</h3>
-            <span className="text-xs text-primary">এক ট্যাপে অটো-ফিল</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {recentTemplates.slice(0, 4).map((t) => (
-              <button
-                key={`${t.name}-${t.lastUsed}`}
-                type="button"
-                onClick={() => applyTemplate(t)}
-                className="flex items-center justify-between gap-3 bg-card border border-primary/20 rounded-xl px-3 py-2 text-left hover:border-primary/50 transition-colors"
-              >
-                <div>
-                  <p className="font-semibold text-foreground">{t.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {t.address || "ঠিকানা নেই"} • {t.phone || "ফোন নেই"}
-                  </p>
-                </div>
-                <span className="text-xs text-primary">
-                  {availableBusinessTypes.find((b) => b.id === t.businessType)?.label || t.businessType}
-                </span>
-              </button>
-            ))}
-          </div>
         </div>
-      )}
+      ) : null}
 
       {submitError ? (
         <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
@@ -1960,21 +2375,48 @@ export default function ShopFormClient({
         </div>
       ) : null}
 
-      {/* Buttons */}
-      <div className="flex gap-3 pt-4">
-        <button
-          type="submit"
-          className="flex-1 h-14 sm:h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-        >
-          {submitLabel}
-        </button>
-        <Link
-          href={backHref}
-          className="flex-1 h-14 sm:h-12 rounded-xl border border-border text-foreground text-base font-semibold hover:bg-muted transition text-center flex items-center justify-center"
-        >
-          পিছনে যান
-        </Link>
-      </div>
+      {!isEditMode && createStep === 1 && hasFeatureStep ? (
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => setCreateStep(2)}
+            disabled={!hasFeatureStep}
+            className="flex-1 h-14 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Optional features দেখুন
+          </button>
+          <Link
+            href={backHref}
+            className="flex-1 h-14 rounded-xl border border-border text-foreground text-base font-semibold hover:bg-muted transition text-center flex items-center justify-center"
+          >
+            পিছনে যান
+          </Link>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3 sm:flex-row">
+          {!isEditMode ? (
+            <button
+              type="button"
+              onClick={() => setCreateStep(1)}
+              className="flex-1 h-14 sm:h-12 rounded-xl border border-border text-foreground text-base font-semibold hover:bg-muted transition text-center flex items-center justify-center"
+            >
+              Basic info-তে ফিরে যান
+            </button>
+          ) : null}
+          <button
+            type="submit"
+            className="flex-1 h-14 sm:h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            {submitLabel}
+          </button>
+          <Link
+            href={backHref}
+            className="flex-1 h-14 sm:h-12 rounded-xl border border-border text-foreground text-base font-semibold hover:bg-muted transition text-center flex items-center justify-center"
+          >
+            পিছনে যান
+          </Link>
+        </div>
+      )}
       <p className="text-xs text-muted-foreground text-right">
         মাইক্রোফোনে বলুন: “নিউ রহমান স্টোর 017…” → নাম + ফোন প্রস্তুত
       </p>

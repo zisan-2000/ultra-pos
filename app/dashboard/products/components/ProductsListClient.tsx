@@ -1111,7 +1111,7 @@ export default function ProductsListClient({
         </div>
       </div>
 
-      <div className="sticky top-0 z-30">
+      <div className="sticky top-0 z-10">
         <div className="rounded-2xl border border-border bg-background/95 backdrop-blur-sm shadow-sm">
           <div className="space-y-3 p-3">
             <div className="relative">

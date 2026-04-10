@@ -1265,7 +1265,7 @@ export default function DuePageClient({
         </div>
       </div>
 
-      <div className="sticky top-0 z-20 bg-card/95 backdrop-blur border-b border-border/70">
+      <div className="sticky top-0 z-10 bg-card/95 backdrop-blur border-b border-border/70">
         <div className="px-2 py-2">
           <div className="flex gap-2 overflow-x-auto no-scrollbar rounded-full bg-muted/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
             {tabs.map((tab) => (

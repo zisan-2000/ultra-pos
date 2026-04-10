@@ -320,15 +320,15 @@ export default async function EditShop({ params, searchParams }: PageProps) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="mx-auto max-w-6xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground">
           {setupMode ? "দোকান সেটআপ সম্পন্ন করুন" : "দোকানের তথ্য সম্পাদনা"}
         </h1>
         <p className="text-muted-foreground mt-2">
           {setupMode
-            ? "এখন প্রয়োজনীয় feature-গুলোর Access Request দিন। Approve হলে সঙ্গে সঙ্গে চালু করতে পারবেন।"
-            : "নাম + ঠিকানা আপডেট করুন"}
+            ? "দোকান তৈরি হয়েছে। এখন feature tab-এ গিয়ে প্রয়োজনীয় access/setup ঠিক করুন।"
+            : "Overview-এ basic তথ্য, Features-এ module configuration রাখুন।"}
         </p>
       </div>
       {setupMode ? (
@@ -347,6 +347,7 @@ export default async function EditShop({ params, searchParams }: PageProps) {
         action={handleUpdate}
         cacheUserId={user?.id ?? "anon"}
         shopId={id}
+        initialSection={setupMode ? "features" : "overview"}
         initial={{
           name: shop.name || "",
           address: shop.address || "",

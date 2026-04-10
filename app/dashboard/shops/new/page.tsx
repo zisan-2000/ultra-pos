@@ -252,18 +252,21 @@ export default async function NewShopPage({ searchParams }: PageProps) {
   ];
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">নতুন দোকান যোগ করুন</h1>
-        <p className="text-muted-foreground mt-2">মৌলিক তথ্য, ঠিকানা, যোগাযোগ ও ব্যবসার ধরন যুক্ত করুন</p>
-      </div>
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground">নতুন দোকান যোগ করুন</h1>
+          <p className="mt-2 text-muted-foreground">
+            Basic তথ্য আগে দিন, তারপর দরকার হলে optional feature setup ঠিক করুন।
+          </p>
+        </div>
 
-      <ShopFormClient
-        backHref={backHref}
-        action={handleCreateShop}
-        cacheUserId={user?.id ?? "anon"}
-        ownerOptions={ownerOptions}
-        businessTypeOptions={mergedBusinessTypes}
+        <ShopFormClient
+          backHref={backHref}
+          action={handleCreateShop}
+          cacheUserId={user?.id ?? "anon"}
+          initialSection="overview"
+          ownerOptions={ownerOptions}
+          businessTypeOptions={mergedBusinessTypes}
         showSalesInvoiceSettings={
           canManageSalesInvoiceEntitlement || canManageSalesInvoiceFeature
         }

@@ -150,12 +150,12 @@ function formatImpactLabel(
 ) {
   const rounded = roundMoney(amount);
   if (rounded < 1) {
-    return options?.fallback ?? "আজ লাভ ধরে রাখার দিকে ফোকাস দিন";
+    return options?.fallback ?? "আজ লাভ ঠিক রাখায় ফোকাস দিন";
   }
   if (options?.type === "cash") {
-    return `হাতে নগদ প্রায় ${formatMoney(rounded)} আসতে পারে`;
+    return `এই কাজ হলে হাতে আসতে পারে ${formatMoney(rounded)}`;
   }
-  return `লাভ প্রায় ${formatMoney(rounded)} বাড়তে পারে`;
+  return `এই কাজ হলে বাড়তি লাভ হতে পারে ${formatMoney(rounded)}`;
 }
 
 function getTopSellerAction(businessType: string, productName: string) {
@@ -242,6 +242,11 @@ function buildMetricRows(summary: TodaySummary, snapshot: OwnerCopilotSnapshot) 
 
 function buildCommonBullets(summary: TodaySummary, snapshot: OwnerCopilotSnapshot) {
   const bullets: string[] = [];
+  const cashBalance = roundMoney(summary.cash.balance);
+  const cashTrend = directionLabel(summary.cash.balance, snapshot.yesterday.cashBalance, {
+    higherIsBetter: true,
+    idleLabel: "গতকালের মতোই আছে",
+  });
 
   if (snapshot.topProductName) {
     bullets.push(
@@ -253,6 +258,20 @@ function buildCommonBullets(summary: TodaySummary, snapshot: OwnerCopilotSnapsho
     bullets.push(`আজ মোট ${summary.sales.count}টি বিক্রি হয়েছে।`);
   } else {
     bullets.push("আজ এখনো কোনো বিক্রি হয়নি।");
+  }
+
+  if (cashBalance <= 0) {
+    bullets.push("আজ হাতে usable ক্যাশ নেই। cash in/out মিলিয়ে আবার দেখুন।");
+  } else if (cashTrend.tone === "success") {
+    bullets.push(
+      `আজ হাতে ক্যাশ আছে ${formatMoney(cashBalance)}। গতকালের তুলনায় কিছুটা বেড়েছে।`
+    );
+  } else if (cashTrend.tone === "danger") {
+    bullets.push(
+      `আজ হাতে ক্যাশ আছে ${formatMoney(cashBalance)}। গতকালের তুলনায় কমে গেছে।`
+    );
+  } else {
+    bullets.push(`আজ হাতে ক্যাশ আছে ${formatMoney(cashBalance)}। গতকালের মতোই আছে।`);
   }
 
   if (snapshot.dueTotal > 0) {

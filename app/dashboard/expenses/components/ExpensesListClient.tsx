@@ -531,7 +531,7 @@ export function ExpensesListClient({
       )}
 
       {/* Mobile sticky summary */}
-      <div className="md:hidden sticky top-0 z-30">
+      <div className="md:hidden sticky top-0 z-10">
         <div className="rounded-2xl border border-border bg-card/95 backdrop-blur shadow-sm">
           <div className="p-3 space-y-3">
             <div className="flex items-center justify-between gap-3">

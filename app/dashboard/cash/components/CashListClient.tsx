@@ -466,7 +466,7 @@ export function CashListClient({
   return (
     <div className="space-y-4 pb-16">
       {/* Sticky time filter (mobile only) */}
-      <div className="md:hidden sticky top-0 z-30">
+      <div className="md:hidden sticky top-0 z-10">
         <div className="rounded-xl border border-border bg-card/95 backdrop-blur shadow-sm">
           <div className="px-3 py-2 space-y-2">
             <div className="flex items-center justify-between">

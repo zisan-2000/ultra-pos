@@ -604,7 +604,7 @@ export function DashboardShell({
       : "grid-cols-1";
 
   return (
-    <div className="h-screen overflow-x-hidden bg-background print:h-auto print:overflow-visible print:bg-white">
+    <div className="h-screen min-h-dvh h-dvh overflow-x-hidden bg-background print:h-auto print:overflow-visible print:bg-white">
       {/* Overlay for drawer on mobile */}
       {drawerOpen && (
         <button
@@ -1143,8 +1143,8 @@ export function DashboardShell({
         </aside>
 
         {/* Main content */}
-        <div className="flex-1 flex flex-col h-full lg:pl-0 overflow-hidden print:h-auto print:overflow-visible">
-          <header className="sticky top-0 z-20 bg-card/90 backdrop-blur border-b border-border/70 shadow-[0_1px_0_rgba(15,23,42,0.08)] relative print:hidden">
+        <div className="flex-1 flex min-h-0 flex-col h-full lg:pl-0 overflow-hidden print:h-auto print:overflow-visible">
+          <header className="sticky top-0 z-40 bg-card/90 backdrop-blur border-b border-border/70 shadow-[0_1px_0_rgba(15,23,42,0.08)] relative print:hidden">
             {isNavigating && (
               <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/20">
                 <div className="h-full w-1/3 bg-primary animate-pulse" />
