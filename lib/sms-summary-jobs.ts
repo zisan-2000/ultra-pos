@@ -39,9 +39,13 @@ type ShopDaySummary = {
   sales: number;
   expense: number;
   profit: number;
-  due: number;
+  cashBalance: number;
   topProductName: string | null;
   topProductQty: number;
+};
+
+type ShopDayTrend = {
+  profitLine: string;
 };
 
 function isDateOnly(input: string) {
@@ -100,36 +104,76 @@ function truncate(value: string, max = 20) {
   return `${value.slice(0, Math.max(1, max - 1))}...`;
 }
 
+function getPreviousDate(dateOnly: string) {
+  const current = new Date(`${dateOnly}T00:00:00.000+06:00`);
+  const prev = new Date(current.getTime() - 24 * 60 * 60 * 1000);
+  return getDhakaDateString(prev);
+}
+
+function buildProfitTrendLine(todayProfit: number, yesterdayProfit: number) {
+  const today = Number(todayProfit.toFixed(2));
+  const yesterday = Number(yesterdayProfit.toFixed(2));
+
+  if (Math.abs(yesterday) < 0.01) {
+    if (Math.abs(today) < 0.01) {
+      return "লাভ গতকালের মতোই আছে।";
+    }
+    return `গতকালের তুলনায় আজ নতুন লাভ এসেছে ${formatMoney(today)}৳।`;
+  }
+
+  const diff = today - yesterday;
+  const percent = Math.abs((diff / Math.abs(yesterday)) * 100);
+
+  if (percent < 0.5) {
+    return "লাভ গতকালের মতোই আছে।";
+  }
+
+  return diff > 0
+    ? `গতকালের তুলনায় আজ লাভ ${percent.toFixed(1)}% বেড়েছে।`
+    : `গতকালের তুলনায় আজ লাভ ${percent.toFixed(1)}% কমেছে।`;
+}
+
 function buildSummaryMessage(params: {
   shopName: string;
   businessDate: string;
   summary: ShopDaySummary;
+  trend: ShopDayTrend;
 }) {
   const top =
     params.summary.topProductName && params.summary.topProductQty > 0
       ? `${truncate(params.summary.topProductName, 16)}(${formatQty(
           params.summary.topProductQty
         )})`
-      : "N/A";
+      : null;
 
-  let message = `[MicroPOS] ${params.businessDate} ${truncate(
+  let message = `[SellFlick] ${params.businessDate} ${truncate(
     params.shopName,
     18
-  )}: Sales ${formatMoney(params.summary.sales)}, Exp ${formatMoney(
+  )}: বিক্রি ${formatMoney(params.summary.sales)}৳, খরচ ${formatMoney(
     params.summary.expense
-  )}, Profit ${formatMoney(params.summary.profit)}, Due ${formatMoney(
-    params.summary.due
-  )}, Top ${top}`;
+  )}৳, লাভ ${formatMoney(params.summary.profit)}৳, হাতে ক্যাশ ${formatMoney(
+    params.summary.cashBalance
+  )}৳। ${params.trend.profitLine}${top ? ` বেশি বিক্রি: ${top}` : ""}`;
 
   if (message.length > 160) {
-    message = `[MicroPOS] ${params.businessDate} ${truncate(
+    message = `[SellFlick] ${params.businessDate} ${truncate(
       params.shopName,
       12
-    )}: S ${formatMoney(params.summary.sales)} E ${formatMoney(
-      params.summary.expense
-    )} P ${formatMoney(params.summary.profit)} D ${formatMoney(
-      params.summary.due
-    )} Top ${truncate(top, 16)}`;
+    )}: বিক্রি ${formatMoney(params.summary.sales)}৳, লাভ ${formatMoney(
+      params.summary.profit
+    )}৳, ক্যাশ ${formatMoney(params.summary.cashBalance)}৳। ${
+      params.trend.profitLine
+    }${
+      top ? `, টপ ${truncate(top, 14)}` : ""
+    }`;
+  }
+
+  if (message.length > 160) {
+    message = `[SellFlick] ${truncate(params.shopName, 10)} ${params.businessDate}: বিক্রি ${formatMoney(
+      params.summary.sales
+    )}৳, লাভ ${formatMoney(
+      params.summary.profit
+    )}৳, ক্যাশ ${formatMoney(params.summary.cashBalance)}৳। ${params.trend.profitLine}`;
   }
 
   return message;
@@ -149,7 +193,7 @@ async function computeShopDaySummary(
   const end = parsedRange.end ?? new Date(`${businessDate}T23:59:59.999Z`);
   const dateOnly = businessDate;
 
-  const [salesAgg, returnAgg, expenseAgg, dueAgg, cogs, topRows] =
+  const [salesAgg, returnAgg, expenseAgg, cashAgg, cogs, topRows] =
     await Promise.all([
       prisma.sale.aggregate({
         where: {
@@ -174,10 +218,16 @@ async function computeShopDaySummary(
         },
         _sum: { amount: true },
       }),
-      prisma.customer.aggregate({
-        where: { shopId },
-        _sum: { totalDue: true },
-      }),
+      prisma.$queryRaw<
+        { totalIn: Prisma.Decimal | number; totalOut: Prisma.Decimal | number }[]
+      >(Prisma.sql`
+        SELECT
+          COALESCE(SUM(CASE WHEN entry_type = 'IN' THEN amount ELSE 0 END), 0) AS "totalIn",
+          COALESCE(SUM(CASE WHEN entry_type = 'OUT' THEN amount ELSE 0 END), 0) AS "totalOut"
+        FROM "cash_entries"
+        WHERE shop_id = CAST(${shopId} AS uuid)
+          AND business_date = CAST(${dateOnly} AS date)
+      `),
       getCogsTotalRaw(shopId, start, end),
       prisma.$queryRaw<
         {
@@ -253,7 +303,9 @@ async function computeShopDaySummary(
   const sales =
     Number(salesAgg._sum.totalAmount ?? 0) + Number(returnAgg._sum.netAmount ?? 0);
   const expense = Number(expenseAgg._sum.amount ?? 0);
-  const due = Number(dueAgg._sum.totalDue ?? 0);
+  const totalIn = Number(cashAgg[0]?.totalIn ?? 0);
+  const totalOut = Number(cashAgg[0]?.totalOut ?? 0);
+  const cashBalance = totalIn - totalOut;
   const profit = sales - expense - Number(cogs ?? 0);
 
   if (!Number.isFinite(topProductQty)) {
@@ -264,7 +316,7 @@ async function computeShopDaySummary(
     sales: Number(sales.toFixed(2)),
     expense: Number(expense.toFixed(2)),
     profit: Number(profit.toFixed(2)),
-    due: Number(due.toFixed(2)),
+    cashBalance: Number(cashBalance.toFixed(2)),
     topProductName,
     topProductQty: Number(topProductQty.toFixed(2)),
   };
@@ -443,10 +495,16 @@ export async function runDailySmsSummaryJob(
     }
 
     const summary = await computeShopDaySummary(shop.id, targetBusinessDate);
+    const yesterdayDate = getPreviousDate(targetBusinessDate);
+    const yesterdaySummary = await computeShopDaySummary(shop.id, yesterdayDate);
+    const trend: ShopDayTrend = {
+      profitLine: buildProfitTrendLine(summary.profit, yesterdaySummary.profit),
+    };
     const message = buildSummaryMessage({
       shopName: shop.name,
       businessDate: targetBusinessDate,
       summary,
+      trend,
     });
 
     result.previews.push({
