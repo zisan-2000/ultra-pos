@@ -78,6 +78,7 @@ type ScannerSuspendDetail = {
 };
 type PosInputMode = "search" | "scanner";
 type PosProductViewMode = "grid" | "list";
+type VoiceSearchMode = "bn" | "en";
 type VariantPickerState = {
   product: EnrichedProduct;
 };
@@ -85,31 +86,74 @@ type CodeLookupMatch = {
   product: EnrichedProduct;
   variant?: ProductVariantOption;
 };
+type VoiceProductMatch = {
+  product: EnrichedProduct;
+  score: number;
+  transcript: string;
+  matchKind: "exact" | "startsWith" | "contains" | "token" | "fuzzy";
+};
 
 const QUICK_LIMIT = 8; // fixed slots so buttons never jump during a session
 const INITIAL_RENDER = 60;
 const RENDER_BATCH = 40;
 const SCANNER_INTERACTION_PAUSE_MS = 2200;
-const PRIMARY_VOICE_LANG = "bn-BD";
-const FALLBACK_VOICE_LANG = "en-US";
+const VOICE_LANG_BY_MODE: Record<VoiceSearchMode, string> = {
+  bn: "bn-BD",
+  en: "en-US",
+};
 const VOICE_SEARCH_ALIAS_MAP: Record<string, string[]> = {
   orange: ["কমলা", "কমলারস", "orange juice", "orenge"],
+  "অরেঞ্জ": ["orange", "কমলা", "orange juice"],
   "কমলা": ["orange", "orange juice", "কমলার রস", "কমলারস"],
+  mango: ["আম", "mengo", "mango juice"],
+  "আম": ["mango", "mango juice"],
+  lemon: ["লেবু", "lemon juice"],
+  "লেবু": ["lemon", "lemon juice"],
   juice: ["জুস", "রস"],
   "জুস": ["juice", "রস"],
   "রস": ["juice", "জুস"],
   shake: ["শেক", "milkshake", "milk shake"],
   "শেক": ["shake", "milkshake"],
+  milk: ["দুধ", "milkshake", "milk shake"],
+  "দুধ": ["milk", "milkshake"],
   tea: ["চা"],
   "চা": ["tea"],
   coffee: ["কফি"],
   "কফি": ["coffee"],
+  chicken: ["চিকেন"],
+  "চিকেন": ["chicken"],
+  beef: ["বিফ", "গরু"],
+  "বিফ": ["beef"],
+  egg: ["ডিম"],
+  "ডিম": ["egg"],
+  rice: ["ভাত", "রাইস"],
+  "ভাত": ["rice", "রাইস"],
+  curry: ["কারি", "কারি", "ঝোল"],
+  "কারি": ["curry"],
+  burger: ["বার্গার"],
+  "বার্গার": ["burger"],
+  pizza: ["পিজ্জা"],
+  "পিজ্জা": ["pizza"],
   coke: ["কোক", "cola", "coca cola"],
   "কোক": ["coke", "cola"],
   water: ["পানি", "জল"],
   "পানি": ["water", "জল"],
   "জল": ["water", "পানি"],
 };
+
+function dedupeStringList(values: string[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = normalizeVoiceTranscript(value);
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+  }
+  return result;
+}
 
 function scheduleIdle(callback: () => void) {
   const g = globalThis as typeof globalThis & {
@@ -224,6 +268,142 @@ function expandAliasTokens(token: string) {
     }
   }
   return Array.from(terms);
+}
+
+function buildSearchableVoiceFields(product: EnrichedProduct) {
+  const fields: string[] = [
+    product.name,
+    product.category,
+    String(product.sku || ""),
+    String(product.barcode || ""),
+  ];
+
+  for (const variant of getActiveVariants(product)) {
+    fields.push(
+      String(variant.label || ""),
+      String(variant.sku || ""),
+      String(variant.barcode || "")
+    );
+  }
+
+  return fields
+    .map((field) => normalizeVoiceTranscript(field))
+    .filter(Boolean);
+}
+
+function scoreVoiceTranscriptForProduct(
+  transcript: string,
+  product: EnrichedProduct,
+  usage: Record<string, UsageEntry>
+): VoiceProductMatch | null {
+  const foldedTranscript = foldSearchText(transcript);
+  const transcriptTokens = tokenizeSearchText(transcript);
+  if (!foldedTranscript || transcriptTokens.length === 0) return null;
+
+  const fields = buildSearchableVoiceFields(product);
+  const foldedFields = fields.map((field) => foldSearchText(field)).filter(Boolean);
+  if (foldedFields.length === 0) return null;
+
+  let score = 0;
+  let matchKind: VoiceProductMatch["matchKind"] = "fuzzy";
+
+  for (const field of foldedFields) {
+    if (field === foldedTranscript) {
+      score = Math.max(score, 320);
+      matchKind = "exact";
+    } else if (field.startsWith(foldedTranscript)) {
+      score = Math.max(score, 240);
+      if (matchKind !== "exact") matchKind = "startsWith";
+    } else if (field.includes(foldedTranscript)) {
+      score = Math.max(score, 180);
+      if (matchKind === "fuzzy") matchKind = "contains";
+    }
+  }
+
+  const fieldTokens = foldedFields.flatMap((field) => field.split(" "));
+  let matchedTokens = 0;
+  let fuzzyHitCount = 0;
+
+  for (const token of transcriptTokens) {
+    const expanded = expandAliasTokens(token);
+    let tokenMatched = false;
+
+    for (const candidate of expanded) {
+      if (foldedFields.some((field) => field.includes(candidate))) {
+        matchedTokens += 1;
+        tokenMatched = true;
+        if (matchKind === "fuzzy") matchKind = "token";
+        break;
+      }
+
+      if (
+        fieldTokens.some((fieldToken) => isFuzzyTokenMatch(candidate, fieldToken))
+      ) {
+        matchedTokens += 1;
+        fuzzyHitCount += 1;
+        tokenMatched = true;
+        break;
+      }
+    }
+
+    if (!tokenMatched && transcriptTokens.length > 1) {
+      score -= 24;
+    }
+  }
+
+  if (matchedTokens > 0) {
+    score += matchedTokens * 48;
+    if (matchedTokens === transcriptTokens.length) {
+      score += 70;
+    } else {
+      score -= (transcriptTokens.length - matchedTokens) * 12;
+    }
+  }
+
+  if (fuzzyHitCount > 0) {
+    score -= fuzzyHitCount * 8;
+    if (matchKind === "fuzzy") {
+      matchKind = "fuzzy";
+    }
+  }
+
+  const usageEntry = usage[product.id];
+  if (usageEntry?.favorite) score += 16;
+  if (usageEntry?.count) score += Math.min(usageEntry.count, 12);
+  if (usageEntry?.lastUsed) score += 6;
+
+  if (score < 80) return null;
+
+  return {
+    product,
+    score,
+    transcript,
+    matchKind,
+  };
+}
+
+function rankVoiceProductMatches(
+  transcripts: string[],
+  products: EnrichedProduct[],
+  usage: Record<string, UsageEntry>
+) {
+  const ranked = new Map<string, VoiceProductMatch>();
+  for (const transcript of transcripts) {
+    for (const product of products) {
+      const candidate = scoreVoiceTranscriptForProduct(transcript, product, usage);
+      if (!candidate) continue;
+      const existing = ranked.get(product.id);
+      if (!existing || existing.score < candidate.score) {
+        ranked.set(product.id, candidate);
+      }
+    }
+  }
+
+  return Array.from(ranked.values()).sort(
+    (a, b) =>
+      b.score - a.score ||
+      a.product.name.localeCompare(b.product.name)
+  );
 }
 
 function getActiveVariants(product: EnrichedProduct): ProductVariantOption[] {
@@ -386,6 +566,13 @@ export const PosProductSearch = memo(function PosProductSearch({
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceHeard, setVoiceHeard] = useState("");
+  const [voiceMatches, setVoiceMatches] = useState<VoiceProductMatch[]>([]);
+  const [voiceMode, setVoiceMode] = useState<VoiceSearchMode>(() => {
+    if (typeof window === "undefined") return "bn";
+    const stored = safeLocalStorageGet(`pos-voice-mode:${shopId}`);
+    return stored === "en" ? "en" : "bn";
+  });
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
   const [cooldownProductId, setCooldownProductId] = useState<string | null>(
     null
@@ -447,6 +634,10 @@ export const PosProductSearch = memo(function PosProductSearch({
     () => `pos-input-mode:${shopId}`,
     [shopId]
   );
+  const voiceModeStorageKey = useMemo(
+    () => `pos-voice-mode:${shopId}`,
+    [shopId]
+  );
   const [inputMode, setInputMode] = useState<PosInputMode>("search");
   const scannerAssistEnabled = canUseBarcodeScan && inputMode === "scanner";
 
@@ -497,6 +688,14 @@ export const PosProductSearch = memo(function PosProductSearch({
       // ignore local preference write errors
     }
   }, [inputMode, inputModeStorageKey]);
+
+  useEffect(() => {
+    try {
+      safeLocalStorageSet(voiceModeStorageKey, voiceMode);
+    } catch {
+      // ignore local preference write errors
+    }
+  }, [voiceMode, voiceModeStorageKey]);
 
   useEffect(() => {
     if (!canUseBarcodeScan && inputMode === "scanner") {
@@ -1315,6 +1514,54 @@ export const PosProductSearch = memo(function PosProductSearch({
     return () => clearTimeout(id);
   }, [scanFeedback]);
 
+  const clearVoiceAssist = useCallback(() => {
+    setVoiceHeard("");
+    setVoiceMatches([]);
+  }, []);
+
+  useEffect(() => {
+    clearVoiceAssist();
+    setVoiceError(null);
+  }, [voiceMode, clearVoiceAssist]);
+
+  const resolveVoiceQuery = useCallback(
+    (alternatives: string[]) => {
+      const normalizedAlternatives = dedupeStringList(alternatives);
+      if (normalizedAlternatives.length === 0) {
+        setVoiceHeard("");
+        setVoiceMatches([]);
+        return false;
+      }
+
+      const rankedMatches = rankVoiceProductMatches(
+        normalizedAlternatives,
+        productsWithCategory,
+        usage
+      );
+      const heard = normalizedAlternatives[0] || "";
+      setVoiceHeard(heard);
+      setVoiceMatches(rankedMatches.slice(0, 3));
+      setShowAllProducts(true);
+
+      const top = rankedMatches[0];
+      const second = rankedMatches[1];
+      const hasHighConfidence =
+        Boolean(top) &&
+        (top.score >= 280 ||
+          (top.score >= 220 && (!second || top.score - second.score >= 48)));
+
+      if (hasHighConfidence && top) {
+        setQuery(top.product.name);
+        setVoiceError(null);
+        return true;
+      }
+
+      setQuery(heard);
+      return rankedMatches.length > 0;
+    },
+    [productsWithCategory, usage]
+  );
+
   useEffect(() => {
     if (
       !canUseBarcodeScan ||
@@ -1367,11 +1614,17 @@ export const PosProductSearch = memo(function PosProductSearch({
 
     const runVoiceAttempt = (
       lang: string
-    ): Promise<{ spoken: string | null; errorCode: string | null }> =>
+    ): Promise<{ spoken: string | null; alternatives: string[]; errorCode: string | null }> =>
       new Promise((resolve) => {
         const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
         let settled = false;
-        const finish = (result: { spoken: string | null; errorCode: string | null }) => {
+        const finish = (
+          result: {
+            spoken: string | null;
+            alternatives: string[];
+            errorCode: string | null;
+          }
+        ) => {
           if (settled) return;
           settled = true;
           if (recognitionRef.current === recognition) {
@@ -1383,20 +1636,23 @@ export const PosProductSearch = memo(function PosProductSearch({
         recognition.lang = lang;
         recognition.interimResults = false;
         recognition.continuous = false;
+        (recognition as any).maxAlternatives = 5;
         recognition.onerror = (e: any) => {
           const code = typeof e?.error === "string" ? e.error : "unknown";
-          finish({ spoken: null, errorCode: code });
+          finish({ spoken: null, alternatives: [], errorCode: code });
         };
         recognition.onend = () => {
-          finish({ spoken: null, errorCode: null });
+          finish({ spoken: null, alternatives: [], errorCode: null });
         };
         recognition.onresult = (event: any) => {
-          const spoken: string | undefined = event?.results?.[0]?.[0]?.transcript;
-          const normalizedSpoken = spoken
-            ? normalizeVoiceTranscript(spoken)
-            : "";
+          const alternatives = Array.from(event?.results?.[0] || [])
+            .map((choice: any) => normalizeVoiceTranscript(choice?.transcript || ""))
+            .filter(Boolean);
+          const normalizedAlternatives = dedupeStringList(alternatives);
+          const normalizedSpoken = normalizedAlternatives[0] || "";
           finish({
             spoken: normalizedSpoken || null,
+            alternatives: normalizedAlternatives,
             errorCode: null,
           });
         };
@@ -1405,7 +1661,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         try {
           recognition.start();
         } catch {
-          finish({ spoken: null, errorCode: "start-failed" });
+          finish({ spoken: null, alternatives: [], errorCode: "start-failed" });
         }
       });
 
@@ -1416,47 +1672,39 @@ export const PosProductSearch = memo(function PosProductSearch({
 
     voiceCancelRequestedRef.current = false;
     setVoiceError(null);
+    clearVoiceAssist();
     setListening(true);
     void (async () => {
-      const primary = await runVoiceAttempt(PRIMARY_VOICE_LANG);
-      if (voiceCancelRequestedRef.current || userStoppedCodes.has(primary.errorCode || "")) {
+      const result = await runVoiceAttempt(VOICE_LANG_BY_MODE[voiceMode]);
+      if (voiceCancelRequestedRef.current || userStoppedCodes.has(result.errorCode || "")) {
         setListening(false);
         return;
       }
 
-      const primarySpoken = primary.spoken;
-      if (primarySpoken) {
-        setQuery((prev) => (prev ? `${prev} ${primarySpoken}` : primarySpoken));
+      const spoken = result.spoken;
+      if (spoken) {
+        resolveVoiceQuery(result.alternatives.length ? result.alternatives : [spoken]);
         setListening(false);
         return;
       }
 
-      if (blockedCodes.has(primary.errorCode || "")) {
+      if (blockedCodes.has(result.errorCode || "")) {
         setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
         setListening(false);
         return;
       }
 
-      if (!tryFallback(primary.errorCode)) {
+      if (!tryFallback(result.errorCode)) {
         setVoiceError("ভয়েস সার্চ ব্যর্থ হয়েছে। পরে আবার চেষ্টা করুন।");
         setListening(false);
         return;
       }
 
-      const fallback = await runVoiceAttempt(FALLBACK_VOICE_LANG);
-      if (voiceCancelRequestedRef.current || userStoppedCodes.has(fallback.errorCode || "")) {
-        setListening(false);
-        return;
-      }
-
-      const fallbackSpoken = fallback.spoken;
-      if (fallbackSpoken) {
-        setQuery((prev) => (prev ? `${prev} ${fallbackSpoken}` : fallbackSpoken));
-      } else if (blockedCodes.has(fallback.errorCode || "")) {
-        setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি");
-      } else {
-        setVoiceError("কথা পরিষ্কার শোনা যায়নি। বাংলা বা ইংরেজিতে আবার বলুন।");
-      }
+      setVoiceError(
+        voiceMode === "bn"
+          ? "বাংলায় আবার পরিষ্কার করে বলুন।"
+          : "Please say the product name clearly in English."
+      );
       setListening(false);
     })();
   };
@@ -1465,13 +1713,18 @@ export const PosProductSearch = memo(function PosProductSearch({
     voiceCancelRequestedRef.current = true;
     recognitionRef.current?.abort?.();
     recognitionRef.current?.stop?.();
+    clearVoiceAssist();
     setListening(false);
   };
   const voiceErrorText = voiceError ? `(${voiceError})` : "";
   const voiceHint = listening
-    ? "শুনছে... বাংলা বা ইংরেজিতে পণ্যের নাম বলুন।"
+    ? voiceMode === "bn"
+      ? "শুনছে... বাংলায় পণ্যের নাম বলুন।"
+      : "Listening... say the product name in English."
     : voiceReady
-    ? "ভয়েসে বাংলা বা ইংরেজি পণ্যের নাম বলুন।"
+    ? voiceMode === "bn"
+      ? "বাংলা mode-এ পণ্যের নাম বলুন।"
+      : "English mode-এ product name বলুন।"
     : "ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না";
 
   const renderProductButton = (product: EnrichedProduct) => (
@@ -1535,7 +1788,10 @@ export const PosProductSearch = memo(function PosProductSearch({
             placeholder="পণ্য খুঁজুন (নাম/কোড)..."
             value={query}
             onFocus={() => setShowAllProducts(true)}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              clearVoiceAssist();
+              setQuery(e.target.value);
+            }}
           />
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-base">
             🔍
@@ -1544,7 +1800,10 @@ export const PosProductSearch = memo(function PosProductSearch({
             {query ? (
               <button
                 type="button"
-                onClick={() => setQuery("")}
+                onClick={() => {
+                  clearVoiceAssist();
+                  setQuery("");
+                }}
                 aria-label="সার্চ ক্লিয়ার করুন"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground text-sm hover:bg-muted"
               >
@@ -1567,12 +1826,81 @@ export const PosProductSearch = memo(function PosProductSearch({
           </div>
         </div>
       </div>
-      <p className="hidden text-xs text-muted-foreground sm:block">
-        {voiceHint}{" "}
-        {voiceErrorText ? <span className="text-danger">{voiceErrorText}</span> : null}
-      </p>
-      {voiceErrorText ? (
-        <p className="text-[11px] text-danger sm:hidden">{voiceErrorText}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex items-center rounded-full border border-border bg-card/90 p-0.5 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setVoiceMode("bn")}
+            aria-pressed={voiceMode === "bn"}
+            className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold transition ${
+              voiceMode === "bn"
+                ? "bg-primary-soft text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            বাংলা
+          </button>
+          <button
+            type="button"
+            onClick={() => setVoiceMode("en")}
+            aria-pressed={voiceMode === "en"}
+            className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold transition ${
+              voiceMode === "en"
+                ? "bg-primary-soft text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            EN
+          </button>
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {listening ? (
+            <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary-soft px-2.5 py-1 text-[11px] font-semibold text-primary">
+              {voiceMode === "bn" ? "বাংলা শুনছে..." : "Listening..."}
+            </span>
+          ) : null}
+          {voiceErrorText ? (
+            <span className="inline-flex items-center rounded-full border border-danger/25 bg-danger/10 px-2.5 py-1 text-[11px] font-semibold text-danger">
+              {voiceMode === "bn" ? "আবার বলুন" : "Try again"}
+            </span>
+          ) : voiceReady ? (
+            <span className="text-[11px] text-muted-foreground">
+              {voiceMode === "bn" ? "বাংলা mode" : "EN mode"}
+            </span>
+          ) : (
+            <span className="text-[11px] text-danger">
+              মাইক্রোফোন সাপোর্ট নেই
+            </span>
+          )}
+        </div>
+      </div>
+      {voiceHeard ? (
+        <div className="rounded-xl border border-primary/15 bg-primary-soft/20 p-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex max-w-full items-center rounded-full border border-primary/20 bg-card px-2.5 py-1 text-[11px] font-semibold text-primary">
+              <span className="truncate">শুনেছে: {voiceHeard}</span>
+            </span>
+            {voiceMatches.length > 0 ? (
+              voiceMatches.map((match) => (
+                <button
+                  key={`${match.product.id}-${match.matchKind}`}
+                  type="button"
+                  onClick={() => {
+                    setQuery(match.product.name);
+                    setShowAllProducts(true);
+                  }}
+                  className="inline-flex items-center rounded-full border border-primary/25 bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary/45 hover:text-primary"
+                >
+                  {match.product.name}
+                </button>
+              ))
+            ) : (
+              <span className="text-[11px] text-muted-foreground">
+                match পাওয়া যায়নি
+              </span>
+            )}
+          </div>
+        </div>
       ) : null}
       {canUseBarcodeScan ? (
         <p className="hidden rounded-lg border border-primary/20 bg-primary-soft/30 px-3 py-2 text-[11px] text-muted-foreground sm:block">
