@@ -44,10 +44,6 @@ type ShopDaySummary = {
   topProductQty: number;
 };
 
-type ShopDayTrend = {
-  profitLine: string;
-};
-
 function isDateOnly(input: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(input);
 }
@@ -104,76 +100,82 @@ function truncate(value: string, max = 20) {
   return `${value.slice(0, Math.max(1, max - 1))}...`;
 }
 
-function getPreviousDate(dateOnly: string) {
-  const current = new Date(`${dateOnly}T00:00:00.000+06:00`);
-  const prev = new Date(current.getTime() - 24 * 60 * 60 * 1000);
-  return getDhakaDateString(prev);
-}
+const MONTH_LABELS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
-function buildProfitTrendLine(todayProfit: number, yesterdayProfit: number) {
-  const today = Number(todayProfit.toFixed(2));
-  const yesterday = Number(yesterdayProfit.toFixed(2));
-
-  if (Math.abs(yesterday) < 0.01) {
-    if (Math.abs(today) < 0.01) {
-      return "লাভ গতকালের মতোই আছে।";
-    }
-    return `গতকালের তুলনায় আজ নতুন লাভ এসেছে ${formatMoney(today)}৳।`;
+function toCompactDateLabel(dateOnly: string) {
+  const [year, month, day] = dateOnly.split("-");
+  const parsedMonth = Number(month);
+  const parsedDay = Number(day);
+  if (
+    !year ||
+    !Number.isInteger(parsedMonth) ||
+    parsedMonth < 1 ||
+    parsedMonth > 12 ||
+    !Number.isInteger(parsedDay) ||
+    parsedDay < 1 ||
+    parsedDay > 31
+  ) {
+    return dateOnly;
   }
-
-  const diff = today - yesterday;
-  const percent = Math.abs((diff / Math.abs(yesterday)) * 100);
-
-  if (percent < 0.5) {
-    return "লাভ গতকালের মতোই আছে।";
-  }
-
-  return diff > 0
-    ? `গতকালের তুলনায় আজ লাভ ${percent.toFixed(1)}% বেড়েছে।`
-    : `গতকালের তুলনায় আজ লাভ ${percent.toFixed(1)}% কমেছে।`;
+  return `${parsedDay}${MONTH_LABELS[parsedMonth - 1]}`;
 }
 
 function buildSummaryMessage(params: {
   shopName: string;
   businessDate: string;
   summary: ShopDaySummary;
-  trend: ShopDayTrend;
 }) {
-  const top =
+  const topProduct =
     params.summary.topProductName && params.summary.topProductQty > 0
       ? `${truncate(params.summary.topProductName, 16)}(${formatQty(
           params.summary.topProductQty
         )})`
       : null;
 
-  let message = `[SellFlick] ${params.businessDate} ${truncate(
-    params.shopName,
-    18
-  )}: বিক্রি ${formatMoney(params.summary.sales)}৳, খরচ ${formatMoney(
-    params.summary.expense
-  )}৳, লাভ ${formatMoney(params.summary.profit)}৳, হাতে ক্যাশ ${formatMoney(
-    params.summary.cashBalance
-  )}৳। ${params.trend.profitLine}${top ? ` বেশি বিক্রি: ${top}` : ""}`;
+  const sales = formatMoney(params.summary.sales);
+  const expense = formatMoney(params.summary.expense);
+  const profit = formatMoney(params.summary.profit);
+  const cash = formatMoney(params.summary.cashBalance);
+  const dateLabel = toCompactDateLabel(params.businessDate);
+
+  const withTemplate = (shopName: string, topLabel: string, compact = false) => {
+    if (compact) {
+      return `[SellFlick] ${dateLabel}: ${shopName}-Sales${sales}Tk,Exp${expense}Tk,Profit${profit}Tk,Cash${cash}Tk${topLabel}`;
+    }
+    return `[SellFlick] ${dateLabel}: ${shopName}-Sales ${sales}Tk, Exp ${expense}Tk, Profit ${profit}Tk, Cash ${cash}Tk${topLabel}`;
+  };
+
+  let shopLabel = truncate(params.shopName, 18);
+  let topLabel = topProduct ? `, Top product: ${topProduct}` : "";
+  let message = withTemplate(shopLabel, topLabel, false);
 
   if (message.length > 160) {
-    message = `[SellFlick] ${params.businessDate} ${truncate(
-      params.shopName,
-      12
-    )}: বিক্রি ${formatMoney(params.summary.sales)}৳, লাভ ${formatMoney(
-      params.summary.profit
-    )}৳, ক্যাশ ${formatMoney(params.summary.cashBalance)}৳। ${
-      params.trend.profitLine
-    }${
-      top ? `, টপ ${truncate(top, 14)}` : ""
-    }`;
+    shopLabel = truncate(params.shopName, 14);
+    topLabel = topProduct ? `, Top:${truncate(topProduct, 20)}` : "";
+    message = withTemplate(shopLabel, topLabel, false);
   }
 
   if (message.length > 160) {
-    message = `[SellFlick] ${truncate(params.shopName, 10)} ${params.businessDate}: বিক্রি ${formatMoney(
-      params.summary.sales
-    )}৳, লাভ ${formatMoney(
-      params.summary.profit
-    )}৳, ক্যাশ ${formatMoney(params.summary.cashBalance)}৳। ${params.trend.profitLine}`;
+    shopLabel = truncate(params.shopName, 12);
+    topLabel = topProduct ? `, Top:${truncate(topProduct, 12)}` : "";
+    message = withTemplate(shopLabel, topLabel, true);
+  }
+
+  if (message.length > 160) {
+    message = message.slice(0, 160);
   }
 
   return message;
@@ -495,16 +497,10 @@ export async function runDailySmsSummaryJob(
     }
 
     const summary = await computeShopDaySummary(shop.id, targetBusinessDate);
-    const yesterdayDate = getPreviousDate(targetBusinessDate);
-    const yesterdaySummary = await computeShopDaySummary(shop.id, yesterdayDate);
-    const trend: ShopDayTrend = {
-      profitLine: buildProfitTrendLine(summary.profit, yesterdaySummary.profit),
-    };
     const message = buildSummaryMessage({
       shopName: shop.name,
       businessDate: targetBusinessDate,
       summary,
-      trend,
     });
 
     result.previews.push({
