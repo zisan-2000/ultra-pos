@@ -248,9 +248,15 @@ function isFuzzyTokenMatch(queryToken: string, candidateToken: string) {
   if (candidateToken.includes(queryToken)) return true;
   if (queryToken.length < 3 || candidateToken.length < 3) return false;
   if (Math.abs(queryToken.length - candidateToken.length) > 3) return false;
+  if (
+    queryToken.length <= 6 &&
+    queryToken[0] !== candidateToken[0]
+  ) {
+    return false;
+  }
 
   const maxDistance =
-    queryToken.length <= 4 ? 1 : queryToken.length <= 7 ? 2 : 3;
+    queryToken.length <= 5 ? 1 : queryToken.length <= 8 ? 2 : 3;
   return levenshteinWithin(queryToken, candidateToken, maxDistance);
 }
 
@@ -1784,7 +1790,7 @@ export const PosProductSearch = memo(function PosProductSearch({
       <div className="flex gap-2 items-center">
         <div className="relative flex-1">
           <input
-            className="w-full h-10 rounded-xl border border-border bg-card/80 pl-10 pr-22 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full h-10 rounded-xl border border-border bg-card/80 pl-10 pr-36 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 sm:pr-44"
             placeholder="পণ্য খুঁজুন (নাম/কোড)..."
             value={query}
             onFocus={() => setShowAllProducts(true)}
@@ -1796,7 +1802,33 @@ export const PosProductSearch = memo(function PosProductSearch({
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-base">
             🔍
           </span>
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+            <div className="inline-flex items-center rounded-full border border-border bg-card/90 p-0.5 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setVoiceMode("bn")}
+                aria-pressed={voiceMode === "bn"}
+                className={`inline-flex h-7 items-center rounded-full px-2 text-[11px] font-semibold transition sm:px-2.5 ${
+                  voiceMode === "bn"
+                    ? "bg-primary-soft text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                BN
+              </button>
+              <button
+                type="button"
+                onClick={() => setVoiceMode("en")}
+                aria-pressed={voiceMode === "en"}
+                className={`inline-flex h-7 items-center rounded-full px-2 text-[11px] font-semibold transition sm:px-2.5 ${
+                  voiceMode === "en"
+                    ? "bg-primary-soft text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                EN
+              </button>
+            </div>
             {query ? (
               <button
                 type="button"
@@ -1826,54 +1858,23 @@ export const PosProductSearch = memo(function PosProductSearch({
           </div>
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex items-center rounded-full border border-border bg-card/90 p-0.5 shadow-sm">
-          <button
-            type="button"
-            onClick={() => setVoiceMode("bn")}
-            aria-pressed={voiceMode === "bn"}
-            className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold transition ${
-              voiceMode === "bn"
-                ? "bg-primary-soft text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            বাংলা
-          </button>
-          <button
-            type="button"
-            onClick={() => setVoiceMode("en")}
-            aria-pressed={voiceMode === "en"}
-            className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold transition ${
-              voiceMode === "en"
-                ? "bg-primary-soft text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            EN
-          </button>
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+      {listening || voiceErrorText || !voiceReady ? (
+        <div className="flex flex-wrap items-center gap-2">
           {listening ? (
             <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary-soft px-2.5 py-1 text-[11px] font-semibold text-primary">
-              {voiceMode === "bn" ? "বাংলা শুনছে..." : "Listening..."}
+              {voiceMode === "bn" ? "BN শুনছে..." : "EN listening..."}
             </span>
           ) : null}
           {voiceErrorText ? (
             <span className="inline-flex items-center rounded-full border border-danger/25 bg-danger/10 px-2.5 py-1 text-[11px] font-semibold text-danger">
               {voiceMode === "bn" ? "আবার বলুন" : "Try again"}
             </span>
-          ) : voiceReady ? (
-            <span className="text-[11px] text-muted-foreground">
-              {voiceMode === "bn" ? "বাংলা mode" : "EN mode"}
-            </span>
-          ) : (
-            <span className="text-[11px] text-danger">
-              মাইক্রোফোন সাপোর্ট নেই
-            </span>
-          )}
+          ) : null}
+          {!voiceReady ? (
+            <span className="text-[11px] text-danger">মাইক্রোফোন সাপোর্ট নেই</span>
+          ) : null}
         </div>
-      </div>
+      ) : null}
       {voiceHeard ? (
         <div className="rounded-xl border border-primary/15 bg-primary-soft/20 p-2.5">
           <div className="flex flex-wrap items-center gap-2">
