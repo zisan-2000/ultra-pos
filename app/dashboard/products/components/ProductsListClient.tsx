@@ -39,8 +39,6 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import {
   getSpeechRecognitionCtor,
   mapVoiceErrorBangla,
-  startDualLanguageVoice,
-  type VoiceSession,
 } from "@/lib/voice-recognition";
 import { matchesProductSearchQuery } from "@/lib/product-search";
 
@@ -92,6 +90,8 @@ type SpeechRecognitionInstance = {
   onend: (() => void) | null;
 };
 
+type VoiceSearchMode = "bn" | "en";
+
 type Props = {
   shops: Shop[];
   activeShopId: string;
@@ -113,6 +113,10 @@ type Props = {
 const MAX_PAGE_BUTTONS = 5;
 const OFFLINE_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
+const VOICE_LANG_BY_MODE: Record<VoiceSearchMode, string> = {
+  bn: "bn-BD",
+  en: "en-US",
+};
 const UNTRACKED_STOCK_CLASSES = {
   card: "border-border bg-muted/40",
   label: "text-muted-foreground",
@@ -225,7 +229,7 @@ export default function ProductsListClient({
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const { setShop } = useCurrentShop();
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const voiceSessionRef = useRef<VoiceSession | null>(null);
+  const voiceStopRequestedRef = useRef(false);
   const serverSnapshotRef = useRef(serverProducts);
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
@@ -261,6 +265,10 @@ export default function ProductsListClient({
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceMode, setVoiceMode] = useState<VoiceSearchMode>(() => {
+    const stored = safeLocalStorageGet(`products-voice-mode:${activeShopId}`);
+    return stored === "en" ? "en" : "bn";
+  });
   const [searchExpanded, setSearchExpanded] = useState(false);
 
   const lastAppliedRef = useRef({
@@ -268,6 +276,10 @@ export default function ProductsListClient({
     status: initialStatus,
   });
   const debouncedQuery = useDebounce(query, SEARCH_DEBOUNCE_MS);
+  const voiceModeStorageKey = useMemo(
+    () => `products-voice-mode:${activeShopId}`,
+    [activeShopId]
+  );
 
   useEffect(() => {
     setShop(activeShopId);
@@ -310,12 +322,27 @@ export default function ProductsListClient({
     const SpeechRecognitionImpl = getSpeechRecognitionCtor();
     setVoiceReady(Boolean(SpeechRecognitionImpl));
     return () => {
-      voiceSessionRef.current?.stop();
-      voiceSessionRef.current = null;
+      voiceStopRequestedRef.current = true;
       recognitionRef.current?.stop?.();
       recognitionRef.current?.abort?.();
+      recognitionRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const stored = safeLocalStorageGet(voiceModeStorageKey);
+    setVoiceMode(stored === "en" ? "en" : "bn");
+    setVoiceError(null);
+    setListening(false);
+    voiceStopRequestedRef.current = true;
+    recognitionRef.current?.stop?.();
+    recognitionRef.current?.abort?.();
+    recognitionRef.current = null;
+  }, [voiceModeStorageKey]);
+
+  useEffect(() => {
+    safeLocalStorageSet(voiceModeStorageKey, voiceMode);
+  }, [voiceMode, voiceModeStorageKey]);
 
   useEffect(() => {
     if (serverSnapshotRef.current !== serverProducts) {
@@ -972,43 +999,90 @@ export default function ProductsListClient({
   }, [online, debouncedQuery, status, applyFilters]);
 
   function startListening() {
+    if (listening) return;
+    const SpeechRecognitionImpl = getSpeechRecognitionCtor();
+    if (!SpeechRecognitionImpl) {
+      setVoiceReady(false);
+      setVoiceError("এই ব্রাউজারে ভয়েস সার্চ সমর্থিত নয়।");
+      return;
+    }
+
     setVoiceError(null);
     triggerHaptic("light");
-    voiceSessionRef.current?.stop();
-    voiceSessionRef.current = startDualLanguageVoice({
-      onRecognitionRef: (recognition) => {
-        recognitionRef.current = recognition;
-      },
-      onTranscript: (transcript) => {
-        if (!transcript) return;
-        setQuery(transcript);
-        triggerHaptic("medium");
-      },
-      onError: (kind, errorCode) => {
-        if (kind === "aborted") return;
-        if (kind === "not_supported") {
-          setVoiceReady(false);
-          setVoiceError("এই ব্রাউজারে ভয়েস সার্চ সমর্থিত নয়।");
-          return;
-        }
-        const message = mapVoiceErrorBangla(kind);
-        const codeSuffix = errorCode ? ` (${errorCode})` : "";
-        setVoiceError(`${message}${codeSuffix}`);
-      },
-      onEnd: () => {
-        setListening(false);
-        voiceSessionRef.current = null;
-      },
-    });
-    if (!voiceSessionRef.current) return;
+    voiceStopRequestedRef.current = false;
+    recognitionRef.current?.stop?.();
+    recognitionRef.current?.abort?.();
+
+    const recognition: SpeechRecognitionInstance = new SpeechRecognitionImpl();
+    recognition.lang = VOICE_LANG_BY_MODE[voiceMode];
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    (recognition as any).maxAlternatives = 3;
+
+    recognition.onresult = (event: any) => {
+      const transcript = String(event?.results?.[0]?.[0]?.transcript || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!transcript) return;
+      setQuery(transcript);
+      setSearchExpanded(true);
+      triggerHaptic("medium");
+      setVoiceError(null);
+    };
+
+    recognition.onerror = (event: any) => {
+      const errorCode =
+        typeof event?.error === "string" ? (event.error as string) : null;
+      if (
+        voiceStopRequestedRef.current ||
+        errorCode === "aborted"
+      ) {
+        return;
+      }
+      if (
+        errorCode === "not-allowed" ||
+        errorCode === "denied" ||
+        errorCode === "service-not-allowed"
+      ) {
+        setVoiceError("মাইক্রোফোন অ্যাক্সেস পাওয়া যায়নি।");
+        return;
+      }
+      if (errorCode === "no-speech") {
+        setVoiceError(
+          voiceMode === "bn"
+            ? "বাংলায় আবার পরিষ্কার করে বলুন।"
+            : "Please say the product name clearly in English."
+        );
+        return;
+      }
+      const fallbackMessage = mapVoiceErrorBangla("unavailable");
+      setVoiceError(errorCode ? `${fallbackMessage} (${errorCode})` : fallbackMessage);
+    };
+
+    recognition.onend = () => {
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+      }
+      voiceStopRequestedRef.current = false;
+      setListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch {
+      recognitionRef.current = null;
+      setVoiceError("ভয়েস সার্চ শুরু করা যায়নি।");
+      return;
+    }
     setListening(true);
   }
 
   function stopListening() {
-    voiceSessionRef.current?.stop();
-    voiceSessionRef.current = null;
+    voiceStopRequestedRef.current = true;
     recognitionRef.current?.stop?.();
     recognitionRef.current?.abort?.();
+    recognitionRef.current = null;
     setListening(false);
   }
 
@@ -1124,27 +1198,84 @@ export default function ProductsListClient({
                   if (!query) setSearchExpanded(false);
                 }}
                 placeholder="পণ্য খুঁজুন..."
-                className="w-full h-12 pl-11 pr-16 text-base border border-border rounded-xl bg-card shadow-sm focus:border-primary/40 focus:ring-2 focus:ring-primary/20 transition"
+                className="w-full h-12 pl-11 pr-36 text-base border border-border rounded-xl bg-card shadow-sm focus:border-primary/40 focus:ring-2 focus:ring-primary/20 transition sm:pr-40"
               />
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">
                 🔍
               </span>
-              {voiceReady && (
-                <button
-                  type="button"
-                  onClick={listening ? stopListening : startListening}
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+              <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-2">
+                {voiceReady ? (
+                  <>
+                    <div className="inline-flex h-9 items-center rounded-full border border-primary/20 bg-primary-soft/60 p-1 shadow-sm">
+                      <button
+                        type="button"
+                        aria-pressed={voiceMode === "bn"}
+                        onClick={() => {
+                          setVoiceMode("bn");
+                          setVoiceError(null);
+                        }}
+                        className={`inline-flex h-7 items-center rounded-full px-2.5 text-[11px] font-semibold transition ${
+                          voiceMode === "bn"
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-primary"
+                        }`}
+                      >
+                        বাংলা
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={voiceMode === "en"}
+                        onClick={() => {
+                          setVoiceMode("en");
+                          setVoiceError(null);
+                        }}
+                        className={`inline-flex h-7 items-center rounded-full px-2.5 text-[11px] font-semibold transition ${
+                          voiceMode === "en"
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-primary"
+                        }`}
+                      >
+                        EN
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={listening ? stopListening : startListening}
+                      aria-label={
+                        listening
+                          ? "ভয়েস সার্চ বন্ধ করুন"
+                          : voiceMode === "bn"
+                          ? "বাংলায় ভয়েস সার্চ চালু করুন"
+                          : "Enable English voice search"
+                      }
+                      className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border text-sm font-semibold transition ${
+                        listening
+                          ? "animate-pulse border-primary/40 bg-primary-soft text-primary"
+                          : "border-primary/30 bg-primary-soft text-primary active:scale-95"
+                      }`}
+                    >
+                      {listening ? "🔴" : "🎤"}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+            {(listening || voiceError) && (
+              <div className="flex items-center justify-between gap-2 px-1">
+                <span
+                  className={`inline-flex min-h-7 items-center rounded-full border px-3 py-1 text-[11px] font-semibold ${
                     listening
-                      ? "bg-primary-soft text-primary border-primary/40 animate-pulse"
-                      : "bg-primary-soft text-primary border-primary/30 active:scale-95"
+                      ? "border-primary/30 bg-primary-soft text-primary"
+                      : "border-danger/20 bg-danger-soft text-danger"
                   }`}
                 >
-                  {listening ? "🔴" : "🎤"}
-                </button>
-              )}
-            </div>
-            {voiceError && (
-              <p className="text-xs text-danger px-1">{voiceError}</p>
+                  {listening
+                    ? voiceMode === "bn"
+                      ? "বাংলা শুনছে..."
+                      : "EN listening..."
+                    : voiceError}
+                </span>
+              </div>
             )}
 
             <div className="relative">
