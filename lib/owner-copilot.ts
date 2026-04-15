@@ -92,6 +92,10 @@ function percentDelta(current: number, base: number) {
   return Number((((currentValue - baseValue) / Math.abs(baseValue)) * 100).toFixed(1));
 }
 
+function moneyDelta(current: number, base: number) {
+  return roundMoney(current) - roundMoney(base);
+}
+
 function directionLabel(
   current: number,
   base: number,
@@ -99,18 +103,19 @@ function directionLabel(
 ): { label: string; tone: OwnerCopilotMetricTone } {
   const higherIsBetter = options?.higherIsBetter ?? true;
   const idleLabel = options?.idleLabel ?? "গতকালের সমান";
-  const delta = percentDelta(current, base);
-  if (delta === null) {
+  const deltaPercent = percentDelta(current, base);
+  const deltaAmount = moneyDelta(current, base);
+  if (deltaPercent === null) {
     if (Math.abs(current) < 0.01) return { label: idleLabel, tone: "muted" as const };
     return {
       label: `নতুন ${current > 0 ? "চলাচল" : "পরিবর্তন"}`,
       tone: higherIsBetter ? "success" : "warning",
     };
   }
-  if (Math.abs(delta) < 0.5) {
+  if (Math.abs(deltaAmount) < 1) {
     return { label: idleLabel, tone: "muted" as const };
   }
-  const positive = delta > 0;
+  const positive = deltaAmount > 0;
   const tone: OwnerCopilotMetricTone =
     positive === higherIsBetter
       ? "success"
@@ -118,15 +123,15 @@ function directionLabel(
         ? "danger"
         : "warning";
   return {
-    label: `গতকালের তুলনায় ${Math.abs(delta).toFixed(1)}% ${positive ? "বেশি" : "কম"}`,
+    label: `গতকালের তুলনায় ${formatMoney(Math.abs(deltaAmount))} ${positive ? "বেশি" : "কম"}`,
     tone,
   };
 }
 
 function avgLabel(current: number, average: number, noun = "৭ দিনের গড়") {
-  const delta = percentDelta(current, average);
-  if (delta === null || Math.abs(delta) < 0.5) return `${noun}-এর কাছাকাছি`;
-  return `${noun}-এর তুলনায় ${Math.abs(delta).toFixed(1)}% ${delta > 0 ? "বেশি" : "কম"}`;
+  const deltaAmount = moneyDelta(current, average);
+  if (Math.abs(deltaAmount) < 1) return `${noun}-এর কাছাকাছি`;
+  return `${noun}-এর তুলনায় ${formatMoney(Math.abs(deltaAmount))} ${deltaAmount > 0 ? "বেশি" : "কম"}`;
 }
 
 function clampNumber(value: number, min: number, max: number) {
@@ -392,11 +397,7 @@ export function buildOwnerCopilotInsight(
         title: `${snapshot.topProductName} আজ বেশি বিক্রি হচ্ছে`,
         reason: `${snapshot.topProductName} আজ ${snapshot.topProductQty.toFixed(
           snapshot.topProductQty % 1 === 0 ? 0 : 2
-        )} ইউনিট বিক্রি হয়ে ${formatMoney(snapshot.topProductRevenue)} বিক্রি এসেছে${
-          topProductShare >= 0.25
-            ? `, যা মোট বিক্রির ${(topProductShare * 100).toFixed(1)}%।`
-            : "।"
-        }`,
+        )} ইউনিট বিক্রি হয়ে ${formatMoney(snapshot.topProductRevenue)} বিক্রি এসেছে।`,
         action: getTopSellerAction(businessType, snapshot.topProductName),
         impactLabel: formatImpactLabel(pushImpact, {
           fallback: "এটা সামনে রাখলে আজকের লাভ বাড়তে পারে",
@@ -588,7 +589,9 @@ export function buildOwnerCopilotInsight(
   if (profitVsYesterday !== null && profitVsYesterday <= -8) {
     tone = "warning";
     badge = "লাভ কমেছে";
-    headline = `আজ লাভ গতকালের তুলনায় ${Math.abs(profitVsYesterday).toFixed(1)}% কম।`;
+    headline = `আজ লাভ গতকালের তুলনায় ${formatMoney(
+      Math.abs(moneyDelta(profit, snapshot.yesterday.profit))
+    )} কম।`;
     overview = expenseSpike
       ? `মূল চাপ এসেছে খরচের দিক থেকে। ${avgLabel(
           expenses,
@@ -608,7 +611,9 @@ export function buildOwnerCopilotInsight(
   } else if (profitVsYesterday !== null && profitVsYesterday >= 8) {
     tone = "success";
     badge = "লাভ বেড়েছে";
-    headline = `আজ লাভ গতকালের তুলনায় ${Math.abs(profitVsYesterday).toFixed(1)}% বেশি।`;
+    headline = `আজ লাভ গতকালের তুলনায় ${formatMoney(
+      Math.abs(moneyDelta(profit, snapshot.yesterday.profit))
+    )} বেশি।`;
     overview = snapshot.topProductName
       ? `${snapshot.topProductName} আজ ভালো বিক্রি দিচ্ছে। ${avgLabel(
           sales,
@@ -649,7 +654,9 @@ export function buildOwnerCopilotInsight(
   } else if (salesVsYesterday !== null && salesVsYesterday <= -10) {
     tone = "warning";
     badge = "বিক্রি কমেছে";
-    headline = `আজ বিক্রি গতকালের তুলনায় ${Math.abs(salesVsYesterday).toFixed(1)}% কম।`;
+    headline = `আজ বিক্রি গতকালের তুলনায় ${formatMoney(
+      Math.abs(moneyDelta(sales, snapshot.yesterday.sales))
+    )} কম।`;
     overview = snapshot.topProductName
       ? `${snapshot.topProductName} সামনে রাখুন এবং দ্রুত বিক্রিতে এটাকে আগে দিন।`
       : "যেসব পণ্য বেশি বিক্রি হয়, সেগুলো সামনে রাখলে দ্রুত বিক্রি বাড়বে।";

@@ -100,6 +100,27 @@ function truncate(value: string, max = 20) {
   return `${value.slice(0, Math.max(1, max - 1))}...`;
 }
 
+const SINGLE_PART_SMS_MAX = 160;
+
+function normalizeSmsText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function lengthByCodePoint(value: string) {
+  return Array.from(value).length;
+}
+
+function sliceByCodePoint(value: string, max: number) {
+  return Array.from(value).slice(0, Math.max(0, max)).join("");
+}
+
+function truncateByCodePoint(value: string, max: number) {
+  const normalized = normalizeSmsText(value);
+  if (lengthByCodePoint(normalized) <= max) return normalized;
+  if (max <= 1) return sliceByCodePoint(normalized, max);
+  return `${sliceByCodePoint(normalized, max - 1)}…`;
+}
+
 const MONTH_LABELS = [
   "Jan",
   "Feb",
@@ -138,47 +159,56 @@ function buildSummaryMessage(params: {
   businessDate: string;
   summary: ShopDaySummary;
 }) {
-  const topProduct =
-    params.summary.topProductName && params.summary.topProductQty > 0
-      ? `${truncate(params.summary.topProductName, 16)}(${formatQty(
-          params.summary.topProductQty
-        )})`
-      : null;
-
   const sales = formatMoney(params.summary.sales);
   const expense = formatMoney(params.summary.expense);
   const profit = formatMoney(params.summary.profit);
   const cash = formatMoney(params.summary.cashBalance);
   const dateLabel = toCompactDateLabel(params.businessDate);
+  const normalizedShopName = normalizeSmsText(params.shopName);
+  const topProduct =
+    params.summary.topProductName && params.summary.topProductQty > 0
+      ? `${truncateByCodePoint(
+          normalizeSmsText(params.summary.topProductName),
+          16
+        )}(${formatQty(params.summary.topProductQty)})`
+      : null;
 
-  const withTemplate = (shopName: string, topLabel: string, compact = false) => {
-    if (compact) {
-      return `[SellFlick] ${dateLabel}: ${shopName}-Sales${sales}Tk,Exp${expense}Tk,Profit${profit}Tk,Cash${cash}Tk${topLabel}`;
-    }
-    return `[SellFlick] ${dateLabel}: ${shopName}-Sales ${sales}Tk, Exp ${expense}Tk, Profit ${profit}Tk, Cash ${cash}Tk${topLabel}`;
-  };
+  const withTemplate = (shopLabel?: string, topLabel?: string) =>
+    normalizeSmsText(
+      shopLabel
+        ? `SellFlick ${dateLabel} ${shopLabel}: Sales ${sales}Tk, Profit ${profit}Tk, Exp ${expense}Tk, Cash ${cash}Tk${topLabel ? `, Top ${topLabel}` : ""}`
+        : `SellFlick ${dateLabel}: Sales ${sales}Tk, Profit ${profit}Tk, Exp ${expense}Tk, Cash ${cash}Tk${topLabel ? `, Top ${topLabel}` : ""}`
+    );
 
-  let shopLabel = truncate(params.shopName, 18);
-  let topLabel = topProduct ? `, Top product: ${topProduct}` : "";
-  let message = withTemplate(shopLabel, topLabel, false);
-
-  if (message.length > 160) {
-    shopLabel = truncate(params.shopName, 14);
-    topLabel = topProduct ? `, Top:${truncate(topProduct, 20)}` : "";
-    message = withTemplate(shopLabel, topLabel, false);
+  let shopLabel = truncateByCodePoint(normalizedShopName, 18);
+  let topLabel = topProduct ? truncateByCodePoint(topProduct, 20) : "";
+  let message = withTemplate(shopLabel, topLabel || undefined);
+  if (lengthByCodePoint(message) <= SINGLE_PART_SMS_MAX) {
+    return message;
   }
 
-  if (message.length > 160) {
-    shopLabel = truncate(params.shopName, 12);
-    topLabel = topProduct ? `, Top:${truncate(topProduct, 12)}` : "";
-    message = withTemplate(shopLabel, topLabel, true);
+  shopLabel = truncateByCodePoint(normalizedShopName, 14);
+  topLabel = topProduct ? truncateByCodePoint(topProduct, 14) : "";
+  message = withTemplate(shopLabel, topLabel || undefined);
+  if (lengthByCodePoint(message) <= SINGLE_PART_SMS_MAX) {
+    return message;
   }
 
-  if (message.length > 160) {
-    message = message.slice(0, 160);
+  shopLabel = truncateByCodePoint(normalizedShopName, 10);
+  topLabel = topProduct ? truncateByCodePoint(topProduct, 10) : "";
+  message = withTemplate(shopLabel, topLabel || undefined);
+  if (lengthByCodePoint(message) <= SINGLE_PART_SMS_MAX) {
+    return message;
   }
 
-  return message;
+  message = normalizeSmsText(
+    `SellFlick ${dateLabel}: Sales ${sales}Tk, Profit ${profit}Tk, Exp ${expense}Tk, Cash ${cash}Tk`
+  );
+  if (lengthByCodePoint(message) <= SINGLE_PART_SMS_MAX) {
+    return message;
+  }
+
+  return sliceByCodePoint(message, SINGLE_PART_SMS_MAX).trim();
 }
 
 async function computeShopDaySummary(
