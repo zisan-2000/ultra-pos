@@ -38,6 +38,7 @@ import {
   startDualLanguageVoice,
   type VoiceSession,
 } from "@/lib/voice-recognition";
+import { parsePhoneInput } from "@/lib/phone-input";
 import {
   db,
   type LocalDueCustomer,
@@ -274,11 +275,6 @@ export default function DuePageClient({
   function parseAmount(text: string) {
     const match = text.match(/(\d+(?:[.,]\d+)?)/);
     return match ? match[1].replace(",", "") : "";
-  }
-
-  function parsePhone(text: string) {
-    const digits = text.replace(/\D/g, "");
-    return digits ? digits.slice(0, 15) : "";
   }
 
   function dedupe(values: string[]) {
@@ -1072,7 +1068,7 @@ export default function DuePageClient({
       },
       onTranscript: (spoken) => {
         if (field === "customerName") {
-          const phone = parsePhone(spoken);
+          const phone = parsePhoneInput(spoken);
           const name = phone ? spoken.replace(phone, "").trim() : spoken;
           setNewCustomer((p) => ({ ...p, name }));
           if (phone && !newCustomer.phone) {
@@ -1081,7 +1077,7 @@ export default function DuePageClient({
           return;
         }
         if (field === "customerPhone") {
-          const phone = parsePhone(spoken);
+          const phone = parsePhoneInput(spoken);
           if (phone) setNewCustomer((p) => ({ ...p, phone }));
           return;
         }

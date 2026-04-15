@@ -18,6 +18,7 @@ import {
   startDualLanguageVoice,
   type VoiceSession,
 } from "@/lib/voice-recognition";
+import { parsePhoneInput } from "@/lib/phone-input";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -30,11 +31,6 @@ type SpeechRecognitionInstance = {
   onerror: ((event: any) => void) | null;
   onend: (() => void) | null;
 };
-
-function parsePhone(text: string) {
-  const digits = text.replace(/\D/g, "");
-  return digits ? digits.slice(0, 15) : "";
-}
 
 type QuickCustomerSheetProps = {
   shopId: string;
@@ -126,7 +122,7 @@ export default function QuickCustomerSheet({
       },
       onTranscript: (spoken) => {
         if (field === "customerName") {
-          const phoneFromSpeech = parsePhone(spoken);
+          const phoneFromSpeech = parsePhoneInput(spoken);
           const parsedName = phoneFromSpeech
             ? spoken.replace(phoneFromSpeech, "").trim()
             : spoken;
@@ -137,7 +133,7 @@ export default function QuickCustomerSheet({
           return;
         }
         if (field === "customerPhone") {
-          const parsedPhone = parsePhone(spoken);
+          const parsedPhone = parsePhoneInput(spoken);
           if (parsedPhone) setPhone(parsedPhone);
           return;
         }
@@ -305,7 +301,7 @@ export default function QuickCustomerSheet({
                 <input
                   type="tel"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(parsePhoneInput(e.target.value))}
                   placeholder="যেমন: 017XXXXXXXX"
                   className="h-12 w-full rounded-xl border border-border bg-card px-4 pr-16 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />

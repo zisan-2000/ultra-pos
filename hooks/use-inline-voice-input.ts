@@ -7,6 +7,7 @@ import {
   startDualLanguageVoice,
   type VoiceSession,
 } from "@/lib/voice-recognition";
+import { parsePhoneInput } from "@/lib/phone-input";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -51,17 +52,11 @@ function parseAmount(value: string) {
   return match?.[1] ?? "";
 }
 
-function parsePhone(value: string) {
-  const normalized = normalizeDigits(value);
-  const digits = normalized.replace(/\D/g, "");
-  return digits.slice(0, 15);
-}
-
 function transformTranscript(mode: VoiceMode, transcript: string) {
   const clean = transcript.trim();
   if (!clean) return "";
   if (mode === "amount") return parseAmount(clean);
-  if (mode === "phone") return parsePhone(clean);
+  if (mode === "phone") return parsePhoneInput(clean);
   return clean;
 }
 

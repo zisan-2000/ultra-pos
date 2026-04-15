@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import { parsePhoneInput } from "@/lib/phone-input";
 import { queueAdminAction } from "@/lib/sync/queue";
 import { db } from "@/lib/dexie/db";
 import { handlePermissionError } from "@/lib/permission-toast";
@@ -147,8 +148,7 @@ function dedupe(values: string[]) {
 }
 
 function parsePhone(text: string) {
-  const digits = text.replace(/\D/g, "");
-  return digits ? digits.slice(0, 15) : "";
+  return parsePhoneInput(text);
 }
 
 function parseSpokenNameAndPhone(spoken: string) {
