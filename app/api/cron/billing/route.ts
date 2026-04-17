@@ -28,10 +28,10 @@ const isAuthorized = (request: Request, secret: string | undefined) => {
 };
 
 const handleRequest = async (request: Request) => {
-  const secret = process.env.BILLING_CRON_SECRET;
+  const secret = process.env.BILLING_CRON_SECRET || process.env.CRON_SECRET;
   if (!secret && process.env.NODE_ENV !== "development") {
     return buildResponse(
-      { ok: false, error: "BILLING_CRON_SECRET is not configured" },
+      { ok: false, error: "BILLING_CRON_SECRET or CRON_SECRET is not configured" },
       500,
     );
   }

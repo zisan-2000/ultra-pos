@@ -23,10 +23,13 @@ const isAuthorized = (request: Request, secret: string | undefined) => {
 };
 
 async function handleRequest(request: Request) {
-  const secret = process.env.SMS_SUMMARY_CRON_SECRET || process.env.BILLING_CRON_SECRET;
+  const secret =
+    process.env.SMS_SUMMARY_CRON_SECRET ||
+    process.env.CRON_SECRET ||
+    process.env.BILLING_CRON_SECRET;
   if (!secret && process.env.NODE_ENV !== "development") {
     return json(
-      { ok: false, error: "SMS_SUMMARY_CRON_SECRET is not configured" },
+      { ok: false, error: "SMS_SUMMARY_CRON_SECRET or CRON_SECRET is not configured" },
       500
     );
   }

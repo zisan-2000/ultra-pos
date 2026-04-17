@@ -15,6 +15,7 @@ type DailySmsSummaryJobOptions = {
 type SmsPreviewRow = {
   shopId: string;
   shopName: string;
+  businessDate: string;
   to: string | null;
   message: string;
   status: "ready" | "skipped";
@@ -32,6 +33,7 @@ export type DailySmsSummaryJobResult = {
   skippedNoPhone: number;
   skippedAlreadySent: number;
   skippedInvalidPhone: number;
+  skippedNotScheduled: number;
   previews: SmsPreviewRow[];
 };
 
@@ -61,6 +63,69 @@ function resolveTargetDate(now: Date, explicitDate?: string) {
   const todayStart = new Date(`${todayDhaka}T00:00:00.000+06:00`);
   const prev = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
   return getDhakaDateString(prev);
+}
+
+const DHAKA_UTC_OFFSET = "+06:00";
+const SMS_SUMMARY_SEND_DELAY_MINUTES = 30;
+const SMS_SUMMARY_FALLBACK_CLOSING_TIME = "23:00";
+const CLOSING_TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
+
+function normalizeClosingTime(raw?: string | null) {
+  const trimmed = (raw || "").trim();
+  const match = CLOSING_TIME_PATTERN.exec(trimmed);
+  if (!match) {
+    return SMS_SUMMARY_FALLBACK_CLOSING_TIME;
+  }
+
+  return `${match[1]}:${match[2]}`;
+}
+
+function addDaysToDhakaDate(dateOnly: string, days: number) {
+  const start = new Date(`${dateOnly}T00:00:00.000${DHAKA_UTC_OFFSET}`);
+  return getDhakaDateString(
+    new Date(start.getTime() + days * 24 * 60 * 60 * 1000)
+  );
+}
+
+function buildScheduledAt(dateOnly: string, closingTime: string) {
+  const scheduled = new Date(
+    `${dateOnly}T${closingTime}:00.000${DHAKA_UTC_OFFSET}`
+  );
+  return new Date(
+    scheduled.getTime() + SMS_SUMMARY_SEND_DELAY_MINUTES * 60 * 1000
+  );
+}
+
+function resolveScheduledBusinessDateForShop(params: {
+  now: Date;
+  closingTime?: string | null;
+}) {
+  const normalizedClosingTime = normalizeClosingTime(params.closingTime);
+  const todayDhaka = getDhakaDateString(params.now);
+  const yesterdayDhaka = addDaysToDhakaDate(todayDhaka, -1);
+  const todayScheduledAt = buildScheduledAt(todayDhaka, normalizedClosingTime);
+  const yesterdayScheduledAt = buildScheduledAt(
+    yesterdayDhaka,
+    normalizedClosingTime
+  );
+
+  if (params.now.getTime() >= todayScheduledAt.getTime()) {
+    return {
+      businessDate: todayDhaka,
+      scheduledAt: todayScheduledAt,
+      closingTime: normalizedClosingTime,
+    };
+  }
+
+  if (params.now.getTime() >= yesterdayScheduledAt.getTime()) {
+    return {
+      businessDate: yesterdayDhaka,
+      scheduledAt: yesterdayScheduledAt,
+      closingTime: normalizedClosingTime,
+    };
+  }
+
+  return null;
 }
 
 function normalizePhone(raw?: string | null) {
@@ -399,14 +464,10 @@ export async function runDailySmsSummaryJob(
   options?: DailySmsSummaryJobOptions
 ): Promise<DailySmsSummaryJobResult> {
   const now = options?.now ?? new Date();
-  const targetBusinessDate = resolveTargetDate(now, options?.businessDate);
-  const parsedRange = parseDhakaDateOnlyRange(
-    targetBusinessDate,
-    targetBusinessDate,
-    true
-  );
-  const businessDateValue =
-    parsedRange.start ?? new Date(`${targetBusinessDate}T00:00:00.000Z`);
+  const explicitBusinessDate = options?.businessDate?.trim() || undefined;
+  const targetBusinessDate = explicitBusinessDate
+    ? resolveTargetDate(now, explicitBusinessDate)
+    : "scheduled-per-shop";
   const forceResend = options?.forceResend === true;
   const dryRun = options?.dryRun === true;
   const provider = resolveSmsProviderLabel();
@@ -422,6 +483,7 @@ export async function runDailySmsSummaryJob(
       id: true,
       name: true,
       phone: true,
+      closingTime: true,
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: shopLimit,
@@ -438,11 +500,45 @@ export async function runDailySmsSummaryJob(
     skippedNoPhone: 0,
     skippedAlreadySent: 0,
     skippedInvalidPhone: 0,
+    skippedNotScheduled: 0,
     previews: [],
   };
 
   for (const shop of shops) {
+    const scheduledTarget = explicitBusinessDate
+      ? {
+          businessDate: targetBusinessDate,
+          closingTime: normalizeClosingTime(shop.closingTime),
+        }
+      : resolveScheduledBusinessDateForShop({
+          now,
+          closingTime: shop.closingTime,
+        });
+
+    if (!scheduledTarget) {
+      result.skippedNotScheduled += 1;
+      result.previews.push({
+        shopId: shop.id,
+        shopName: shop.name,
+        businessDate: "",
+        to: normalizePhone(shop.phone),
+        message: "",
+        status: "skipped",
+        reason: "not-due-yet",
+      });
+      continue;
+    }
+
     result.processed += 1;
+
+    const parsedRange = parseDhakaDateOnlyRange(
+      scheduledTarget.businessDate,
+      scheduledTarget.businessDate,
+      true
+    );
+    const businessDateValue =
+      parsedRange.start ??
+      new Date(`${scheduledTarget.businessDate}T00:00:00.000Z`);
 
     const existing = await prisma.smsSummaryDispatch.findUnique({
       where: {
@@ -463,6 +559,7 @@ export async function runDailySmsSummaryJob(
       result.previews.push({
         shopId: shop.id,
         shopName: shop.name,
+        businessDate: scheduledTarget.businessDate,
         to: normalizePhone(shop.phone),
         message: "",
         status: "skipped",
@@ -490,6 +587,7 @@ export async function runDailySmsSummaryJob(
       result.previews.push({
         shopId: shop.id,
         shopName: shop.name,
+        businessDate: scheduledTarget.businessDate,
         to: null,
         message: "",
         status: "skipped",
@@ -518,6 +616,7 @@ export async function runDailySmsSummaryJob(
       result.previews.push({
         shopId: shop.id,
         shopName: shop.name,
+        businessDate: scheduledTarget.businessDate,
         to: shop.phone,
         message: "",
         status: "skipped",
@@ -526,16 +625,20 @@ export async function runDailySmsSummaryJob(
       continue;
     }
 
-    const summary = await computeShopDaySummary(shop.id, targetBusinessDate);
+    const summary = await computeShopDaySummary(
+      shop.id,
+      scheduledTarget.businessDate
+    );
     const message = buildSummaryMessage({
       shopName: shop.name,
-      businessDate: targetBusinessDate,
+      businessDate: scheduledTarget.businessDate,
       summary,
     });
 
     result.previews.push({
       shopId: shop.id,
       shopName: shop.name,
+      businessDate: scheduledTarget.businessDate,
       to: normalizedPhone,
       message,
       status: "ready",
