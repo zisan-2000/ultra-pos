@@ -130,7 +130,7 @@ const navItems: { href: string; label: string; Icon: LucideIcon }[] = [
 const bottomNav: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/dashboard", label: "ড্যাশ", Icon: LayoutDashboard },
   { href: "/dashboard/sales", label: "বিক্রি", Icon: ShoppingCart },
-  { href: "/dashboard/products", label: "পণ্য", Icon: Package },
+  { href: "/dashboard/cash", label: "ক্যাশ", Icon: NotebookText },
   { href: "/dashboard/expenses", label: "খরচ", Icon: Receipt },
   { href: "/dashboard/reports", label: "রিপোর্ট", Icon: BarChart3 },
 ];
@@ -153,7 +153,7 @@ const bottomNavTone: Record<
       "bg-gradient-to-br from-emerald-500/40 via-emerald-400/25 to-emerald-600/40 text-emerald-700",
     itemActive: "text-emerald-700 bg-emerald-500/10",
   },
-  "/dashboard/products": {
+  "/dashboard/cash": {
     icon:
       "bg-gradient-to-br from-violet-400/25 via-violet-300/10 to-violet-600/25 text-violet-600",
     iconActive:
