@@ -51,6 +51,7 @@ import {
   Ticket,
   User,
   Users,
+  Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -130,7 +131,7 @@ const navItems: { href: string; label: string; Icon: LucideIcon }[] = [
 const bottomNav: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/dashboard", label: "ড্যাশ", Icon: LayoutDashboard },
   { href: "/dashboard/sales", label: "বিক্রি", Icon: ShoppingCart },
-  { href: "/dashboard/cash", label: "ক্যাশ", Icon: NotebookText },
+  { href: "/dashboard/cash", label: "ক্যাশ", Icon: Wallet },
   { href: "/dashboard/expenses", label: "খরচ", Icon: Receipt },
   { href: "/dashboard/reports", label: "রিপোর্ট", Icon: BarChart3 },
 ];
