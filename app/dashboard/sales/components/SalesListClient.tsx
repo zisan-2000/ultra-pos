@@ -34,6 +34,7 @@ type SaleSummary = {
   createdAt: string; // ISO string
   itemCount: number;
   itemPreview: string;
+  itemPreviewFull?: string;
   customerName: string | null;
   returnCount?: number;
   refundCount?: number;
@@ -111,6 +112,7 @@ export default function SalesListClient({
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
   const [items, setItems] = useState<SaleSummary[]>(sales);
   const [manualRefreshing, setManualRefreshing] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const serverSnapshotRef = useRef(sales);
   const refreshInFlightRef = useRef(false);
 
@@ -206,6 +208,18 @@ export default function SalesListClient({
                   .slice(0, 5)
                   .join(", ")
               : "");
+          const itemPreviewFull =
+            (r as any).itemPreviewFull ||
+            (Array.isArray(r.items) && r.items.length > 0
+              ? r.items
+                  .map((it: any) => {
+                    const name = it?.name || "";
+                    const qty = Number(it?.qty || 0);
+                    return qty > 0 ? `${name} x${qty}` : name;
+                  })
+                  .filter(Boolean)
+                  .join(", ")
+              : itemPreview);
           const itemCount =
             (r as any).itemCount ??
             (Array.isArray(r.items) ? r.items.length : 0);
@@ -227,6 +241,7 @@ export default function SalesListClient({
             createdAt: created,
             itemCount,
             itemPreview,
+            itemPreviewFull,
             customerName: (r as any).customerName ?? null,
             returnCount: Number((r as any).returnCount ?? 0),
             refundCount: Number((r as any).refundCount ?? 0),
@@ -280,6 +295,7 @@ export default function SalesListClient({
         syncStatus: "synced" as const,
         itemCount: s.itemCount,
         itemPreview: s.itemPreview,
+        itemPreviewFull: (s as any).itemPreviewFull ?? s.itemPreview,
         customerName: s.customerName,
         status: s.status ?? "COMPLETED",
         voidReason: s.voidReason ?? null,
@@ -357,8 +373,20 @@ export default function SalesListClient({
             paymentLabels[paymentKey] || s.paymentMethod || "নগদ";
           const isDueSale = paymentKey === "due";
           const isPending = s.syncStatus === "new";
+          const isExpanded = Boolean(expandedItems[s.id]);
+          const collapsedPreview = s.itemPreview || "";
+          const fullPreview = s.itemPreviewFull || collapsedPreview;
+          const moreMatch = collapsedPreview.match(/^(.*)\s\+(\d+)\smore$/);
+          const hasExpandableMore =
+            Boolean(moreMatch) &&
+            Boolean(fullPreview) &&
+            fullPreview !== collapsedPreview;
           const itemLine =
-            s.itemPreview ||
+            (isExpanded
+              ? fullPreview
+              : hasExpandableMore
+              ? (moreMatch?.[1] ?? collapsedPreview)
+              : collapsedPreview) ||
             (s.itemCount > 0
               ? `${s.itemCount} আইটেম`
               : "কোন আইটেম সংযুক্ত নেই");
@@ -445,10 +473,11 @@ export default function SalesListClient({
                     </span>
                   </div>
                   <div className="text-left text-[11px] text-muted-foreground sm:text-xs sm:text-right">
-                    <p className="font-semibold flex items-center gap-1 justify-start sm:justify-end">
-                      ⏱ {timeStr}
+                    <p className="flex items-center gap-1 whitespace-nowrap font-semibold justify-start sm:justify-end">
+                      <span>⏱ {timeStr}</span>
+                      <span className="opacity-60">•</span>
+                      <span>{dateStr}</span>
                     </p>
-                    <p>{dateStr}</p>
                   </div>
                 </div>
 
@@ -482,9 +511,23 @@ export default function SalesListClient({
                     </span>
                   )}
                 </p>
-                <p className="text-[12px] text-muted-foreground flex items-center gap-1.5 leading-snug break-words line-clamp-1 sm:text-[13px] sm:line-clamp-2">
-                  🧾 {itemLine}
-                </p>
+                <div className="text-[12px] text-muted-foreground leading-snug break-words sm:text-[13px]">
+                  <span>🧾 {itemLine}</span>
+                  {hasExpandableMore ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedItems((current) => ({
+                          ...current,
+                          [s.id]: !current[s.id],
+                        }))
+                      }
+                      className="ml-2 inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-semibold text-primary hover:bg-primary-soft"
+                    >
+                      {isExpanded ? "কম দেখুন" : `+${moreMatch?.[2]} more`}
+                    </button>
+                  ) : null}
+                </div>
                 {isVoided && voidReason && (
                   <p className="text-xs text-danger">
                     বাতিলের কারণ: {voidReason}

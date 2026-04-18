@@ -65,6 +65,7 @@ export type LocalSale = {
   // Optional summary fields for offline listing
   itemCount?: number;
   itemPreview?: string;
+  itemPreviewFull?: string;
   customerName?: string | null;
   status?: string | null;
   voidReason?: string | null;

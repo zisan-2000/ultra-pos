@@ -352,6 +352,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     createdAt: s.saleDate.toISOString(),
     itemCount: (s as any).itemCount ?? 0,
     itemPreview: (s as any).itemPreview ?? "",
+    itemPreviewFull: (s as any).itemPreviewFull ?? (s as any).itemPreview ?? "",
     customerName: (s as any).customerName ?? null,
     invoiceNo: (s as any).invoiceNo ?? null,
     returnCount: Number((s as any).returnCount ?? 0),

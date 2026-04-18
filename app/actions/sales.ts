@@ -84,6 +84,7 @@ type SaleRow = {
 type SaleWithSummary = SaleRow & {
   itemCount: number;
   itemPreview: string;
+  itemPreviewFull: string;
   customerName: string | null;
   subtotalAmountText: string;
   discountType: string | null;
@@ -318,17 +319,23 @@ async function attachSaleSummaries(
 
   const itemSummaryMap: Record<
     string,
-    { count: number; names: string[] }
+    { count: number; names: string[]; fullNames: string[] }
   > = {};
 
   for (const it of items) {
-    const entry = itemSummaryMap[it.saleId] || { count: 0, names: [] };
+    const entry = itemSummaryMap[it.saleId] || {
+      count: 0,
+      names: [],
+      fullNames: [],
+    };
     entry.count += 1;
     const itemName = it.productNameSnapshot || it.product?.name;
-    if (entry.names.length < 3 && itemName) {
-      entry.names.push(
-        `${itemName} x${Number(it.quantity || 0)}`
-      );
+    if (itemName) {
+      const line = `${itemName} x${Number(it.quantity || 0)}`;
+      entry.fullNames.push(line);
+      if (entry.names.length < 3) {
+        entry.names.push(line);
+      }
     }
     itemSummaryMap[it.saleId] = entry;
   }
@@ -443,14 +450,24 @@ async function attachSaleSummaries(
   }
 
   return rows.map((r) => {
-    const summary = itemSummaryMap[r.id] || { count: 0, names: [] };
+    const summary = itemSummaryMap[r.id] || { count: 0, names: [], fullNames: [] };
+    const previewCount = summary.names.length;
+    const remainingCount = Math.max(summary.count - previewCount, 0);
+    const collapsedPreview = summary.names.join(", ");
+    const fullPreview = summary.fullNames.join(", ");
     const returnSummary = returnSummaryBySaleId.get(r.id);
     const returnTypeSummary = returnTypeSummaryBySaleId.get(r.id);
     const latestReturnPreview = latestReturnPreviewBySaleId.get(r.id);
     return {
       ...r,
       itemCount: summary.count,
-      itemPreview: summary.names.join(", "),
+      itemPreviewFull: fullPreview,
+      itemPreview:
+        previewCount === 0
+          ? ""
+          : remainingCount > 0
+          ? `${collapsedPreview} +${remainingCount} more`
+          : collapsedPreview,
       customerName: r.customerId ? customerMap[r.customerId] : null,
       subtotalAmountText: toMoney(Number(r.subtotalAmount ?? 0)),
       discountType: r.discountType ?? null,
