@@ -30,6 +30,14 @@ export const metadata: Metadata = {
   description:
     "দ্রুত, সহজ ও নির্ভরযোগ্য পিওএস সফটওয়্যার—সব ধরনের দোকান ও ব্যবসার জন্য বিক্রি, স্টক ও হিসাব একসাথে",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icons/icon-192x192.png?v=20260418", type: "image/png", sizes: "192x192" },
+      { url: "/icons/icon-512x512.png?v=20260418", type: "image/png", sizes: "512x512" },
+    ],
+    shortcut: ["/icons/icon-192x192.png?v=20260418"],
+    apple: [{ url: "/icons/icon-192x192.png?v=20260418", sizes: "192x192" }],
+  },
 };
 
 export default function RootLayout({
