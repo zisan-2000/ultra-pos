@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/sms-summary",
-      "schedule": "*/15 * * * *"
+      "schedule": "30 17 * * *"
     }
   ]
 }
