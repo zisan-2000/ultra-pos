@@ -297,6 +297,28 @@ function buildSuggestedBarcodeBase(name: string) {
   return skuLikeBase || "ITEM";
 }
 
+function hashBarcodeShopSegment(shopId: string) {
+  let hash = 0;
+  for (const char of shopId) {
+    hash = (hash * 31 + char.charCodeAt(0)) % 10000;
+  }
+  return String(hash).padStart(4, "0");
+}
+
+function computeEan13CheckDigit(twelveDigits: string) {
+  if (!/^\d{12}$/.test(twelveDigits)) {
+    throw new Error("EAN-13 body must contain exactly 12 digits");
+  }
+
+  let sum = 0;
+  for (let i = 0; i < twelveDigits.length; i += 1) {
+    const digit = Number(twelveDigits[i]);
+    sum += i % 2 === 0 ? digit : digit * 3;
+  }
+
+  return String((10 - (sum % 10)) % 10);
+}
+
 function normalizeBaseUnitInput(
   value: unknown,
   options?: { defaultValue?: string }
@@ -826,8 +848,8 @@ export async function generateProductBarcode(
   await assertShopAccess(shopId, user);
 
   const normalizedName = String(productName || "").trim();
-  const base = buildSuggestedBarcodeBase(normalizedName || "ITEM");
-  const prefix = `BC-${base}`;
+  const shopSegment = hashBarcodeShopSegment(shopId);
+  const prefix = `29${shopSegment}`;
 
   const rows = await prisma.product.findMany({
     where: {
@@ -862,7 +884,7 @@ export async function generateProductBarcode(
   );
 
   let maxSequence = 0;
-  const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d{4})$`);
+  const pattern = new RegExp(`^${prefix}(\\d{6})(\\d)$`);
 
   for (const barcode of used) {
     const match = barcode.match(pattern);
@@ -873,8 +895,11 @@ export async function generateProductBarcode(
     }
   }
 
-  const nextSequence = String(maxSequence + 1).padStart(4, "0");
-  return { barcode: `${prefix}-${nextSequence}` };
+  const nextSequence = String(maxSequence + 1).padStart(6, "0");
+  const body = `${prefix}${nextSequence}`;
+  const checkDigit = computeEan13CheckDigit(body);
+
+  return { barcode: `${body}${checkDigit}` };
 }
 
 // ---------------------------------

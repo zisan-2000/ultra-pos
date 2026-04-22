@@ -19,6 +19,16 @@ function normalizePriceLabel(value?: string) {
   return parsed.toFixed(2);
 }
 
+function getBarcodeRenderConfig(value: string) {
+  if (/^\d{13}$/.test(value)) {
+    return { format: "EAN13" as const, width: 2, height: 68, margin: 8 };
+  }
+  if (/^\d{8}$/.test(value)) {
+    return { format: "EAN8" as const, width: 2, height: 62, margin: 8 };
+  }
+  return { format: "CODE128" as const, width: 1.6, height: 54, margin: 6 };
+}
+
 export default function BarcodePreviewCard({
   value,
   productName,
@@ -31,6 +41,7 @@ export default function BarcodePreviewCard({
 
   const trimmedValue = value.trim();
   const printablePrice = useMemo(() => normalizePriceLabel(sellPrice), [sellPrice]);
+  const renderConfig = useMemo(() => getBarcodeRenderConfig(trimmedValue), [trimmedValue]);
   const renderError = useMemo(() => {
     if (!trimmedValue) return null;
     if (!/^[\x00-\x7F]+$/.test(trimmedValue)) {
@@ -52,20 +63,20 @@ export default function BarcodePreviewCard({
 
     try {
       JsBarcode(svgRef.current, trimmedValue, {
-        format: "CODE128",
+        format: renderConfig.format,
         displayValue: false,
         lineColor: "#0f172a",
         background: "#ffffff",
-        width: 1.6,
-        height: 54,
-        margin: 6,
+        width: renderConfig.width,
+        height: renderConfig.height,
+        margin: renderConfig.margin,
         fontSize: 14,
         textMargin: 4,
       });
     } catch {
       svgRef.current.innerHTML = "";
     }
-  }, [renderError, trimmedValue]);
+  }, [renderConfig, renderError, trimmedValue]);
 
   function handlePrint() {
     if (!trimmedValue || !svgRef.current || renderError) return;
@@ -204,7 +215,7 @@ export default function BarcodePreviewCard({
         <div>
           <p className="text-sm font-semibold text-foreground">Barcode Tools</p>
           <p className="text-xs text-muted-foreground">
-            One-click Code 128 generate করুন, preview দেখুন, label print করুন।
+            Numeric code হলে EAN preview, অন্যথায় Code 128 preview দেখুন ও label print করুন।
           </p>
         </div>
         <button
