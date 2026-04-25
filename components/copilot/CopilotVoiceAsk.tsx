@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Mic, SendHorizonal, Volume2 } from "lucide-react";
+import {
+  Bot,
+  Loader2,
+  MessageSquarePlus,
+  Mic,
+  SendHorizonal,
+  Sparkles,
+  Volume2,
+  Wand2,
+} from "lucide-react";
 import {
   COPILOT_GROUPED_QUESTION_SUGGESTIONS,
   COPILOT_QUESTION_SUGGESTIONS,
@@ -12,6 +21,7 @@ import {
   startDualLanguageVoice,
   type VoiceSession,
 } from "@/lib/voice-recognition";
+import type { OwnerCopilotActionDraft } from "@/lib/owner-copilot-actions";
 
 type SpeechRecognitionInstance = {
   lang: string;
@@ -30,7 +40,76 @@ type AskResponse = {
   intent?: string;
   matchedCustomerName?: string | null;
   suggestions?: readonly string[];
+  conversationId?: string;
+  requiresConfirmation?: boolean;
+  actionDraft?: OwnerCopilotActionDraft | null;
+  engine?: string;
+  provider?: string;
+  model?: string;
+  toolNames?: readonly string[];
+  fallbackUsed?: boolean;
 };
+
+type AssistantTrace = {
+  engine?: string;
+  provider?: string;
+  model?: string;
+  toolNames?: readonly string[];
+  fallbackUsed?: boolean;
+  actionKind?: string;
+  requiresConfirmation?: boolean;
+};
+
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  trace?: AssistantTrace;
+};
+
+function buildMessageId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getEngineLabel(engine?: string) {
+  switch (engine) {
+    case "llm-tools":
+      return "Tool mode";
+    case "llm":
+      return "LLM";
+    case "action-draft":
+      return "Draft";
+    case "action-confirm":
+      return "Executed";
+    case "rule":
+      return "Rule";
+    default:
+      return null;
+  }
+}
+
+function getThinkingLabel(pendingAction: OwnerCopilotActionDraft | null) {
+  if (pendingAction) return "Draft confirmation প্রস্তুত হচ্ছে...";
+  return "Copilot business context analyse করছে...";
+}
+
+function renderActionDetails(pendingAction: OwnerCopilotActionDraft) {
+  if (pendingAction.kind === "expense") {
+    return [
+      { label: "Action", value: "Quick expense" },
+      { label: "Amount", value: `৳ ${pendingAction.amount}` },
+      { label: "Category", value: pendingAction.category },
+      { label: "Note", value: pendingAction.note || "None" },
+    ];
+  }
+
+  return [
+    { label: "Action", value: pendingAction.entryType === "IN" ? "Cash in" : "Cash out" },
+    { label: "Amount", value: `৳ ${pendingAction.amount}` },
+    { label: "Type", value: pendingAction.entryType },
+    { label: "Reason", value: pendingAction.reason || "None" },
+  ];
+}
 
 function stopSpeaking() {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -48,6 +127,12 @@ export default function CopilotVoiceAsk({
 }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [pendingAction, setPendingAction] = useState<OwnerCopilotActionDraft | null>(null);
+  const [confirmingAction, setConfirmingAction] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [streamingLength, setStreamingLength] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
@@ -56,11 +141,12 @@ export default function CopilotVoiceAsk({
   const [lastAnswer, setLastAnswer] = useState("");
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false);
   const [openSuggestionGroup, setOpenSuggestionGroup] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<readonly string[]>(COPILOT_QUESTION_SUGGESTIONS);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const voiceSessionRef = useRef<VoiceSession | null>(null);
 
-  const primarySuggestions = COPILOT_QUESTION_SUGGESTIONS.slice(0, 4);
-  const extraSuggestions = COPILOT_QUESTION_SUGGESTIONS.slice(4);
+  const primarySuggestions = suggestions.slice(0, 4);
+  const extraSuggestions = suggestions.slice(4);
 
   useEffect(() => {
     const SpeechRecognitionImpl = getSpeechRecognitionCtor();
@@ -78,6 +164,36 @@ export default function CopilotVoiceAsk({
       stopSpeaking();
     };
   }, []);
+
+  useEffect(() => {
+    setConversationId(null);
+    setMessages([]);
+    setAnswer(null);
+    setLastAnswer("");
+    setSuggestions(COPILOT_QUESTION_SUGGESTIONS);
+    setShowMoreSuggestions(false);
+    setOpenSuggestionGroup(null);
+    setPendingAction(null);
+    setStreamingMessageId(null);
+    setStreamingLength(0);
+  }, [shopId]);
+
+  useEffect(() => {
+    if (!streamingMessageId) return;
+
+    const targetMessage = messages.find((message) => message.id === streamingMessageId);
+    const targetText = targetMessage?.content ?? "";
+
+    if (!targetText || streamingLength >= targetText.length) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setStreamingLength((current) => Math.min(targetText.length, current + 8));
+    }, 18);
+
+    return () => window.clearTimeout(timeout);
+  }, [messages, streamingLength, streamingMessageId]);
 
   const speakAnswer = useCallback(
     (text?: string | null) => {
@@ -117,6 +233,7 @@ export default function CopilotVoiceAsk({
           body: JSON.stringify({
             shopId,
             question: nextQuestion,
+            conversationId,
           }),
         });
 
@@ -125,8 +242,37 @@ export default function CopilotVoiceAsk({
         }
 
         const payload = (await response.json()) as AskResponse;
+        const userMessage: ChatMessage = {
+          id: buildMessageId(),
+          role: "user",
+          content: nextQuestion,
+        };
+        const assistantMessage: ChatMessage = {
+          id: buildMessageId(),
+          role: "assistant",
+          content: payload.answer,
+          trace: {
+            engine: payload.engine,
+            provider: payload.provider,
+            model: payload.model,
+            toolNames: payload.toolNames,
+            fallbackUsed: payload.fallbackUsed,
+            requiresConfirmation: payload.requiresConfirmation,
+          },
+        };
+
         setAnswer(payload.answer);
         setLastAnswer(payload.answer);
+        setConversationId(payload.conversationId ?? conversationId);
+        setMessages((current) => [...current, userMessage, assistantMessage]);
+        setStreamingMessageId(assistantMessage.id);
+        setStreamingLength(0);
+        setSuggestions(
+          payload.suggestions && payload.suggestions.length > 0
+            ? payload.suggestions
+            : COPILOT_QUESTION_SUGGESTIONS
+        );
+        setPendingAction(payload.requiresConfirmation ? payload.actionDraft ?? null : null);
         setQuestion(nextQuestion);
         setShowMoreSuggestions(false);
         setOpenSuggestionGroup(null);
@@ -140,7 +286,7 @@ export default function CopilotVoiceAsk({
         setLoading(false);
       }
     },
-    [online, question, shopId, speakAnswer]
+    [conversationId, online, question, shopId, speakAnswer]
   );
 
   const stopListening = useCallback(() => {
@@ -195,9 +341,23 @@ export default function CopilotVoiceAsk({
     if (!online) return "অনলাইনে থাকলে voice প্রশ্ন করা যাবে।";
     if (listening) return "শুনছি... প্রশ্ন বলুন।";
     if (voiceReady)
-      return "Sales, profit, due, product stock, low stock, top item, payable বা queue নিয়ে প্রশ্ন করুন।";
+      return "Sales, profit, due, product stock, low stock, top item, payable, queue বা follow-up প্রশ্ন করুন।";
     return "এই ডিভাইসে মাইক্রোফোন সাপোর্ট নেই, লিখে business প্রশ্ন করুন।";
   }, [listening, online, voiceReady]);
+
+  const latestAssistantMessage = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index]?.role === "assistant") {
+        return messages[index];
+      }
+    }
+    return null;
+  }, [messages]);
+
+  const followUpSuggestions = useMemo(() => {
+    if (suggestions.length === 0) return [];
+    return suggestions.slice(0, 3);
+  }, [suggestions]);
 
   return (
     <section className="rounded-[24px] border border-border/70 bg-background/80 p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
@@ -212,14 +372,36 @@ export default function CopilotVoiceAsk({
           <p className="text-sm text-muted-foreground">{helperText}</p>
         </div>
         {speechReady && lastAnswer ? (
-          <button
-            type="button"
-            onClick={() => speakAnswer()}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
-          >
-            <Volume2 className="h-4 w-4" />
-            শোনান
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setConversationId(null);
+                setMessages([]);
+                setAnswer(null);
+                setLastAnswer("");
+                setQuestion("");
+                setSuggestions(COPILOT_QUESTION_SUGGESTIONS);
+                setShowMoreSuggestions(false);
+                setOpenSuggestionGroup(null);
+                setPendingAction(null);
+                setStreamingMessageId(null);
+                setStreamingLength(0);
+              }}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+            >
+              <MessageSquarePlus className="h-4 w-4" />
+              নতুন চ্যাট
+            </button>
+            <button
+              type="button"
+              onClick={() => speakAnswer()}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+            >
+              <Volume2 className="h-4 w-4" />
+              শোনান
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -355,12 +537,230 @@ export default function CopilotVoiceAsk({
         </div>
       ) : null}
 
-      {answer ? (
+      {messages.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Conversation
+            </div>
+            {latestAssistantMessage?.trace?.engine ? (
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1 text-[11px] font-semibold text-muted-foreground">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                {getEngineLabel(latestAssistantMessage.trace.engine)}
+              </div>
+            ) : null}
+          </div>
+          {messages.map((message, index) => (
+            <div
+              key={message.id}
+              className={`rounded-[22px] border p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)] ${
+                message.role === "assistant"
+                  ? "border-primary/15 bg-gradient-to-br from-primary-soft/40 via-card to-card"
+                  : "border-border/70 bg-card"
+              }`}
+            >
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                {message.role === "assistant" ? "Copilot" : "You"}
+              </div>
+              <p className="text-sm leading-7 text-foreground">
+                {message.role === "assistant" && message.id === streamingMessageId
+                  ? message.content.slice(0, streamingLength || 1)
+                  : message.content}
+              </p>
+              {message.role === "assistant" && message.trace ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {message.trace.engine ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                      <Bot className="h-3 w-3" />
+                      {getEngineLabel(message.trace.engine)}
+                    </span>
+                  ) : null}
+                  {message.trace.toolNames?.map((toolName) => (
+                    <span
+                      key={toolName}
+                      className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground"
+                    >
+                      <Wand2 className="h-3 w-3 text-primary" />
+                      {toolName}
+                    </span>
+                  ))}
+                  {message.trace.provider ? (
+                    <span className="inline-flex rounded-full border border-border/70 bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+                      {message.trace.provider}
+                    </span>
+                  ) : null}
+                  {message.trace.fallbackUsed ? (
+                    <span className="inline-flex rounded-full border border-warning/20 bg-warning-soft/50 px-2.5 py-1 text-[11px] font-semibold text-foreground">
+                      fallback
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ))}
+          {loading ? (
+            <div className="rounded-[22px] border border-primary/15 bg-gradient-to-br from-primary-soft/30 via-card to-card p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Copilot
+              </div>
+              <div className="flex items-center gap-3 text-sm text-foreground">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                {getThinkingLabel(pendingAction)}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : answer ? (
         <div className="mt-4 rounded-[22px] border border-primary/15 bg-gradient-to-br from-primary-soft/40 via-card to-card p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Copilot Answer
           </div>
           <p className="text-sm leading-7 text-foreground">{answer}</p>
+        </div>
+      ) : null}
+
+      {pendingAction ? (
+        <div className="mt-4 rounded-[22px] border border-primary/20 bg-primary-soft/25 p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Confirmation Needed
+            </div>
+            <span className="inline-flex rounded-full border border-primary/20 bg-card px-2.5 py-1 text-[11px] font-semibold text-primary">
+              Nothing saved yet
+            </span>
+          </div>
+          <p className="text-sm leading-7 text-foreground">{pendingAction.confirmationText}</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {renderActionDetails(pendingAction).map((item) => (
+              <div
+                key={item.label}
+                className="rounded-2xl border border-border/60 bg-card px-3 py-3 text-sm text-foreground"
+              >
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  {item.label}
+                </div>
+                <div className="mt-1 font-semibold text-foreground">{item.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 rounded-2xl border border-border/60 bg-card px-3 py-3 text-sm text-foreground">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Summary
+            </div>
+            <div className="mt-1">{pendingAction.summary}</div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                if (!conversationId || confirmingAction) return;
+                setConfirmingAction(true);
+                setError(null);
+                try {
+                  const response = await fetch("/api/owner/copilot/confirm", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      shopId,
+                      conversationId,
+                      actionDraft: pendingAction,
+                    }),
+                  });
+
+                  const payload = (await response.json()) as {
+                    success?: boolean;
+                    answer?: string;
+                    error?: string;
+                    conversationId?: string;
+                    engine?: string;
+                    actionKind?: string;
+                    suggestions?: readonly string[];
+                  };
+
+                  if (!response.ok || !payload.success || !payload.answer) {
+                    throw new Error(payload.error || "Action confirm করা যায়নি");
+                  }
+
+                  const confirmedAnswer = payload.answer;
+                  const confirmedAssistantMessage: ChatMessage = {
+                    id: buildMessageId(),
+                    role: "assistant",
+                    content: confirmedAnswer,
+                    trace: {
+                      engine: payload.engine,
+                      actionKind: payload.actionKind,
+                    },
+                  };
+
+                  setConversationId(payload.conversationId ?? conversationId);
+                  setMessages((current) => [
+                    ...current,
+                    {
+                      id: buildMessageId(),
+                      role: "user",
+                      content: `Confirm: ${pendingAction.summary}`,
+                    },
+                    confirmedAssistantMessage,
+                  ]);
+                  setStreamingMessageId(confirmedAssistantMessage.id);
+                  setStreamingLength(0);
+                  setAnswer(confirmedAnswer);
+                  setLastAnswer(confirmedAnswer);
+                  setSuggestions(
+                    payload.suggestions && payload.suggestions.length > 0
+                      ? payload.suggestions
+                      : COPILOT_QUESTION_SUGGESTIONS
+                  );
+                  setPendingAction(null);
+                } catch (actionError) {
+                  setError(
+                    actionError instanceof Error
+                      ? actionError.message
+                      : "Action confirm করা যায়নি।"
+                  );
+                } finally {
+                  setConfirmingAction(false);
+                }
+              }}
+              disabled={confirmingAction}
+              className="inline-flex h-11 items-center justify-center rounded-2xl border border-primary/20 bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {confirmingAction ? "Confirm হচ্ছে..." : pendingAction.kind === "expense" ? "Expense Save করুন" : "Entry Save করুন"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingAction(null)}
+              disabled={confirmingAction}
+              className="inline-flex h-11 items-center justify-center rounded-2xl border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {messages.length > 0 && followUpSuggestions.length > 0 && !pendingAction ? (
+        <div className="mt-4 rounded-[22px] border border-border/70 bg-muted/20 p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
+          <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Suggested Follow-ups
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {followUpSuggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => {
+                  setQuestion(suggestion);
+                  void askCopilot(suggestion);
+                }}
+                className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
     </section>

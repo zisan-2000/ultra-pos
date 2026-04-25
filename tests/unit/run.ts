@@ -5,6 +5,9 @@ import { runCatalogImportTests } from "./catalog-import.test.ts";
 import { runCsvUtilTests } from "./csv.test.ts";
 import { runDateRangeTests } from "./date-range.test.ts";
 import { runDebounceTests } from "./debounce.test.ts";
+import { runOwnerCopilotActionTests } from "./owner-copilot-actions.test.ts";
+import { runOwnerCopilotConfigTests } from "./owner-copilot-config.test.ts";
+import { runOwnerCopilotGoldenTests } from "./owner-copilot-golden.test.ts";
 import { runPurchasesIntegrationScaffoldTests } from "./purchases.integration.test.ts";
 import { runQueueWorkflowTests } from "./queue-workflow.test.ts";
 import { runReportingRangeTests } from "./reporting-range.test.ts";
@@ -20,6 +23,9 @@ async function main() {
     runCsvUtilTests,
     runDateRangeTests,
     runDebounceTests,
+    runOwnerCopilotActionTests,
+    runOwnerCopilotConfigTests,
+    runOwnerCopilotGoldenTests,
     runQueueWorkflowTests,
     runReportingConfigTests,
     runReportingRangeTests,

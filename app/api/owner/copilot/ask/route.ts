@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-session";
+import { rateLimit } from "@/lib/rate-limit";
+import { getOwnerCopilotRuntimeConfig, isOwnerCopilotEnabledForContext } from "@/lib/owner-copilot-config";
+import { logOwnerCopilotRun } from "@/lib/owner-copilot-telemetry";
 import { withTracing } from "@/lib/tracing";
 import { prisma } from "@/lib/prisma";
 import { getOwnerCopilotPayload } from "@/lib/owner-copilot-server";
 import { buildOwnerCopilotInsight } from "@/lib/owner-copilot";
+import { maybeAnswerOwnerCopilotWithLlm } from "@/lib/owner-copilot-llm";
+import { maybeAnswerOwnerCopilotWithTools } from "@/lib/owner-copilot-tool-orchestrator";
+import {
+  getOrCreateOwnerCopilotConversation,
+  listOwnerCopilotConversationTurns,
+  saveOwnerCopilotConversationExchange,
+} from "@/lib/owner-copilot-memory";
+import { parseOwnerCopilotActionDraft } from "@/lib/owner-copilot-actions";
 import {
   COPILOT_QUESTION_SUGGESTIONS,
   normalizeCopilotQuestion,
@@ -165,16 +176,35 @@ async function getLowStockPreview(shopId: string) {
   });
 }
 
+const responseHeaders = {
+  "Cache-Control": "private, no-store",
+};
+
 export async function POST(req: Request) {
   return withTracing(req, "/api/owner/copilot/ask", async () => {
+    const startedAt = Date.now();
     try {
+      const rl = await rateLimit(req, {
+        windowMs: 60_000,
+        max: 40,
+        keyPrefix: "owner-copilot-ask",
+      });
+      if (rl.limited) {
+        return NextResponse.json(
+          { error: "অনেক বেশি request হচ্ছে। একটু পরে আবার চেষ্টা করুন।" },
+          { status: 429, headers: rl.headers }
+        );
+      }
+
       const body = (await req.json()) as {
         shopId?: string;
         question?: string;
+        conversationId?: string;
       };
 
       const shopId = String(body.shopId || "").trim();
       const question = String(body.question || "").trim();
+      const requestedConversationId = String(body.conversationId || "").trim() || null;
 
       if (!shopId || !question) {
         return NextResponse.json(
@@ -184,19 +214,212 @@ export async function POST(req: Request) {
       }
 
       const user = await requireUser();
-      const payload = await getOwnerCopilotPayload(shopId, user);
-      const intent = parseCopilotQuestion(question);
-
-      if (intent.type === "unsupported") {
+      const availability = isOwnerCopilotEnabledForContext({
+        userId: user.id,
+        shopId,
+      });
+      if (!availability.enabled) {
+        await logOwnerCopilotRun({
+          shopId,
+          userId: user.id,
+          routeKey: "ask",
+          question,
+          status: "blocked",
+          engine: "availability-gate",
+          errorMessage: availability.reason,
+          latencyMs: Date.now() - startedAt,
+        });
         return NextResponse.json(
           {
             supported: false,
-            answer:
-              "আমি এখন sales, profit, expense, cash, due, payable, queue, top item, low stock, আর product stock/details type business প্রশ্ন বুঝি। প্রশ্নটা আরেকটু clear করে বলুন।",
+            answer: "Copilot এই account-এর জন্য এখনো চালু হয়নি।",
             suggestions: COPILOT_QUESTION_SUGGESTIONS,
+            engine: "blocked",
+            fallbackUsed: false,
           },
-          { status: 200, headers: { "Cache-Control": "private, no-store" } }
+          { status: 200, headers: responseHeaders }
         );
+      }
+
+      const runtimeConfig = getOwnerCopilotRuntimeConfig();
+      const payload = await getOwnerCopilotPayload(shopId, user);
+      const conversation = await getOrCreateOwnerCopilotConversation({
+        conversationId: requestedConversationId,
+        shopId,
+        userId: user.id,
+        firstQuestion: question,
+      });
+      const conversationTurns = await listOwnerCopilotConversationTurns(conversation.id, 8);
+      const intent = parseCopilotQuestion(question);
+      const actionDraft = parseOwnerCopilotActionDraft(question);
+      let fallbackUsed = false;
+
+      async function persistAndReturn(data: {
+        supported: boolean;
+        answer: string;
+        suggestions?: readonly string[];
+        engine: string;
+        provider?: string;
+        model?: string;
+        toolNames?: readonly string[];
+        matchedCustomerName?: string | null;
+        intentLabel?: string;
+        actionDraft?: unknown;
+        requiresConfirmation?: boolean;
+      }) {
+        await saveOwnerCopilotConversationExchange({
+          conversationId: conversation.id,
+          question,
+          answer: data.answer,
+          assistantMetadata: {
+            supported: data.supported,
+            engine: data.engine,
+            provider: data.provider ?? null,
+            model: data.model ?? null,
+            toolNames: data.toolNames ?? [],
+            matchedCustomerName: data.matchedCustomerName ?? null,
+            intent: data.intentLabel ?? intent.type,
+            actionDraft: data.actionDraft ?? null,
+            requiresConfirmation: data.requiresConfirmation ?? false,
+          },
+        });
+
+        await logOwnerCopilotRun({
+          shopId,
+          userId: user.id,
+          conversationId: conversation.id,
+          routeKey: "ask",
+          question,
+          answer: data.answer,
+          engine: data.engine,
+          provider: data.provider ?? null,
+          model: data.model ?? null,
+          toolNames: data.toolNames ?? [],
+          fallbackUsed,
+          requiresConfirmation: data.requiresConfirmation ?? false,
+          status:
+            data.engine === "rule" && fallbackUsed
+              ? "fallback"
+              : data.engine === "blocked"
+                ? "blocked"
+                : "success",
+          latencyMs: Date.now() - startedAt,
+        });
+
+        return NextResponse.json(
+          {
+            supported: data.supported,
+            normalizedQuestion: normalizeCopilotQuestion(question),
+            intent: data.intentLabel ?? intent.type,
+            answer: data.answer,
+            matchedCustomerName: data.matchedCustomerName ?? null,
+            suggestions: data.suggestions ?? COPILOT_QUESTION_SUGGESTIONS,
+            engine: data.engine,
+            provider: data.provider,
+            model: data.model,
+            toolNames: data.toolNames,
+            actionDraft: data.actionDraft,
+            requiresConfirmation: data.requiresConfirmation ?? false,
+            conversationId: conversation.id,
+            fallbackUsed,
+          },
+          { status: 200, headers: responseHeaders }
+        );
+      }
+
+      if (actionDraft && runtimeConfig.actionsEnabled) {
+        return persistAndReturn({
+          supported: true,
+          answer: "আমি draft তৈরি করেছি। নিচে দেখে confirm করলে তখনই action execute হবে।",
+          suggestions: [
+            "Confirm করলে সেভ হবে",
+            "না চাইলে নতুনভাবে বলুন",
+            "অন্য amount/category দিয়েও বলতে পারেন",
+          ],
+          engine: "action-draft",
+          actionDraft,
+          requiresConfirmation: true,
+          intentLabel: "action_draft",
+        });
+      }
+
+      if (actionDraft && !runtimeConfig.actionsEnabled) {
+        return persistAndReturn({
+          supported: false,
+          answer: "Copilot action draft এখন disabled আছে। আপাতত প্রশ্ন-উত্তর mode ব্যবহার করুন।",
+          suggestions: COPILOT_QUESTION_SUGGESTIONS,
+          engine: "blocked",
+          intentLabel: "action_draft_blocked",
+        });
+      }
+
+      try {
+        const toolAnswer = await maybeAnswerOwnerCopilotWithTools({
+          question,
+          shopId,
+          payload,
+          conversationTurns,
+        });
+
+        if (toolAnswer && !toolAnswer.needsRuleFallback && toolAnswer.answer) {
+          fallbackUsed = false;
+          return persistAndReturn({
+            supported: toolAnswer.supported,
+            answer: toolAnswer.answer,
+            suggestions:
+              toolAnswer.suggestions && toolAnswer.suggestions.length > 0
+                ? toolAnswer.suggestions
+                : COPILOT_QUESTION_SUGGESTIONS,
+            engine: toolAnswer.engine,
+            provider: toolAnswer.provider,
+            model: toolAnswer.model,
+            toolNames: toolAnswer.toolNames,
+          });
+        }
+
+        fallbackUsed = fallbackUsed || Boolean(toolAnswer?.needsRuleFallback);
+      } catch (error) {
+        fallbackUsed = true;
+        console.warn("owner copilot tool orchestration fallback", error);
+      }
+
+      try {
+        const llmAnswer = await maybeAnswerOwnerCopilotWithLlm({
+          question,
+          payload,
+          conversationTurns,
+        });
+
+        if (llmAnswer && !llmAnswer.needsRuleFallback) {
+          fallbackUsed = false;
+          return persistAndReturn({
+            supported: llmAnswer.supported,
+            answer: llmAnswer.answer,
+            suggestions:
+              llmAnswer.suggestions && llmAnswer.suggestions.length > 0
+                ? llmAnswer.suggestions
+                : COPILOT_QUESTION_SUGGESTIONS,
+            engine: llmAnswer.engine,
+            provider: llmAnswer.provider,
+            model: llmAnswer.model,
+          });
+        }
+
+        fallbackUsed = fallbackUsed || Boolean(llmAnswer?.needsRuleFallback);
+      } catch (error) {
+        fallbackUsed = true;
+        console.warn("owner copilot llm fallback", error);
+      }
+
+      if (intent.type === "unsupported") {
+        return persistAndReturn({
+          supported: false,
+          answer:
+            "আমি এখন sales, profit, expense, cash, due, payable, queue, top item, low stock, আর product stock/details type business প্রশ্ন বুঝি। প্রশ্নটা আরেকটু clear করে বলুন।",
+          suggestions: COPILOT_QUESTION_SUGGESTIONS,
+          engine: "rule",
+          intentLabel: "unsupported",
+        });
       }
 
       let answer = "";
@@ -321,24 +544,17 @@ export async function POST(req: Request) {
         }
       }
 
-      return NextResponse.json(
-        {
-          supported: true,
-          normalizedQuestion: normalizeCopilotQuestion(question),
-          intent: intent.type,
-          answer,
-          matchedCustomerName,
-          suggestions: COPILOT_QUESTION_SUGGESTIONS,
-        },
-        {
-          status: 200,
-          headers: {
-            "Cache-Control": "private, no-store",
-          },
-        }
-      );
+      return persistAndReturn({
+        supported: true,
+        answer,
+        matchedCustomerName,
+        suggestions: COPILOT_QUESTION_SUGGESTIONS,
+        engine: "rule",
+      });
     } catch (error) {
       console.error("owner copilot ask route error", error);
+      const message =
+        error instanceof Error ? error.message : "Failed to answer owner copilot question";
       return NextResponse.json(
         { error: "Failed to answer owner copilot question" },
         { status: 500 }
