@@ -33,22 +33,36 @@ type TemplateRow = {
   id: string;
   businessType: string;
   name: string;
+  brand?: string | null;
   category?: string | null;
+  packSize?: string | null;
   defaultSellPrice?: string | number | null;
+  defaultBarcode?: string | null;
   defaultBaseUnit?: string | null;
   defaultTrackStock?: boolean;
+  aliases?: string[];
+  keywords?: string[];
   variants?: TemplateVariantDraft[];
+  imageUrl?: string | null;
+  popularityScore?: number;
   isActive: boolean;
 };
 
 type ImportTemplateInput = {
   businessType?: string | null;
   name?: string | null;
+  brand?: string | null;
   category?: string | null;
+  packSize?: string | null;
   defaultSellPrice?: string | number | null;
+  defaultBarcode?: string | null;
   defaultBaseUnit?: string | null;
   defaultTrackStock?: boolean | null;
+  aliases?: string[] | null;
+  keywords?: string[] | null;
   variants?: TemplateVariantDraft[] | null;
+  imageUrl?: string | null;
+  popularityScore?: number | null;
   isActive?: boolean | null;
 };
 
@@ -85,6 +99,17 @@ function scheduleStateUpdate(fn: () => void) {
 
 function normalizeCodeInput(value: string) {
   return value.trim().replace(/\s+/g, "").toUpperCase().slice(0, 80);
+}
+
+function parseCsvInput(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatCsvInput(items?: string[] | null) {
+  return Array.isArray(items) ? items.join(", ") : "";
 }
 
 function createVariantDraft(seed?: Partial<TemplateVariantDraft>): TemplateVariantDraft {
@@ -169,6 +194,18 @@ function parseImportPayload(raw: string, defaultBusinessType?: string | null) {
       itemErrors.push("name is required");
     }
 
+    let brand: string | null = null;
+    if (record.brand !== undefined) {
+      if (record.brand === null || record.brand === "") {
+        brand = null;
+      } else if (typeof record.brand === "string") {
+        const trimmedBrand = record.brand.trim();
+        brand = trimmedBrand ? trimmedBrand.slice(0, 120) : null;
+      } else {
+        itemErrors.push("brand must be a string");
+      }
+    }
+
     let category: string | null = null;
     if (record.category !== undefined) {
       if (record.category === null) {
@@ -178,6 +215,18 @@ function parseImportPayload(raw: string, defaultBusinessType?: string | null) {
         category = trimmedCategory ? trimmedCategory : null;
       } else {
         itemErrors.push("category must be a string");
+      }
+    }
+
+    let packSize: string | null = null;
+    if (record.packSize !== undefined) {
+      if (record.packSize === null || record.packSize === "") {
+        packSize = null;
+      } else if (typeof record.packSize === "string") {
+        const trimmedPackSize = record.packSize.trim();
+        packSize = trimmedPackSize ? trimmedPackSize.slice(0, 80) : null;
+      } else {
+        itemErrors.push("packSize must be a string");
       }
     }
 
@@ -197,6 +246,17 @@ function parseImportPayload(raw: string, defaultBusinessType?: string | null) {
         }
       } else {
         itemErrors.push("defaultSellPrice must be a number or string");
+      }
+    }
+
+    let defaultBarcode: string | null = null;
+    if (record.defaultBarcode !== undefined) {
+      if (record.defaultBarcode === null || record.defaultBarcode === "") {
+        defaultBarcode = null;
+      } else if (typeof record.defaultBarcode === "string") {
+        defaultBarcode = normalizeCodeInput(record.defaultBarcode);
+      } else {
+        itemErrors.push("defaultBarcode must be a string");
       }
     }
 
@@ -221,6 +281,31 @@ function parseImportPayload(raw: string, defaultBusinessType?: string | null) {
       }
     }
 
+    const parseStringCollection = (
+      rawValue: unknown,
+      fieldName: string,
+    ): string[] | null => {
+      if (rawValue === undefined || rawValue === null || rawValue === "") return [];
+      if (Array.isArray(rawValue)) {
+        const items = rawValue
+          .map((item) => (typeof item === "string" ? item.trim() : ""))
+          .filter(Boolean);
+        if (items.length !== rawValue.filter((item) => typeof item === "string").length) {
+          itemErrors.push(`${fieldName} must contain only strings`);
+          return null;
+        }
+        return items;
+      }
+      if (typeof rawValue === "string") {
+        return parseCsvInput(rawValue);
+      }
+      itemErrors.push(`${fieldName} must be an array or comma-separated string`);
+      return null;
+    };
+
+    const aliases = parseStringCollection(record.aliases, "aliases");
+    const keywords = parseStringCollection(record.keywords, "keywords");
+
     let variants: TemplateVariantDraft[] = [];
     if (record.variants !== undefined && record.variants !== null) {
       if (!Array.isArray(record.variants)) {
@@ -236,6 +321,28 @@ function parseImportPayload(raw: string, defaultBusinessType?: string | null) {
             isActive: variant.isActive !== false,
           }),
         );
+      }
+    }
+
+    let imageUrl: string | null = null;
+    if (record.imageUrl !== undefined) {
+      if (record.imageUrl === null || record.imageUrl === "") {
+        imageUrl = null;
+      } else if (typeof record.imageUrl === "string") {
+        const trimmedImageUrl = record.imageUrl.trim();
+        imageUrl = trimmedImageUrl ? trimmedImageUrl.slice(0, 500) : null;
+      } else {
+        itemErrors.push("imageUrl must be a string");
+      }
+    }
+
+    let popularityScore = 0;
+    if (record.popularityScore !== undefined && record.popularityScore !== null) {
+      const parsedScore = Number(record.popularityScore);
+      if (!Number.isFinite(parsedScore) || parsedScore < 0) {
+        itemErrors.push("popularityScore must be a non-negative number");
+      } else {
+        popularityScore = Math.floor(parsedScore);
       }
     }
 
@@ -263,11 +370,18 @@ function parseImportPayload(raw: string, defaultBusinessType?: string | null) {
     items.push({
       businessType,
       name,
+      brand,
       category,
+      packSize,
       defaultSellPrice,
+      defaultBarcode,
       defaultBaseUnit,
       defaultTrackStock,
+      aliases: aliases ?? [],
+      keywords: keywords ?? [],
       variants,
+      imageUrl,
+      popularityScore,
       isActive,
     });
   });
@@ -380,12 +494,24 @@ export default function BusinessProductLibraryClient({
       const businessType = (formData.get("businessType") as string | null)?.trim();
       const name = (formData.get("name") as string | null)?.trim();
       if (!businessType || !name) return;
+      const brand = (formData.get("brand") as string | null)?.trim() || null;
       const category = (formData.get("category") as string | null)?.trim() || null;
+      const packSize = (formData.get("packSize") as string | null)?.trim() || null;
       const rawPrice = (formData.get("defaultSellPrice") as string | null)?.trim();
       const defaultSellPrice = rawPrice ? rawPrice : null;
+      const defaultBarcode =
+        normalizeCodeInput((formData.get("defaultBarcode") as string | null) || "") || null;
       const defaultBaseUnit = (formData.get("defaultBaseUnit") as string | null)?.trim() || null;
       const defaultTrackStock = formData.get("defaultTrackStock") === "on";
+      const aliases = parseCsvInput((formData.get("aliasesCsv") as string | null) || "");
+      const keywords = parseCsvInput((formData.get("keywordsCsv") as string | null) || "");
       const rawVariantsJson = (formData.get("variantsJson") as string | null) || "";
+      const imageUrl = (formData.get("imageUrl") as string | null)?.trim() || null;
+      const rawPopularityScore =
+        (formData.get("popularityScore") as string | null)?.trim() || "";
+      const popularityScore = rawPopularityScore
+        ? Math.max(0, Math.floor(Number(rawPopularityScore) || 0))
+        : 0;
       let variants: TemplateVariantDraft[] = [];
       if (rawVariantsJson.trim()) {
         try {
@@ -414,11 +540,18 @@ export default function BusinessProductLibraryClient({
           id,
           businessType,
           name,
+          brand,
           category,
+          packSize,
           defaultSellPrice,
+          defaultBarcode,
           defaultBaseUnit,
           defaultTrackStock,
+          aliases,
+          keywords,
           variants,
+          imageUrl,
+          popularityScore,
           isActive,
         },
       ]);
@@ -427,11 +560,18 @@ export default function BusinessProductLibraryClient({
         id,
         businessType,
         name,
+        brand,
         category,
+        packSize,
         defaultSellPrice,
+        defaultBarcode,
         defaultBaseUnit,
         defaultTrackStock,
+        aliases,
+        keywords,
         variants,
+        imageUrl,
+        popularityScore,
         isActive,
       });
       alert("Offline: template queued.");
@@ -452,9 +592,23 @@ export default function BusinessProductLibraryClient({
       if (!id) return;
       const businessType = (formData.get("businessType") as string | null)?.trim();
       const name = (formData.get("name") as string | null)?.trim();
+      const brand = (formData.get("brand") as string | null)?.trim() || null;
       const category = (formData.get("category") as string | null)?.trim() || null;
+      const packSize = (formData.get("packSize") as string | null)?.trim() || null;
       const rawPrice = (formData.get("defaultSellPrice") as string | null)?.trim();
       const defaultSellPrice = rawPrice ? rawPrice : null;
+      const defaultBarcode =
+        normalizeCodeInput((formData.get("defaultBarcode") as string | null) || "") || null;
+      const defaultBaseUnit = (formData.get("defaultBaseUnit") as string | null)?.trim() || null;
+      const defaultTrackStock = formData.get("defaultTrackStock") === "on";
+      const aliases = parseCsvInput((formData.get("aliasesCsv") as string | null) || "");
+      const keywords = parseCsvInput((formData.get("keywordsCsv") as string | null) || "");
+      const imageUrl = (formData.get("imageUrl") as string | null)?.trim() || null;
+      const rawPopularityScore =
+        (formData.get("popularityScore") as string | null)?.trim() || "";
+      const popularityScore = rawPopularityScore
+        ? Math.max(0, Math.floor(Number(rawPopularityScore) || 0))
+        : 0;
       const isActive = formData.get("isActive") === "on";
 
       updateTemplates((prev) =>
@@ -464,8 +618,17 @@ export default function BusinessProductLibraryClient({
                 ...template,
                 businessType: businessType || template.businessType,
                 name: name || template.name,
+                brand,
                 category,
+                packSize,
                 defaultSellPrice,
+                defaultBarcode,
+                defaultBaseUnit,
+                defaultTrackStock,
+                aliases,
+                keywords,
+                imageUrl,
+                popularityScore,
                 isActive,
               }
             : template,
@@ -476,8 +639,17 @@ export default function BusinessProductLibraryClient({
         id,
         businessType,
         name,
+        brand,
         category,
+        packSize,
         defaultSellPrice,
+        defaultBarcode,
+        defaultBaseUnit,
+        defaultTrackStock,
+        aliases,
+        keywords,
+        imageUrl,
+        popularityScore,
         isActive,
       });
       alert("Offline: template update queued.");
@@ -545,9 +717,17 @@ export default function BusinessProductLibraryClient({
               ? crypto.randomUUID()
               : `${businessType}-${Date.now()}`;
           const category = item.category ?? null;
+          const brand = item.brand ?? null;
+          const packSize = item.packSize ?? null;
           const defaultSellPrice = item.defaultSellPrice ?? null;
+          const defaultBarcode =
+            typeof item.defaultBarcode === "string"
+              ? normalizeCodeInput(item.defaultBarcode)
+              : null;
           const defaultBaseUnit = item.defaultBaseUnit ?? null;
           const defaultTrackStock = item.defaultTrackStock === true;
+          const aliases = Array.isArray(item.aliases) ? item.aliases : [];
+          const keywords = Array.isArray(item.keywords) ? item.keywords : [];
           const variants = Array.isArray(item.variants)
             ? item.variants.map((variant, index) =>
                 createVariantDraft({
@@ -560,17 +740,26 @@ export default function BusinessProductLibraryClient({
                 }),
               )
             : [];
+          const imageUrl = item.imageUrl ?? null;
+          const popularityScore = Number(item.popularityScore ?? 0) || 0;
           const isActive = item.isActive ?? true;
 
           created.push({
             id,
             businessType,
             name,
+            brand,
             category,
+            packSize,
             defaultSellPrice,
+            defaultBarcode,
             defaultBaseUnit,
             defaultTrackStock,
+            aliases,
+            keywords,
             variants,
+            imageUrl,
+            popularityScore,
             isActive,
           });
         }
@@ -583,13 +772,20 @@ export default function BusinessProductLibraryClient({
                 id: item.id,
                 businessType: item.businessType,
                 name: item.name,
+                brand: item.brand ?? null,
                 category: item.category ?? null,
+                packSize: item.packSize ?? null,
                 defaultSellPrice: item.defaultSellPrice ?? null,
+                defaultBarcode: item.defaultBarcode ?? null,
                 defaultBaseUnit: item.defaultBaseUnit ?? null,
                 defaultTrackStock: item.defaultTrackStock === true,
+                aliases: Array.isArray(item.aliases) ? item.aliases : [],
+                keywords: Array.isArray(item.keywords) ? item.keywords : [],
                 variants: Array.isArray(item.variants)
                   ? sanitizeVariantsForSubmit(item.variants)
                   : [],
+                imageUrl: item.imageUrl ?? null,
+                popularityScore: Number(item.popularityScore ?? 0) || 0,
                 isActive: item.isActive,
               }),
             ),
@@ -839,6 +1035,57 @@ export default function BusinessProductLibraryClient({
               />
             </div>
 
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+              <input
+                name="brand"
+                type="text"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Brand (optional)"
+              />
+              <input
+                name="packSize"
+                type="text"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Pack size (500ml, 1kg)"
+              />
+              <input
+                name="defaultBarcode"
+                type="text"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Default barcode"
+              />
+              <input
+                name="popularityScore"
+                type="number"
+                min="0"
+                step="1"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Popularity score"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <input
+                name="aliasesCsv"
+                type="text"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Aliases: chini, sugar, চিনি"
+              />
+              <input
+                name="keywordsCsv"
+                type="text"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Keywords: grocery, staple, daily"
+              />
+            </div>
+
+            <input
+              name="imageUrl"
+              type="text"
+              className="w-full border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="Image URL (optional)"
+            />
+
             <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-foreground">
@@ -1025,7 +1272,8 @@ export default function BusinessProductLibraryClient({
           <div>
             <h2 className="text-lg font-semibold text-foreground">Import templates (JSON)</h2>
             <p className="text-xs text-muted-foreground">
-              Paste a JSON array. Include businessType per item or select a default.
+              Paste a JSON array. Supports brand, packSize, defaultBarcode, aliases, keywords,
+              imageUrl, popularityScore too.
             </p>
           </div>
           <form onSubmit={handleImport} className="space-y-3">
@@ -1052,7 +1300,7 @@ export default function BusinessProductLibraryClient({
               rows={8}
               spellCheck={false}
               className="w-full border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono"
-              placeholder='[{"businessType":"grocery","name":"Rice","category":"Staple","defaultSellPrice":50,"isActive":true}]'
+              placeholder='[{"businessType":"grocery","name":"Rice","brand":"ACI","packSize":"5kg","aliases":["chal","rice"],"defaultSellPrice":50,"popularityScore":90,"isActive":true}]'
               value={importPayload}
               onChange={(event) => {
                 setImportPayload(event.currentTarget.value);
@@ -1113,6 +1361,16 @@ export default function BusinessProductLibraryClient({
                       className="border border-border rounded-lg p-3 grid grid-cols-1 lg:grid-cols-6 gap-3 items-start"
                     >
                       <div className="lg:col-span-6 flex flex-wrap items-center gap-2 text-[11px]">
+                        {template.brand ? (
+                          <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">
+                            brand: {template.brand}
+                          </span>
+                        ) : null}
+                        {template.packSize ? (
+                          <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">
+                            pack: {template.packSize}
+                          </span>
+                        ) : null}
                         <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">
                           unit: {template.defaultBaseUnit || "pcs"}
                         </span>
@@ -1128,6 +1386,16 @@ export default function BusinessProductLibraryClient({
                         <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">
                           variants: {Array.isArray(template.variants) ? template.variants.length : 0}
                         </span>
+                        {template.defaultBarcode ? (
+                          <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 font-mono text-muted-foreground">
+                            barcode: {template.defaultBarcode}
+                          </span>
+                        ) : null}
+                        {Number(template.popularityScore ?? 0) > 0 ? (
+                          <span className="rounded-full border border-primary/30 bg-primary-soft px-2 py-0.5 text-primary">
+                            popularity: {template.popularityScore}
+                          </span>
+                        ) : null}
                       </div>
                       <form
                         action={onUpdateTemplate}
@@ -1135,6 +1403,11 @@ export default function BusinessProductLibraryClient({
                         className="grid grid-cols-1 lg:grid-cols-6 gap-3 lg:col-span-5"
                       >
                         <input type="hidden" name="id" value={template.id} />
+                        <input type="hidden" name="defaultBaseUnit" value={template.defaultBaseUnit ?? ""} />
+                        <input type="hidden" name="variantsJson" value={JSON.stringify(template.variants ?? [])} />
+                        {template.defaultTrackStock ? (
+                          <input type="hidden" name="defaultTrackStock" value="on" />
+                        ) : null}
                         <input
                           name="name"
                           type="text"
@@ -1149,6 +1422,20 @@ export default function BusinessProductLibraryClient({
                           placeholder="Category"
                         />
                         <input
+                          name="brand"
+                          type="text"
+                          className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          defaultValue={template.brand ?? ""}
+                          placeholder="Brand"
+                        />
+                        <input
+                          name="packSize"
+                          type="text"
+                          className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          defaultValue={template.packSize ?? ""}
+                          placeholder="Pack size"
+                        />
+                        <input
                           name="defaultSellPrice"
                           type="number"
                           step="0.01"
@@ -1157,10 +1444,59 @@ export default function BusinessProductLibraryClient({
                           defaultValue={template.defaultSellPrice ?? ""}
                           placeholder="Default price"
                         />
+                        <input
+                          name="defaultBarcode"
+                          type="text"
+                          className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          defaultValue={template.defaultBarcode ?? ""}
+                          placeholder="Barcode"
+                        />
+                        <input
+                          name="popularityScore"
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          defaultValue={template.popularityScore ?? 0}
+                          placeholder="Popularity"
+                        />
+                        <input
+                          name="aliasesCsv"
+                          type="text"
+                          className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 lg:col-span-2"
+                          defaultValue={formatCsvInput(template.aliases)}
+                          placeholder="Aliases"
+                        />
+                        <input
+                          name="keywordsCsv"
+                          type="text"
+                          className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 lg:col-span-2"
+                          defaultValue={formatCsvInput(template.keywords)}
+                          placeholder="Keywords"
+                        />
+                        <input
+                          name="imageUrl"
+                          type="text"
+                          className="border border-border rounded-md px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 lg:col-span-2"
+                          defaultValue={template.imageUrl ?? ""}
+                          placeholder="Image URL"
+                        />
                         <label className="inline-flex items-center gap-2 text-sm text-foreground">
                           <input type="checkbox" name="isActive" className="w-4 h-4" defaultChecked={template.isActive} />
                           <span>Active</span>
                         </label>
+                        {template.aliases && template.aliases.length > 0 ? (
+                          <div className="lg:col-span-6 flex flex-wrap gap-1.5">
+                            {template.aliases.slice(0, 6).map((alias) => (
+                              <span
+                                key={`${template.id}-alias-${alias}`}
+                                className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                              >
+                                {alias}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         <button
                           type="submit"
                           className="px-3 py-2 rounded-md bg-primary-soft text-primary border border-primary/30 font-semibold hover:bg-primary/15 hover:border-primary/40"

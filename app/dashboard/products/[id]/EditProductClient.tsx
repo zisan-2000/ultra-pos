@@ -8,6 +8,10 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
 import {
+  getCatalogProductByBarcodeForShop,
+  searchCatalogProductsForShop,
+} from "@/app/actions/catalog";
+import {
   generateProductBarcode,
   suggestProductSku,
   updateProduct,
@@ -64,6 +68,27 @@ type TemplateItem = {
   price?: string;
   count: number;
   lastUsed: number;
+};
+
+type CatalogSearchItem = {
+  id: string;
+  name: string;
+  brand?: string | null;
+  category?: string | null;
+  packSize?: string | null;
+  defaultBaseUnit?: string | null;
+  popularityScore?: number;
+  latestPrice?: string | null;
+  aliases?: Array<{
+    alias: string;
+    locale?: string | null;
+    isPrimary?: boolean;
+  }>;
+  barcodes?: Array<{
+    code: string;
+    format?: string | null;
+    isPrimary?: boolean;
+  }>;
 };
 
 type VariantDraft = {
@@ -296,10 +321,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         <input
           name="size"
           type="text"
+          value={sizeValue}
+          onChange={(e) => setSizeValue(e.target.value)}
           required={isFieldRequired("size")}
           className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           placeholder="যেমন: L, XL, 100ml"
-          defaultValue={product.size || ""}
         />
       </div>
     ),
@@ -309,6 +335,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   );
   const [name, setName] = useState((product.name as string) || fallbackName);
   const [sellPrice, setSellPrice] = useState((product.sellPrice || "").toString());
+  const [sizeValue, setSizeValue] = useState((product.size || "").toString());
   const [variantModeEnabled, setVariantModeEnabled] = useState(
     Array.isArray(product.variants) && product.variants.length > 0
   );
@@ -336,6 +363,8 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   const [barcode, setBarcode] = useState((product.barcode || "").toString());
   const [skuLoading, setSkuLoading] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
+  const [barcodeLookupLoading, setBarcodeLookupLoading] = useState(false);
+  const [barcodeLookupMessage, setBarcodeLookupMessage] = useState<string | null>(null);
   const [variantSkuLoadingIndex, setVariantSkuLoadingIndex] = useState<number | null>(null);
   const [variantBarcodeLoadingIndex, setVariantBarcodeLoadingIndex] = useState<number | null>(
     null
@@ -360,6 +389,25 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogItems, setCatalogItems] = useState<CatalogSearchItem[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [selectedCatalogItem, setSelectedCatalogItem] = useState<CatalogSearchItem | null>(() =>
+    product.catalogProductId
+      ? {
+          id: String(product.catalogProductId),
+          name: String(product.name || fallbackName || "Linked catalog item"),
+          category: product.category ? String(product.category) : null,
+          packSize: product.size ? String(product.size) : null,
+          defaultBaseUnit: product.baseUnit ? String(product.baseUnit) : null,
+          barcodes: product.barcode
+            ? [{ code: String(product.barcode), isPrimary: true }]
+            : [],
+        }
+      : null
+  );
+  const [catalogLinkRemoved, setCatalogLinkRemoved] = useState(false);
 
   const autoGenerateSku = useCallback(
     async (force = false) => {
@@ -732,6 +780,115 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     }
   }
 
+  const applyCatalogItem = useCallback(
+    (item: CatalogSearchItem) => {
+      setCatalogLinkRemoved(false);
+      setSelectedCatalogItem(item);
+      setName(item.name);
+
+      if (item.latestPrice && Number(item.latestPrice) > 0) {
+        setSellPrice(item.latestPrice);
+      }
+
+      if (item.defaultBaseUnit) {
+        setUnitOptions((prev) =>
+          prev.includes(item.defaultBaseUnit!) ? prev : [...prev, item.defaultBaseUnit!]
+        );
+        setSelectedUnit(item.defaultBaseUnit);
+      }
+
+      if (item.category) {
+        setCategoryOptions((prev) =>
+          prev.includes(item.category!) ? prev : [...prev, item.category!]
+        );
+        setSelectedCategory(item.category);
+      }
+
+      if (item.packSize && isFieldVisible("size")) {
+        setSizeValue(item.packSize);
+      }
+
+      const primaryBarcode =
+        item.barcodes?.find((barcodeItem) => barcodeItem.isPrimary)?.code ??
+        item.barcodes?.[0]?.code ??
+        "";
+      if (primaryBarcode) {
+        setBarcode(normalizeCodeInput(primaryBarcode));
+      }
+    },
+    [isFieldVisible]
+  );
+
+  async function handleCatalogSearch() {
+    if (!online) {
+      setCatalogError("Offline mode-এ catalog search available না।");
+      return;
+    }
+
+    setCatalogLoading(true);
+    setCatalogError(null);
+
+    try {
+      const rows = await searchCatalogProductsForShop({
+        shopId,
+        query: catalogQuery.trim() || undefined,
+        limit: 12,
+      });
+      setCatalogItems(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      handlePermissionError(err);
+      setCatalogItems([]);
+      setCatalogError(err instanceof Error ? err.message : "Catalog search failed");
+    } finally {
+      setCatalogLoading(false);
+    }
+  }
+
+  const lookupCatalogByBarcode = useCallback(
+    async (
+      rawCode: string,
+      options?: { source?: "manual" | "camera" | "field" }
+    ) => {
+      const normalized = normalizeCodeInput(rawCode);
+      if (!normalized || !online) return null;
+
+      setBarcodeLookupLoading(true);
+      setBarcodeLookupMessage(null);
+
+      try {
+        const match = await getCatalogProductByBarcodeForShop({
+          shopId,
+          barcode: normalized,
+        });
+
+        if (match) {
+          applyCatalogItem(match);
+          setBarcode(normalized);
+          setBarcodeLookupMessage(
+            options?.source === "camera"
+              ? "Scanned barcode থেকে catalog item auto-fill হয়েছে।"
+              : "Barcode match পাওয়া গেছে, catalog info auto-fill হয়েছে।"
+          );
+          return match;
+        }
+
+        setBarcodeLookupMessage(
+          "এই barcode-এর জন্য exact catalog match পাওয়া যায়নি। দরকার হলে নিচে alias/name দিয়ে search করুন।"
+        );
+        return null;
+      } catch (err) {
+        handlePermissionError(err);
+        setBarcodeLookupMessage(
+          err instanceof Error ? err.message : "Barcode lookup failed"
+        );
+        return null;
+      } finally {
+        setBarcodeLookupLoading(false);
+      }
+    },
+    [applyCatalogItem, online, shopId]
+  );
+
   function upsertVariant(index: number, patch: Partial<VariantDraft>) {
     setVariants((prev) =>
       prev.map((variant, current) =>
@@ -1033,6 +1190,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
       if (scanTarget === "barcode") {
         setBarcode(normalizedCode);
+        void lookupCatalogByBarcode(normalizedCode, { source });
       } else {
         setSku(normalizedCode);
       }
@@ -1052,7 +1210,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       playScannerFeedbackTone("success");
       return true;
     },
-    [scanTarget, scannerAssistEnabled]
+    [lookupCatalogByBarcode, scanTarget, scannerAssistEnabled]
   );
 
   function handleScanAssign() {
@@ -1262,7 +1420,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       : null;
 
     const size = isFieldVisible("size")
-      ? ((form.get("size") as string) || "").toString().trim() || null
+      ? ((form.get("size") as string) || sizeValue || "").toString().trim() || null
       : null;
 
     const requestedSellPrice = (form.get("sellPrice") as string) || sellPrice;
@@ -1306,6 +1464,14 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     const payload: LocalProduct = {
       ...product,
       shopId: shopId,
+      catalogProductId:
+        selectedCatalogItem?.id ??
+        (catalogLinkRemoved ? null : product.catalogProductId ?? null),
+      productSource: selectedCatalogItem
+        ? "catalog"
+        : catalogLinkRemoved
+          ? "manual"
+          : product.productSource || "manual",
       name: resolvedName,
       category: selectedCategory || "Uncategorized",
       sku: resolvedSku || null,
@@ -1362,7 +1528,155 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       </div>
 
       <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card p-4 sm:p-6 space-y-4 shadow-sm">
-        
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-foreground">
+                Catalog লিংক / অটো-ফিল
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                edit করার সময় catalog item re-link করলে name, price, category, unit, barcode sync করা সহজ হবে।
+              </p>
+            </div>
+            {selectedCatalogItem ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCatalogLinkRemoved(true);
+                  setSelectedCatalogItem(null);
+                  setBarcodeLookupMessage(null);
+                }}
+                className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-3 text-xs font-semibold text-foreground hover:bg-muted"
+              >
+                লিংক মুছুন
+              </button>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              type="search"
+              value={catalogQuery}
+              onChange={(e) => setCatalogQuery(e.target.value)}
+              placeholder="নাম, brand, alias, barcode দিয়ে search করুন"
+              className="h-11 flex-1 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                void handleCatalogSearch();
+              }}
+              disabled={catalogLoading || !online}
+              className="h-11 rounded-xl border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/15 disabled:opacity-50"
+            >
+              {catalogLoading ? "খুঁজছে..." : "Catalog Search"}
+            </button>
+          </div>
+
+          {!online ? (
+            <p className="text-xs text-muted-foreground">
+              Offline mode-এ catalog search কাজ করবে না।
+            </p>
+          ) : null}
+          {catalogError ? <p className="text-xs text-danger">{catalogError}</p> : null}
+
+          {selectedCatalogItem ? (
+            <div className="rounded-xl border border-primary/20 bg-primary-soft/50 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold text-foreground">
+                  {selectedCatalogItem.name}
+                </p>
+                {selectedCatalogItem.brand ? (
+                  <span className="inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {selectedCatalogItem.brand}
+                  </span>
+                ) : null}
+                {selectedCatalogItem.latestPrice ? (
+                  <span className="inline-flex items-center rounded-full border border-primary/20 bg-card px-2 py-0.5 text-[10px] font-semibold text-primary">
+                    ৳ {selectedCatalogItem.latestPrice}
+                  </span>
+                ) : null}
+                {selectedCatalogItem.category ? (
+                  <span className="inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {selectedCatalogItem.category}
+                  </span>
+                ) : null}
+                {selectedCatalogItem.packSize ? (
+                  <span className="inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {selectedCatalogItem.packSize}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Save করলে এই product catalog-এর সাথে linked থাকবে।
+              </p>
+            </div>
+          ) : null}
+
+          {catalogItems.length > 0 ? (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {catalogItems.map((item) => {
+                const aliasPreview = (item.aliases ?? [])
+                  .map((alias) => alias.alias)
+                  .filter(Boolean)
+                  .slice(0, 2);
+                const barcodePreview = (item.barcodes ?? [])
+                  .map((barcodeItem) => barcodeItem.code)
+                  .filter(Boolean)
+                  .slice(0, 1);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => applyCatalogItem(item)}
+                    className={`rounded-xl border p-3 text-left shadow-sm transition ${
+                      selectedCatalogItem?.id === item.id
+                        ? "border-primary/40 bg-primary-soft/50"
+                        : "border-border bg-card hover:border-primary/40"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {item.name}
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {item.brand ? (
+                            <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              {item.brand}
+                            </span>
+                          ) : null}
+                          {item.category ? (
+                            <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              {item.category}
+                            </span>
+                          ) : null}
+                          {item.latestPrice ? (
+                            <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft/60 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                              ৳ {item.latestPrice}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    {(aliasPreview.length > 0 || barcodePreview.length > 0 || item.packSize) ? (
+                      <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+                        {aliasPreview.length > 0 ? (
+                          <p>Alias: {aliasPreview.join(", ")}</p>
+                        ) : null}
+                        {barcodePreview.length > 0 ? (
+                          <p>Barcode: {barcodePreview.join(", ")}</p>
+                        ) : null}
+                        {item.packSize ? <p>Pack: {item.packSize}</p> : null}
+                      </div>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+
         {/* Product Name */}
         {isFieldVisible("name") && (
           <div className="space-y-2">
@@ -1806,12 +2120,33 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                   name="barcode"
                   type="text"
                   value={barcode}
-                  onChange={(e) => setBarcode(normalizeCodeInput(e.target.value))}
+                  onChange={(e) => {
+                    setBarcode(normalizeCodeInput(e.target.value));
+                    setBarcodeLookupMessage(null);
+                  }}
                   className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   placeholder="যেমন: 8901234567890"
                   maxLength={80}
                   autoComplete="off"
                 />
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    {barcodeLookupLoading
+                      ? "Barcode match খোঁজা হচ্ছে..."
+                      : barcodeLookupMessage ||
+                        "Scan বা manual barcode দিলে exact match থাকলে catalog auto-fill হবে।"}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void lookupCatalogByBarcode(barcode, { source: "field" });
+                    }}
+                    disabled={!barcode || barcodeLookupLoading || !online}
+                    className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-3 text-xs font-semibold text-foreground transition hover:bg-muted disabled:opacity-50"
+                  >
+                    {barcodeLookupLoading ? "..." : "Lookup"}
+                  </button>
+                </div>
                 <BarcodePreviewCard
                   value={barcode}
                   productName={name}

@@ -15,6 +15,8 @@ import { revalidateReportsForProduct } from "@/lib/reports/revalidate";
 const productCreateSchema = z.object({
   id: z.string().optional(),
   shopId: z.string(),
+  catalogProductId: z.string().optional().nullable(),
+  productSource: z.enum(["manual", "template", "catalog", "barcode"]).optional().nullable(),
   name: z.string().optional(),
   category: z.string().optional(),
   sku: z.string().optional().nullable(),
@@ -207,6 +209,14 @@ function sanitizeCreate(item: IncomingProduct) {
   return {
     id: item.id, // keep client-generated id when present
     shopId,
+    catalogProductId:
+      normalizeNullableText(item.catalogProductId, 36) === undefined
+        ? undefined
+        : normalizeNullableText(item.catalogProductId, 36),
+    productSource:
+      item.productSource === undefined || item.productSource === null
+        ? undefined
+        : item.productSource,
     name: item.name || "Unnamed product",
     category: item.category || "Uncategorized",
     sku: sku === undefined ? undefined : sku,
@@ -231,6 +241,12 @@ function sanitizeUpdate(item: IncomingProduct) {
 
   if (item.name !== undefined) payload.name = item.name || "Unnamed product";
   if (item.category !== undefined) payload.category = item.category || "Uncategorized";
+  if (item.catalogProductId !== undefined) {
+    payload.catalogProductId = normalizeNullableText(item.catalogProductId, 36);
+  }
+  if (item.productSource !== undefined) {
+    payload.productSource = item.productSource ?? "manual";
+  }
   if (item.sku !== undefined) payload.sku = normalizeCode(item.sku);
   if (item.barcode !== undefined) payload.barcode = normalizeCode(item.barcode);
   if (item.baseUnit !== undefined) payload.baseUnit = normalizeBaseUnit(item.baseUnit, "pcs");

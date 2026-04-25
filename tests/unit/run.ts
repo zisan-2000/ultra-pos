@@ -1,5 +1,7 @@
 import { runBillingTests } from "./billing.test.ts";
 import { runBillingRequestIntegrationScaffoldTests } from "./billing-request.integration.test.ts";
+import { runCatalogAdminUtilsTests } from "./catalog-admin-utils.test.ts";
+import { runCatalogImportTests } from "./catalog-import.test.ts";
 import { runCsvUtilTests } from "./csv.test.ts";
 import { runDateRangeTests } from "./date-range.test.ts";
 import { runDebounceTests } from "./debounce.test.ts";
@@ -13,6 +15,8 @@ import { runStockLevelTests } from "./stock-level.test.ts";
 async function main() {
   const suites = [
     runBillingTests,
+    runCatalogAdminUtilsTests,
+    runCatalogImportTests,
     runCsvUtilTests,
     runDateRangeTests,
     runDebounceTests,

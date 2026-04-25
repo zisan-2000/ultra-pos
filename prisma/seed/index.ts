@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { resetDatabase } from "./reset";
 import { seedRBACAndUsers } from "./rbac/seedRbac";
 import { seedBilling } from "./billing/seedBilling";
+import { seedBusinessProductTemplates } from "./catalog/seedBusinessProductTemplates";
 import { seedShops } from "./pos/seedShops";
 import { seedProducts } from "./pos/seedProducts";
 
@@ -34,6 +35,12 @@ async function main() {
 
   console.log("INFO: Seeding billing plans and subscriptions...");
   await seedBilling(prisma, shops);
+
+  console.log("INFO: Seeding starter business product templates...");
+  const templateSeed = await seedBusinessProductTemplates(prisma);
+  console.log(
+    `INFO: Seeded ${templateSeed.seededCount} templates across ${templateSeed.businessTypes} business types.`,
+  );
 
   console.log("🔥 Seeding products...");
   const products = await seedProducts(prisma, shops);

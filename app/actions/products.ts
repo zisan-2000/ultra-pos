@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { hasAnyPermission, requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
-import { Prisma } from "@prisma/client";
+import { Prisma, ProductSourceType } from "@prisma/client";
 import { revalidateReportsForProduct } from "@/lib/reports/revalidate";
 import { getDhakaBusinessDate } from "@/lib/dhaka-date";
 import { buildProductSearchTerms } from "@/lib/product-search";
@@ -19,6 +19,14 @@ import { type CursorToken } from "@/lib/cursor-pagination";
 type CreateProductInput = {
   id?: string;
   shopId: string;
+  catalogProductId?: string | null;
+  productSource?:
+    | ProductSourceType
+    | "manual"
+    | "template"
+    | "catalog"
+    | "barcode"
+    | null;
   name: string;
   category: string;
   sku?: string | null;
@@ -36,6 +44,14 @@ type CreateProductInput = {
 };
 
 type UpdateProductInput = {
+  catalogProductId?: string | null;
+  productSource?:
+    | ProductSourceType
+    | "manual"
+    | "template"
+    | "catalog"
+    | "barcode"
+    | null;
   name?: string;
   category?: string;
   sku?: string | null;
@@ -175,6 +191,30 @@ function normalizeProductCodeInput(value: unknown) {
   const raw = value === null ? "" : String(value);
   const normalized = raw.trim().replace(/\s+/g, "").toUpperCase().slice(0, 80);
   return normalized || null;
+}
+
+function normalizeProductSourceInput(
+  value:
+    | ProductSourceType
+    | "manual"
+    | "template"
+    | "catalog"
+    | "barcode"
+    | null
+    | undefined,
+  fallback = ProductSourceType.manual
+) {
+  if (value === undefined || value === null) return fallback;
+  switch (value) {
+    case ProductSourceType.template:
+      return ProductSourceType.template;
+    case ProductSourceType.catalog:
+      return ProductSourceType.catalog;
+    case ProductSourceType.barcode:
+      return ProductSourceType.barcode;
+    default:
+      return ProductSourceType.manual;
+  }
 }
 
 const BANGLA_DIGIT_MAP: Record<string, string> = {
@@ -710,6 +750,7 @@ export async function createProduct(input: CreateProductInput) {
   const variants = normalizeVariantInputs(input.variants, {
     fieldPrefix: "Variants",
   });
+  const productSource = normalizeProductSourceInput(input.productSource);
 
   await assertNoCodeCollisionsInShop({
     shopId: input.shopId,
@@ -720,6 +761,8 @@ export async function createProduct(input: CreateProductInput) {
 
   const data: any = {
     shopId: input.shopId,
+    catalogProductId: input.catalogProductId ?? null,
+    productSource,
     name: input.name,
     category: input.category || "Uncategorized",
     sku: sku === undefined ? undefined : sku,
@@ -964,6 +1007,26 @@ export async function getProductsByShopPaginated({
       { category: { contains: term, mode: "insensitive" } },
       { sku: { contains: term, mode: "insensitive" } },
       { barcode: { contains: term, mode: "insensitive" } },
+      { catalogProduct: { is: { name: { contains: term, mode: "insensitive" } } } },
+      { catalogProduct: { is: { brand: { contains: term, mode: "insensitive" } } } },
+      {
+        catalogProduct: {
+          is: {
+            aliases: {
+              some: { alias: { contains: term, mode: "insensitive" } },
+            },
+          },
+        },
+      },
+      {
+        catalogProduct: {
+          is: {
+            barcodes: {
+              some: { code: { contains: term, mode: "insensitive" } },
+            },
+          },
+        },
+      },
     ]);
   }
 
@@ -1060,6 +1123,26 @@ export async function getProductsByShopCursorPaginated({
       { category: { contains: term, mode: "insensitive" } },
       { sku: { contains: term, mode: "insensitive" } },
       { barcode: { contains: term, mode: "insensitive" } },
+      { catalogProduct: { is: { name: { contains: term, mode: "insensitive" } } } },
+      { catalogProduct: { is: { brand: { contains: term, mode: "insensitive" } } } },
+      {
+        catalogProduct: {
+          is: {
+            aliases: {
+              some: { alias: { contains: term, mode: "insensitive" } },
+            },
+          },
+        },
+      },
+      {
+        catalogProduct: {
+          is: {
+            barcodes: {
+              some: { code: { contains: term, mode: "insensitive" } },
+            },
+          },
+        },
+      },
     ]);
   }
 
@@ -1344,6 +1427,14 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
     data.baseUnit !== undefined
       ? normalizeBaseUnitInput(data.baseUnit, { defaultValue: "pcs" })
       : undefined;
+  const catalogProductId =
+    data.catalogProductId !== undefined
+      ? normalizeNullableTextInput(data.catalogProductId, 36)
+      : undefined;
+  const productSource =
+    data.productSource !== undefined
+      ? normalizeProductSourceInput(data.productSource)
+      : undefined;
   const expiryDate =
     data.expiryDate !== undefined
       ? normalizeDateOnlyInput(data.expiryDate)
@@ -1382,8 +1473,26 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   const resolvedStockQty = trackStockFlag ? stockQty : "0";
   const payload: Record<string, any> = {};
 
+  if (catalogProductId !== undefined && catalogProductId !== null) {
+    const catalogProduct = await prisma.catalogProduct.findUnique({
+      where: { id: catalogProductId },
+      select: { id: true },
+    });
+    if (!catalogProduct) {
+      throw new Error("Catalog product not found");
+    }
+  }
+
   if (data.name !== undefined) payload.name = data.name;
   if (data.category !== undefined) payload.category = data.category;
+  if (catalogProductId !== undefined) payload.catalogProductId = catalogProductId;
+  if (productSource !== undefined) {
+    payload.productSource = productSource;
+  } else if (catalogProductId !== undefined) {
+    payload.productSource = catalogProductId
+      ? ProductSourceType.catalog
+      : ProductSourceType.manual;
+  }
   if (sku !== undefined) payload.sku = sku;
   if (barcode !== undefined) payload.barcode = barcode;
   if (baseUnit !== undefined) payload.baseUnit = baseUnit;

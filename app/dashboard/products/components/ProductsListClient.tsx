@@ -28,6 +28,10 @@ import { ShopSwitcherClient } from "../shop-switcher-client";
 import { useCurrentShop } from "@/hooks/use-current-shop";
 import { addBusinessProductTemplatesToShop } from "@/app/actions/business-product-templates";
 import {
+  addCatalogProductsToShop,
+  searchCatalogProductsForShop,
+} from "@/app/actions/catalog";
+import {
   deleteProduct,
   getProductReturnInsights,
   type ProductCardMetrics,
@@ -62,10 +66,17 @@ type Product = {
 type TemplateProduct = {
   id: string;
   name: string;
+  brand?: string | null;
   category: string | null;
+  packSize?: string | null;
   defaultSellPrice: string | null;
+  defaultBarcode?: string | null;
   defaultBaseUnit?: string | null;
   defaultTrackStock?: boolean;
+  aliases?: string[];
+  keywords?: string[];
+  popularityScore?: number;
+  imageUrl?: string | null;
   variants?: Array<{
     label: string;
     sellPrice: string | number;
@@ -74,6 +85,39 @@ type TemplateProduct = {
     sortOrder?: number;
     isActive?: boolean;
   }>;
+};
+
+type CatalogProduct = {
+  id: string;
+  name: string;
+  businessType?: string | null;
+  brand?: string | null;
+  category?: string | null;
+  packSize?: string | null;
+  defaultBaseUnit?: string | null;
+  imageUrl?: string | null;
+  popularityScore?: number;
+  sourceType?: string;
+  externalRef?: string | null;
+  aliases?: Array<{
+    alias: string;
+    locale?: string | null;
+    isPrimary?: boolean;
+  }>;
+  barcodes?: Array<{
+    code: string;
+    format?: string | null;
+    isPrimary?: boolean;
+  }>;
+  latestPrice?: string | null;
+  latestPriceKind?: string | null;
+  latestPriceObservedAt?: string | null;
+  importSource?: {
+    id: string;
+    slug: string;
+    name: string;
+    type: string;
+  } | null;
 };
 
 type ProductStatusFilter = "all" | "active" | "inactive";
@@ -135,6 +179,13 @@ function useDebounce<T>(value: T, delay: number): T {
 
 function normalizeText(value: string) {
   return value.toLowerCase().trim();
+}
+
+function normalizeCodeText(value?: string | null) {
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toUpperCase();
 }
 
 function triggerHaptic(type: "light" | "medium" | "heavy" = "light") {
@@ -233,6 +284,7 @@ export default function ProductsListClient({
   const serverSnapshotRef = useRef(serverProducts);
   const refreshInFlightRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
+  const catalogSectionRef = useRef<HTMLDivElement | null>(null);
   const REFRESH_MIN_INTERVAL_MS = 2_000;
   const lastEventAtRef = useRef(0);
   const EVENT_DEBOUNCE_MS = 500;
@@ -261,6 +313,13 @@ export default function ProductsListClient({
   const [templateOpen, setTemplateOpen] = useState(serverProducts.length === 0);
   const [templateSelections, setTemplateSelections] = useState<Record<string, boolean>>({});
   const [addingTemplates, setAddingTemplates] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState(serverProducts.length === 0);
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogItems, setCatalogItems] = useState<CatalogProduct[]>([]);
+  const [catalogSelections, setCatalogSelections] = useState<Record<string, boolean>>({});
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [addingCatalog, setAddingCatalog] = useState(false);
 
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
@@ -276,6 +335,7 @@ export default function ProductsListClient({
     status: initialStatus,
   });
   const debouncedQuery = useDebounce(query, SEARCH_DEBOUNCE_MS);
+  const debouncedCatalogQuery = useDebounce(catalogQuery, SEARCH_DEBOUNCE_MS);
   const voiceModeStorageKey = useMemo(
     () => `products-voice-mode:${activeShopId}`,
     [activeShopId]
@@ -296,6 +356,9 @@ export default function ProductsListClient({
 
   useEffect(() => {
     setTemplateSelections({});
+    setCatalogSelections({});
+    setCatalogQuery("");
+    setCatalogError(null);
   }, [activeShopId, templateProducts]);
 
   useEffect(() => {
@@ -310,7 +373,49 @@ export default function ProductsListClient({
     if (serverProducts.length === 0 && templateProducts.length > 0) {
       setTemplateOpen(true);
     }
+    if (serverProducts.length === 0) {
+      setCatalogOpen(true);
+    }
   }, [serverProducts.length, templateProducts.length]);
+
+  useEffect(() => {
+    if (!online) {
+      setCatalogLoading(false);
+      return;
+    }
+    if (!catalogOpen) return;
+
+    let cancelled = false;
+    setCatalogLoading(true);
+    setCatalogError(null);
+
+    (async () => {
+      try {
+        const rows = await searchCatalogProductsForShop({
+          shopId: activeShopId,
+          query: debouncedCatalogQuery.trim() || undefined,
+          limit: 24,
+        });
+        if (cancelled) return;
+        setCatalogItems(Array.isArray(rows) ? rows : []);
+      } catch (err) {
+        if (cancelled) return;
+        handlePermissionError(err);
+        setCatalogItems([]);
+        setCatalogError(
+          err instanceof Error ? err.message : "Catalog load failed",
+        );
+      } finally {
+        if (!cancelled) {
+          setCatalogLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeShopId, catalogOpen, debouncedCatalogQuery, online]);
 
   useEffect(() => {
     if (online) {
@@ -582,6 +687,37 @@ export default function ProductsListClient({
     [templateItems, templateSelections]
   );
 
+  const catalogCards = useMemo(() => {
+    if (!catalogItems.length) return [];
+    const seen = new Set<string>();
+    return catalogItems
+      .filter((item) => {
+        const key = normalizeText(item.name);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((item) => ({
+        ...item,
+        alreadyExists: normalizedExistingNames.has(normalizeText(item.name)),
+      }));
+  }, [catalogItems, normalizedExistingNames]);
+
+  const selectableCatalogIds = useMemo(
+    () => catalogCards.filter((item) => !item.alreadyExists).map((item) => item.id),
+    [catalogCards],
+  );
+
+  const selectedCatalogIds = useMemo(
+    () => Object.keys(catalogSelections).filter((id) => catalogSelections[id]),
+    [catalogSelections],
+  );
+
+  const selectedCatalogItems = useMemo(
+    () => catalogCards.filter((item) => catalogSelections[item.id]),
+    [catalogCards, catalogSelections],
+  );
+
   const filteredProducts = useMemo(() => {
     if (online) return products;
     return products.filter((product) => {
@@ -606,6 +742,11 @@ export default function ProductsListClient({
   const visibleProducts = online
     ? products
     : filteredProducts.slice(startIndex, startIndex + OFFLINE_PAGE_SIZE);
+  const trimmedQuery = query.trim();
+  const queryLooksLikeCode =
+    normalizeCodeText(trimmedQuery).length >= 4 && /[0-9]/.test(trimmedQuery);
+  const canOfferCatalogFallback =
+    online && trimmedQuery.length > 0 && visibleProducts.length === 0;
 
   const selectedStockClasses = useMemo(
     () =>
@@ -662,6 +803,19 @@ export default function ProductsListClient({
     },
     [online, activeShopId, query, status, router]
   );
+
+  const handleUseQueryInCatalog = useCallback(() => {
+    const nextQuery = query.trim();
+    setCatalogOpen(true);
+    setCatalogQuery(nextQuery);
+
+    requestAnimationFrame(() => {
+      catalogSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [query]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -725,6 +879,26 @@ export default function ProductsListClient({
     setTemplateSelections({});
   }
 
+  function toggleCatalogSelection(id: string, checked: boolean) {
+    setCatalogSelections((prev) => ({ ...prev, [id]: checked }));
+  }
+
+  function handleToggleAllCatalog(checked: boolean) {
+    if (!checked) {
+      setCatalogSelections({});
+      return;
+    }
+    const next: Record<string, boolean> = {};
+    selectableCatalogIds.forEach((id) => {
+      next[id] = true;
+    });
+    setCatalogSelections(next);
+  }
+
+  function clearCatalogSelections() {
+    setCatalogSelections({});
+  }
+
   async function handleAddTemplates() {
     if (!canCreateProducts) {
       alert("You do not have permission to add products.");
@@ -767,6 +941,11 @@ export default function ProductsListClient({
       const localProducts: LocalProduct[] = [];
       let skipped = 0;
       let inactiveCount = 0;
+      const usedBarcodes = new Set(
+        products
+          .map((product) => normalizeText(product.barcode ?? ""))
+          .filter(Boolean),
+      );
 
         for (const template of selected) {
           const key = normalizeText(template.name);
@@ -809,6 +988,12 @@ export default function ProductsListClient({
           const fallbackVariantPrice = variants.find(
             (variant) => Number(variant.sellPrice) > 0,
           )?.sellPrice;
+          const normalizedBarcode = normalizeText(template.defaultBarcode ?? "");
+          const resolvedBarcode =
+            normalizedBarcode && !usedBarcodes.has(normalizedBarcode)
+              ? (template.defaultBarcode ?? null)
+              : null;
+          if (resolvedBarcode) usedBarcodes.add(normalizedBarcode);
 
           localProducts.push({
             id: crypto.randomUUID(),
@@ -816,13 +1001,14 @@ export default function ProductsListClient({
             name: template.name,
             category: template.category || "Uncategorized",
             sku: null,
-            barcode: null,
+            barcode: resolvedBarcode,
             baseUnit: template.defaultBaseUnit || "pcs",
             buyPrice: null,
             sellPrice: defaultPrice || fallbackVariantPrice || "0",
             stockQty: "0",
             isActive: hasValidPrice,
             trackStock: template.defaultTrackStock === true,
+            size: template.packSize ?? null,
             variants,
             updatedAt: now,
             syncStatus: "new",
@@ -875,6 +1061,160 @@ export default function ProductsListClient({
       alert(message);
     } finally {
       setAddingTemplates(false);
+    }
+  }
+
+  async function handleAddCatalogProducts() {
+    if (!canCreateProducts) {
+      alert("You do not have permission to add products.");
+      return;
+    }
+    if (addingCatalog) return;
+
+    const selected = selectedCatalogItems.filter((item) => !item.alreadyExists);
+    if (selected.length === 0) {
+      alert("Select at least one catalog item to add.");
+      return;
+    }
+
+    setAddingCatalog(true);
+    triggerHaptic("medium");
+
+    try {
+      if (online) {
+        const result = await addCatalogProductsToShop({
+          shopId: activeShopId,
+          catalogProductIds: selected.map((item) => item.id),
+        });
+        const createdCount = result?.createdCount ?? 0;
+        const skippedCount = result?.skippedCount ?? 0;
+        const inactiveCount = result?.inactiveCount ?? 0;
+        const adjustedCodeCount = result?.adjustedCodeCount ?? 0;
+
+        setCatalogSelections({});
+        router.refresh();
+
+        const parts = [`${createdCount} catalog products added`];
+        if (skippedCount) parts.push(`${skippedCount} skipped`);
+        if (inactiveCount) {
+          parts.push(`${inactiveCount} added as inactive (missing price)`);
+        }
+        if (adjustedCodeCount) {
+          parts.push(`${adjustedCodeCount} barcode adjusted`);
+        }
+        alert(parts.join(". "));
+        return;
+      }
+
+      const existingNames = new Set(normalizedExistingNames);
+      const now = Date.now();
+      const localProducts: LocalProduct[] = [];
+      let skipped = 0;
+      let inactiveCount = 0;
+      let adjustedCodeCount = 0;
+      const usedBarcodes = new Set(
+        products
+          .map((product) => normalizeCodeText(product.barcode))
+          .filter(Boolean),
+      );
+
+      for (const item of selected) {
+        const key = normalizeText(item.name);
+        if (!key || existingNames.has(key)) {
+          skipped += 1;
+          continue;
+        }
+        existingNames.add(key);
+
+        const sellPrice = item.latestPrice?.toString?.() || "0";
+        const numericPrice = Number(sellPrice);
+        const hasValidPrice = Number.isFinite(numericPrice) && numericPrice > 0;
+        if (!hasValidPrice) inactiveCount += 1;
+
+        let resolvedBarcode: string | null = null;
+        for (const barcodeItem of item.barcodes ?? []) {
+          const normalizedBarcode = normalizeCodeText(barcodeItem.code);
+          if (!normalizedBarcode) continue;
+          if (usedBarcodes.has(normalizedBarcode)) {
+            adjustedCodeCount += 1;
+            continue;
+          }
+          resolvedBarcode = normalizedBarcode;
+          usedBarcodes.add(normalizedBarcode);
+          break;
+        }
+
+        localProducts.push({
+          id: crypto.randomUUID(),
+          shopId: activeShopId,
+          catalogProductId: item.id,
+          productSource: "catalog",
+          name: item.name,
+          category: item.category || "Uncategorized",
+          sku: null,
+          barcode: resolvedBarcode,
+          baseUnit: item.defaultBaseUnit || "pcs",
+          buyPrice: null,
+          sellPrice,
+          stockQty: "0",
+          isActive: hasValidPrice,
+          trackStock: false,
+          size: item.packSize ?? null,
+          updatedAt: now,
+          syncStatus: "new",
+        });
+      }
+
+      if (localProducts.length === 0) {
+        alert("All selected catalog items already exist in this shop.");
+        return;
+      }
+
+      await db.transaction("rw", db.products, db.queue, async () => {
+        await db.products.bulkPut(localProducts);
+        await Promise.all(
+          localProducts.map((item) => queueAdd("product", "create", item)),
+        );
+      });
+
+      setProducts((prev) => [
+        ...localProducts.map((item) => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          sku: item.sku ?? null,
+          barcode: item.barcode ?? null,
+          buyPrice: item.buyPrice ?? null,
+          sellPrice: item.sellPrice,
+          stockQty: item.stockQty,
+          trackStock: item.trackStock ?? false,
+          isActive: item.isActive,
+          createdAt: item.updatedAt.toString(),
+        })),
+        ...prev,
+      ]);
+
+      setCatalogSelections({});
+      const parts = [`${localProducts.length} catalog products added offline`];
+      if (skipped) parts.push(`${skipped} skipped`);
+      if (inactiveCount) {
+        parts.push(`${inactiveCount} added as inactive (missing price)`);
+      }
+      if (adjustedCodeCount) {
+        parts.push(`${adjustedCodeCount} barcode adjusted`);
+      }
+      parts.push("Will sync when online.");
+      alert(parts.join(". "));
+    } catch (err) {
+      handlePermissionError(err);
+      console.error("Add catalog products failed", err);
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : "Failed to add catalog products";
+      alert(message);
+    } finally {
+      setAddingCatalog(false);
     }
   }
 
@@ -1442,6 +1782,9 @@ export default function ProductsListClient({
                     ? "border-primary/20 bg-primary-soft text-primary"
                     : "border-warning/30 bg-warning/10 text-warning";
                   const unitLabel = (template.defaultBaseUnit || "pcs").toLowerCase();
+                  const aliasPreview = Array.isArray(template.aliases)
+                    ? template.aliases.filter(Boolean).slice(0, 3)
+                    : [];
                   return (
                     <label
                       key={template.id}
@@ -1466,13 +1809,30 @@ export default function ProductsListClient({
                         <div className="min-w-0 flex-1 space-y-2">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-foreground">
-                                {template.name}
-                              </p>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <p className="truncate text-sm font-semibold text-foreground">
+                                  {template.name}
+                                </p>
+                                {template.brand ? (
+                                  <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    {template.brand}
+                                  </span>
+                                ) : null}
+                                {Number(template.popularityScore ?? 0) > 0 ? (
+                                  <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                    {template.popularityScore}
+                                  </span>
+                                ) : null}
+                              </div>
                               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                 <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                                   {template.category || "Uncategorized"}
                                 </span>
+                                {template.packSize ? (
+                                  <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    {template.packSize}
+                                  </span>
+                                ) : null}
                                 <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                                   ইউনিট: {unitLabel}
                                 </span>
@@ -1485,6 +1845,11 @@ export default function ProductsListClient({
                                 >
                                   {template.defaultTrackStock ? "স্টক অন" : "স্টক অফ"}
                                 </span>
+                                {template.defaultBarcode ? (
+                                  <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium font-mono text-muted-foreground">
+                                    {template.defaultBarcode}
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
                             <div className="shrink-0 space-y-1 text-right">
@@ -1531,6 +1896,24 @@ export default function ProductsListClient({
                               </div>
                             </div>
                           ) : null}
+                          {aliasPreview.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {aliasPreview.map((alias) => (
+                                <span
+                                  key={`${template.id}-alias-${alias}`}
+                                  className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                                >
+                                  {alias}
+                                </span>
+                              ))}
+                              {Array.isArray(template.aliases) &&
+                              template.aliases.length > aliasPreview.length ? (
+                                <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  +{template.aliases.length - aliasPreview.length} alias
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </label>
@@ -1541,6 +1924,288 @@ export default function ProductsListClient({
           )}
         </div>
       )}
+
+      <div className="rounded-2xl border border-border bg-card p-3 sm:p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground truncate sm:text-base">
+              Catalog থেকে যোগ করুন
+            </h3>
+            <p className="mt-0.5 text-[11px] text-muted-foreground leading-tight sm:text-xs sm:leading-relaxed">
+              Search করে ready-made catalog item shop-এ import করুন।
+            </p>
+            {selectedCatalogIds.length > 0 && (
+              <span className="mt-1 inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                {selectedCatalogIds.length} টি বাছাই
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            aria-expanded={catalogOpen}
+            aria-controls="product-catalog-section"
+            onClick={() => setCatalogOpen((prev) => !prev)}
+            className="inline-flex h-8 items-center gap-2 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground shadow-sm transition hover:bg-muted hover:border-primary/30"
+          >
+            {catalogOpen ? "লুকান" : "দেখান"}
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className={`h-3.5 w-3.5 transition-transform ${
+                catalogOpen ? "rotate-180" : ""
+              }`}
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.24a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08Z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+        </div>
+
+        {catalogOpen && (
+          <div
+            id="product-catalog-section"
+            ref={catalogSectionRef}
+            className="mt-3 space-y-3"
+          >
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-2.5 space-y-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  type="search"
+                  value={catalogQuery}
+                  onChange={(event) => setCatalogQuery(event.target.value)}
+                  placeholder="নাম, brand, category, alias, barcode"
+                  className="h-10 flex-1 rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary/40"
+                />
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center gap-2 text-xs font-medium text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={
+                        selectableCatalogIds.length > 0 &&
+                        selectableCatalogIds.every((id) => catalogSelections[id])
+                      }
+                      onChange={(event) =>
+                        handleToggleAllCatalog(event.target.checked)
+                      }
+                      disabled={!canCreateProducts || selectableCatalogIds.length === 0}
+                      className="h-4 w-4"
+                    />
+                    <span>সবগুলো</span>
+                  </label>
+                  {selectedCatalogIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearCatalogSelections}
+                      className="text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                    >
+                      মুছুন
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleAddCatalogProducts}
+                    disabled={
+                      !canCreateProducts ||
+                      addingCatalog ||
+                      selectedCatalogItems.length === 0
+                    }
+                    className="inline-flex h-8 items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary-soft px-4 text-xs font-semibold text-primary shadow-sm hover:bg-primary/15 hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {addingCatalog ? "যোগ হচ্ছে..." : "Catalog যোগ করুন"}
+                  </button>
+                </div>
+              </div>
+              {!online ? (
+                <p className="text-xs text-muted-foreground">
+                  Offline mode: catalog search unavailable. অনলাইনে এলে search করা যাবে।
+                </p>
+              ) : null}
+              {canOfferCatalogFallback && catalogQuery.trim() !== trimmedQuery ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary-soft/40 px-3 py-2">
+                  <p className="text-xs text-foreground">
+                    {queryLooksLikeCode
+                      ? "এই barcode/SKU shop-এ মেলেনি। catalog-এ exact/related match খুঁজে দেখতে পারেন।"
+                      : "Local product না পেলে catalog alias/name দিয়েও খুঁজে import করতে পারেন।"}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleUseQueryInCatalog}
+                    className="inline-flex h-7 items-center justify-center rounded-full border border-primary/30 bg-background px-3 text-[11px] font-semibold text-primary hover:bg-primary/10"
+                  >
+                    এই search ব্যবহার করুন
+                  </button>
+                </div>
+              ) : null}
+              {catalogError ? (
+                <p className="text-xs text-danger">{catalogError}</p>
+              ) : null}
+            </div>
+
+            {!canCreateProducts && (
+              <div className="text-xs text-warning">পণ্য যোগ করার অনুমতি নেই।</div>
+            )}
+
+            {online && catalogLoading ? (
+              <div className="rounded-xl border border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+                Catalog search লোড হচ্ছে...
+              </div>
+            ) : null}
+
+            {online && !catalogLoading && catalogCards.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-muted/10 px-3 py-5 text-sm text-muted-foreground">
+                {debouncedCatalogQuery.trim()
+                  ? "এই search-এ কোনো catalog item পাওয়া যায়নি।"
+                  : "এই business-এর জন্য এখনো কোনো catalog suggestion নেই।"}
+              </div>
+            ) : null}
+
+            {catalogCards.length > 0 && (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {catalogCards.map((item) => {
+                  const checked = Boolean(catalogSelections[item.id]);
+                  const disabled = item.alreadyExists || !canCreateProducts;
+                  const aliasPreview = Array.isArray(item.aliases)
+                    ? item.aliases
+                        .map((alias) => alias.alias)
+                        .filter(Boolean)
+                        .slice(0, 3)
+                    : [];
+                  const barcodePreview = Array.isArray(item.barcodes)
+                    ? item.barcodes.slice(0, 2)
+                    : [];
+                  const hasPrice =
+                    Number.isFinite(Number(item.latestPrice ?? 0)) &&
+                    Number(item.latestPrice ?? 0) > 0;
+                  const priceLabel = hasPrice
+                    ? `৳ ${formatTemplatePrice(item.latestPrice)}`
+                    : "দাম নেই";
+                  return (
+                    <label
+                      key={item.id}
+                      className={`block rounded-xl border p-3 transition ${
+                        disabled
+                          ? "border-border bg-muted/50 text-muted-foreground"
+                          : checked
+                          ? "border-primary/40 bg-primary-soft/50"
+                          : "border-border bg-card hover:border-primary/40"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) =>
+                            toggleCatalogSelection(item.id, event.target.checked)
+                          }
+                          disabled={disabled}
+                          className="mt-1 h-4 w-4 shrink-0"
+                        />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <p className="truncate text-sm font-semibold text-foreground">
+                                  {item.name}
+                                </p>
+                                {item.brand ? (
+                                  <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    {item.brand}
+                                  </span>
+                                ) : null}
+                                {Number(item.popularityScore ?? 0) > 0 ? (
+                                  <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                    {item.popularityScore}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  {item.category || "Uncategorized"}
+                                </span>
+                                {item.packSize ? (
+                                  <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    {item.packSize}
+                                  </span>
+                                ) : null}
+                                <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  ইউনিট: {(item.defaultBaseUnit || "pcs").toLowerCase()}
+                                </span>
+                                {item.sourceType ? (
+                                  <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    {item.sourceType}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="shrink-0 space-y-1 text-right">
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                                  hasPrice
+                                    ? "border-primary/20 bg-primary-soft text-primary"
+                                    : "border-warning/30 bg-warning/10 text-warning"
+                                }`}
+                              >
+                                {priceLabel}
+                              </span>
+                              {item.alreadyExists ? (
+                                <span className="block text-[10px] font-semibold text-muted-foreground">
+                                  আগে থেকেই আছে
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {barcodePreview.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {barcodePreview.map((barcode) => (
+                                <span
+                                  key={`${item.id}-barcode-${barcode.code}`}
+                                  className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 font-mono text-[10px] font-medium text-muted-foreground"
+                                >
+                                  {barcode.code}
+                                </span>
+                              ))}
+                              {Array.isArray(item.barcodes) &&
+                              item.barcodes.length > barcodePreview.length ? (
+                                <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  +{item.barcodes.length - barcodePreview.length} barcode
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          {aliasPreview.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {aliasPreview.map((alias) => (
+                                <span
+                                  key={`${item.id}-alias-${alias}`}
+                                  className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                                >
+                                  {alias}
+                                </span>
+                              ))}
+                              {Array.isArray(item.aliases) &&
+                              item.aliases.length > aliasPreview.length ? (
+                                <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  +{item.aliases.length - aliasPreview.length} alias
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
 
       {/* Products List - Scrolls normally */}
@@ -1562,6 +2227,22 @@ export default function ProductsListClient({
                 ? "ফিল্টার পরিবর্তন করে আবার চেষ্টা করুন"
                 : "নতুন পণ্য যোগ করতে + বাটনে ক্লিক করুন"}
             </p>
+            {canOfferCatalogFallback ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {queryLooksLikeCode
+                    ? "এই barcode/SKU shop-এ নেই। catalog-এ খুঁজে import করা যেতে পারে।"
+                    : "এই search-এর local result নেই। catalog alias/barcode থেকেও খুঁজে দেখতে পারেন।"}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleUseQueryInCatalog}
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/15 hover:border-primary/40"
+                >
+                  Catalog-এ এই search চালান
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : (
           visibleProducts.map((product) => {

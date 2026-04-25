@@ -253,6 +253,24 @@ export default function AdminDashboardClient({ userId, initialData }: Props) {
             >
               User creation log
             </Link>
+            <Link
+              href="/dashboard/admin/catalog"
+              className={buttonVariants({
+                variant: "outline",
+                className: "justify-start",
+              })}
+            >
+              Global catalog
+            </Link>
+            <Link
+              href="/dashboard/admin/business-product-library"
+              className={buttonVariants({
+                variant: "outline",
+                className: "justify-start",
+              })}
+            >
+              Product library
+            </Link>
           </div>
         </div>
 

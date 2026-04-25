@@ -20,18 +20,41 @@ import BusinessProductLibraryClient from "./BusinessProductLibraryClient";
 
 export const dynamic = "force-dynamic";
 
+function parseCsvList(value: FormDataEntryValue | null) {
+  const raw = typeof value === "string" ? value : "";
+  return raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseOptionalNumber(value: FormDataEntryValue | null) {
+  if (typeof value !== "string") return undefined;
+  const cleaned = value.trim();
+  if (!cleaned) return undefined;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 async function handleCreateTemplate(formData: FormData) {
   "use server";
   const businessType = (formData.get("businessType") as string | null) || "";
   const name = (formData.get("name") as string | null) || "";
+  const brand = (formData.get("brand") as string | null) || null;
   const category = (formData.get("category") as string | null) || null;
+  const packSize = (formData.get("packSize") as string | null) || null;
   const defaultSellPrice = formData.get("defaultSellPrice") as string | null;
+  const defaultBarcode = (formData.get("defaultBarcode") as string | null) || null;
   const defaultBaseUnit = (formData.get("defaultBaseUnit") as string | null) || null;
   const hasDefaultTrackStock = formData.has("defaultTrackStock");
   const defaultTrackStock = hasDefaultTrackStock
     ? formData.get("defaultTrackStock") === "on"
     : undefined;
+  const aliases = parseCsvList(formData.get("aliasesCsv"));
+  const keywords = parseCsvList(formData.get("keywordsCsv"));
   const rawVariantsJson = (formData.get("variantsJson") as string | null) || "";
+  const imageUrl = (formData.get("imageUrl") as string | null) || null;
+  const popularityScore = parseOptionalNumber(formData.get("popularityScore"));
   let variants: Array<{
     label?: string | null;
     sellPrice?: string | number | null;
@@ -53,11 +76,18 @@ async function handleCreateTemplate(formData: FormData) {
   await createBusinessProductTemplate({
     businessType,
     name,
+    brand,
     category,
+    packSize,
     defaultSellPrice,
+    defaultBarcode,
     defaultBaseUnit,
     defaultTrackStock,
+    aliases,
+    keywords,
     variants,
+    imageUrl,
+    popularityScore,
     isActive,
   });
   revalidatePath("/dashboard/admin/business-product-library");
@@ -67,14 +97,21 @@ async function handleUpdateTemplate(formData: FormData) {
   "use server";
   const id = (formData.get("id") as string | null) || "";
   const name = formData.get("name") as string | null;
+  const brand = formData.get("brand") as string | null;
   const category = formData.get("category") as string | null;
+  const packSize = formData.get("packSize") as string | null;
   const defaultSellPrice = formData.get("defaultSellPrice") as string | null;
+  const defaultBarcode = formData.get("defaultBarcode") as string | null;
   const defaultBaseUnit = formData.get("defaultBaseUnit") as string | null;
   const hasDefaultTrackStock = formData.has("defaultTrackStock");
   const defaultTrackStock = hasDefaultTrackStock
     ? formData.get("defaultTrackStock") === "on"
     : undefined;
+  const aliases = parseCsvList(formData.get("aliasesCsv"));
+  const keywords = parseCsvList(formData.get("keywordsCsv"));
   const rawVariantsJson = (formData.get("variantsJson") as string | null) || "";
+  const imageUrl = formData.get("imageUrl") as string | null;
+  const popularityScore = parseOptionalNumber(formData.get("popularityScore"));
   let variants:
     | Array<{
         label?: string | null;
@@ -97,11 +134,18 @@ async function handleUpdateTemplate(formData: FormData) {
 
   await updateBusinessProductTemplate(id, {
     name: name ?? undefined,
+    brand: brand ?? undefined,
     category: category ?? undefined,
+    packSize: packSize ?? undefined,
     defaultSellPrice: defaultSellPrice ?? undefined,
+    defaultBarcode: defaultBarcode ?? undefined,
     defaultBaseUnit: defaultBaseUnit ?? undefined,
     defaultTrackStock,
+    aliases,
+    keywords,
     variants,
+    imageUrl: imageUrl ?? undefined,
+    popularityScore,
     isActive,
   });
   revalidatePath("/dashboard/admin/business-product-library");

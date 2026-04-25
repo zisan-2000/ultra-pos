@@ -256,6 +256,48 @@ enum SmsDispatchStatus {
   skipped
 }
 
+enum CatalogProductSource {
+  curated
+  imported
+  user_submitted
+}
+
+enum CatalogImportSourceType {
+  csv
+  json
+  barcode_feed
+  supplier_list
+  manual
+}
+
+enum CatalogImportPayloadFormat {
+  json
+  csv
+}
+
+enum CatalogImportMode {
+  skip
+  upsert
+}
+
+enum CatalogPriceKind {
+  retail
+  wholesale
+  mrp
+}
+
+enum CatalogProductMergeMode {
+  archive
+  delete
+}
+
+enum ProductSourceType {
+  manual
+  template
+  catalog
+  barcode
+}
+
 model SmsSummaryDispatch {
   id                String            @id @default(uuid()) @db.Uuid
   shopId            String            @map("shop_id") @db.Uuid
@@ -447,28 +489,210 @@ model BusinessType {
   @@map("business_types")
 }
 
+model CatalogImportSource {
+  id            String                  @id @default(uuid()) @db.Uuid
+  slug          String                  @unique
+  name          String
+  type          CatalogImportSourceType
+  notes         String?
+  importedAt    DateTime?               @map("imported_at") @db.Timestamptz(6)
+  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  products       CatalogProduct[]
+  priceSnapshots CatalogPriceSnapshot[]
+  importRuns     CatalogImportRun[]
+
+  @@map("catalog_import_sources")
+}
+
+model CatalogProduct {
+  id              String               @id @default(uuid()) @db.Uuid
+  businessType    String?              @map("business_type")
+  name            String
+  brand           String?              @db.VarChar(120)
+  category        String?
+  packSize        String?              @map("pack_size") @db.VarChar(80)
+  defaultBaseUnit String?              @map("default_base_unit") @db.VarChar(40)
+  imageUrl        String?              @map("image_url")
+  popularityScore Int                  @default(0) @map("popularity_score")
+  sourceType      CatalogProductSource @default(curated) @map("source_type")
+  importSourceId  String?              @map("import_source_id") @db.Uuid
+  externalRef     String?              @map("external_ref")
+  mergedIntoCatalogProductId String?   @map("merged_into_catalog_product_id") @db.Uuid
+  mergedAt        DateTime?            @map("merged_at") @db.Timestamptz(6)
+  isActive        Boolean              @default(true) @map("is_active")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  importSource       CatalogImportSource?      @relation(fields: [importSourceId], references: [id], onDelete: SetNull)
+  mergedIntoCatalogProduct CatalogProduct?     @relation("CatalogProductMergeParent", fields: [mergedIntoCatalogProductId], references: [id], onDelete: SetNull)
+  mergedFromCatalogProducts CatalogProduct[]   @relation("CatalogProductMergeParent")
+  aliases            CatalogProductAlias[]
+  barcodes           CatalogProductBarcode[]
+  priceSnapshots     CatalogPriceSnapshot[]
+  templates          BusinessProductTemplate[]
+  products           Product[]
+  mergeSourceActions CatalogProductMergeAction[] @relation("CatalogProductMergeSourceActions")
+  mergeTargetActions CatalogProductMergeAction[] @relation("CatalogProductMergeTargetActions")
+
+  @@index([businessType], map: "idx_catalog_products_business_type")
+  @@index([businessType, popularityScore], map: "idx_catalog_products_business_popularity")
+  @@index([brand], map: "idx_catalog_products_brand")
+  @@index([importSourceId], map: "idx_catalog_products_import_source_id")
+  @@index([isActive], map: "idx_catalog_products_is_active")
+  @@index([mergedIntoCatalogProductId], map: "idx_catalog_products_merged_into")
+  @@index([mergedAt], map: "idx_catalog_products_merged_at")
+  @@map("catalog_products")
+}
+
+model CatalogProductAlias {
+  id               String   @id @default(uuid()) @db.Uuid
+  catalogProductId String   @map("catalog_product_id") @db.Uuid
+  alias            String
+  locale           String?  @db.VarChar(16)
+  isPrimary        Boolean  @default(false) @map("is_primary")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  catalogProduct CatalogProduct @relation(fields: [catalogProductId], references: [id], onDelete: Cascade)
+
+  @@unique([catalogProductId, alias], map: "uq_catalog_product_aliases_product_alias")
+  @@index([alias], map: "idx_catalog_product_aliases_alias")
+  @@index([locale], map: "idx_catalog_product_aliases_locale")
+  @@map("catalog_product_aliases")
+}
+
+model CatalogProductBarcode {
+  id               String   @id @default(uuid()) @db.Uuid
+  catalogProductId String   @map("catalog_product_id") @db.Uuid
+  code             String   @db.VarChar(80)
+  format           String?  @db.VarChar(40)
+  isPrimary        Boolean  @default(false) @map("is_primary")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  catalogProduct CatalogProduct @relation(fields: [catalogProductId], references: [id], onDelete: Cascade)
+
+  @@unique([code], map: "uq_catalog_product_barcodes_code")
+  @@index([catalogProductId], map: "idx_catalog_product_barcodes_product_id")
+  @@map("catalog_product_barcodes")
+}
+
+model CatalogPriceSnapshot {
+  id               String           @id @default(uuid()) @db.Uuid
+  catalogProductId String           @map("catalog_product_id") @db.Uuid
+  businessType     String?          @map("business_type")
+  regionCode       String?          @map("region_code") @db.VarChar(40)
+  priceKind        CatalogPriceKind @default(retail) @map("price_kind")
+  price            Decimal          @db.Decimal(12, 2)
+  currency         String           @default("BDT") @db.VarChar(8)
+  importSourceId   String?          @map("import_source_id") @db.Uuid
+  sourceLabel      String?          @map("source_label")
+  observedAt       DateTime         @map("observed_at") @db.Timestamptz(6)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  catalogProduct CatalogProduct       @relation(fields: [catalogProductId], references: [id], onDelete: Cascade)
+  importSource   CatalogImportSource? @relation(fields: [importSourceId], references: [id], onDelete: SetNull)
+
+  @@index([catalogProductId, observedAt], map: "idx_catalog_price_snapshots_product_observed")
+  @@index([businessType, regionCode, priceKind], map: "idx_catalog_price_snapshots_lookup")
+  @@index([importSourceId], map: "idx_catalog_price_snapshots_import_source_id")
+  @@map("catalog_price_snapshots")
+}
+
+model CatalogImportRun {
+  id                       String                     @id @default(uuid()) @db.Uuid
+  payloadFormat            CatalogImportPayloadFormat @default(json) @map("payload_format")
+  importMode               CatalogImportMode          @default(skip) @map("import_mode")
+  submittedCount           Int                        @default(0) @map("submitted_count")
+  validCount               Int                        @default(0) @map("valid_count")
+  invalidCount             Int                        @default(0) @map("invalid_count")
+  duplicateInputCount      Int                        @default(0) @map("duplicate_input_count")
+  createdCount             Int                        @default(0) @map("created_count")
+  updatedCount             Int                        @default(0) @map("updated_count")
+  skippedCount             Int                        @default(0) @map("skipped_count")
+  errorCount               Int                        @default(0) @map("error_count")
+  defaultBusinessType      String?                    @map("default_business_type")
+  defaultImportSourceId    String?                    @map("default_import_source_id") @db.Uuid
+  defaultImportSourceLabel String?                    @map("default_import_source_label")
+  defaultSourceType        CatalogProductSource?      @map("default_source_type")
+  importedByUserId         String?                    @map("imported_by_user_id")
+  importedByLabel          String?                    @map("imported_by_label")
+  errorSummary             String?                    @map("error_summary")
+  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  defaultImportSource CatalogImportSource? @relation(fields: [defaultImportSourceId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt], map: "idx_catalog_import_runs_created")
+  @@index([payloadFormat, createdAt], map: "idx_catalog_import_runs_format_created")
+  @@index([defaultImportSourceId], map: "idx_catalog_import_runs_default_source")
+  @@map("catalog_import_runs")
+}
+
+model CatalogProductMergeAction {
+  id                           String                  @id @default(uuid()) @db.Uuid
+  sourceCatalogProductId       String?                 @map("source_catalog_product_id") @db.Uuid
+  sourceProductNameSnapshot    String                  @map("source_product_name_snapshot")
+  sourceBusinessTypeSnapshot   String?                 @map("source_business_type_snapshot")
+  targetCatalogProductId       String?                 @map("target_catalog_product_id") @db.Uuid
+  targetProductNameSnapshot    String                  @map("target_product_name_snapshot")
+  targetBusinessTypeSnapshot   String?                 @map("target_business_type_snapshot")
+  mergeMode                    CatalogProductMergeMode @map("merge_mode")
+  movedTemplateCount           Int                     @default(0) @map("moved_template_count")
+  movedShopProductCount        Int                     @default(0) @map("moved_shop_product_count")
+  movedSnapshotCount           Int                     @default(0) @map("moved_snapshot_count")
+  movedAliasCount              Int                     @default(0) @map("moved_alias_count")
+  movedBarcodeCount            Int                     @default(0) @map("moved_barcode_count")
+  mergedByUserId               String?                 @map("merged_by_user_id")
+  mergedByLabel                String?                 @map("merged_by_label")
+  note                         String?
+  createdAt                    DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  sourceCatalogProduct CatalogProduct? @relation("CatalogProductMergeSourceActions", fields: [sourceCatalogProductId], references: [id], onDelete: SetNull)
+  targetCatalogProduct CatalogProduct? @relation("CatalogProductMergeTargetActions", fields: [targetCatalogProductId], references: [id], onDelete: SetNull)
+
+  @@index([sourceCatalogProductId], map: "idx_catalog_product_merge_actions_source")
+  @@index([targetCatalogProductId], map: "idx_catalog_product_merge_actions_target")
+  @@index([mergeMode, createdAt], map: "idx_catalog_product_merge_actions_mode_created")
+  @@map("catalog_product_merge_actions")
+}
+
 model BusinessProductTemplate {
   id               String   @id @default(uuid()) @db.Uuid
   businessType     String   @map("business_type")
+  catalogProductId String?  @map("catalog_product_id") @db.Uuid
   name             String
+  brand            String?  @db.VarChar(120)
   category         String?
+  packSize         String?  @map("pack_size") @db.VarChar(80)
   defaultSellPrice Decimal? @map("default_sell_price") @db.Decimal(12, 2)
+  defaultBarcode   String?  @map("default_barcode") @db.VarChar(80)
   defaultBaseUnit  String?  @map("default_base_unit") @db.VarChar(40)
   defaultTrackStock Boolean @default(false) @map("default_track_stock")
+  aliasesJson      Json?    @map("aliases_json")
+  keywordsJson     Json?    @map("keywords_json")
   variantsJson     Json?    @map("variants_json")
+  imageUrl         String?  @map("image_url")
+  popularityScore  Int      @default(0) @map("popularity_score")
   isActive         Boolean  @default(true) @map("is_active")
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  catalogProduct   CatalogProduct? @relation(fields: [catalogProductId], references: [id], onDelete: SetNull)
+
   @@unique([businessType, name], map: "uq_business_product_templates_type_name")
+  @@index([catalogProductId], map: "idx_business_product_templates_catalog_product_id")
   @@index([businessType], map: "idx_business_product_templates_type")
   @@index([businessType, isActive], map: "idx_business_product_templates_active")
+  @@index([businessType, popularityScore], map: "idx_business_product_templates_popularity")
+  @@index([defaultBarcode], map: "idx_business_product_templates_default_barcode")
   @@map("business_product_templates")
 }
 
 model Product {
   id         String   @id @default(uuid()) @db.Uuid
   shopId     String   @map("shop_id") @db.Uuid
+  catalogProductId String? @map("catalog_product_id") @db.Uuid
+  productSource ProductSourceType @default(manual) @map("product_source")
   name       String
   category   String   @default("Uncategorized")
   sku        String?  @db.VarChar(80)
@@ -485,6 +709,7 @@ model Product {
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   shop            Shop             @relation(fields: [shopId], references: [id])
+  catalogProduct  CatalogProduct?  @relation(fields: [catalogProductId], references: [id], onDelete: SetNull)
   variants        ProductVariant[]
   saleItems       SaleItem[]
   purchaseItems   PurchaseItem[]
@@ -493,6 +718,8 @@ model Product {
   returnExchangeItems SaleReturnExchangeItem[]
 
   @@index([shopId], map: "idx_products_shop")
+  @@index([catalogProductId], map: "idx_products_catalog_product_id")
+  @@index([shopId, productSource], map: "idx_products_shop_source")
   @@index([shopId, isActive], map: "idx_products_active")
   @@index([shopId, isActive, stockQty], map: "idx_products_low_stock")
   @@index([shopId, sku], map: "idx_products_shop_sku")

@@ -31,6 +31,7 @@ import { getOfflineRouteFallbackHref } from "@/lib/offline/route-readiness";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import {
   BarChart3,
+  BookOpen,
   ChevronDown,
   CreditCard,
   HandCoins,
@@ -981,6 +982,40 @@ export function DashboardShell({
                       <span className={navLabelClass}>
                         Product Library
                       </span>
+                    </Link>
+
+                    <Link
+                      href={buildShopHref("/dashboard/admin/catalog")}
+                      prefetch={false}
+                      onClick={(event) => {
+                        setDrawerOpen(false);
+                        handleNavClick(event, "/dashboard/admin/catalog");
+                      }}
+                      onMouseEnter={() =>
+                        handleNavPrefetch("/dashboard/admin/catalog")
+                      }
+                      onTouchStart={() =>
+                        handleNavPrefetch("/dashboard/admin/catalog")
+                      }
+                      className={navItemClass(
+                        isActive("/dashboard/admin/catalog")
+                      )}
+                    >
+                      <span
+                        className={navIconWrapClass(
+                          "/dashboard/admin/catalog",
+                          isActive("/dashboard/admin/catalog")
+                        )}
+                      >
+                        <BookOpen
+                          className={`h-4 w-4 ${navIconClass(
+                            "/dashboard/admin/catalog",
+                            isActive("/dashboard/admin/catalog")
+                          )}`}
+                        />
+                      </span>
+
+                      <span className={navLabelClass}>Global Catalog</span>
                     </Link>
 
                     <Link

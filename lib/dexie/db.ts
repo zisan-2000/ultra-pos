@@ -7,6 +7,8 @@ import Dexie, { Table } from "dexie";
 export type LocalProduct = {
   id: string;
   shopId: string;
+  catalogProductId?: string | null;
+  productSource?: "manual" | "template" | "catalog" | "barcode";
   name: string;
   category: string;
   sku?: string | null;

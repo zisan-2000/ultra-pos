@@ -12,11 +12,18 @@ type TemplateInput = {
   id?: string;
   businessType: string;
   name: string;
+  brand?: string | null;
   category?: string | null;
+  packSize?: string | null;
   defaultSellPrice?: string | number | null;
+  defaultBarcode?: string | null;
   defaultBaseUnit?: string | null;
   defaultTrackStock?: boolean;
+  aliases?: string[] | null;
+  keywords?: string[] | null;
   variants?: TemplateVariantInput[] | null;
+  imageUrl?: string | null;
+  popularityScore?: number | null;
   isActive?: boolean;
 };
 
@@ -41,11 +48,18 @@ type NormalizedTemplateVariant = {
 export type BusinessProductTemplateImportItem = {
   businessType?: string | null;
   name?: string | null;
+  brand?: string | null;
   category?: string | null;
+  packSize?: string | null;
   defaultSellPrice?: string | number | null;
+  defaultBarcode?: string | null;
   defaultBaseUnit?: string | null;
   defaultTrackStock?: boolean | null;
+  aliases?: string[] | null;
+  keywords?: string[] | null;
   variants?: TemplateVariantInput[] | null;
+  imageUrl?: string | null;
+  popularityScore?: number | null;
   isActive?: boolean | null;
 };
 
@@ -64,11 +78,18 @@ type TemplateListRow = {
   id: string;
   businessType: string;
   name: string;
+  brand: string | null;
   category: string | null;
+  packSize: string | null;
   defaultSellPrice: string | null;
+  defaultBarcode: string | null;
   defaultBaseUnit: string | null;
   defaultTrackStock: boolean;
+  aliases: string[];
+  keywords: string[];
   variants: NormalizedTemplateVariant[];
+  imageUrl: string | null;
+  popularityScore: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -118,6 +139,45 @@ function normalizeOptionalUnit(value?: string | null) {
   const cleaned = value === null ? "" : value.toString().trim();
   if (!cleaned) return null;
   return cleaned.slice(0, 40);
+}
+
+function normalizeOptionalImageUrl(value?: string | null) {
+  const cleaned = normalizeOptionalText(value);
+  if (cleaned === undefined || cleaned === null) return cleaned;
+  return cleaned.slice(0, 500);
+}
+
+function normalizeOptionalScore(value?: number | string | null) {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return 0;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error("Popularity score must be a valid non-negative number");
+  }
+  return Math.floor(parsed);
+}
+
+function normalizeOptionalStringArray(value?: string[] | null) {
+  if (value === undefined) return undefined;
+  if (value === null) return [];
+  if (!Array.isArray(value)) {
+    throw new Error("Expected an array of strings");
+  }
+
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of value) {
+    const cleaned = typeof item === "string" ? item.trim() : "";
+    if (!cleaned) continue;
+    const normalizedItem = cleaned.slice(0, 80);
+    const key = normalizedItem.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(normalizedItem);
+  }
+
+  return normalized;
 }
 
 function normalizeTemplateVariants(
@@ -185,15 +245,44 @@ function parseTemplateVariantsFromJson(value?: unknown): NormalizedTemplateVaria
   return [];
 }
 
+function parseStringArrayFromJson(value?: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    try {
+      return normalizeOptionalStringArray(value as string[]) ?? [];
+    } catch {
+      return [];
+    }
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      return normalizeOptionalStringArray(parsed as string[]) ?? [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 function mapTemplateRow(row: {
   id: string;
   businessType: string;
   name: string;
+  brand: string | null;
   category: string | null;
+  packSize: string | null;
   defaultSellPrice: any;
+  defaultBarcode: string | null;
   defaultBaseUnit: string | null;
   defaultTrackStock: boolean;
+  aliasesJson: unknown;
+  keywordsJson: unknown;
   variantsJson: unknown;
+  imageUrl: string | null;
+  popularityScore: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -202,11 +291,20 @@ function mapTemplateRow(row: {
     id: row.id,
     businessType: row.businessType,
     name: row.name,
+    brand: row.brand ?? null,
     category: row.category,
+    packSize: row.packSize ?? null,
     defaultSellPrice: row.defaultSellPrice?.toString?.() ?? null,
+    defaultBarcode: normalizeProductCodeInput(row.defaultBarcode) ?? null,
     defaultBaseUnit: row.defaultBaseUnit ?? null,
     defaultTrackStock: row.defaultTrackStock === true,
+    aliases: parseStringArrayFromJson(row.aliasesJson),
+    keywords: parseStringArrayFromJson(row.keywordsJson),
     variants: parseTemplateVariantsFromJson(row.variantsJson),
+    imageUrl: row.imageUrl ?? null,
+    popularityScore: Number.isFinite(Number(row.popularityScore))
+      ? Number(row.popularityScore)
+      : 0,
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -221,7 +319,7 @@ export async function listBusinessProductTemplatesAdmin() {
   assertSuperAdmin(user);
 
   const rows = await prisma.businessProductTemplate.findMany({
-    orderBy: [{ businessType: "asc" }, { name: "asc" }],
+    orderBy: [{ businessType: "asc" }, { popularityScore: "desc" }, { name: "asc" }],
   });
 
   return rows.map(mapTemplateRow);
@@ -237,11 +335,18 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
   const id = input.id?.toString().trim() || undefined;
   const businessType = normalizeRequiredText(input.businessType, "Business type");
   const name = normalizeRequiredText(input.name, "Name");
+  const brand = normalizeOptionalText(input.brand);
   const category = normalizeOptionalText(input.category);
+  const packSize = normalizeOptionalText(input.packSize);
   const defaultSellPrice = normalizeOptionalMoney(input.defaultSellPrice);
+  const defaultBarcode = normalizeProductCodeInput(input.defaultBarcode);
   const defaultBaseUnit = normalizeOptionalUnit(input.defaultBaseUnit);
   const defaultTrackStock = Boolean(input.defaultTrackStock);
+  const aliases = normalizeOptionalStringArray(input.aliases);
+  const keywords = normalizeOptionalStringArray(input.keywords);
   const variants = normalizeTemplateVariants(input.variants);
+  const imageUrl = normalizeOptionalImageUrl(input.imageUrl);
+  const popularityScore = normalizeOptionalScore(input.popularityScore) ?? 0;
   const isActive = input.isActive ?? true;
 
   if (id) {
@@ -251,21 +356,35 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
         id,
         businessType,
         name,
+        brand: brand ?? null,
         category: category ?? null,
+        packSize: packSize ?? null,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultBarcode,
         defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
         defaultTrackStock,
+        aliasesJson: aliases === undefined ? [] : aliases,
+        keywordsJson: keywords === undefined ? [] : keywords,
         variantsJson: variants === undefined ? [] : variants,
+        imageUrl: imageUrl ?? null,
+        popularityScore,
         isActive,
       },
       update: {
         businessType,
         name,
+        brand: brand ?? null,
         category: category ?? null,
+        packSize: packSize ?? null,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultBarcode,
         defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
         defaultTrackStock,
+        aliasesJson: aliases === undefined ? [] : aliases,
+        keywordsJson: keywords === undefined ? [] : keywords,
         variantsJson: variants === undefined ? [] : variants,
+        imageUrl: imageUrl ?? null,
+        popularityScore,
         isActive,
       },
     });
@@ -274,11 +393,18 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
       data: {
         businessType,
         name,
+        brand: brand ?? null,
         category: category ?? null,
+        packSize: packSize ?? null,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultBarcode,
         defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
         defaultTrackStock,
+        aliasesJson: aliases === undefined ? [] : aliases,
+        keywordsJson: keywords === undefined ? [] : keywords,
         variantsJson: variants === undefined ? [] : variants,
+        imageUrl: imageUrl ?? null,
+        popularityScore,
         isActive,
       },
     });
@@ -309,11 +435,20 @@ export async function updateBusinessProductTemplate(
   if (input.name !== undefined) {
     data.name = normalizeRequiredText(input.name, "Name");
   }
+  if (input.brand !== undefined) {
+    data.brand = normalizeOptionalText(input.brand);
+  }
   if (input.category !== undefined) {
     data.category = normalizeOptionalText(input.category);
   }
+  if (input.packSize !== undefined) {
+    data.packSize = normalizeOptionalText(input.packSize);
+  }
   if (input.defaultSellPrice !== undefined) {
     data.defaultSellPrice = normalizeOptionalMoney(input.defaultSellPrice);
+  }
+  if (input.defaultBarcode !== undefined) {
+    data.defaultBarcode = normalizeProductCodeInput(input.defaultBarcode);
   }
   if (input.defaultBaseUnit !== undefined) {
     data.defaultBaseUnit = normalizeOptionalUnit(input.defaultBaseUnit);
@@ -321,8 +456,20 @@ export async function updateBusinessProductTemplate(
   if (input.defaultTrackStock !== undefined) {
     data.defaultTrackStock = Boolean(input.defaultTrackStock);
   }
+  if (input.aliases !== undefined) {
+    data.aliasesJson = normalizeOptionalStringArray(input.aliases) ?? [];
+  }
+  if (input.keywords !== undefined) {
+    data.keywordsJson = normalizeOptionalStringArray(input.keywords) ?? [];
+  }
   if (input.variants !== undefined) {
     data.variantsJson = normalizeTemplateVariants(input.variants) ?? [];
+  }
+  if (input.imageUrl !== undefined) {
+    data.imageUrl = normalizeOptionalImageUrl(input.imageUrl);
+  }
+  if (input.popularityScore !== undefined) {
+    data.popularityScore = normalizeOptionalScore(input.popularityScore) ?? 0;
   }
   if (input.isActive !== undefined) {
     data.isActive = Boolean(input.isActive);
@@ -367,11 +514,18 @@ export async function importBusinessProductTemplates(
   const normalized: Array<{
     businessType: string;
     name: string;
+    brand: string | null;
     category: string | null;
+    packSize: string | null;
     defaultSellPrice: string | null;
+    defaultBarcode: string | null;
     defaultBaseUnit: string | null;
     defaultTrackStock: boolean;
+    aliases: string[];
+    keywords: string[];
     variants: NormalizedTemplateVariant[];
+    imageUrl: string | null;
+    popularityScore: number;
     isActive: boolean;
   }> = [];
 
@@ -386,21 +540,35 @@ export async function importBusinessProductTemplates(
         "Business type",
       );
       const name = normalizeRequiredText(String(item.name ?? ""), "Name");
+      const brand = normalizeOptionalText(item.brand);
       const category = normalizeOptionalText(item.category);
+      const packSize = normalizeOptionalText(item.packSize);
       const defaultSellPrice = normalizeOptionalMoney(item.defaultSellPrice);
+      const defaultBarcode = normalizeProductCodeInput(item.defaultBarcode);
       const defaultBaseUnit = normalizeOptionalUnit(item.defaultBaseUnit);
       const defaultTrackStock = item.defaultTrackStock === true;
+      const aliases = normalizeOptionalStringArray(item.aliases) ?? [];
+      const keywords = normalizeOptionalStringArray(item.keywords) ?? [];
       const variants = normalizeTemplateVariants(item.variants) ?? [];
+      const imageUrl = normalizeOptionalImageUrl(item.imageUrl);
+      const popularityScore = normalizeOptionalScore(item.popularityScore) ?? 0;
       const isActive = item.isActive ?? true;
 
       normalized.push({
         businessType,
         name,
+        brand: brand ?? null,
         category: category ?? null,
+        packSize: packSize ?? null,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultBarcode,
         defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
         defaultTrackStock,
+        aliases,
+        keywords,
         variants,
+        imageUrl: imageUrl ?? null,
+        popularityScore,
         isActive: Boolean(isActive),
       });
     } catch (err) {
@@ -435,11 +603,18 @@ export async function importBusinessProductTemplates(
     data: deduped.map((item) => ({
       businessType: item.businessType,
       name: item.name,
+      brand: item.brand,
       category: item.category,
+      packSize: item.packSize,
       defaultSellPrice: item.defaultSellPrice,
+      defaultBarcode: item.defaultBarcode,
       defaultBaseUnit: item.defaultBaseUnit,
       defaultTrackStock: item.defaultTrackStock,
+      aliasesJson: item.aliases,
+      keywordsJson: item.keywords,
       variantsJson: item.variants,
+      imageUrl: item.imageUrl,
+      popularityScore: item.popularityScore,
       isActive: item.isActive,
     })),
     skipDuplicates: true,
@@ -464,7 +639,7 @@ export async function listActiveBusinessProductTemplates(businessType: string) {
 
   const rows = await prisma.businessProductTemplate.findMany({
     where: { businessType: key, isActive: true },
-    orderBy: [{ name: "asc" }],
+    orderBy: [{ popularityScore: "desc" }, { name: "asc" }],
   });
 
   return rows.map(mapTemplateRow);
@@ -568,6 +743,13 @@ export async function addBusinessProductTemplatesToShop(input: {
 
     const defaultPrice = template.defaultSellPrice?.toString();
     const numericPrice = defaultPrice ? Number(defaultPrice) : 0;
+    let productBarcode = normalizeProductCodeInput((template as any).defaultBarcode);
+    if (productBarcode && usedBarcodes.has(productBarcode)) {
+      productBarcode = null;
+      adjustedCodeCount += 1;
+    } else if (productBarcode) {
+      usedBarcodes.add(productBarcode);
+    }
     const rawVariants = parseTemplateVariantsFromJson(
       (template as any).variantsJson,
     );
@@ -609,6 +791,7 @@ export async function addBusinessProductTemplatesToShop(input: {
     const defaultUnit = normalizeOptionalUnit(
       (template as any).defaultBaseUnit,
     );
+    const packSize = normalizeOptionalText((template as any).packSize);
     const resolvedSellPrice =
       defaultPrice ||
       preparedVariants.find((variant) => Number(variant.sellPrice) > 0)?.sellPrice ||
@@ -621,6 +804,8 @@ export async function addBusinessProductTemplatesToShop(input: {
             shopId: shop.id,
             name: template.name,
             category: template.category || "Uncategorized",
+            barcode: productBarcode,
+            size: packSize ?? null,
             buyPrice: null,
             sellPrice: resolvedSellPrice,
             stockQty: "0",
