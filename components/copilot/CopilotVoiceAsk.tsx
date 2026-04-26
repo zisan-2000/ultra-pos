@@ -103,6 +103,78 @@ function renderActionDetails(pendingAction: OwnerCopilotActionDraft) {
     ];
   }
 
+  if (pendingAction.kind === "due_collection") {
+    return [
+      { label: "Action", value: "Due collection" },
+      { label: "Customer", value: pendingAction.customerName },
+      { label: "Amount", value: `৳ ${pendingAction.amount}` },
+      { label: "Note", value: pendingAction.note || "None" },
+    ];
+  }
+
+  if (pendingAction.kind === "due_entry") {
+    return [
+      { label: "Action", value: "Due entry" },
+      { label: "Customer", value: pendingAction.customerName },
+      { label: "Amount", value: `৳ ${pendingAction.amount}` },
+      { label: "Note", value: pendingAction.note || "None" },
+    ];
+  }
+
+  if (pendingAction.kind === "supplier_payment") {
+    return [
+      { label: "Action", value: "Supplier payment" },
+      { label: "Supplier", value: pendingAction.supplierName },
+      { label: "Amount", value: `৳ ${pendingAction.amount}` },
+      { label: "Method", value: pendingAction.method || "cash" },
+      { label: "Note", value: pendingAction.note || "None" },
+    ];
+  }
+
+  if (pendingAction.kind === "stock_adjustment") {
+    return [
+      { label: "Action", value: "Stock adjustment" },
+      { label: "Product", value: pendingAction.productQuery },
+      { label: "Target stock", value: pendingAction.targetStock },
+      { label: "Note", value: pendingAction.note || "None" },
+    ];
+  }
+
+  if (pendingAction.kind === "void_sale") {
+    return [
+      { label: "Action", value: "Void sale" },
+      { label: "Invoice", value: pendingAction.invoiceNo || pendingAction.saleQuery },
+      { label: "Reason", value: pendingAction.note || "No reason" },
+    ];
+  }
+
+  if (pendingAction.kind === "create_customer") {
+    return [
+      { label: "Action", value: "Create customer" },
+      { label: "Name", value: pendingAction.name },
+      { label: "Phone", value: pendingAction.phone || "None" },
+    ];
+  }
+
+  if (pendingAction.kind === "create_supplier") {
+    return [
+      { label: "Action", value: "Create supplier" },
+      { label: "Name", value: pendingAction.name },
+      { label: "Phone", value: pendingAction.phone || "None" },
+    ];
+  }
+
+  if (pendingAction.kind === "create_product") {
+    return [
+      { label: "Action", value: "Create product" },
+      { label: "Name", value: pendingAction.name },
+      { label: "Sell price", value: `৳ ${pendingAction.sellPrice}` },
+      { label: "Category", value: pendingAction.category || "Uncategorized" },
+      { label: "Base unit", value: pendingAction.baseUnit || "pcs" },
+      { label: "Opening stock", value: pendingAction.stockQty || "0" },
+    ];
+  }
+
   return [
     { label: "Action", value: pendingAction.entryType === "IN" ? "Cash in" : "Cash out" },
     { label: "Amount", value: `৳ ${pendingAction.amount}` },
@@ -114,6 +186,35 @@ function renderActionDetails(pendingAction: OwnerCopilotActionDraft) {
 function stopSpeaking() {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
+}
+
+function getConfirmButtonLabel(pendingAction: OwnerCopilotActionDraft, confirmingAction: boolean) {
+  if (confirmingAction) return "Confirm হচ্ছে...";
+
+  switch (pendingAction.kind) {
+    case "expense":
+      return "Expense Save করুন";
+    case "cash_entry":
+      return "Entry Save করুন";
+    case "due_collection":
+      return "Payment Collect করুন";
+    case "due_entry":
+      return "Due Add করুন";
+    case "supplier_payment":
+      return "Payment Submit করুন";
+    case "stock_adjustment":
+      return "Stock Update করুন";
+    case "void_sale":
+      return "Sale Void করুন";
+    case "create_customer":
+      return "Customer Create করুন";
+    case "create_supplier":
+      return "Supplier Create করুন";
+    case "create_product":
+      return "Product Create করুন";
+    default:
+      return "Confirm করুন";
+  }
 }
 
 export default function CopilotVoiceAsk({
@@ -727,7 +828,7 @@ export default function CopilotVoiceAsk({
               disabled={confirmingAction}
               className="inline-flex h-11 items-center justify-center rounded-2xl border border-primary/20 bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {confirmingAction ? "Confirm হচ্ছে..." : pendingAction.kind === "expense" ? "Expense Save করুন" : "Entry Save করুন"}
+              {getConfirmButtonLabel(pendingAction, confirmingAction)}
             </button>
             <button
               type="button"

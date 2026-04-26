@@ -11,10 +11,18 @@ import { maybeAnswerOwnerCopilotWithLlm } from "@/lib/owner-copilot-llm";
 import { maybeAnswerOwnerCopilotWithTools } from "@/lib/owner-copilot-tool-orchestrator";
 import {
   getOrCreateOwnerCopilotConversation,
+  listOwnerCopilotConversationMessagesWithMetadata,
   listOwnerCopilotConversationTurns,
   saveOwnerCopilotConversationExchange,
 } from "@/lib/owner-copilot-memory";
-import { parseOwnerCopilotActionDraft } from "@/lib/owner-copilot-actions";
+import {
+  getOwnerCopilotActionClarification,
+  parseOwnerCopilotActionDraft,
+} from "@/lib/owner-copilot-actions";
+import {
+  getOwnerCopilotActionSuggestions,
+  prepareOwnerCopilotActionDraft,
+} from "@/lib/owner-copilot-action-planner";
 import {
   COPILOT_QUESTION_SUGGESTIONS,
   normalizeCopilotQuestion,
@@ -250,8 +258,13 @@ export async function POST(req: Request) {
         firstQuestion: question,
       });
       const conversationTurns = await listOwnerCopilotConversationTurns(conversation.id, 8);
+      const recentMessages = await listOwnerCopilotConversationMessagesWithMetadata(
+        conversation.id,
+        12
+      );
       const intent = parseCopilotQuestion(question);
       const actionDraft = parseOwnerCopilotActionDraft(question);
+      const actionClarification = getOwnerCopilotActionClarification(question);
       let fallbackUsed = false;
 
       async function persistAndReturn(data: {
@@ -328,16 +341,31 @@ export async function POST(req: Request) {
       }
 
       if (actionDraft && runtimeConfig.actionsEnabled) {
+        const preparedActionPlan = await prepareOwnerCopilotActionDraft({
+          shopId,
+          actionDraft,
+          recentMessages,
+        });
+
+        if (preparedActionPlan.status === "clarify") {
+          return persistAndReturn({
+            supported: true,
+            answer: preparedActionPlan.clarification.answer,
+            suggestions: preparedActionPlan.clarification.suggestions,
+            engine: "action-clarification",
+            intentLabel: "action_clarification",
+          });
+        }
+
         return persistAndReturn({
           supported: true,
           answer: "আমি draft তৈরি করেছি। নিচে দেখে confirm করলে তখনই action execute হবে।",
-          suggestions: [
-            "Confirm করলে সেভ হবে",
-            "না চাইলে নতুনভাবে বলুন",
-            "অন্য amount/category দিয়েও বলতে পারেন",
-          ],
+          suggestions: getOwnerCopilotActionSuggestions(
+            preparedActionPlan.actionDraft,
+            "draft"
+          ),
           engine: "action-draft",
-          actionDraft,
+          actionDraft: preparedActionPlan.actionDraft,
           requiresConfirmation: true,
           intentLabel: "action_draft",
         });
@@ -350,6 +378,16 @@ export async function POST(req: Request) {
           suggestions: COPILOT_QUESTION_SUGGESTIONS,
           engine: "blocked",
           intentLabel: "action_draft_blocked",
+        });
+      }
+
+      if (actionClarification) {
+        return persistAndReturn({
+          supported: true,
+          answer: actionClarification.answer,
+          suggestions: actionClarification.suggestions,
+          engine: "action-clarification",
+          intentLabel: "action_clarification",
         });
       }
 

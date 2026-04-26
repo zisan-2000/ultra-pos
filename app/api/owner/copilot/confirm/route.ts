@@ -7,6 +7,7 @@ import { withTracing } from "@/lib/tracing";
 import { executeOwnerCopilotActionDraft } from "@/lib/owner-copilot-action-executor";
 import { getOrCreateOwnerCopilotConversation, saveOwnerCopilotConversationExchange } from "@/lib/owner-copilot-memory";
 import { ownerCopilotActionDraftSchema } from "@/lib/owner-copilot-actions";
+import { getOwnerCopilotActionSuggestions } from "@/lib/owner-copilot-action-planner";
 
 const responseHeaders = {
   "Cache-Control": "private, no-store",
@@ -112,11 +113,7 @@ export async function POST(req: Request) {
           conversationId: conversation.id,
           engine: "action-confirm",
           actionKind: actionDraft.kind,
-          suggestions: [
-            "আরেকটা action draft করতে পারেন",
-            "আজকের cash balance জিজ্ঞেস করুন",
-            "আজ খরচ কত হলো জিজ্ঞেস করুন",
-          ],
+          suggestions: getOwnerCopilotActionSuggestions(actionDraft, "confirmed"),
         },
         {
           status: 200,

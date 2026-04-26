@@ -32,6 +32,8 @@ OWNER_COPILOT_LLM_TIMEOUT_MS=8000
 
 If the Gemini provider is not configured or times out, the existing rule-based copilot flow continues to answer supported business questions.
 
+Phase 8 roadmap for tool-first copilot expansion is documented in [docs/owner-copilot-phase-8-plan.md](docs/owner-copilot-phase-8-plan.md).
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

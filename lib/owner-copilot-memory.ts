@@ -6,6 +6,12 @@ export type OwnerCopilotConversationTurn = {
   content: string;
 };
 
+export type OwnerCopilotConversationMessageWithMetadata = {
+  role: "user" | "assistant";
+  content: string;
+  metadata?: Record<string, unknown> | null;
+};
+
 function buildConversationTitle(question: string) {
   const compact = question.replace(/\s+/g, " ").trim();
   if (!compact) return "নতুন কোপাইলট চ্যাট";
@@ -79,6 +85,36 @@ export async function listOwnerCopilotConversationTurns(
       role: message.role,
       content: message.content,
     }));
+}
+
+export async function listOwnerCopilotConversationMessagesWithMetadata(
+  conversationId: string,
+  limit = 8
+): Promise<OwnerCopilotConversationMessageWithMetadata[]> {
+  const messages = await prisma.ownerCopilotConversationMessage.findMany({
+    where: {
+      conversationId,
+    },
+    select: {
+      role: true,
+      content: true,
+      metadata: true,
+      createdAt: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: limit,
+  });
+
+  return messages.reverse().map((message) => ({
+    role: message.role,
+    content: message.content,
+    metadata:
+      message.metadata && typeof message.metadata === "object"
+        ? (message.metadata as Record<string, unknown>)
+        : null,
+  }));
 }
 
 export async function saveOwnerCopilotConversationExchange({
