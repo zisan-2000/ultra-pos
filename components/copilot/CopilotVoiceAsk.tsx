@@ -621,17 +621,63 @@ export default function CopilotVoiceAsk({
 
   return (
     <section className="flex h-full min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-hidden rounded-[24px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.96))] shadow-[0_18px_45px_rgba(15,23,42,0.07)] backdrop-blur sm:rounded-[28px]">
-      <div className="flex flex-col gap-3 border-b border-border/70 px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:px-5 sm:py-4">
-        <div className="min-w-0 space-y-1">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="border-b border-border/70 px-3 py-2.5 sm:px-5 sm:py-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 space-y-0.5">
+            <div className="hidden text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:block">
             Copilot
+            </div>
+            <h3 className="truncate pr-2 text-sm font-bold text-foreground sm:text-base">
+              {shopName ? `${shopName}-কে জিজ্ঞেস করুন` : "দোকানকে জিজ্ঞেস করুন"}
+            </h3>
           </div>
-          <h3 className="truncate pr-2 text-sm font-bold text-foreground sm:text-base">
-            {shopName ? `${shopName}-কে জিজ্ঞেস করুন` : "দোকানকে জিজ্ঞেস করুন"}
-          </h3>
-          <p className="line-clamp-2 text-xs text-muted-foreground sm:text-sm">{helperText}</p>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {speechReady && lastAnswer ? (
+              <button
+                type="button"
+                onClick={() => speakAnswer()}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary sm:h-9 sm:w-9"
+                aria-label="উত্তর শোনান"
+              >
+                <Volume2 className="h-4 w-4" />
+              </button>
+            ) : null}
+            {speechReady && lastAnswer ? (
+              <button
+                type="button"
+                onClick={() => stopSpeaking()}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary sm:h-9 sm:w-9"
+                aria-label="শোনা থামান"
+              >
+                <VolumeX className="h-4 w-4" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setConversationId(null);
+                setMessages([]);
+                setAnswer(null);
+                setLastAnswer("");
+                setQuestion("");
+                setSuggestions(COPILOT_QUESTION_SUGGESTIONS);
+                setPendingAction(null);
+                setStreamingMessageId(null);
+                setStreamingLength(0);
+                setVoiceDraft("");
+                setVoiceAttemptLabel(null);
+                setShowChoiceCompareModal(false);
+                setError(null);
+              }}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-[11px] font-semibold text-foreground transition hover:border-primary/30 hover:text-primary sm:h-9 sm:gap-2 sm:px-3 sm:text-xs"
+            >
+              <MessageSquarePlus className="h-4 w-4" />
+              <span className="sm:hidden">নতুন</span>
+              <span className="hidden sm:inline">নতুন চ্যাট</span>
+            </button>
+          </div>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end sm:gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {RESPONSE_MODE_OPTIONS.map((option) => {
             const active = responseMode === option.value;
             return (
@@ -649,49 +695,6 @@ export default function CopilotVoiceAsk({
               </button>
             );
           })}
-          {speechReady && lastAnswer ? (
-            <button
-              type="button"
-              onClick={() => speakAnswer()}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary sm:h-9 sm:w-9"
-              aria-label="উত্তর শোনান"
-            >
-              <Volume2 className="h-4 w-4" />
-            </button>
-          ) : null}
-          {speechReady && lastAnswer ? (
-            <button
-              type="button"
-              onClick={() => stopSpeaking()}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary sm:h-9 sm:w-9"
-              aria-label="শোনা থামান"
-            >
-              <VolumeX className="h-4 w-4" />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              setConversationId(null);
-              setMessages([]);
-              setAnswer(null);
-              setLastAnswer("");
-              setQuestion("");
-              setSuggestions(COPILOT_QUESTION_SUGGESTIONS);
-              setPendingAction(null);
-              setStreamingMessageId(null);
-              setStreamingLength(0);
-              setVoiceDraft("");
-              setVoiceAttemptLabel(null);
-              setShowChoiceCompareModal(false);
-              setError(null);
-            }}
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-[11px] font-semibold text-foreground transition hover:border-primary/30 hover:text-primary sm:h-9 sm:gap-2 sm:px-3 sm:text-xs"
-          >
-            <MessageSquarePlus className="h-4 w-4" />
-            <span className="sm:hidden">নতুন</span>
-            <span className="hidden sm:inline">নতুন চ্যাট</span>
-          </button>
         </div>
       </div>
 
@@ -703,17 +706,16 @@ export default function CopilotVoiceAsk({
         ) : null}
 
         {messages.length === 0 && !loading ? (
-          <div className="flex min-h-full flex-col items-center justify-center py-6 text-center sm:py-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-primary/15 bg-primary-soft/30 text-primary sm:h-14 sm:w-14">
-              <Bot className="h-5 w-5 sm:h-6 sm:w-6" />
+          <div className="flex min-h-full flex-col justify-center py-3 text-center sm:py-6">
+            <div className="mx-auto max-w-xl px-2">
+              <h4 className="text-base font-semibold text-foreground sm:text-lg">
+                আজ কী জানতে চান?
+              </h4>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                sales, stock, due বা quick action নিয়ে লিখুন।
+              </p>
             </div>
-            <h4 className="mt-4 text-lg font-semibold text-foreground sm:text-xl">
-              দোকানের যেকোনো গুরুত্বপূর্ণ প্রশ্ন করুন
-            </h4>
-            <p className="mt-2 max-w-xl px-2 text-sm leading-6 text-muted-foreground sm:leading-7">
-              sales, profit, due, stock, payable, customer, supplier বা quick action draft নিয়ে natural ভাষায় লিখুন।
-            </p>
-            <div className="mt-5 flex max-w-3xl flex-wrap justify-center gap-2">
+            <div className="mt-4 flex max-w-3xl flex-wrap justify-center gap-2">
               {starterSuggestions.map((suggestion) => (
                 <button
                   key={suggestion}
