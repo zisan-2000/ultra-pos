@@ -452,9 +452,9 @@ export default function FloatingCopilotLauncher() {
         <DialogContent
           forceMount
           overlayClassName="bg-black/55 data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:[animation-duration:260ms] data-[state=closed]:[animation-duration:380ms] data-[state=open]:[animation-timing-function:cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:[animation-timing-function:cubic-bezier(0.22,1,0.36,1)]"
-          className="bottom-0 left-0 right-0 top-auto z-[70] max-h-[88vh] w-full max-w-none translate-x-0 translate-y-0 overflow-y-auto rounded-t-[28px] border-border/70 bg-background/95 p-4 shadow-[0_28px_80px_rgba(15,23,42,0.24)] will-change-transform will-change-opacity data-[state=closed]:slide-out-to-bottom-[4%] data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-bottom-[10%] data-[state=open]:fade-in-0 data-[state=open]:[animation-duration:320ms] data-[state=closed]:[animation-duration:520ms] data-[state=open]:[animation-timing-function:cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:[animation-timing-function:cubic-bezier(0.22,1,0.36,1)] sm:bottom-auto sm:left-auto sm:right-4 sm:top-4 sm:h-[calc(100vh-2rem)] sm:w-[min(560px,calc(100vw-2rem))] sm:max-h-none sm:rounded-[28px] sm:border sm:translate-x-0 sm:translate-y-0 sm:data-[state=closed]:slide-out-to-right-[3%] sm:data-[state=closed]:slide-out-to-top-0 sm:data-[state=open]:slide-in-from-right-[7%] sm:data-[state=open]:slide-in-from-top-0"
+          className="bottom-0 left-0 right-0 top-auto z-[70] flex h-[92vh] max-h-[92vh] w-full max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden rounded-t-[24px] border-border/70 bg-background/95 p-3 shadow-[0_28px_80px_rgba(15,23,42,0.24)] will-change-transform will-change-opacity data-[state=closed]:slide-out-to-bottom-[4%] data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-bottom-[10%] data-[state=open]:fade-in-0 data-[state=open]:[animation-duration:320ms] data-[state=closed]:[animation-duration:520ms] data-[state=open]:[animation-timing-function:cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:[animation-timing-function:cubic-bezier(0.22,1,0.36,1)] sm:bottom-auto sm:left-auto sm:right-4 sm:top-4 sm:h-[calc(100vh-2rem)] sm:w-[min(560px,calc(100vw-2rem))] sm:max-h-none sm:rounded-[28px] sm:border sm:p-4 sm:translate-x-0 sm:translate-y-0 sm:data-[state=closed]:slide-out-to-right-[3%] sm:data-[state=closed]:slide-out-to-top-0 sm:data-[state=open]:slide-in-from-right-[7%] sm:data-[state=open]:slide-in-from-top-0"
         >
-          <DialogHeader className="space-y-1.5">
+          <DialogHeader className={`shrink-0 ${activeTab === "ask" ? "space-y-1 pb-1" : "space-y-1.5 pb-0"}`}>
             <div className="flex items-start gap-2 pr-10">
               <div className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
                 স্মার্ট কপাইলট
@@ -467,22 +467,28 @@ export default function FloatingCopilotLauncher() {
                 className="ml-auto h-10 shrink-0 px-3"
               />
             </div>
-            <DialogTitle className="text-2xl font-extrabold tracking-tight text-foreground">
-              এক নজরে দোকানের অবস্থা দেখুন
+            <DialogTitle className={`font-extrabold tracking-tight text-foreground ${activeTab === "ask" ? "text-lg sm:text-xl" : "text-xl sm:text-2xl"}`}>
+              {activeTab === "ask" ? "দোকানকে প্রশ্ন করুন" : "এক নজরে দোকানের অবস্থা দেখুন"}
             </DialogTitle>
-            <DialogDescription className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              {payload?.snapshot.shopName
-                ? `${payload.snapshot.shopName}-এর আজকের অবস্থা, কী সমস্যা আর কী করবেন, সব একসাথে দেখুন।`
-                : "আজকের অবস্থা, কী সমস্যা আর কী করবেন, সব একসাথে দেখুন।"}
-            </DialogDescription>
-            {generatedLabel ? (
+            {activeTab === "insights" ? (
+              <DialogDescription className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                {payload?.snapshot.shopName
+                  ? `${payload.snapshot.shopName}-এর আজকের অবস্থা, কী সমস্যা আর কী করবেন, সব একসাথে দেখুন।`
+                  : "আজকের অবস্থা, কী সমস্যা আর কী করবেন, সব একসাথে দেখুন।"}
+              </DialogDescription>
+            ) : (
+              <DialogDescription className="text-xs leading-5 text-muted-foreground sm:text-sm">
+                sales, stock, due, payable বা action draft নিয়ে natural language-এ জিজ্ঞেস করুন।
+              </DialogDescription>
+            )}
+            {generatedLabel && activeTab === "insights" ? (
               <div className="text-xs font-medium text-muted-foreground">
                 সর্বশেষ আপডেট: {generatedLabel}
               </div>
             ) : null}
           </DialogHeader>
 
-          <div className="space-y-4 pb-6 pr-1">
+          <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-hidden pb-1">
             {loading && !insight ? (
               <div className="flex min-h-[240px] items-center justify-center rounded-[28px] border border-dashed border-border/70 bg-muted/20">
                 <div className="flex items-center gap-3 text-sm font-medium text-muted-foreground">
@@ -520,14 +526,14 @@ export default function FloatingCopilotLauncher() {
             </div>
 
             <div
-              className={activeTab === "insights" ? "block" : "hidden"}
+              className={activeTab === "insights" ? "min-h-0 flex-1 overflow-y-auto pr-1" : "hidden"}
               aria-hidden={activeTab !== "insights"}
             >
               {insight ? <CopilotInsightPanel insight={insight} /> : null}
             </div>
 
             <div
-              className={activeTab === "ask" ? "block" : "hidden"}
+              className={activeTab === "ask" ? "min-h-0 flex-1" : "hidden"}
               aria-hidden={activeTab !== "ask"}
             >
               {activeShopId ? (
@@ -540,7 +546,7 @@ export default function FloatingCopilotLauncher() {
             </div>
 
             {error ? (
-              <div className="rounded-2xl border border-warning/25 bg-warning-soft/50 px-4 py-3 text-sm font-medium text-foreground">
+              <div className="shrink-0 rounded-2xl border border-warning/25 bg-warning-soft/50 px-4 py-3 text-sm font-medium text-foreground">
                 {error}
               </div>
             ) : null}

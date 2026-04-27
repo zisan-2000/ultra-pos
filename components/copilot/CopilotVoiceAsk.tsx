@@ -620,18 +620,18 @@ export default function CopilotVoiceAsk({
   }, [pendingAction, responseMode]);
 
   return (
-    <section className="flex h-[min(78vh,760px)] min-h-[620px] flex-col overflow-hidden rounded-[28px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.96))] shadow-[0_18px_45px_rgba(15,23,42,0.07)] backdrop-blur">
-      <div className="flex items-start justify-between gap-3 border-b border-border/70 px-4 py-4 sm:px-5">
+    <section className="flex h-full min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-hidden rounded-[24px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.96))] shadow-[0_18px_45px_rgba(15,23,42,0.07)] backdrop-blur sm:rounded-[28px]">
+      <div className="flex flex-col gap-3 border-b border-border/70 px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:px-5 sm:py-4">
         <div className="min-w-0 space-y-1">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Copilot
           </div>
-          <h3 className="truncate text-base font-bold text-foreground">
+          <h3 className="truncate pr-2 text-sm font-bold text-foreground sm:text-base">
             {shopName ? `${shopName}-কে জিজ্ঞেস করুন` : "দোকানকে জিজ্ঞেস করুন"}
           </h3>
-          <p className="text-sm text-muted-foreground">{helperText}</p>
+          <p className="line-clamp-2 text-xs text-muted-foreground sm:text-sm">{helperText}</p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end sm:gap-2">
           {RESPONSE_MODE_OPTIONS.map((option) => {
             const active = responseMode === option.value;
             return (
@@ -639,7 +639,7 @@ export default function CopilotVoiceAsk({
                 key={option.value}
                 type="button"
                 onClick={() => setResponseMode(option.value)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                className={`min-w-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition sm:px-3 sm:py-1.5 sm:text-xs ${
                   active
                     ? "border-primary/30 bg-primary/10 text-primary"
                     : "border-border/70 bg-card text-muted-foreground hover:border-primary/20 hover:text-foreground"
@@ -653,7 +653,7 @@ export default function CopilotVoiceAsk({
             <button
               type="button"
               onClick={() => speakAnswer()}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary sm:h-9 sm:w-9"
               aria-label="উত্তর শোনান"
             >
               <Volume2 className="h-4 w-4" />
@@ -663,7 +663,7 @@ export default function CopilotVoiceAsk({
             <button
               type="button"
               onClick={() => stopSpeaking()}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary sm:h-9 sm:w-9"
               aria-label="শোনা থামান"
             >
               <VolumeX className="h-4 w-4" />
@@ -686,15 +686,16 @@ export default function CopilotVoiceAsk({
               setShowChoiceCompareModal(false);
               setError(null);
             }}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-[11px] font-semibold text-foreground transition hover:border-primary/30 hover:text-primary sm:h-9 sm:gap-2 sm:px-3 sm:text-xs"
           >
             <MessageSquarePlus className="h-4 w-4" />
-            নতুন চ্যাট
+            <span className="sm:hidden">নতুন</span>
+            <span className="hidden sm:inline">নতুন চ্যাট</span>
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
         {error ? (
           <div className="mb-4 rounded-2xl border border-danger/30 bg-danger-soft/50 px-3 py-2 text-sm text-danger">
             {error}
@@ -702,17 +703,17 @@ export default function CopilotVoiceAsk({
         ) : null}
 
         {messages.length === 0 && !loading ? (
-          <div className="flex min-h-full flex-col items-center justify-center py-8 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full border border-primary/15 bg-primary-soft/30 text-primary">
-              <Bot className="h-6 w-6" />
+          <div className="flex min-h-full flex-col items-center justify-center py-6 text-center sm:py-8">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-primary/15 bg-primary-soft/30 text-primary sm:h-14 sm:w-14">
+              <Bot className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
-            <h4 className="mt-4 text-xl font-semibold text-foreground">
+            <h4 className="mt-4 text-lg font-semibold text-foreground sm:text-xl">
               দোকানের যেকোনো গুরুত্বপূর্ণ প্রশ্ন করুন
             </h4>
-            <p className="mt-2 max-w-xl text-sm leading-7 text-muted-foreground">
+            <p className="mt-2 max-w-xl px-2 text-sm leading-6 text-muted-foreground sm:leading-7">
               sales, profit, due, stock, payable, customer, supplier বা quick action draft নিয়ে natural ভাষায় লিখুন।
             </p>
-            <div className="mt-6 flex max-w-3xl flex-wrap justify-center gap-2">
+            <div className="mt-5 flex max-w-3xl flex-wrap justify-center gap-2">
               {starterSuggestions.map((suggestion) => (
                 <button
                   key={suggestion}
@@ -721,15 +722,15 @@ export default function CopilotVoiceAsk({
                     setQuestion(suggestion);
                     void askCopilot(suggestion);
                   }}
-                  className="rounded-full border border-border/70 bg-card px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/30 hover:text-primary"
+                  className="max-w-full rounded-full border border-border/70 bg-card px-3 py-2 text-sm font-medium text-foreground transition hover:border-primary/30 hover:text-primary"
                 >
-                  {suggestion}
+                  <span className="block max-w-full truncate sm:whitespace-normal">{suggestion}</span>
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          <div className="mx-auto flex max-w-4xl flex-col gap-4">
+          <div className="mx-auto flex min-w-0 max-w-4xl flex-col gap-3 sm:gap-4">
             {messages.map((message) => {
               const isAssistant = message.role === "assistant";
               const content =
@@ -743,17 +744,17 @@ export default function CopilotVoiceAsk({
                   className={`flex ${isAssistant ? "justify-start" : "justify-end"}`}
                 >
                   <div
-                    className={`max-w-[88%] rounded-[24px] px-4 py-3 sm:max-w-[78%] ${
+                    className={`min-w-0 max-w-[92%] rounded-[22px] px-3.5 py-3 sm:max-w-[78%] sm:rounded-[24px] sm:px-4 ${
                       isAssistant
                         ? "border border-border/70 bg-card text-foreground shadow-sm"
                         : "bg-primary text-primary-foreground shadow-sm"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap text-sm leading-7">{content}</p>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-6 sm:leading-7">{content}</p>
                     {isAssistant && message.trace ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {message.trace.engine ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+                          <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-border/70 bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
                             <Sparkles className="h-3 w-3 text-primary" />
                             {getTraceStatusLabel(message.trace.engine)}
                           </span>
@@ -772,7 +773,7 @@ export default function CopilotVoiceAsk({
 
             {loading ? (
               <div className="flex justify-start">
-                <div className="max-w-[88%] rounded-[24px] border border-border/70 bg-card px-4 py-3 text-foreground shadow-sm sm:max-w-[78%]">
+                <div className="max-w-[92%] rounded-[22px] border border-border/70 bg-card px-3.5 py-3 text-foreground shadow-sm sm:max-w-[78%] sm:rounded-[24px] sm:px-4">
                   <div className="flex items-center gap-3">
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     <div className="space-y-1">
@@ -1017,8 +1018,8 @@ export default function CopilotVoiceAsk({
         )}
       </div>
 
-      <div className="border-t border-border/70 bg-background/95 px-4 py-4 backdrop-blur sm:px-5">
-        <div className="mx-auto max-w-4xl space-y-3">
+      <div className="border-t border-border/70 bg-background/95 px-3 py-3 backdrop-blur sm:px-5 sm:py-4">
+        <div className="mx-auto max-w-4xl space-y-2.5 sm:space-y-3">
           {(listening || voiceDraft) && online ? (
             <div className="rounded-2xl border border-primary/20 bg-primary-soft/20 p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1052,7 +1053,7 @@ export default function CopilotVoiceAsk({
           ) : null}
 
           <div className="rounded-[26px] border border-border/80 bg-card shadow-sm">
-            <div className="flex items-end gap-2 px-3 py-3">
+            <div className="flex items-end gap-2 px-2 py-2 sm:px-3 sm:py-3">
               <textarea
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
@@ -1064,15 +1065,15 @@ export default function CopilotVoiceAsk({
                 }}
                 placeholder="আজ দোকান কেমন চলছে? / কোন product-এর stock কত?"
                 rows={1}
-                className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                className="max-h-32 min-h-[40px] flex-1 resize-none bg-transparent px-2 py-2 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground sm:max-h-40 sm:min-h-[44px]"
               />
-              <div className="flex items-center gap-2 pb-1">
+              <div className="flex shrink-0 items-center gap-1.5 pb-0.5 sm:gap-2 sm:pb-1">
                 <button
                   type="button"
                   onClick={listening ? stopListening : startListening}
                   disabled={!online}
                   aria-label={listening ? "শোনা বন্ধ করুন" : "মাইক্রোফোনে প্রশ্ন করুন"}
-                  className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
+                  className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition sm:h-10 sm:w-10 ${
                     listening
                       ? "border-primary/40 bg-primary/10 text-primary"
                       : "border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-primary"
@@ -1084,7 +1085,7 @@ export default function CopilotVoiceAsk({
                   type="button"
                   onClick={() => void askCopilot()}
                   disabled={loading || !online || !question.trim()}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-primary/20 bg-primary text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-primary/20 bg-primary text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 sm:h-10 sm:w-10"
                   aria-label="জিজ্ঞেস করুন"
                 >
                   {loading ? (
@@ -1099,7 +1100,7 @@ export default function CopilotVoiceAsk({
 
           {messages.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {starterSuggestions.slice(0, 3).map((suggestion) => (
+              {starterSuggestions.slice(0, 2).map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
@@ -1107,9 +1108,9 @@ export default function CopilotVoiceAsk({
                     setQuestion(suggestion);
                     void askCopilot(suggestion);
                   }}
-                  className="rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+                  className="max-w-full rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-primary/30 hover:text-primary"
                 >
-                  {suggestion}
+                  <span className="block max-w-full truncate sm:whitespace-normal">{suggestion}</span>
                 </button>
               ))}
             </div>
