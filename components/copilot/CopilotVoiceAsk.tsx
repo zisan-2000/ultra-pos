@@ -334,6 +334,7 @@ export default function CopilotVoiceAsk({
   const [lastAnswer, setLastAnswer] = useState("");
   const [suggestions, setSuggestions] = useState<readonly string[]>(COPILOT_QUESTION_SUGGESTIONS);
   const [openSuggestionGroup, setOpenSuggestionGroup] = useState<string | null>(null);
+  const [showSuggestionDrawer, setShowSuggestionDrawer] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const voiceSessionRef = useRef<VoiceSession | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
@@ -640,8 +641,64 @@ export default function CopilotVoiceAsk({
     return ["প্রশ্ন বুঝছি", "Relevant data/context মিলাচ্ছি", "Natural answer লিখছি"];
   }, [pendingAction, responseMode]);
 
+  const suggestionAccordion = (
+    <div className="w-full rounded-[22px] border border-border/70 bg-card/70 p-3 text-left shadow-sm">
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        আরও প্রশ্নের ধরন
+      </div>
+      <div className="space-y-2">
+        {COPILOT_GROUPED_QUESTION_SUGGESTIONS.map((group) => {
+          const isOpen = openSuggestionGroup === group.label;
+          return (
+            <div key={group.label} className="rounded-2xl border border-border/70 bg-background/80">
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenSuggestionGroup((current) =>
+                    current === group.label ? null : group.label
+                  )
+                }
+                className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
+              >
+                <div>
+                  <div className="text-sm font-semibold text-foreground">{group.label}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {group.questions.length}টি example question
+                  </div>
+                </div>
+                <ChevronRight
+                  className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                    isOpen ? "rotate-90" : ""
+                  }`}
+                />
+              </button>
+              {isOpen ? (
+                <div className="flex flex-wrap gap-2 border-t border-border/60 px-3 py-3">
+                  {group.questions.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => {
+                        setShowSuggestionDrawer(false);
+                        setQuestion(suggestion);
+                        void askCopilot(suggestion);
+                      }}
+                      className="max-w-full rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+                    >
+                      <span className="block max-w-full truncate sm:whitespace-normal">{suggestion}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
-    <section className="flex h-full min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-hidden rounded-[24px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.96))] shadow-[0_18px_45px_rgba(15,23,42,0.07)] backdrop-blur sm:rounded-[28px]">
+    <section className="relative flex h-full min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-hidden rounded-[24px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.96))] shadow-[0_18px_45px_rgba(15,23,42,0.07)] backdrop-blur sm:rounded-[28px]">
       <div className="border-b border-border/70 px-3 py-2.5 sm:px-5 sm:py-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 space-y-0.5">
@@ -689,6 +746,7 @@ export default function CopilotVoiceAsk({
                 setVoiceAttemptLabel(null);
                 setShowChoiceCompareModal(false);
                 setOpenSuggestionGroup(null);
+                setShowSuggestionDrawer(false);
                 setError(null);
               }}
               className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-[11px] font-semibold text-foreground transition hover:border-primary/30 hover:text-primary sm:h-9 sm:gap-2 sm:px-3 sm:text-xs"
@@ -755,58 +813,7 @@ export default function CopilotVoiceAsk({
                 </button>
               ))}
             </div>
-            <div className="mt-5 w-full max-w-3xl rounded-[22px] border border-border/70 bg-card/70 p-3 text-left shadow-sm">
-              <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                আরও প্রশ্নের ধরন
-              </div>
-              <div className="space-y-2">
-                {COPILOT_GROUPED_QUESTION_SUGGESTIONS.map((group) => {
-                  const isOpen = openSuggestionGroup === group.label;
-                  return (
-                    <div key={group.label} className="rounded-2xl border border-border/70 bg-background/80">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOpenSuggestionGroup((current) =>
-                            current === group.label ? null : group.label
-                          )
-                        }
-                        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
-                      >
-                        <div>
-                          <div className="text-sm font-semibold text-foreground">{group.label}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {group.questions.length}টি example question
-                          </div>
-                        </div>
-                        <ChevronRight
-                          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
-                            isOpen ? "rotate-90" : ""
-                          }`}
-                        />
-                      </button>
-                      {isOpen ? (
-                        <div className="flex flex-wrap gap-2 border-t border-border/60 px-3 py-3">
-                          {group.questions.map((suggestion) => (
-                            <button
-                              key={suggestion}
-                              type="button"
-                              onClick={() => {
-                                setQuestion(suggestion);
-                                void askCopilot(suggestion);
-                              }}
-                              className="max-w-full rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
-                            >
-                              <span className="block max-w-full truncate sm:whitespace-normal">{suggestion}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <div className="mt-5 w-full max-w-3xl">{suggestionAccordion}</div>
           </div>
         ) : (
           <div className="mx-auto flex min-w-0 max-w-4xl flex-col gap-3 sm:gap-4">
@@ -1204,6 +1211,49 @@ export default function CopilotVoiceAsk({
               ))}
             </div>
           ) : null}
+
+          <div className="relative rounded-[22px] border border-border/70 bg-card/80 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setShowSuggestionDrawer((current) => !current)}
+              className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
+            >
+              <div>
+                <div className="text-sm font-semibold text-foreground">Explore questions</div>
+                <div className="text-xs text-muted-foreground">
+                  grouped business question examples সবসময় এখানেই পাবেন
+                </div>
+              </div>
+              <ChevronRight
+                className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                  showSuggestionDrawer ? "rotate-90" : ""
+                }`}
+              />
+            </button>
+            {showSuggestionDrawer && messages.length > 0 ? (
+              <div className="absolute bottom-full left-0 right-0 z-20 mb-2 overflow-hidden rounded-[24px] border border-border/80 bg-background/98 shadow-[0_24px_60px_rgba(15,23,42,0.18)] backdrop-blur">
+                <div className="flex items-center justify-between gap-3 border-b border-border/60 px-3 py-3">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">Explore questions</div>
+                    <div className="text-xs text-muted-foreground">
+                      drawer open থাকলেও main chat height বদলাবে না
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowSuggestionDrawer(false)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+                    aria-label="Explore drawer বন্ধ করুন"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="max-h-[min(46vh,380px)] overflow-y-auto px-2 py-2">
+                  {suggestionAccordion}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
