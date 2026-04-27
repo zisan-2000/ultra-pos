@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { generateTextWithGemini } from "@/lib/ai/gemini";
 import { getAiProviderConfig } from "@/lib/ai/provider";
+import { getCopilotLanguageInstruction } from "@/lib/copilot-language";
 import { getOwnerCopilotRuntimeConfig } from "@/lib/owner-copilot-config";
 import {
   listOwnerCopilotToolDefinitions,
@@ -121,6 +122,7 @@ function buildPlannerPrompt(
     "- Tool দরকার না হলে toolCalls empty রাখো।",
     "- Specific product/customer/recent sale/ranked item/detail question হলে matching tool use করো।",
     "- Inventory-wide প্রশ্ন যেমন total product count, active/inactive count, out-of-stock, dead stock, highest/lowest stock হলে inventory tools prefer করো।",
+    "- Stock value, inventory value, reorder, restock, high-stock-risk, dead-stock-risk প্রশ্ন হলে inventory value / reorder / dead-stock tools prefer করো।",
     "- Sales intelligence প্রশ্ন যেমন কোন category বেশি বিক্রি, payment method breakdown, average order value, specific product sales summary হলে sales tools prefer করো।",
     "- Customer intelligence প্রশ্ন যেমন total customers, top due customers, repeat customers, inactive customers হলে customer tools prefer করো।",
     "- Supplier/purchase intelligence প্রশ্ন যেমন total suppliers, top suppliers, supplier payable list, recent purchases, purchase gap items হলে supplier tools prefer করো।",
@@ -161,7 +163,7 @@ function buildSynthesisPrompt(
     "RULES:",
     "- শুধু BASE_CONTEXT_JSON এবং TOOL_RESULTS_JSON থেকে grounded answer দাও।",
     "- RECENT_CONVERSATION_JSON use করে follow-up wording resolve করতে পারো, but facts অবশ্যই TOOL_RESULTS_JSON থেকে নিতে হবে।",
-    "- answer সহজ, ছোট, business-friendly বাংলা হবে।",
+    `- ${getCopilotLanguageInstruction(question)}`,
     "- matched=false হলে সেটা স্পষ্টভাবে বলো।",
     "- number/value বানিয়ে বলবে না।",
     "- create/update/delete action করবে না।",

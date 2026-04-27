@@ -94,6 +94,32 @@ export async function runOwnerCopilotActionTests() {
       },
     },
     {
+      name: "creates product price update draft from natural prompt",
+      fn: () => {
+        const draft = parseOwnerCopilotActionDraft("চিনির দাম 130 করো");
+
+        assert.ok(draft);
+        assert.equal(draft?.kind, "product_price_update");
+        if (draft?.kind === "product_price_update") {
+          assert.equal(draft.productQuery, "চিনি");
+          assert.equal(draft.targetPrice, "130");
+        }
+      },
+    },
+    {
+      name: "creates product deactivate draft from natural prompt",
+      fn: () => {
+        const draft = parseOwnerCopilotActionDraft("চিনি product inactive করো");
+
+        assert.ok(draft);
+        assert.equal(draft?.kind, "product_toggle_active");
+        if (draft?.kind === "product_toggle_active") {
+          assert.equal(draft.productQuery, "চিনি");
+          assert.equal(draft.nextActiveState, false);
+        }
+      },
+    },
+    {
       name: "creates customer create draft from natural prompt",
       fn: () => {
         const draft = parseOwnerCopilotActionDraft("নতুন customer রহিম যোগ করো");
@@ -168,6 +194,15 @@ export async function runOwnerCopilotActionTests() {
 
         assert.ok(clarification);
         assert.match(clarification?.answer ?? "", /target stock/i);
+      },
+    },
+    {
+      name: "returns clarification for incomplete price update prompt",
+      fn: () => {
+        const clarification = getOwnerCopilotActionClarification("চিনির দাম update করো");
+
+        assert.ok(clarification);
+        assert.match(clarification?.answer ?? "", /price update/i);
       },
     },
     {

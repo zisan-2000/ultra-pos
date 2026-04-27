@@ -29,6 +29,8 @@ import {
   parseCopilotQuestion,
 } from "@/lib/copilot-ask";
 
+type OwnerCopilotResponseMode = "auto" | "verified" | "fast";
+
 function formatMoney(value: number) {
   return `৳ ${new Intl.NumberFormat("bn-BD", {
     minimumFractionDigits: 2,
@@ -188,6 +190,13 @@ const responseHeaders = {
   "Cache-Control": "private, no-store",
 };
 
+function parseOwnerCopilotResponseMode(
+  rawValue: unknown
+): OwnerCopilotResponseMode {
+  if (rawValue === "verified" || rawValue === "fast") return rawValue;
+  return "auto";
+}
+
 export async function POST(req: Request) {
   return withTracing(req, "/api/owner/copilot/ask", async () => {
     const startedAt = Date.now();
@@ -208,11 +217,13 @@ export async function POST(req: Request) {
         shopId?: string;
         question?: string;
         conversationId?: string;
+        responseMode?: string;
       };
 
       const shopId = String(body.shopId || "").trim();
       const question = String(body.question || "").trim();
       const requestedConversationId = String(body.conversationId || "").trim() || null;
+      const responseMode = parseOwnerCopilotResponseMode(body.responseMode);
 
       if (!shopId || !question) {
         return NextResponse.json(
@@ -271,6 +282,13 @@ export async function POST(req: Request) {
         supported: boolean;
         answer: string;
         suggestions?: readonly string[];
+        clarificationChoices?: readonly {
+          prompt: string;
+          title: string;
+          subtitle?: string;
+          badge?: string;
+          details?: ReadonlyArray<{ label: string; value: string }>;
+        }[];
         engine: string;
         provider?: string;
         model?: string;
@@ -279,6 +297,8 @@ export async function POST(req: Request) {
         intentLabel?: string;
         actionDraft?: unknown;
         requiresConfirmation?: boolean;
+        responseMode?: OwnerCopilotResponseMode;
+        entityMemory?: Record<string, unknown>;
       }) {
         await saveOwnerCopilotConversationExchange({
           conversationId: conversation.id,
@@ -294,6 +314,8 @@ export async function POST(req: Request) {
             intent: data.intentLabel ?? intent.type,
             actionDraft: data.actionDraft ?? null,
             requiresConfirmation: data.requiresConfirmation ?? false,
+            responseMode: data.responseMode ?? responseMode,
+            entities: data.entityMemory ?? null,
           },
         });
 
@@ -327,6 +349,7 @@ export async function POST(req: Request) {
             answer: data.answer,
             matchedCustomerName: data.matchedCustomerName ?? null,
             suggestions: data.suggestions ?? COPILOT_QUESTION_SUGGESTIONS,
+            clarificationChoices: data.clarificationChoices ?? [],
             engine: data.engine,
             provider: data.provider,
             model: data.model,
@@ -335,6 +358,7 @@ export async function POST(req: Request) {
             requiresConfirmation: data.requiresConfirmation ?? false,
             conversationId: conversation.id,
             fallbackUsed,
+            responseMode: data.responseMode ?? responseMode,
           },
           { status: 200, headers: responseHeaders }
         );
@@ -352,6 +376,7 @@ export async function POST(req: Request) {
             supported: true,
             answer: preparedActionPlan.clarification.answer,
             suggestions: preparedActionPlan.clarification.suggestions,
+            clarificationChoices: preparedActionPlan.clarification.choices,
             engine: "action-clarification",
             intentLabel: "action_clarification",
           });
@@ -368,6 +393,8 @@ export async function POST(req: Request) {
           actionDraft: preparedActionPlan.actionDraft,
           requiresConfirmation: true,
           intentLabel: "action_draft",
+          responseMode,
+          entityMemory: preparedActionPlan.resolvedEntities,
         });
       }
 
@@ -378,6 +405,7 @@ export async function POST(req: Request) {
           suggestions: COPILOT_QUESTION_SUGGESTIONS,
           engine: "blocked",
           intentLabel: "action_draft_blocked",
+          responseMode,
         });
       }
 
@@ -386,208 +414,254 @@ export async function POST(req: Request) {
           supported: true,
           answer: actionClarification.answer,
           suggestions: actionClarification.suggestions,
+          clarificationChoices: [],
           engine: "action-clarification",
           intentLabel: "action_clarification",
+          responseMode,
         });
       }
 
-      try {
-        const toolAnswer = await maybeAnswerOwnerCopilotWithTools({
-          question,
-          shopId,
-          payload,
-          conversationTurns,
-        });
-
-        if (toolAnswer && !toolAnswer.needsRuleFallback && toolAnswer.answer) {
-          fallbackUsed = false;
-          return persistAndReturn({
-            supported: toolAnswer.supported,
-            answer: toolAnswer.answer,
-            suggestions:
-              toolAnswer.suggestions && toolAnswer.suggestions.length > 0
-                ? toolAnswer.suggestions
-                : COPILOT_QUESTION_SUGGESTIONS,
-            engine: toolAnswer.engine,
-            provider: toolAnswer.provider,
-            model: toolAnswer.model,
-            toolNames: toolAnswer.toolNames,
+      async function tryToolAnswer() {
+        try {
+          const toolAnswer = await maybeAnswerOwnerCopilotWithTools({
+            question,
+            shopId,
+            payload,
+            conversationTurns,
           });
+
+          if (toolAnswer && !toolAnswer.needsRuleFallback && toolAnswer.answer) {
+            fallbackUsed = false;
+            return persistAndReturn({
+              supported: toolAnswer.supported,
+              answer: toolAnswer.answer,
+              suggestions:
+                toolAnswer.suggestions && toolAnswer.suggestions.length > 0
+                  ? toolAnswer.suggestions
+                  : COPILOT_QUESTION_SUGGESTIONS,
+              engine: toolAnswer.engine,
+              provider: toolAnswer.provider,
+              model: toolAnswer.model,
+              toolNames: toolAnswer.toolNames,
+              responseMode,
+            });
+          }
+
+          fallbackUsed = fallbackUsed || Boolean(toolAnswer?.needsRuleFallback);
+          return null;
+        } catch (error) {
+          fallbackUsed = true;
+          console.warn("owner copilot tool orchestration fallback", error);
+          return null;
+        }
+      }
+
+      async function tryLlmAnswer() {
+        try {
+          const llmAnswer = await maybeAnswerOwnerCopilotWithLlm({
+            question,
+            payload,
+            conversationTurns,
+          });
+
+          if (llmAnswer && !llmAnswer.needsRuleFallback) {
+            fallbackUsed = false;
+            return persistAndReturn({
+              supported: llmAnswer.supported,
+              answer: llmAnswer.answer,
+              suggestions:
+                llmAnswer.suggestions && llmAnswer.suggestions.length > 0
+                  ? llmAnswer.suggestions
+                  : COPILOT_QUESTION_SUGGESTIONS,
+              engine: llmAnswer.engine,
+              provider: llmAnswer.provider,
+              model: llmAnswer.model,
+              responseMode,
+            });
+          }
+
+          fallbackUsed = fallbackUsed || Boolean(llmAnswer?.needsRuleFallback);
+          return null;
+        } catch (error) {
+          fallbackUsed = true;
+          console.warn("owner copilot llm fallback", error);
+          return null;
+        }
+      }
+
+      async function tryRuleAnswer() {
+        if (intent.type === "unsupported") {
+          return null;
         }
 
-        fallbackUsed = fallbackUsed || Boolean(toolAnswer?.needsRuleFallback);
-      } catch (error) {
-        fallbackUsed = true;
-        console.warn("owner copilot tool orchestration fallback", error);
-      }
+        let answer = "";
+        let matchedCustomerName: string | null = null;
+        let entityMemory: Record<string, unknown> | undefined;
 
-      try {
-        const llmAnswer = await maybeAnswerOwnerCopilotWithLlm({
-          question,
-          payload,
-          conversationTurns,
-        });
+        switch (intent.type) {
+          case "today_status": {
+            const insight = buildOwnerCopilotInsight(
+              shopId,
+              payload.summary,
+              payload.snapshot
+            );
+            answer = `${insight.headline} ${insight.overview}`;
+            break;
+          }
+          case "today_sales":
+            answer = `আজ মোট বিক্রি ${formatMoney(payload.summary.sales.total)}। আজ ${formatCount(payload.summary.sales.count)}টি বিক্রি হয়েছে।`;
+            break;
+          case "today_profit":
+            answer = `আজ মোট লাভ ${formatMoney(payload.summary.profit)}।`;
+            break;
+          case "today_expenses": {
+            const totalExpense =
+              Number(payload.summary.expenses.total) +
+              Number(payload.summary.expenses.cogs ?? 0);
+            answer = `আজ মোট খরচ ${formatMoney(totalExpense)}।`;
+            break;
+          }
+          case "today_cash":
+            answer = `আজ ক্যাশ ব্যালেন্স এখন ${formatMoney(payload.summary.cash.balance)}।`;
+            break;
+          case "yesterday_sales":
+            answer = `গতকাল মোট বিক্রি ছিল ${formatMoney(payload.snapshot.yesterday.sales)}।`;
+            break;
+          case "yesterday_profit":
+            answer = `গতকাল মোট লাভ ছিল ${formatMoney(payload.snapshot.yesterday.profit)}।`;
+            break;
+          case "yesterday_expenses":
+            answer = `গতকাল মোট খরচ ছিল ${formatMoney(payload.snapshot.yesterday.expenses)}।`;
+            break;
+          case "yesterday_cash":
+            answer = `গতকাল ক্যাশ ব্যালেন্স ছিল ${formatMoney(payload.snapshot.yesterday.cashBalance)}।`;
+            break;
+          case "due_total":
+            answer =
+              payload.snapshot.dueTotal > 0
+                ? `মোট বাকি এখন ${formatMoney(payload.snapshot.dueTotal)}। ${formatCount(payload.snapshot.dueCustomerCount)} জন কাস্টমারের কাছে due আছে।`
+                : "এখন কোনো customer due নেই।";
+            break;
+          case "payables_total":
+            answer =
+              payload.snapshot.payablesTotal > 0
+                ? `Supplier payable এখন ${formatMoney(payload.snapshot.payablesTotal)}। ${formatCount(payload.snapshot.payableSupplierCount)} জন supplier-এর কাছে due আছে।`
+                : "এখন কোনো supplier payable নেই।";
+            break;
+          case "queue_pending":
+            answer =
+              payload.snapshot.queuePendingCount > 0
+                ? `এখন queue-তে ${formatCount(payload.snapshot.queuePendingCount)}টি pending token আছে।`
+                : "এখন queue-তে কোনো pending token নেই।";
+            break;
+          case "top_product_today":
+            answer = payload.snapshot.topProductName
+              ? `আজ সবচেয়ে বেশি টানছে ${payload.snapshot.topProductName}। বিক্রি ${formatCompactValue(payload.snapshot.topProductQty)} ইউনিট এবং revenue ${formatMoney(payload.snapshot.topProductRevenue)}।`
+              : "আজ এখনো top-selling item বের করার মতো বিক্রি হয়নি।";
+            break;
+          case "low_stock_list": {
+            const lowStockItems = await getLowStockPreview(shopId);
+            if (lowStockItems.length === 0) {
+              answer = "এখন low stock-এ কোনো active tracked item নেই।";
+              break;
+            }
+            const preview = lowStockItems
+              .map(
+                (item) =>
+                  `${item.name} (${formatCompactValue(Number(item.stockQty ?? 0))} ${item.baseUnit || "pcs"})`
+              )
+              .join(", ");
+            answer = `Low stock-এ ${formatCount(payload.snapshot.lowStockCount)}টি item আছে। সবচেয়ে জরুরি: ${preview}।`;
+            break;
+          }
+          case "customer_due": {
+            const customer = await findBestCustomer(shopId, intent.customerName);
+            if (!customer) {
+              answer = `${intent.customerName} নামে কোনো কাস্টমার খুঁজে পাইনি। নামটা আরেকটু স্পষ্ট করে বলুন।`;
+            } else {
+              matchedCustomerName = customer.name;
+              entityMemory = {
+                customer: {
+                  id: customer.id,
+                  name: customer.name,
+                },
+              };
+              answer =
+                Number(customer.totalDue ?? 0) > 0
+                  ? `${customer.name}-এর কাছে এখন মোট বাকি ${formatMoney(Number(customer.totalDue ?? 0))}।`
+                  : `${customer.name}-এর কাছে এখন কোনো বাকি নেই।`;
+            }
+            break;
+          }
+          case "product_query": {
+            const product = await findBestProduct(shopId, intent.productName);
+            if (!product) {
+              answer = `${intent.productName} নামে কোনো product খুঁজে পাইনি। নাম, SKU, বা barcode আরেকটু স্পষ্ট করে বলুন।`;
+              break;
+            }
 
-        if (llmAnswer && !llmAnswer.needsRuleFallback) {
-          fallbackUsed = false;
-          return persistAndReturn({
-            supported: llmAnswer.supported,
-            answer: llmAnswer.answer,
-            suggestions:
-              llmAnswer.suggestions && llmAnswer.suggestions.length > 0
-                ? llmAnswer.suggestions
-                : COPILOT_QUESTION_SUGGESTIONS,
-            engine: llmAnswer.engine,
-            provider: llmAnswer.provider,
-            model: llmAnswer.model,
-          });
+            const stockQty = Number(product.stockQty ?? 0);
+            const stockText = `${formatCompactValue(stockQty)} ${product.baseUnit || "pcs"}`;
+            const lowStockNote =
+              product.trackStock && stockQty <= 10
+                ? " Low stock zone-এ আছে।"
+                : "";
+            const activeText = product.isActive ? "active" : "inactive";
+            const skuText = product.sku ? ` SKU ${product.sku}.` : "";
+            const barcodeText = product.barcode ? ` Barcode ${product.barcode}.` : "";
+
+            if (intent.mode === "exists") {
+              answer = `${product.name} product আছে। এটা ${activeText} এবং বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${product.trackStock ? ` বর্তমান stock ${stockText}.` : " এই item-এ stock tracking চালু নেই."}${lowStockNote}${skuText}${barcodeText}`;
+            } else if (intent.mode === "stock") {
+              answer = product.trackStock
+                ? `${product.name}-এর বর্তমান stock ${stockText}। বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${lowStockNote}${skuText}${barcodeText}`
+                : `${product.name} item-এ stock tracking চালু নেই। বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${skuText}${barcodeText}`;
+            } else {
+              answer = `${product.name} ${product.isActive ? "active" : "inactive"} product। Category ${product.category}. বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${product.trackStock ? ` বর্তমান stock ${stockText}.` : " Stock tracking চালু নেই."}${lowStockNote}${skuText}${barcodeText}`;
+            }
+            entityMemory = {
+              product: {
+                id: product.id,
+                name: product.name,
+              },
+            };
+            break;
+          }
         }
 
-        fallbackUsed = fallbackUsed || Boolean(llmAnswer?.needsRuleFallback);
-      } catch (error) {
-        fallbackUsed = true;
-        console.warn("owner copilot llm fallback", error);
-      }
-
-      if (intent.type === "unsupported") {
         return persistAndReturn({
-          supported: false,
-          answer:
-            "আমি এখন sales, profit, expense, cash, due, payable, queue, top item, low stock, আর product stock/details type business প্রশ্ন বুঝি। প্রশ্নটা আরেকটু clear করে বলুন।",
+          supported: true,
+          answer,
+          matchedCustomerName,
           suggestions: COPILOT_QUESTION_SUGGESTIONS,
           engine: "rule",
-          intentLabel: "unsupported",
+          responseMode,
+          entityMemory,
         });
       }
 
-      let answer = "";
-      let matchedCustomerName: string | null = null;
+      const executionOrder =
+        responseMode === "verified"
+          ? [tryToolAnswer, tryRuleAnswer, tryLlmAnswer]
+          : responseMode === "fast"
+            ? [tryRuleAnswer, tryToolAnswer, tryLlmAnswer]
+            : [tryToolAnswer, tryLlmAnswer, tryRuleAnswer];
 
-      switch (intent.type) {
-        case "today_status": {
-          const insight = buildOwnerCopilotInsight(
-            shopId,
-            payload.summary,
-            payload.snapshot
-          );
-          answer = `${insight.headline} ${insight.overview}`;
-          break;
-        }
-        case "today_sales":
-          answer = `আজ মোট বিক্রি ${formatMoney(payload.summary.sales.total)}। আজ ${formatCount(payload.summary.sales.count)}টি বিক্রি হয়েছে।`;
-          break;
-        case "today_profit":
-          answer = `আজ মোট লাভ ${formatMoney(payload.summary.profit)}।`;
-          break;
-        case "today_expenses": {
-          const totalExpense =
-            Number(payload.summary.expenses.total) +
-            Number(payload.summary.expenses.cogs ?? 0);
-          answer = `আজ মোট খরচ ${formatMoney(totalExpense)}।`;
-          break;
-        }
-        case "today_cash":
-          answer = `আজ ক্যাশ ব্যালেন্স এখন ${formatMoney(payload.summary.cash.balance)}।`;
-          break;
-        case "yesterday_sales":
-          answer = `গতকাল মোট বিক্রি ছিল ${formatMoney(payload.snapshot.yesterday.sales)}।`;
-          break;
-        case "yesterday_profit":
-          answer = `গতকাল মোট লাভ ছিল ${formatMoney(payload.snapshot.yesterday.profit)}।`;
-          break;
-        case "yesterday_expenses":
-          answer = `গতকাল মোট খরচ ছিল ${formatMoney(payload.snapshot.yesterday.expenses)}।`;
-          break;
-        case "yesterday_cash":
-          answer = `গতকাল ক্যাশ ব্যালেন্স ছিল ${formatMoney(payload.snapshot.yesterday.cashBalance)}।`;
-          break;
-        case "due_total":
-          answer =
-            payload.snapshot.dueTotal > 0
-              ? `মোট বাকি এখন ${formatMoney(payload.snapshot.dueTotal)}। ${formatCount(payload.snapshot.dueCustomerCount)} জন কাস্টমারের কাছে due আছে।`
-              : "এখন কোনো customer due নেই।";
-          break;
-        case "payables_total":
-          answer =
-            payload.snapshot.payablesTotal > 0
-              ? `Supplier payable এখন ${formatMoney(payload.snapshot.payablesTotal)}। ${formatCount(payload.snapshot.payableSupplierCount)} জন supplier-এর কাছে due আছে।`
-              : "এখন কোনো supplier payable নেই।";
-          break;
-        case "queue_pending":
-          answer =
-            payload.snapshot.queuePendingCount > 0
-              ? `এখন queue-তে ${formatCount(payload.snapshot.queuePendingCount)}টি pending token আছে।`
-              : "এখন queue-তে কোনো pending token নেই।";
-          break;
-        case "top_product_today":
-          answer = payload.snapshot.topProductName
-            ? `আজ সবচেয়ে বেশি টানছে ${payload.snapshot.topProductName}। বিক্রি ${formatCompactValue(payload.snapshot.topProductQty)} ইউনিট এবং revenue ${formatMoney(payload.snapshot.topProductRevenue)}।`
-            : "আজ এখনো top-selling item বের করার মতো বিক্রি হয়নি।";
-          break;
-        case "low_stock_list": {
-          const lowStockItems = await getLowStockPreview(shopId);
-          if (lowStockItems.length === 0) {
-            answer = "এখন low stock-এ কোনো active tracked item নেই।";
-            break;
-          }
-          const preview = lowStockItems
-            .map(
-              (item) =>
-                `${item.name} (${formatCompactValue(Number(item.stockQty ?? 0))} ${item.baseUnit || "pcs"})`
-            )
-            .join(", ");
-          answer = `Low stock-এ ${formatCount(payload.snapshot.lowStockCount)}টি item আছে। সবচেয়ে জরুরি: ${preview}।`;
-          break;
-        }
-        case "customer_due": {
-          const customer = await findBestCustomer(shopId, intent.customerName);
-          if (!customer) {
-            answer = `${intent.customerName} নামে কোনো কাস্টমার খুঁজে পাইনি। নামটা আরেকটু স্পষ্ট করে বলুন।`;
-          } else {
-            matchedCustomerName = customer.name;
-            answer =
-              Number(customer.totalDue ?? 0) > 0
-                ? `${customer.name}-এর কাছে এখন মোট বাকি ${formatMoney(Number(customer.totalDue ?? 0))}।`
-                : `${customer.name}-এর কাছে এখন কোনো বাকি নেই।`;
-          }
-          break;
-        }
-        case "product_query": {
-          const product = await findBestProduct(shopId, intent.productName);
-          if (!product) {
-            answer = `${intent.productName} নামে কোনো product খুঁজে পাইনি। নাম, SKU, বা barcode আরেকটু স্পষ্ট করে বলুন।`;
-            break;
-          }
-
-          const stockQty = Number(product.stockQty ?? 0);
-          const stockText = `${formatCompactValue(stockQty)} ${product.baseUnit || "pcs"}`;
-          const lowStockNote =
-            product.trackStock && stockQty <= 10
-              ? " Low stock zone-এ আছে।"
-              : "";
-          const activeText = product.isActive ? "active" : "inactive";
-          const skuText = product.sku ? ` SKU ${product.sku}.` : "";
-          const barcodeText = product.barcode ? ` Barcode ${product.barcode}.` : "";
-
-          if (intent.mode === "exists") {
-            answer = `${product.name} product আছে। এটা ${activeText} এবং বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${product.trackStock ? ` বর্তমান stock ${stockText}.` : " এই item-এ stock tracking চালু নেই."}${lowStockNote}${skuText}${barcodeText}`;
-          } else if (intent.mode === "stock") {
-            answer = product.trackStock
-              ? `${product.name}-এর বর্তমান stock ${stockText}। বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${lowStockNote}${skuText}${barcodeText}`
-              : `${product.name} item-এ stock tracking চালু নেই। বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${skuText}${barcodeText}`;
-          } else {
-            answer = `${product.name} ${product.isActive ? "active" : "inactive"} product। Category ${product.category}. বিক্রয় মূল্য ${formatMoney(Number(product.sellPrice ?? 0))}.${product.trackStock ? ` বর্তমান stock ${stockText}.` : " Stock tracking চালু নেই."}${lowStockNote}${skuText}${barcodeText}`;
-          }
-          break;
+      for (const responder of executionOrder) {
+        const resolved = await responder();
+        if (resolved) {
+          return resolved;
         }
       }
 
       return persistAndReturn({
-        supported: true,
-        answer,
-        matchedCustomerName,
+        supported: false,
+        answer:
+          "আমি এখন sales, profit, expense, cash, due, payable, queue, top item, low stock, আর product stock/details type business প্রশ্ন বুঝি। প্রশ্নটা আরেকটু clear করে বলুন।",
         suggestions: COPILOT_QUESTION_SUGGESTIONS,
         engine: "rule",
+        intentLabel: "unsupported",
+        responseMode,
       });
     } catch (error) {
       console.error("owner copilot ask route error", error);

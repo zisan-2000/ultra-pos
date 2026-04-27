@@ -113,6 +113,26 @@ const stockAdjustmentDraftSchema = z.object({
   confirmationText: z.string().min(1),
 });
 
+const productPriceUpdateDraftSchema = z.object({
+  kind: z.literal("product_price_update"),
+  productQuery: z.string().min(1),
+  productId: z.string().optional(),
+  targetPrice: z.string().regex(/^\d+(\.\d+)?$/),
+  note: z.string().optional().default(""),
+  summary: z.string().min(1),
+  confirmationText: z.string().min(1),
+});
+
+const productToggleActiveDraftSchema = z.object({
+  kind: z.literal("product_toggle_active"),
+  productQuery: z.string().min(1),
+  productId: z.string().optional(),
+  nextActiveState: z.boolean(),
+  note: z.string().optional().default(""),
+  summary: z.string().min(1),
+  confirmationText: z.string().min(1),
+});
+
 const dueEntryDraftSchema = z.object({
   kind: z.literal("due_entry"),
   customerName: z.string().min(1),
@@ -167,6 +187,8 @@ export const ownerCopilotActionDraftSchema = z.discriminatedUnion("kind", [
   dueCollectionDraftSchema,
   supplierPaymentDraftSchema,
   stockAdjustmentDraftSchema,
+  productPriceUpdateDraftSchema,
+  productToggleActiveDraftSchema,
   dueEntryDraftSchema,
   saleVoidDraftSchema,
   customerCreateDraftSchema,
@@ -272,6 +294,54 @@ function buildStockAdjustmentDraft(question: string): OwnerCopilotActionDraft | 
     note,
     summary: `Stock adjustment draft: ${productQuery} | target ${amount}${note ? ` | ${note}` : ""}`,
     confirmationText: `${productQuery}-এর stock ${amount}-এ set করব${note ? ` (${note})` : ""}?`,
+  };
+}
+
+function buildProductPriceUpdateDraft(question: string): OwnerCopilotActionDraft | null {
+  const amount = extractAmount(question);
+  if (!amount) return null;
+  const productQuery = stripBanglaPossessiveSuffix(
+    question
+      .split(amount)[0]
+      ?.replace(/[?？！!।,\-]/g, " ")
+      .replace(/sell price/gi, " ")
+      .replace(/price|দাম|update|set|করো|করুন/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim() || ""
+  );
+  if (!productQuery) return null;
+  const note = extractReason(question, amount);
+
+  return {
+    kind: "product_price_update",
+    productQuery,
+    targetPrice: amount,
+    note,
+    summary: `Price update draft: ${productQuery} | target price ৳ ${amount}${note ? ` | ${note}` : ""}`,
+    confirmationText: `${productQuery}-এর sell price ৳ ${amount} করব${note ? ` (${note})` : ""}?`,
+  };
+}
+
+function buildProductToggleActiveDraft(
+  question: string,
+  nextActiveState: boolean
+): OwnerCopilotActionDraft | null {
+  const productQuery = stripBanglaPossessiveSuffix(
+    question
+      .replace(/[?？！!।,\-]/g, " ")
+      .replace(/product|পণ্য|item|active|inactive|enable|disable|চালু|বন্ধ|করো|করুন/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+  if (!productQuery) return null;
+
+  return {
+    kind: "product_toggle_active",
+    productQuery,
+    nextActiveState,
+    note: "",
+    summary: `${nextActiveState ? "Activate" : "Deactivate"} product draft: ${productQuery}`,
+    confirmationText: `${productQuery} product ${nextActiveState ? "active" : "inactive"} করব?`,
   };
 }
 
@@ -480,6 +550,41 @@ export function parseOwnerCopilotActionDraft(
     return buildStockAdjustmentDraft(question);
   }
 
+  const productCreateIntent =
+    includesAny(normalized, ["product", "পণ্য", "item"]) &&
+    includesAny(normalized, ["নতুন", "new", "add", "create", "যোগ"]) &&
+    Boolean(extractAmount(question));
+
+  if (productCreateIntent) {
+    return buildProductCreateDraft(question);
+  }
+
+  const productPriceUpdateIntent =
+    includesAny(normalized, ["দাম", "price"]) &&
+    includesAny(normalized, ["করো", "করুন", "set", "update"]) &&
+    !includesAny(normalized, ["stock", "স্টক", "কত", "কি", "কী", "আছে"]) &&
+    Boolean(extractAmount(question));
+
+  if (productPriceUpdateIntent) {
+    return buildProductPriceUpdateDraft(question);
+  }
+
+  const productDeactivateIntent =
+    includesAny(normalized, ["inactive", "disable", "বন্ধ"]) &&
+    includesAny(normalized, ["product", "পণ্য", "item", "করো", "করুন"]);
+
+  if (productDeactivateIntent) {
+    return buildProductToggleActiveDraft(question, false);
+  }
+
+  const productActivateIntent =
+    includesAny(normalized, ["active", "enable", "চালু"]) &&
+    includesAny(normalized, ["product", "পণ্য", "item", "করো", "করুন"]);
+
+  if (productActivateIntent) {
+    return buildProductToggleActiveDraft(question, true);
+  }
+
   const dueEntryIntent =
     includesAny(normalized, ["বাকি", "due"]) &&
     includesAny(normalized, ["যোগ", "add", "create", "করো", "করুন", "লেখো"]) &&
@@ -511,15 +616,6 @@ export function parseOwnerCopilotActionDraft(
 
   if (supplierCreateIntent) {
     return buildSupplierCreateDraft(question);
-  }
-
-  const productCreateIntent =
-    includesAny(normalized, ["product", "পণ্য", "item"]) &&
-    includesAny(normalized, ["নতুন", "new", "add", "create", "যোগ"]) &&
-    Boolean(extractAmount(question));
-
-  if (productCreateIntent) {
-    return buildProductCreateDraft(question);
   }
 
   return null;
@@ -575,6 +671,19 @@ export function getOwnerCopilotActionClarification(question: string) {
       answer:
         "Stock update করতে হলে product name আর target stock বলুন। যেমন: চিনির stock 25 করো",
       suggestions: ["চিনির stock 25 করো", "ডালের stock 12 করো"] as const,
+    };
+  }
+
+  if (
+    includesAny(normalized, ["দাম", "price"]) &&
+    includesAny(normalized, ["করো", "করুন", "set", "update"]) &&
+    !extractAmount(question)
+  ) {
+    return {
+      kind: "clarification",
+      answer:
+        "Price update করতে হলে product name আর নতুন দাম বলুন। যেমন: চিনির দাম 130 করো",
+      suggestions: ["চিনির দাম 130 করো", "ডালের price 95 করো"] as const,
     };
   }
 

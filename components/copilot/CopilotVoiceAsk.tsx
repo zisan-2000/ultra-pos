@@ -2,14 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CheckCircle2,
   Bot,
+  ChevronRight,
   Loader2,
   MessageSquarePlus,
   Mic,
   SendHorizonal,
+  ShieldCheck,
   Sparkles,
   Volume2,
-  Wand2,
+  VolumeX,
+  Waves,
+  X,
 } from "lucide-react";
 import {
   COPILOT_GROUPED_QUESTION_SUGGESTIONS,
@@ -40,6 +45,7 @@ type AskResponse = {
   intent?: string;
   matchedCustomerName?: string | null;
   suggestions?: readonly string[];
+  clarificationChoices?: readonly ClarificationChoice[];
   conversationId?: string;
   requiresConfirmation?: boolean;
   actionDraft?: OwnerCopilotActionDraft | null;
@@ -48,7 +54,10 @@ type AskResponse = {
   model?: string;
   toolNames?: readonly string[];
   fallbackUsed?: boolean;
+  responseMode?: ResponseMode;
 };
+
+type ResponseMode = "auto" | "verified" | "fast";
 
 type AssistantTrace = {
   engine?: string;
@@ -58,6 +67,7 @@ type AssistantTrace = {
   fallbackUsed?: boolean;
   actionKind?: string;
   requiresConfirmation?: boolean;
+  responseMode?: ResponseMode;
 };
 
 type ChatMessage = {
@@ -65,32 +75,90 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   trace?: AssistantTrace;
+  clarificationChoices?: readonly ClarificationChoice[];
+};
+
+type ClarificationChoice = {
+  prompt: string;
+  title: string;
+  subtitle?: string;
+  badge?: string;
+  details?: ReadonlyArray<{
+    label: string;
+    value: string;
+  }>;
 };
 
 function buildMessageId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function getEngineLabel(engine?: string) {
+const RESPONSE_MODE_STORAGE_KEY = "owner-copilot-response-mode";
+
+const RESPONSE_MODE_OPTIONS: Array<{
+  value: ResponseMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "auto",
+    label: "Auto",
+    description: "সবচেয়ে balanced অভিজ্ঞতা",
+  },
+  {
+    value: "verified",
+    label: "ডাটা দিয়ে যাচাই",
+    description: "যেখানে সম্ভব shop data আগে দেখা হবে",
+  },
+  {
+    value: "fast",
+    label: "দ্রুত উত্তর",
+    description: "সহজ প্রশ্নে দ্রুত উত্তরকে অগ্রাধিকার",
+  },
+];
+
+function getTraceStatusLabel(engine?: string) {
   switch (engine) {
     case "llm-tools":
-      return "Tool mode";
-    case "llm":
-      return "LLM";
-    case "action-draft":
-      return "Draft";
-    case "action-confirm":
-      return "Executed";
     case "rule":
-      return "Rule";
+      return "ডাটা দিয়ে যাচাই করা";
+    case "llm":
+      return "AI উত্তর";
+    case "action-draft":
+      return "Confirm দরকার";
+    case "action-confirm":
+      return "কাজ সম্পন্ন";
+    case "action-clarification":
+      return "আরও তথ্য দরকার";
+    case "blocked":
+      return "এখন unavailable";
     default:
       return null;
   }
 }
 
-function getThinkingLabel(pendingAction: OwnerCopilotActionDraft | null) {
+function getThinkingLabel(
+  pendingAction: OwnerCopilotActionDraft | null,
+  responseMode: ResponseMode
+) {
   if (pendingAction) return "Draft confirmation প্রস্তুত হচ্ছে...";
-  return "Copilot business context analyse করছে...";
+  if (responseMode === "verified") {
+    return "দোকানের ডাটা দেখে উত্তর প্রস্তুত হচ্ছে...";
+  }
+  if (responseMode === "fast") {
+    return "দ্রুত উত্তর প্রস্তুত হচ্ছে...";
+  }
+  return "প্রশ্ন, context আর ডাটা মিলিয়ে উত্তর প্রস্তুত হচ্ছে...";
+}
+
+function hasBanglaText(value: string) {
+  return /[\u0980-\u09FF]/.test(value);
+}
+
+function getVoiceAttemptLabel(lang?: string) {
+  if (lang?.toLowerCase().startsWith("bn")) return "Bangla listening";
+  if (lang?.toLowerCase().startsWith("en")) return "English fallback listening";
+  return "Voice listening";
 }
 
 function renderActionDetails(pendingAction: OwnerCopilotActionDraft) {
@@ -137,6 +205,23 @@ function renderActionDetails(pendingAction: OwnerCopilotActionDraft) {
       { label: "Product", value: pendingAction.productQuery },
       { label: "Target stock", value: pendingAction.targetStock },
       { label: "Note", value: pendingAction.note || "None" },
+    ];
+  }
+
+  if (pendingAction.kind === "product_price_update") {
+    return [
+      { label: "Action", value: "Price update" },
+      { label: "Product", value: pendingAction.productQuery },
+      { label: "New price", value: `৳ ${pendingAction.targetPrice}` },
+      { label: "Note", value: pendingAction.note || "None" },
+    ];
+  }
+
+  if (pendingAction.kind === "product_toggle_active") {
+    return [
+      { label: "Action", value: pendingAction.nextActiveState ? "Activate product" : "Deactivate product" },
+      { label: "Product", value: pendingAction.productQuery },
+      { label: "Next state", value: pendingAction.nextActiveState ? "Active" : "Inactive" },
     ];
   }
 
@@ -204,6 +289,10 @@ function getConfirmButtonLabel(pendingAction: OwnerCopilotActionDraft, confirmin
       return "Payment Submit করুন";
     case "stock_adjustment":
       return "Stock Update করুন";
+    case "product_price_update":
+      return "Price Update করুন";
+    case "product_toggle_active":
+      return pendingAction.nextActiveState ? "Product Activate করুন" : "Product Deactivate করুন";
     case "void_sale":
       return "Sale Void করুন";
     case "create_customer":
@@ -227,6 +316,7 @@ export default function CopilotVoiceAsk({
   online: boolean;
 }) {
   const [question, setQuestion] = useState("");
+  const [responseMode, setResponseMode] = useState<ResponseMode>("auto");
   const [answer, setAnswer] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -239,6 +329,10 @@ export default function CopilotVoiceAsk({
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [speechReady, setSpeechReady] = useState(false);
+  const [voiceDraft, setVoiceDraft] = useState("");
+  const [voiceAttemptLabel, setVoiceAttemptLabel] = useState<string | null>(null);
+  const [loadingStageIndex, setLoadingStageIndex] = useState(0);
+  const [showChoiceCompareModal, setShowChoiceCompareModal] = useState(false);
   const [lastAnswer, setLastAnswer] = useState("");
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false);
   const [openSuggestionGroup, setOpenSuggestionGroup] = useState<string | null>(null);
@@ -267,6 +361,14 @@ export default function CopilotVoiceAsk({
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedMode = window.localStorage.getItem(RESPONSE_MODE_STORAGE_KEY);
+    if (storedMode === "auto" || storedMode === "verified" || storedMode === "fast") {
+      setResponseMode(storedMode);
+    }
+  }, []);
+
+  useEffect(() => {
     setConversationId(null);
     setMessages([]);
     setAnswer(null);
@@ -277,7 +379,15 @@ export default function CopilotVoiceAsk({
     setPendingAction(null);
     setStreamingMessageId(null);
     setStreamingLength(0);
+    setVoiceDraft("");
+    setVoiceAttemptLabel(null);
+    setShowChoiceCompareModal(false);
   }, [shopId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(RESPONSE_MODE_STORAGE_KEY, responseMode);
+  }, [responseMode]);
 
   useEffect(() => {
     if (!streamingMessageId) return;
@@ -302,13 +412,29 @@ export default function CopilotVoiceAsk({
       if (!content || !speechReady || typeof window === "undefined") return;
       stopSpeaking();
       const utterance = new window.SpeechSynthesisUtterance(content);
-      utterance.lang = "bn-BD";
+      utterance.lang = hasBanglaText(content) ? "bn-BD" : "en-US";
       utterance.rate = 1;
       utterance.pitch = 1;
       window.speechSynthesis.speak(utterance);
     },
     [lastAnswer, speechReady]
   );
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingStageIndex(0);
+      return;
+    }
+
+    const timers = [
+      window.setTimeout(() => setLoadingStageIndex(1), 650),
+      window.setTimeout(() => setLoadingStageIndex(2), 1450),
+    ];
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [loading]);
 
   const askCopilot = useCallback(
     async (rawQuestion?: string, options?: { speak?: boolean }) => {
@@ -324,6 +450,13 @@ export default function CopilotVoiceAsk({
 
       setLoading(true);
       setError(null);
+      setShowChoiceCompareModal(false);
+      const userMessage: ChatMessage = {
+        id: buildMessageId(),
+        role: "user",
+        content: nextQuestion,
+      };
+      setMessages((current) => [...current, userMessage]);
 
       try {
         const response = await fetch("/api/owner/copilot/ask", {
@@ -335,6 +468,7 @@ export default function CopilotVoiceAsk({
             shopId,
             question: nextQuestion,
             conversationId,
+            responseMode,
           }),
         });
 
@@ -343,15 +477,11 @@ export default function CopilotVoiceAsk({
         }
 
         const payload = (await response.json()) as AskResponse;
-        const userMessage: ChatMessage = {
-          id: buildMessageId(),
-          role: "user",
-          content: nextQuestion,
-        };
         const assistantMessage: ChatMessage = {
           id: buildMessageId(),
           role: "assistant",
           content: payload.answer,
+          clarificationChoices: payload.clarificationChoices ?? [],
           trace: {
             engine: payload.engine,
             provider: payload.provider,
@@ -359,13 +489,14 @@ export default function CopilotVoiceAsk({
             toolNames: payload.toolNames,
             fallbackUsed: payload.fallbackUsed,
             requiresConfirmation: payload.requiresConfirmation,
+            responseMode: payload.responseMode ?? responseMode,
           },
         };
 
         setAnswer(payload.answer);
         setLastAnswer(payload.answer);
         setConversationId(payload.conversationId ?? conversationId);
-        setMessages((current) => [...current, userMessage, assistantMessage]);
+        setMessages((current) => [...current, assistantMessage]);
         setStreamingMessageId(assistantMessage.id);
         setStreamingLength(0);
         setSuggestions(
@@ -382,12 +513,13 @@ export default function CopilotVoiceAsk({
           window.setTimeout(() => speakAnswer(payload.answer), 120);
         }
       } catch {
+        setMessages((current) => current.slice(0, -1));
         setError("এই মুহূর্তে উত্তর আনা যাচ্ছে না।");
       } finally {
         setLoading(false);
       }
     },
-    [conversationId, online, question, shopId, speakAnswer]
+    [conversationId, online, question, responseMode, shopId, speakAnswer]
   );
 
   const stopListening = useCallback(() => {
@@ -395,6 +527,8 @@ export default function CopilotVoiceAsk({
     voiceSessionRef.current = null;
     recognitionRef.current?.stop?.();
     setListening(false);
+    setVoiceDraft("");
+    setVoiceAttemptLabel(null);
   }, []);
 
   const startListening = useCallback(() => {
@@ -404,14 +538,25 @@ export default function CopilotVoiceAsk({
     }
     voiceSessionRef.current?.stop();
     voiceSessionRef.current = startDualLanguageVoice({
+      maxAttemptsPerLanguage: 2,
+      interimSilenceMs: 2200,
       onRecognitionRef: (recognition) => {
         recognitionRef.current = recognition;
       },
-      onTranscript: (transcript) => {
+      onInterimTranscript: (transcript, context) => {
+        setVoiceDraft(transcript);
+        setVoiceAttemptLabel(getVoiceAttemptLabel(context.lang));
+        if (transcript.trim()) {
+          setQuestion(transcript.trim());
+        }
+      },
+      onTranscript: (transcript, context) => {
         if (!transcript) {
           setError("কথা পরিষ্কার পাওয়া যায়নি। আবার বলুন।");
           return;
         }
+        setVoiceDraft(transcript);
+        setVoiceAttemptLabel(getVoiceAttemptLabel(context.lang));
         setQuestion(transcript);
         void askCopilot(transcript, { speak: true });
       },
@@ -431,20 +576,26 @@ export default function CopilotVoiceAsk({
       onEnd: () => {
         setListening(false);
         voiceSessionRef.current = null;
+        setVoiceAttemptLabel(null);
       },
     });
     if (!voiceSessionRef.current) return;
     setError(null);
     setListening(true);
+    setVoiceDraft("");
   }, [askCopilot, listening, stopListening]);
 
   const helperText = useMemo(() => {
     if (!online) return "অনলাইনে থাকলে voice প্রশ্ন করা যাবে।";
-    if (listening) return "শুনছি... প্রশ্ন বলুন।";
+    if (listening) {
+      return voiceDraft
+        ? "শোনা টেক্সট review হচ্ছে। চুপ থাকুন, final transcript ধরা হচ্ছে..."
+        : "শুনছি... মাইক্রোফোনের কাছে থেকে ছোট করে প্রশ্ন বলুন।";
+    }
     if (voiceReady)
       return "Sales, profit, due, product stock, low stock, top item, payable, queue বা follow-up প্রশ্ন করুন।";
     return "এই ডিভাইসে মাইক্রোফোন সাপোর্ট নেই, লিখে business প্রশ্ন করুন।";
-  }, [listening, online, voiceReady]);
+  }, [listening, online, voiceDraft, voiceReady]);
 
   const latestAssistantMessage = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -460,12 +611,60 @@ export default function CopilotVoiceAsk({
     return suggestions.slice(0, 3);
   }, [suggestions]);
 
+  const currentClarificationChoices = useMemo(
+    () => latestAssistantMessage?.clarificationChoices ?? [],
+    [latestAssistantMessage]
+  );
+
+  const loadingStages = useMemo(() => {
+    if (pendingAction) {
+      return ["Intent বুঝছি", "Exact entity resolve করছি", "Confirmation card বানাচ্ছি"];
+    }
+    if (responseMode === "verified") {
+      return ["প্রশ্ন বুঝছি", "Shop data যাচাই করছি", "স্পষ্ট উত্তর লিখছি"];
+    }
+    if (responseMode === "fast") {
+      return ["প্রশ্ন ধরছি", "Fast path check করছি", "সংক্ষিপ্ত উত্তর লিখছি"];
+    }
+    return ["প্রশ্ন বুঝছি", "Relevant data/context মিলাচ্ছি", "Natural answer লিখছি"];
+  }, [pendingAction, responseMode]);
+
   return (
-    <section className="rounded-[24px] border border-border/70 bg-background/80 p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
+    <section className="overflow-hidden rounded-[28px] border border-border/70 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.96))] p-4 shadow-[0_18px_45px_rgba(15,23,42,0.07)] backdrop-blur">
+      <div className="mb-4 grid gap-2 rounded-[22px] border border-primary/10 bg-card/70 p-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Trust
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-foreground">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            Shop-scoped safe assistant
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Voice
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Waves className={`h-4 w-4 ${voiceReady ? "text-primary" : "text-muted-foreground"}`} />
+            {voiceReady ? "Noise-aware dual-language input" : "Text-only on this device"}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Mode
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-foreground">
+            <CheckCircle2 className="h-4 w-4 text-primary" />
+            {RESPONSE_MODE_OPTIONS.find((option) => option.value === responseMode)?.label}
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Voice Ask
+            Copilot
           </div>
           <h3 className="text-base font-bold text-foreground">
             {shopName ? `${shopName}-কে জিজ্ঞেস করুন` : "দোকানকে জিজ্ঞেস করুন"}
@@ -488,6 +687,9 @@ export default function CopilotVoiceAsk({
                 setPendingAction(null);
                 setStreamingMessageId(null);
                 setStreamingLength(0);
+                setVoiceDraft("");
+                setVoiceAttemptLabel(null);
+                setShowChoiceCompareModal(false);
               }}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
             >
@@ -502,8 +704,47 @@ export default function CopilotVoiceAsk({
               <Volume2 className="h-4 w-4" />
               শোনান
             </button>
+            <button
+              type="button"
+              onClick={() => stopSpeaking()}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+            >
+              <VolumeX className="h-4 w-4" />
+              থামান
+            </button>
           </div>
         ) : null}
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            উত্তরের ধরন
+          </div>
+          <span className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+            Auto recommended
+          </span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {RESPONSE_MODE_OPTIONS.map((option) => {
+            const active = responseMode === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setResponseMode(option.value)}
+                className={`rounded-2xl border px-3 py-3 text-left transition ${
+                  active
+                    ? "border-primary/30 bg-primary-soft/30 text-foreground"
+                    : "border-border/70 bg-card text-foreground hover:border-primary/20"
+                }`}
+              >
+                <div className="text-sm font-semibold">{option.label}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{option.description}</div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="mt-4 flex gap-2">
@@ -519,7 +760,7 @@ export default function CopilotVoiceAsk({
               }
             }}
             placeholder="যেমন: আজ দোকান কেমন চলছে? / কোন product-এর stock কত?"
-            className="h-12 w-full rounded-2xl border border-border bg-card px-4 pr-12 text-sm text-foreground shadow-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+            className="h-12 w-full rounded-2xl border border-border bg-card/95 px-4 pr-12 text-sm text-foreground shadow-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
           />
           <button
             type="button"
@@ -545,6 +786,53 @@ export default function CopilotVoiceAsk({
           জিজ্ঞেস
         </button>
       </div>
+
+      {(listening || voiceDraft) && online ? (
+        <div className="mt-3 rounded-[22px] border border-primary/20 bg-primary-soft/20 p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/20 bg-card text-primary">
+                <Waves className={`h-5 w-5 ${listening ? "animate-pulse" : ""}`} />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-foreground">
+                  {listening ? "Voice capture চলছে" : "শেষ transcript ধরা হয়েছে"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {voiceAttemptLabel || "Bangla first, English fallback"}
+                </div>
+              </div>
+            </div>
+            {listening ? (
+              <button
+                type="button"
+                onClick={stopListening}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+              >
+                Stop listening
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-3 rounded-2xl border border-border/60 bg-card px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Live transcript
+            </div>
+            <div className="mt-2 text-sm leading-7 text-foreground">
+              {voiceDraft || "শুনছি..."}
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {["মাইক্রোফোনের কাছে থাকুন", "একবারে ছোট প্রশ্ন বলুন", "background noise কমান"].map((tip) => (
+              <span
+                key={tip}
+                className="inline-flex rounded-full border border-border/60 bg-card px-3 py-1 text-[11px] font-semibold text-muted-foreground"
+              >
+                {tip}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-3 space-y-2">
         <div className="flex flex-wrap gap-2">
@@ -647,7 +935,7 @@ export default function CopilotVoiceAsk({
             {latestAssistantMessage?.trace?.engine ? (
               <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1 text-[11px] font-semibold text-muted-foreground">
                 <Sparkles className="h-3.5 w-3.5 text-primary" />
-                {getEngineLabel(latestAssistantMessage.trace.engine)}
+                {getTraceStatusLabel(latestAssistantMessage.trace.engine)}
               </div>
             ) : null}
           </div>
@@ -673,26 +961,19 @@ export default function CopilotVoiceAsk({
                   {message.trace.engine ? (
                     <span className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
                       <Bot className="h-3 w-3" />
-                      {getEngineLabel(message.trace.engine)}
+                      {getTraceStatusLabel(message.trace.engine)}
                     </span>
                   ) : null}
-                  {message.trace.toolNames?.map((toolName) => (
-                    <span
-                      key={toolName}
-                      className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground"
-                    >
-                      <Wand2 className="h-3 w-3 text-primary" />
-                      {toolName}
-                    </span>
-                  ))}
-                  {message.trace.provider ? (
+                  {message.trace.responseMode ? (
                     <span className="inline-flex rounded-full border border-border/70 bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-                      {message.trace.provider}
+                      {RESPONSE_MODE_OPTIONS.find(
+                        (option) => option.value === message.trace?.responseMode
+                      )?.label || "Auto"}
                     </span>
                   ) : null}
                   {message.trace.fallbackUsed ? (
                     <span className="inline-flex rounded-full border border-warning/20 bg-warning-soft/50 px-2.5 py-1 text-[11px] font-semibold text-foreground">
-                      fallback
+                      বিকল্প পথে উত্তর
                     </span>
                   ) : null}
                 </div>
@@ -706,7 +987,12 @@ export default function CopilotVoiceAsk({
               </div>
               <div className="flex items-center gap-3 text-sm text-foreground">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                {getThinkingLabel(pendingAction)}
+                <div className="space-y-1">
+                  <div>{getThinkingLabel(pendingAction, responseMode)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {loadingStages[Math.min(loadingStageIndex, loadingStages.length - 1)]}
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
@@ -727,7 +1013,7 @@ export default function CopilotVoiceAsk({
               Confirmation Needed
             </div>
             <span className="inline-flex rounded-full border border-primary/20 bg-card px-2.5 py-1 text-[11px] font-semibold text-primary">
-              Nothing saved yet
+              Confirm না করা পর্যন্ত কিছু save হবে না
             </span>
           </div>
           <p className="text-sm leading-7 text-foreground">{pendingAction.confirmationText}</p>
@@ -842,6 +1128,98 @@ export default function CopilotVoiceAsk({
         </div>
       ) : null}
 
+      {messages.length > 0 &&
+      latestAssistantMessage?.trace?.engine === "action-clarification" &&
+      (currentClarificationChoices.length > 0 || suggestions.length > 0) &&
+      !pendingAction ? (
+        <div className="mt-4 rounded-[22px] border border-primary/15 bg-primary-soft/20 p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Exact option বেছে নিন
+              </div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                ambiguous match হলে compare করে exact option select করুন।
+              </div>
+            </div>
+            {currentClarificationChoices.length > 1 ? (
+              <button
+                type="button"
+                onClick={() => setShowChoiceCompareModal(true)}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+              >
+                Compare all
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+          {currentClarificationChoices.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {currentClarificationChoices.slice(0, 4).map((choice) => (
+                <div
+                  key={choice.prompt}
+                  className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">{choice.title}</div>
+                      {choice.subtitle ? (
+                        <div className="mt-1 text-xs text-muted-foreground">{choice.subtitle}</div>
+                      ) : null}
+                    </div>
+                    {choice.badge ? (
+                      <span className="inline-flex rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                        {choice.badge}
+                      </span>
+                    ) : null}
+                  </div>
+                  {choice.details && choice.details.length > 0 ? (
+                    <div className="mt-3 grid gap-2">
+                      {choice.details.slice(0, 3).map((detail) => (
+                        <div
+                          key={`${choice.prompt}-${detail.label}`}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/70 px-3 py-2 text-xs"
+                        >
+                          <span className="font-semibold text-muted-foreground">{detail.label}</span>
+                          <span className="text-right font-medium text-foreground">{detail.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuestion(choice.prompt);
+                      setShowChoiceCompareModal(false);
+                      void askCopilot(choice.prompt);
+                    }}
+                    className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-2xl border border-primary/20 bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95"
+                  >
+                    এই option নিন
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {suggestions.slice(0, 4).map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => {
+                    setQuestion(suggestion);
+                    void askCopilot(suggestion);
+                  }}
+                  className="rounded-2xl border border-border/70 bg-card px-4 py-3 text-left text-sm font-medium text-foreground transition hover:border-primary/30 hover:text-primary"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {messages.length > 0 && followUpSuggestions.length > 0 && !pendingAction ? (
         <div className="mt-4 rounded-[22px] border border-border/70 bg-muted/20 p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
           <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -861,6 +1239,87 @@ export default function CopilotVoiceAsk({
                 {suggestion}
               </button>
             ))}
+          </div>
+        </div>
+      ) : null}
+
+      {showChoiceCompareModal && currentClarificationChoices.length > 0 ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[28px] border border-border/70 bg-background shadow-[0_30px_80px_rgba(15,23,42,0.28)]">
+            <div className="flex items-start justify-between gap-4 border-b border-border/70 px-5 py-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Compare Options
+                </div>
+                <h4 className="mt-1 text-xl font-bold text-foreground">
+                  Exact match বেছে নিন
+                </h4>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  ambiguous customer / supplier / product / invoice case compare করে exact one choose করুন।
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowChoiceCompareModal(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+                aria-label="Close compare modal"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="max-h-[calc(90vh-88px)] overflow-y-auto p-5">
+              <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                {currentClarificationChoices.map((choice) => (
+                  <div
+                    key={choice.prompt}
+                    className="rounded-[24px] border border-border/70 bg-card p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-base font-bold text-foreground">{choice.title}</div>
+                        {choice.subtitle ? (
+                          <div className="mt-1 text-sm text-muted-foreground">{choice.subtitle}</div>
+                        ) : null}
+                      </div>
+                      {choice.badge ? (
+                        <span className="inline-flex rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                          {choice.badge}
+                        </span>
+                      ) : null}
+                    </div>
+                    {choice.details && choice.details.length > 0 ? (
+                      <div className="mt-4 space-y-2">
+                        {choice.details.map((detail) => (
+                          <div
+                            key={`${choice.prompt}-${detail.label}`}
+                            className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3"
+                          >
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              {detail.label}
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-foreground">
+                              {detail.value}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuestion(choice.prompt);
+                        setShowChoiceCompareModal(false);
+                        void askCopilot(choice.prompt);
+                      }}
+                      className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95"
+                    >
+                      এই option confirm করুন
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

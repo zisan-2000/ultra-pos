@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { generateTextWithGemini } from "@/lib/ai/gemini";
 import { getAiProviderConfig } from "@/lib/ai/provider";
+import { getCopilotLanguageInstruction } from "@/lib/copilot-language";
 import { buildOwnerCopilotInsight } from "@/lib/owner-copilot";
 import type { OwnerCopilotConversationTurn } from "@/lib/owner-copilot-memory";
 import type { TodaySummary } from "@/lib/reports/today-summary";
@@ -164,7 +165,7 @@ function buildPrompt(
     "- শুধু SHOP_CONTEXT_JSON থেকে উত্তর দাও।",
     "- summary/insight/snapshot scope-এর মধ্যে থাকলে answered business guidance দাও।",
     "- নির্দিষ্ট customer/product lookup, transaction history drilldown, create/update/delete action, or any data not present in SHOP_CONTEXT_JSON লাগলে supported=false এবং needsRuleFallback=true দাও।",
-    "- answer সহজ, ছোট, business-friendly বাংলা হবে।",
+    `- ${getCopilotLanguageInstruction(question)}`,
     "- RECENT_CONVERSATION_JSON-এ recent turns থাকলে follow-up reference যেমন 'ওটা', 'এটার', 'আগেরটার' resolve করার চেষ্টা করো।",
     "- business owner action-oriented প্রশ্ন করলে provided insight/playbook/metrics থেকে grounded recommendation দাও।",
     "- data compare প্রশ্নে provided today / yesterday / average7d values use করো।",
@@ -186,7 +187,6 @@ function buildPrompt(
 
 const systemInstruction = [
   "You are Dokan Copilot, a grounded retail business assistant.",
-  "You answer in simple Bengali for Bangladeshi shop owners.",
   "Never invent numbers, customers, products, or actions.",
   "If the provided context is insufficient, explicitly request rule fallback in JSON.",
 ].join(" ");

@@ -506,6 +506,68 @@ export async function executeOwnerCopilotActionDraft({
     };
   }
 
+  if (parsed.kind === "product_price_update") {
+    requirePermission(user, "update_product");
+
+    const product = parsed.productId
+      ? await resolveProductById(shopId, parsed.productId)
+      : await resolveProductForStockAdjustment(shopId, parsed.productQuery);
+    if (!product) {
+      throw new Error(`"${parsed.productQuery}" নামে product পাওয়া যায়নি`);
+    }
+
+    const targetPrice = Number(parsed.targetPrice);
+    if (!Number.isFinite(targetPrice) || targetPrice < 0) {
+      throw new Error("Target price must be a valid non-negative number");
+    }
+
+    const currentProduct = await prisma.product.findUnique({
+      where: { id: product.id },
+      select: { sellPrice: true },
+    });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: {
+        sellPrice: targetPrice.toFixed(2),
+      },
+    });
+
+    revalidateProductPaths();
+    revalidateReportsForProduct();
+
+    return {
+      success: true,
+      answer: `${product.name}-এর sell price ৳ ${Number(currentProduct?.sellPrice ?? 0).toFixed(2)} থেকে ৳ ${targetPrice.toFixed(2)} করা হয়েছে।`,
+    };
+  }
+
+  if (parsed.kind === "product_toggle_active") {
+    requirePermission(user, "update_product");
+
+    const product = parsed.productId
+      ? await resolveProductById(shopId, parsed.productId)
+      : await resolveProductForStockAdjustment(shopId, parsed.productQuery);
+    if (!product) {
+      throw new Error(`"${parsed.productQuery}" নামে product পাওয়া যায়নি`);
+    }
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: {
+        isActive: parsed.nextActiveState,
+      },
+    });
+
+    revalidateProductPaths();
+    revalidateReportsForProduct();
+
+    return {
+      success: true,
+      answer: `${product.name} product ${parsed.nextActiveState ? "active" : "inactive"} করা হয়েছে।`,
+    };
+  }
+
   if (parsed.kind === "void_sale") {
     requirePermission(user, "cancel_sale");
 

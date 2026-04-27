@@ -31,10 +31,16 @@ type RecognitionResult = {
 type StartDualLanguageVoiceOptions = {
   primaryLang?: string;
   fallbackLang?: string;
+  maxAttemptsPerLanguage?: number;
+  interimSilenceMs?: number;
   recognitionCtor?: SpeechRecognitionConstructor | null;
   onRecognitionRef?: (recognition: SpeechRecognitionInstance | null) => void;
   onStart?: () => void;
   onEnd?: () => void;
+  onInterimTranscript?: (
+    transcript: string,
+    context: { lang: string; attempt: VoiceAttempt }
+  ) => void;
   onTranscript: (
     transcript: string,
     context: { lang: string; attempt: VoiceAttempt }
@@ -48,6 +54,7 @@ export type VoiceSession = {
 
 const PRIMARY_LANG = "bn-BD";
 const FALLBACK_LANG = "en-US";
+const DEFAULT_INTERIM_SILENCE_MS = 2400;
 
 const PERMISSION_ERROR_CODES = new Set([
   "not-allowed",
@@ -116,15 +123,32 @@ export function startDualLanguageVoice(
   };
 
   const runAttempt = (
-    lang: string
+    lang: string,
+    attempt: VoiceAttempt
   ): Promise<RecognitionResult> =>
     new Promise((resolve) => {
       const recognition = new recognitionCtor();
       let settled = false;
+      let bestTranscript = "";
+      let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const resetSilenceTimer = () => {
+        if (silenceTimer) clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          finish({
+            transcript: bestTranscript || null,
+            errorCode: bestTranscript ? null : "no-speech",
+          });
+        }, options.interimSilenceMs ?? DEFAULT_INTERIM_SILENCE_MS);
+      };
 
       const finish = (result: RecognitionResult) => {
         if (settled) return;
         settled = true;
+        if (silenceTimer) {
+          clearTimeout(silenceTimer);
+          silenceTimer = null;
+        }
         if (activeRecognition === recognition) {
           activeRecognition = null;
           options.onRecognitionRef?.(null);
@@ -133,14 +157,40 @@ export function startDualLanguageVoice(
       };
 
       recognition.lang = lang;
-      recognition.interimResults = false;
+      recognition.interimResults = true;
       recognition.continuous = false;
 
       recognition.onresult = (event: any) => {
-        const transcript = normalizeTranscript(
-          String(event?.results?.[0]?.[0]?.transcript || "")
-        );
-        finish({ transcript: transcript || null, errorCode: null });
+        let finalTranscript = "";
+        let interimTranscript = "";
+
+        for (
+          let index = event?.resultIndex ?? 0;
+          index < (event?.results?.length ?? 0);
+          index += 1
+        ) {
+          const result = event.results[index];
+          const transcript = normalizeTranscript(String(result?.[0]?.transcript || ""));
+          if (!transcript) continue;
+          if (result?.isFinal) {
+            finalTranscript = `${finalTranscript} ${transcript}`.trim();
+          } else {
+            interimTranscript = `${interimTranscript} ${transcript}`.trim();
+          }
+        }
+
+        const normalizedFinal = normalizeTranscript(finalTranscript);
+        const normalizedInterim = normalizeTranscript(interimTranscript);
+        if (normalizedInterim && normalizedInterim.length >= bestTranscript.length) {
+          bestTranscript = normalizedInterim;
+          options.onInterimTranscript?.(normalizedInterim, { lang, attempt });
+        }
+        if (normalizedFinal) {
+          bestTranscript = normalizedFinal;
+          finish({ transcript: normalizedFinal, errorCode: null });
+          return;
+        }
+        resetSilenceTimer();
       };
 
       recognition.onerror = (event: any) => {
@@ -155,6 +205,7 @@ export function startDualLanguageVoice(
 
       activeRecognition = recognition;
       options.onRecognitionRef?.(recognition);
+      resetSilenceTimer();
 
       try {
         recognition.start();
@@ -186,9 +237,27 @@ export function startDualLanguageVoice(
   options.onStart?.();
   const primaryLang = options.primaryLang || PRIMARY_LANG;
   const fallbackLang = options.fallbackLang || FALLBACK_LANG;
+  const maxAttemptsPerLanguage = Math.max(1, options.maxAttemptsPerLanguage ?? 2);
+
+  async function runLanguageWithRetries(lang: string, attempt: VoiceAttempt) {
+    let lastResult: RecognitionResult = { transcript: null, errorCode: null };
+    for (let count = 0; count < maxAttemptsPerLanguage; count += 1) {
+      lastResult = await runAttempt(lang, attempt);
+      if (cancelled) return lastResult;
+      if (lastResult.transcript) return lastResult;
+      if (
+        lastResult.errorCode &&
+        (PERMISSION_ERROR_CODES.has(lastResult.errorCode) ||
+          ABORT_ERROR_CODES.has(lastResult.errorCode))
+      ) {
+        return lastResult;
+      }
+    }
+    return lastResult;
+  }
 
   void (async () => {
-    const primary = await runAttempt(primaryLang);
+    const primary = await runLanguageWithRetries(primaryLang, "primary");
     if (cancelled) return;
     if (primary.transcript) {
       options.onTranscript(primary.transcript, {
@@ -206,7 +275,7 @@ export function startDualLanguageVoice(
       return;
     }
 
-    const fallback = await runAttempt(fallbackLang);
+    const fallback = await runLanguageWithRetries(fallbackLang, "fallback");
     if (cancelled) return;
     if (fallback.transcript) {
       options.onTranscript(fallback.transcript, {

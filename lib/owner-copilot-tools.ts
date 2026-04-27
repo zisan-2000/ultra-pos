@@ -42,6 +42,7 @@ const productSalesSummaryArgsSchema = z.object({
   period: z.enum(["today", "7d"]).optional(),
 });
 const inventorySummaryArgsSchema = z.object({});
+const inventoryValueSummaryArgsSchema = z.object({});
 const stockExtremesArgsSchema = z.object({
   direction: z.enum(["highest", "lowest"]).optional(),
   limit: z.coerce.number().int().min(1).max(10).optional(),
@@ -51,6 +52,10 @@ const deadStockArgsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(10).optional(),
   days: z.coerce.number().int().min(7).max(90).optional(),
   activeOnly: z.coerce.boolean().optional(),
+});
+const reorderSuggestionsArgsSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(10).optional(),
+  days: z.coerce.number().int().min(7).max(60).optional(),
 });
 const customerSummaryArgsSchema = z.object({});
 const topDueCustomersArgsSchema = z.object({
@@ -151,6 +156,11 @@ export const OWNER_COPILOT_TOOL_DEFINITIONS = [
     schema: inventorySummaryArgsSchema,
   },
   {
+    name: "get_inventory_value_summary",
+    description: "Get approximate stock retail value, cost value, tracked item count, and out-of-stock value summary.",
+    schema: inventoryValueSummaryArgsSchema,
+  },
+  {
     name: "get_stock_extremes",
     description: "Get products with the highest or lowest stock quantities.",
     schema: stockExtremesArgsSchema,
@@ -159,6 +169,11 @@ export const OWNER_COPILOT_TOOL_DEFINITIONS = [
     name: "get_dead_stock_items",
     description: "Get products with no sales in the last N days for dead-stock review.",
     schema: deadStockArgsSchema,
+  },
+  {
+    name: "get_reorder_suggestions",
+    description: "Get low-stock active products with recent sales signals as reorder suggestions.",
+    schema: reorderSuggestionsArgsSchema,
   },
   {
     name: "get_customer_summary",
@@ -275,8 +290,10 @@ const toolSchemaMap: Record<OwnerCopilotToolName, z.ZodTypeAny> = {
   get_average_order_value: averageOrderValueArgsSchema,
   get_product_sales_summary: productSalesSummaryArgsSchema,
   get_inventory_summary: inventorySummaryArgsSchema,
+  get_inventory_value_summary: inventoryValueSummaryArgsSchema,
   get_stock_extremes: stockExtremesArgsSchema,
   get_dead_stock_items: deadStockArgsSchema,
+  get_reorder_suggestions: reorderSuggestionsArgsSchema,
   get_customer_summary: customerSummaryArgsSchema,
   get_top_due_customers: topDueCustomersArgsSchema,
   get_repeat_customers: repeatCustomersArgsSchema,
@@ -929,6 +946,61 @@ export async function runOwnerCopilotToolCall({
         },
       };
     }
+    case "get_inventory_value_summary": {
+      const [trackedCount, outOfStockCount, stockValueRows] = await Promise.all([
+        prisma.product.count({
+          where: {
+            shopId,
+            isActive: true,
+            trackStock: true,
+          },
+        }),
+        prisma.product.count({
+          where: {
+            shopId,
+            isActive: true,
+            trackStock: true,
+            stockQty: { lte: 0 },
+          },
+        }),
+        prisma.product.findMany({
+          where: {
+            shopId,
+            isActive: true,
+            trackStock: true,
+          },
+          select: {
+            stockQty: true,
+            sellPrice: true,
+            buyPrice: true,
+          },
+        }),
+      ]);
+
+      const totals = stockValueRows.reduce(
+        (sum, row) => {
+          const qty = Number(row.stockQty ?? 0);
+          const sellPrice = Number(row.sellPrice ?? 0);
+          const buyPrice = Number(row.buyPrice ?? 0);
+          if (!Number.isFinite(qty) || qty <= 0) return sum;
+          sum.retailValue += qty * sellPrice;
+          sum.costValue += qty * buyPrice;
+          return sum;
+        },
+        { retailValue: 0, costValue: 0 }
+      );
+
+      return {
+        tool: toolCall.tool,
+        data: {
+          trackedCount,
+          outOfStockCount,
+          retailValue: Number(totals.retailValue.toFixed(2)),
+          costValue: Number(totals.costValue.toFixed(2)),
+          estimatedGrossValue: Number((totals.retailValue - totals.costValue).toFixed(2)),
+        },
+      };
+    }
     case "get_stock_extremes": {
       const direction =
         toolCall.args.direction === "highest" ? "highest" : "lowest";
@@ -1029,6 +1101,85 @@ export async function runOwnerCopilotToolCall({
             stockQty: Number(item.stockQty ?? 0),
             sellPrice: Number(item.sellPrice ?? 0),
           })),
+        },
+      };
+    }
+    case "get_reorder_suggestions": {
+      const limit = Number(toolCall.args.limit ?? 5);
+      const days = Number(toolCall.args.days ?? 30);
+      const { start, end } = getRangeForLastDays(days);
+      const lowStockProducts = await prisma.product.findMany({
+        where: {
+          shopId,
+          isActive: true,
+          trackStock: true,
+          stockQty: { lte: 10 },
+        },
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          stockQty: true,
+          baseUnit: true,
+          sellPrice: true,
+          buyPrice: true,
+        },
+        orderBy: [{ stockQty: "asc" }, { updatedAt: "asc" }],
+        take: Math.max(limit * 3, 10),
+      });
+
+      const salesRows = lowStockProducts.length
+        ? await prisma.saleItem.groupBy({
+            by: ["productId"],
+            where: {
+              productId: { in: lowStockProducts.map((item) => item.id) },
+              sale: {
+                shopId,
+                status: { not: "VOIDED" },
+                businessDate: { gte: start, lte: end },
+              },
+            },
+            _sum: { quantity: true, lineTotal: true },
+          })
+        : [];
+      const salesMap = new Map(
+        salesRows.map((row) => [
+          row.productId,
+          {
+            soldQty: Number(row._sum.quantity ?? 0),
+            soldRevenue: Number(row._sum.lineTotal ?? 0),
+          },
+        ])
+      );
+
+      const items = lowStockProducts
+        .map((product) => {
+          const sales = salesMap.get(product.id) ?? { soldQty: 0, soldRevenue: 0 };
+          return {
+            id: product.id,
+            name: product.name,
+            category: product.category,
+            stockQty: Number(product.stockQty ?? 0),
+            baseUnit: product.baseUnit,
+            sellPrice: Number(product.sellPrice ?? 0),
+            buyPrice: Number(product.buyPrice ?? 0),
+            soldQtyLastDays: sales.soldQty,
+            soldRevenueLastDays: sales.soldRevenue,
+          };
+        })
+        .sort(
+          (a, b) =>
+            b.soldQtyLastDays - a.soldQtyLastDays ||
+            a.stockQty - b.stockQty ||
+            b.soldRevenueLastDays - a.soldRevenueLastDays
+        )
+        .slice(0, limit);
+
+      return {
+        tool: toolCall.tool,
+        data: {
+          days,
+          items,
         },
       };
     }
