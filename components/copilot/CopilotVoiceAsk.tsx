@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  COPILOT_GROUPED_QUESTION_SUGGESTIONS,
   COPILOT_QUESTION_SUGGESTIONS,
 } from "@/lib/copilot-ask";
 import {
@@ -332,10 +333,22 @@ export default function CopilotVoiceAsk({
   const [showChoiceCompareModal, setShowChoiceCompareModal] = useState(false);
   const [lastAnswer, setLastAnswer] = useState("");
   const [suggestions, setSuggestions] = useState<readonly string[]>(COPILOT_QUESTION_SUGGESTIONS);
+  const [openSuggestionGroup, setOpenSuggestionGroup] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const voiceSessionRef = useRef<VoiceSession | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const starterSuggestions = suggestions.slice(0, 6);
+
+  const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const node = chatScrollRef.current;
+    if (!node) return;
+    node.scrollTo({
+      top: node.scrollHeight,
+      behavior,
+    });
+  }, []);
 
   useEffect(() => {
     const SpeechRecognitionImpl = getSpeechRecognitionCtor();
@@ -380,6 +393,14 @@ export default function CopilotVoiceAsk({
     if (typeof window === "undefined") return;
     window.localStorage.setItem(RESPONSE_MODE_STORAGE_KEY, responseMode);
   }, [responseMode]);
+
+  useEffect(() => {
+    if (messages.length === 0 && !pendingAction && !loading) return;
+    const timeoutId = window.setTimeout(() => {
+      scrollChatToBottom(messages.length > 0 ? "smooth" : "auto");
+    }, 40);
+    return () => window.clearTimeout(timeoutId);
+  }, [loading, messages, pendingAction, scrollChatToBottom]);
 
   useEffect(() => {
     if (!streamingMessageId) return;
@@ -667,6 +688,7 @@ export default function CopilotVoiceAsk({
                 setVoiceDraft("");
                 setVoiceAttemptLabel(null);
                 setShowChoiceCompareModal(false);
+                setOpenSuggestionGroup(null);
                 setError(null);
               }}
               className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-[11px] font-semibold text-foreground transition hover:border-primary/30 hover:text-primary sm:h-9 sm:gap-2 sm:px-3 sm:text-xs"
@@ -698,7 +720,10 @@ export default function CopilotVoiceAsk({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
+      <div
+        ref={chatScrollRef}
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-5 sm:py-4"
+      >
         {error ? (
           <div className="mb-4 rounded-2xl border border-danger/30 bg-danger-soft/50 px-3 py-2 text-sm text-danger">
             {error}
@@ -729,6 +754,58 @@ export default function CopilotVoiceAsk({
                   <span className="block max-w-full truncate sm:whitespace-normal">{suggestion}</span>
                 </button>
               ))}
+            </div>
+            <div className="mt-5 w-full max-w-3xl rounded-[22px] border border-border/70 bg-card/70 p-3 text-left shadow-sm">
+              <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                আরও প্রশ্নের ধরন
+              </div>
+              <div className="space-y-2">
+                {COPILOT_GROUPED_QUESTION_SUGGESTIONS.map((group) => {
+                  const isOpen = openSuggestionGroup === group.label;
+                  return (
+                    <div key={group.label} className="rounded-2xl border border-border/70 bg-background/80">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenSuggestionGroup((current) =>
+                            current === group.label ? null : group.label
+                          )
+                        }
+                        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
+                      >
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">{group.label}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {group.questions.length}টি example question
+                          </div>
+                        </div>
+                        <ChevronRight
+                          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                            isOpen ? "rotate-90" : ""
+                          }`}
+                        />
+                      </button>
+                      {isOpen ? (
+                        <div className="flex flex-wrap gap-2 border-t border-border/60 px-3 py-3">
+                          {group.questions.map((suggestion) => (
+                            <button
+                              key={suggestion}
+                              type="button"
+                              onClick={() => {
+                                setQuestion(suggestion);
+                                void askCopilot(suggestion);
+                              }}
+                              className="max-w-full rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+                            >
+                              <span className="block max-w-full truncate sm:whitespace-normal">{suggestion}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         ) : (
@@ -1057,8 +1134,18 @@ export default function CopilotVoiceAsk({
           <div className="rounded-[26px] border border-border/80 bg-card shadow-sm">
             <div className="flex items-end gap-2 px-2 py-2 sm:px-3 sm:py-3">
               <textarea
+                ref={textareaRef}
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
+                onFocus={() => {
+                  window.setTimeout(() => {
+                    scrollChatToBottom("smooth");
+                    textareaRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "nearest",
+                    });
+                  }, 140);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
