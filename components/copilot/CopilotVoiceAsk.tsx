@@ -2,14 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CheckCircle2,
   Bot,
   ChevronRight,
   Loader2,
   MessageSquarePlus,
   Mic,
   SendHorizonal,
-  ShieldCheck,
   Sparkles,
   Volume2,
   VolumeX,
@@ -17,7 +15,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  COPILOT_GROUPED_QUESTION_SUGGESTIONS,
   COPILOT_QUESTION_SUGGESTIONS,
 } from "@/lib/copilot-ask";
 import {
@@ -334,14 +331,11 @@ export default function CopilotVoiceAsk({
   const [loadingStageIndex, setLoadingStageIndex] = useState(0);
   const [showChoiceCompareModal, setShowChoiceCompareModal] = useState(false);
   const [lastAnswer, setLastAnswer] = useState("");
-  const [showMoreSuggestions, setShowMoreSuggestions] = useState(false);
-  const [openSuggestionGroup, setOpenSuggestionGroup] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<readonly string[]>(COPILOT_QUESTION_SUGGESTIONS);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const voiceSessionRef = useRef<VoiceSession | null>(null);
 
-  const primarySuggestions = suggestions.slice(0, 4);
-  const extraSuggestions = suggestions.slice(4);
+  const starterSuggestions = suggestions.slice(0, 6);
 
   useEffect(() => {
     const SpeechRecognitionImpl = getSpeechRecognitionCtor();
@@ -374,8 +368,6 @@ export default function CopilotVoiceAsk({
     setAnswer(null);
     setLastAnswer("");
     setSuggestions(COPILOT_QUESTION_SUGGESTIONS);
-    setShowMoreSuggestions(false);
-    setOpenSuggestionGroup(null);
     setPendingAction(null);
     setStreamingMessageId(null);
     setStreamingLength(0);
@@ -506,8 +498,6 @@ export default function CopilotVoiceAsk({
         );
         setPendingAction(payload.requiresConfirmation ? payload.actionDraft ?? null : null);
         setQuestion(nextQuestion);
-        setShowMoreSuggestions(false);
-        setOpenSuggestionGroup(null);
 
         if (options?.speak && payload.answer) {
           window.setTimeout(() => speakAnswer(payload.answer), 120);
@@ -630,102 +620,18 @@ export default function CopilotVoiceAsk({
   }, [pendingAction, responseMode]);
 
   return (
-    <section className="overflow-hidden rounded-[28px] border border-border/70 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.96))] p-4 shadow-[0_18px_45px_rgba(15,23,42,0.07)] backdrop-blur">
-      <div className="mb-4 grid gap-2 rounded-[22px] border border-primary/10 bg-card/70 p-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Trust
-          </div>
-          <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <ShieldCheck className="h-4 w-4 text-primary" />
-            Shop-scoped safe assistant
-          </div>
-        </div>
-        <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Voice
-          </div>
-          <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Waves className={`h-4 w-4 ${voiceReady ? "text-primary" : "text-muted-foreground"}`} />
-            {voiceReady ? "Noise-aware dual-language input" : "Text-only on this device"}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Mode
-          </div>
-          <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <CheckCircle2 className="h-4 w-4 text-primary" />
-            {RESPONSE_MODE_OPTIONS.find((option) => option.value === responseMode)?.label}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
+    <section className="flex h-[min(78vh,760px)] min-h-[620px] flex-col overflow-hidden rounded-[28px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.96))] shadow-[0_18px_45px_rgba(15,23,42,0.07)] backdrop-blur">
+      <div className="flex items-start justify-between gap-3 border-b border-border/70 px-4 py-4 sm:px-5">
+        <div className="min-w-0 space-y-1">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Copilot
           </div>
-          <h3 className="text-base font-bold text-foreground">
+          <h3 className="truncate text-base font-bold text-foreground">
             {shopName ? `${shopName}-কে জিজ্ঞেস করুন` : "দোকানকে জিজ্ঞেস করুন"}
           </h3>
           <p className="text-sm text-muted-foreground">{helperText}</p>
         </div>
-        {speechReady && lastAnswer ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setConversationId(null);
-                setMessages([]);
-                setAnswer(null);
-                setLastAnswer("");
-                setQuestion("");
-                setSuggestions(COPILOT_QUESTION_SUGGESTIONS);
-                setShowMoreSuggestions(false);
-                setOpenSuggestionGroup(null);
-                setPendingAction(null);
-                setStreamingMessageId(null);
-                setStreamingLength(0);
-                setVoiceDraft("");
-                setVoiceAttemptLabel(null);
-                setShowChoiceCompareModal(false);
-              }}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
-            >
-              <MessageSquarePlus className="h-4 w-4" />
-              নতুন চ্যাট
-            </button>
-            <button
-              type="button"
-              onClick={() => speakAnswer()}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
-            >
-              <Volume2 className="h-4 w-4" />
-              শোনান
-            </button>
-            <button
-              type="button"
-              onClick={() => stopSpeaking()}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
-            >
-              <VolumeX className="h-4 w-4" />
-              থামান
-            </button>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-4 space-y-2">
-        <div className="flex items-center gap-2">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            উত্তরের ধরন
-          </div>
-          <span className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-            Auto recommended
-          </span>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {RESPONSE_MODE_OPTIONS.map((option) => {
             const active = responseMode === option.value;
             return (
@@ -733,476 +639,81 @@ export default function CopilotVoiceAsk({
                 key={option.value}
                 type="button"
                 onClick={() => setResponseMode(option.value)}
-                className={`rounded-2xl border px-3 py-3 text-left transition ${
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                   active
-                    ? "border-primary/30 bg-primary-soft/30 text-foreground"
-                    : "border-border/70 bg-card text-foreground hover:border-primary/20"
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-border/70 bg-card text-muted-foreground hover:border-primary/20 hover:text-foreground"
                 }`}
               >
-                <div className="text-sm font-semibold">{option.label}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{option.description}</div>
+                {option.label}
               </button>
             );
           })}
-        </div>
-      </div>
-
-      <div className="mt-4 flex gap-2">
-        <div className="relative flex-1">
-          <input
-            type="text"
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void askCopilot();
-              }
-            }}
-            placeholder="যেমন: আজ দোকান কেমন চলছে? / কোন product-এর stock কত?"
-            className="h-12 w-full rounded-2xl border border-border bg-card/95 px-4 pr-12 text-sm text-foreground shadow-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
-          />
+          {speechReady && lastAnswer ? (
+            <button
+              type="button"
+              onClick={() => speakAnswer()}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+              aria-label="উত্তর শোনান"
+            >
+              <Volume2 className="h-4 w-4" />
+            </button>
+          ) : null}
+          {speechReady && lastAnswer ? (
+            <button
+              type="button"
+              onClick={() => stopSpeaking()}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+              aria-label="শোনা থামান"
+            >
+              <VolumeX className="h-4 w-4" />
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={startListening}
-            disabled={!online}
-            aria-label={listening ? "শোনা বন্ধ করুন" : "মাইক্রোফোনে প্রশ্ন করুন"}
-            className={`absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border text-sm transition ${
-              listening
-                ? "border-primary/40 bg-primary-soft text-primary animate-pulse"
-                : "border-border bg-background text-muted-foreground hover:text-primary"
-            } ${!online ? "cursor-not-allowed opacity-50" : ""}`}
+            onClick={() => {
+              setConversationId(null);
+              setMessages([]);
+              setAnswer(null);
+              setLastAnswer("");
+              setQuestion("");
+              setSuggestions(COPILOT_QUESTION_SUGGESTIONS);
+              setPendingAction(null);
+              setStreamingMessageId(null);
+              setStreamingLength(0);
+              setVoiceDraft("");
+              setVoiceAttemptLabel(null);
+              setShowChoiceCompareModal(false);
+              setError(null);
+            }}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
           >
-            <Mic className="h-4 w-4" />
+            <MessageSquarePlus className="h-4 w-4" />
+            নতুন চ্যাট
           </button>
         </div>
-        <button
-          type="button"
-          onClick={() => void askCopilot()}
-          disabled={loading || !online}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />}
-          জিজ্ঞেস
-        </button>
       </div>
 
-      {(listening || voiceDraft) && online ? (
-        <div className="mt-3 rounded-[22px] border border-primary/20 bg-primary-soft/20 p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/20 bg-card text-primary">
-                <Waves className={`h-5 w-5 ${listening ? "animate-pulse" : ""}`} />
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-foreground">
-                  {listening ? "Voice capture চলছে" : "শেষ transcript ধরা হয়েছে"}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {voiceAttemptLabel || "Bangla first, English fallback"}
-                </div>
-              </div>
-            </div>
-            {listening ? (
-              <button
-                type="button"
-                onClick={stopListening}
-                className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
-              >
-                Stop listening
-              </button>
-            ) : null}
-          </div>
-          <div className="mt-3 rounded-2xl border border-border/60 bg-card px-4 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Live transcript
-            </div>
-            <div className="mt-2 text-sm leading-7 text-foreground">
-              {voiceDraft || "শুনছি..."}
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {["মাইক্রোফোনের কাছে থাকুন", "একবারে ছোট প্রশ্ন বলুন", "background noise কমান"].map((tip) => (
-              <span
-                key={tip}
-                className="inline-flex rounded-full border border-border/60 bg-card px-3 py-1 text-[11px] font-semibold text-muted-foreground"
-              >
-                {tip}
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="mt-3 space-y-2">
-        <div className="flex flex-wrap gap-2">
-          {primarySuggestions.map((suggestion) => (
-            <button
-              key={suggestion}
-              type="button"
-              onClick={() => {
-                setQuestion(suggestion);
-                void askCopilot(suggestion);
-              }}
-              className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
-            >
-              {suggestion}
-            </button>
-          ))}
-          {extraSuggestions.length > 0 ? (
-            <button
-              type="button"
-              onClick={() =>
-                setShowMoreSuggestions((current) => {
-                  const next = !current;
-                  if (!next) {
-                    setOpenSuggestionGroup(null);
-                  }
-                  return next;
-                })
-              }
-              className="rounded-full border border-primary/15 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary transition hover:border-primary/30 hover:bg-primary/10"
-            >
-              {showMoreSuggestions ? "কম দেখান" : `আরও ${extraSuggestions.length}টি প্রশ্ন`}
-            </button>
-          ) : null}
-        </div>
-
-        {showMoreSuggestions ? (
-          <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/20 p-3">
-            {COPILOT_GROUPED_QUESTION_SUGGESTIONS.map((group) => (
-              <div key={group.label} className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setOpenSuggestionGroup((current) =>
-                      current === group.label ? null : group.label
-                    )
-                  }
-                  className={`flex w-full items-center justify-between rounded-2xl border px-3 py-2 text-left transition ${
-                    openSuggestionGroup === group.label
-                      ? "border-primary/25 bg-background text-foreground"
-                      : "border-border/70 bg-card/80 text-foreground"
-                  }`}
-                >
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    {group.label}
-                  </span>
-                  <span className="text-xs font-semibold text-primary">
-                    {openSuggestionGroup === group.label ? "লুকান" : `${group.questions.length}টি`}
-                  </span>
-                </button>
-                {openSuggestionGroup === group.label ? (
-                  <div className="flex flex-wrap gap-2 px-1">
-                    {group.questions.map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        onClick={() => {
-                          setQuestion(suggestion);
-                          void askCopilot(suggestion);
-                        }}
-                        className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-            {extraSuggestions.length > 0 ? (
-              <div className="text-xs text-muted-foreground">
-                আরও natural phrasing-এও জিজ্ঞেস করতে পারবেন, যদি supported domain-এর মধ্যে থাকে।
-              </div>
-            ) : null}
+      <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+        {error ? (
+          <div className="mb-4 rounded-2xl border border-danger/30 bg-danger-soft/50 px-3 py-2 text-sm text-danger">
+            {error}
           </div>
         ) : null}
-      </div>
 
-      {error ? (
-        <div className="mt-3 rounded-2xl border border-danger/30 bg-danger-soft/50 px-3 py-2 text-sm text-danger">
-          {error}
-        </div>
-      ) : null}
-
-      {messages.length > 0 ? (
-        <div className="mt-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Conversation
+        {messages.length === 0 && !loading ? (
+          <div className="flex min-h-full flex-col items-center justify-center py-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full border border-primary/15 bg-primary-soft/30 text-primary">
+              <Bot className="h-6 w-6" />
             </div>
-            {latestAssistantMessage?.trace?.engine ? (
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1 text-[11px] font-semibold text-muted-foreground">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                {getTraceStatusLabel(latestAssistantMessage.trace.engine)}
-              </div>
-            ) : null}
-          </div>
-          {messages.map((message, index) => (
-            <div
-              key={message.id}
-              className={`rounded-[22px] border p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)] ${
-                message.role === "assistant"
-                  ? "border-primary/15 bg-gradient-to-br from-primary-soft/40 via-card to-card"
-                  : "border-border/70 bg-card"
-              }`}
-            >
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {message.role === "assistant" ? "Copilot" : "You"}
-              </div>
-              <p className="text-sm leading-7 text-foreground">
-                {message.role === "assistant" && message.id === streamingMessageId
-                  ? message.content.slice(0, streamingLength || 1)
-                  : message.content}
-              </p>
-              {message.role === "assistant" && message.trace ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {message.trace.engine ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
-                      <Bot className="h-3 w-3" />
-                      {getTraceStatusLabel(message.trace.engine)}
-                    </span>
-                  ) : null}
-                  {message.trace.responseMode ? (
-                    <span className="inline-flex rounded-full border border-border/70 bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-                      {RESPONSE_MODE_OPTIONS.find(
-                        (option) => option.value === message.trace?.responseMode
-                      )?.label || "Auto"}
-                    </span>
-                  ) : null}
-                  {message.trace.fallbackUsed ? (
-                    <span className="inline-flex rounded-full border border-warning/20 bg-warning-soft/50 px-2.5 py-1 text-[11px] font-semibold text-foreground">
-                      বিকল্প পথে উত্তর
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ))}
-          {loading ? (
-            <div className="rounded-[22px] border border-primary/15 bg-gradient-to-br from-primary-soft/30 via-card to-card p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Copilot
-              </div>
-              <div className="flex items-center gap-3 text-sm text-foreground">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <div className="space-y-1">
-                  <div>{getThinkingLabel(pendingAction, responseMode)}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {loadingStages[Math.min(loadingStageIndex, loadingStages.length - 1)]}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : answer ? (
-        <div className="mt-4 rounded-[22px] border border-primary/15 bg-gradient-to-br from-primary-soft/40 via-card to-card p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Copilot Answer
-          </div>
-          <p className="text-sm leading-7 text-foreground">{answer}</p>
-        </div>
-      ) : null}
-
-      {pendingAction ? (
-        <div className="mt-4 rounded-[22px] border border-primary/20 bg-primary-soft/25 p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Confirmation Needed
-            </div>
-            <span className="inline-flex rounded-full border border-primary/20 bg-card px-2.5 py-1 text-[11px] font-semibold text-primary">
-              Confirm না করা পর্যন্ত কিছু save হবে না
-            </span>
-          </div>
-          <p className="text-sm leading-7 text-foreground">{pendingAction.confirmationText}</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {renderActionDetails(pendingAction).map((item) => (
-              <div
-                key={item.label}
-                className="rounded-2xl border border-border/60 bg-card px-3 py-3 text-sm text-foreground"
-              >
-                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  {item.label}
-                </div>
-                <div className="mt-1 font-semibold text-foreground">{item.value}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 rounded-2xl border border-border/60 bg-card px-3 py-3 text-sm text-foreground">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Summary
-            </div>
-            <div className="mt-1">{pendingAction.summary}</div>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={async () => {
-                if (!conversationId || confirmingAction) return;
-                setConfirmingAction(true);
-                setError(null);
-                try {
-                  const response = await fetch("/api/owner/copilot/confirm", {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                      shopId,
-                      conversationId,
-                      actionDraft: pendingAction,
-                    }),
-                  });
-
-                  const payload = (await response.json()) as {
-                    success?: boolean;
-                    answer?: string;
-                    error?: string;
-                    conversationId?: string;
-                    engine?: string;
-                    actionKind?: string;
-                    suggestions?: readonly string[];
-                  };
-
-                  if (!response.ok || !payload.success || !payload.answer) {
-                    throw new Error(payload.error || "Action confirm করা যায়নি");
-                  }
-
-                  const confirmedAnswer = payload.answer;
-                  const confirmedAssistantMessage: ChatMessage = {
-                    id: buildMessageId(),
-                    role: "assistant",
-                    content: confirmedAnswer,
-                    trace: {
-                      engine: payload.engine,
-                      actionKind: payload.actionKind,
-                    },
-                  };
-
-                  setConversationId(payload.conversationId ?? conversationId);
-                  setMessages((current) => [
-                    ...current,
-                    {
-                      id: buildMessageId(),
-                      role: "user",
-                      content: `Confirm: ${pendingAction.summary}`,
-                    },
-                    confirmedAssistantMessage,
-                  ]);
-                  setStreamingMessageId(confirmedAssistantMessage.id);
-                  setStreamingLength(0);
-                  setAnswer(confirmedAnswer);
-                  setLastAnswer(confirmedAnswer);
-                  setSuggestions(
-                    payload.suggestions && payload.suggestions.length > 0
-                      ? payload.suggestions
-                      : COPILOT_QUESTION_SUGGESTIONS
-                  );
-                  setPendingAction(null);
-                } catch (actionError) {
-                  setError(
-                    actionError instanceof Error
-                      ? actionError.message
-                      : "Action confirm করা যায়নি।"
-                  );
-                } finally {
-                  setConfirmingAction(false);
-                }
-              }}
-              disabled={confirmingAction}
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-primary/20 bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {getConfirmButtonLabel(pendingAction, confirmingAction)}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPendingAction(null)}
-              disabled={confirmingAction}
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {messages.length > 0 &&
-      latestAssistantMessage?.trace?.engine === "action-clarification" &&
-      (currentClarificationChoices.length > 0 || suggestions.length > 0) &&
-      !pendingAction ? (
-        <div className="mt-4 rounded-[22px] border border-primary/15 bg-primary-soft/20 p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Exact option বেছে নিন
-              </div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                ambiguous match হলে compare করে exact option select করুন।
-              </div>
-            </div>
-            {currentClarificationChoices.length > 1 ? (
-              <button
-                type="button"
-                onClick={() => setShowChoiceCompareModal(true)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
-              >
-                Compare all
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-          {currentClarificationChoices.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {currentClarificationChoices.slice(0, 4).map((choice) => (
-                <div
-                  key={choice.prompt}
-                  className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-foreground">{choice.title}</div>
-                      {choice.subtitle ? (
-                        <div className="mt-1 text-xs text-muted-foreground">{choice.subtitle}</div>
-                      ) : null}
-                    </div>
-                    {choice.badge ? (
-                      <span className="inline-flex rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
-                        {choice.badge}
-                      </span>
-                    ) : null}
-                  </div>
-                  {choice.details && choice.details.length > 0 ? (
-                    <div className="mt-3 grid gap-2">
-                      {choice.details.slice(0, 3).map((detail) => (
-                        <div
-                          key={`${choice.prompt}-${detail.label}`}
-                          className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/70 px-3 py-2 text-xs"
-                        >
-                          <span className="font-semibold text-muted-foreground">{detail.label}</span>
-                          <span className="text-right font-medium text-foreground">{detail.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuestion(choice.prompt);
-                      setShowChoiceCompareModal(false);
-                      void askCopilot(choice.prompt);
-                    }}
-                    className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-2xl border border-primary/20 bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95"
-                  >
-                    এই option নিন
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {suggestions.slice(0, 4).map((suggestion) => (
+            <h4 className="mt-4 text-xl font-semibold text-foreground">
+              দোকানের যেকোনো গুরুত্বপূর্ণ প্রশ্ন করুন
+            </h4>
+            <p className="mt-2 max-w-xl text-sm leading-7 text-muted-foreground">
+              sales, profit, due, stock, payable, customer, supplier বা quick action draft নিয়ে natural ভাষায় লিখুন।
+            </p>
+            <div className="mt-6 flex max-w-3xl flex-wrap justify-center gap-2">
+              {starterSuggestions.map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
@@ -1210,38 +721,401 @@ export default function CopilotVoiceAsk({
                     setQuestion(suggestion);
                     void askCopilot(suggestion);
                   }}
-                  className="rounded-2xl border border-border/70 bg-card px-4 py-3 text-left text-sm font-medium text-foreground transition hover:border-primary/30 hover:text-primary"
+                  className="rounded-full border border-border/70 bg-card px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/30 hover:text-primary"
                 >
                   {suggestion}
                 </button>
               ))}
             </div>
-          )}
-        </div>
-      ) : null}
+          </div>
+        ) : (
+          <div className="mx-auto flex max-w-4xl flex-col gap-4">
+            {messages.map((message) => {
+              const isAssistant = message.role === "assistant";
+              const content =
+                isAssistant && message.id === streamingMessageId
+                  ? message.content.slice(0, streamingLength || 1)
+                  : message.content;
 
-      {messages.length > 0 && followUpSuggestions.length > 0 && !pendingAction ? (
-        <div className="mt-4 rounded-[22px] border border-border/70 bg-muted/20 p-4 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
-          <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Suggested Follow-ups
+              return (
+                <div
+                  key={message.id}
+                  className={`flex ${isAssistant ? "justify-start" : "justify-end"}`}
+                >
+                  <div
+                    className={`max-w-[88%] rounded-[24px] px-4 py-3 sm:max-w-[78%] ${
+                      isAssistant
+                        ? "border border-border/70 bg-card text-foreground shadow-sm"
+                        : "bg-primary text-primary-foreground shadow-sm"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap text-sm leading-7">{content}</p>
+                    {isAssistant && message.trace ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {message.trace.engine ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+                            <Sparkles className="h-3 w-3 text-primary" />
+                            {getTraceStatusLabel(message.trace.engine)}
+                          </span>
+                        ) : null}
+                        {message.trace.fallbackUsed ? (
+                          <span className="inline-flex rounded-full border border-warning/20 bg-warning-soft/50 px-2.5 py-1 text-[11px] font-semibold text-foreground">
+                            বিকল্প পথে উত্তর
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+
+            {loading ? (
+              <div className="flex justify-start">
+                <div className="max-w-[88%] rounded-[24px] border border-border/70 bg-card px-4 py-3 text-foreground shadow-sm sm:max-w-[78%]">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <div className="space-y-1">
+                      <div className="text-sm">{getThinkingLabel(pendingAction, responseMode)}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {loadingStages[Math.min(loadingStageIndex, loadingStages.length - 1)]}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {pendingAction ? (
+              <div className="rounded-[24px] border border-primary/20 bg-primary-soft/20 p-4 shadow-sm">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-foreground">Confirm করার আগে review করুন</div>
+                  <span className="inline-flex rounded-full border border-primary/20 bg-card px-2.5 py-1 text-[11px] font-semibold text-primary">
+                    Confirm না করা পর্যন্ত কিছু save হবে না
+                  </span>
+                </div>
+                <p className="text-sm leading-7 text-foreground">{pendingAction.confirmationText}</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {renderActionDetails(pendingAction).map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-2xl border border-border/60 bg-card px-3 py-3 text-sm text-foreground"
+                    >
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        {item.label}
+                      </div>
+                      <div className="mt-1 font-semibold">{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 rounded-2xl border border-border/60 bg-card px-3 py-3 text-sm text-foreground">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Summary
+                  </div>
+                  <div className="mt-1">{pendingAction.summary}</div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!conversationId || confirmingAction) return;
+                      setConfirmingAction(true);
+                      setError(null);
+                      try {
+                        const response = await fetch("/api/owner/copilot/confirm", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            shopId,
+                            conversationId,
+                            actionDraft: pendingAction,
+                          }),
+                        });
+
+                        const payload = (await response.json()) as {
+                          success?: boolean;
+                          answer?: string;
+                          error?: string;
+                          conversationId?: string;
+                          engine?: string;
+                          actionKind?: string;
+                          suggestions?: readonly string[];
+                        };
+
+                        if (!response.ok || !payload.success || !payload.answer) {
+                          throw new Error(payload.error || "Action confirm করা যায়নি");
+                        }
+
+                        const confirmedAnswer = payload.answer;
+                        const confirmedAssistantMessage: ChatMessage = {
+                          id: buildMessageId(),
+                          role: "assistant",
+                          content: confirmedAnswer,
+                          trace: {
+                            engine: payload.engine,
+                            actionKind: payload.actionKind,
+                          },
+                        };
+
+                        setConversationId(payload.conversationId ?? conversationId);
+                        setMessages((current) => [
+                          ...current,
+                          {
+                            id: buildMessageId(),
+                            role: "user",
+                            content: `Confirm: ${pendingAction.summary}`,
+                          },
+                          confirmedAssistantMessage,
+                        ]);
+                        setStreamingMessageId(confirmedAssistantMessage.id);
+                        setStreamingLength(0);
+                        setAnswer(confirmedAnswer);
+                        setLastAnswer(confirmedAnswer);
+                        setSuggestions(
+                          payload.suggestions && payload.suggestions.length > 0
+                            ? payload.suggestions
+                            : COPILOT_QUESTION_SUGGESTIONS
+                        );
+                        setPendingAction(null);
+                      } catch (actionError) {
+                        setError(
+                          actionError instanceof Error
+                            ? actionError.message
+                            : "Action confirm করা যায়নি।"
+                        );
+                      } finally {
+                        setConfirmingAction(false);
+                      }
+                    }}
+                    disabled={confirmingAction}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-primary/20 bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {getConfirmButtonLabel(pendingAction, confirmingAction)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingAction(null)}
+                    disabled={confirmingAction}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {messages.length > 0 &&
+            latestAssistantMessage?.trace?.engine === "action-clarification" &&
+            (currentClarificationChoices.length > 0 || suggestions.length > 0) &&
+            !pendingAction ? (
+              <div className="rounded-[24px] border border-border/70 bg-card p-4 shadow-sm">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">Exact option বেছে নিন</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      একাধিক match থাকলে নিচের card থেকে exact item select করুন।
+                    </div>
+                  </div>
+                  {currentClarificationChoices.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowChoiceCompareModal(true)}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+                    >
+                      Compare all
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+                {currentClarificationChoices.length > 0 ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {currentClarificationChoices.slice(0, 4).map((choice) => (
+                      <div
+                        key={choice.prompt}
+                        className="rounded-2xl border border-border/70 bg-background p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-foreground">{choice.title}</div>
+                            {choice.subtitle ? (
+                              <div className="mt-1 text-xs text-muted-foreground">{choice.subtitle}</div>
+                            ) : null}
+                          </div>
+                          {choice.badge ? (
+                            <span className="inline-flex rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                              {choice.badge}
+                            </span>
+                          ) : null}
+                        </div>
+                        {choice.details && choice.details.length > 0 ? (
+                          <div className="mt-3 grid gap-2">
+                            {choice.details.slice(0, 3).map((detail) => (
+                              <div
+                                key={`${choice.prompt}-${detail.label}`}
+                                className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-3 py-2 text-xs"
+                              >
+                                <span className="font-semibold text-muted-foreground">{detail.label}</span>
+                                <span className="text-right font-medium text-foreground">{detail.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuestion(choice.prompt);
+                            setShowChoiceCompareModal(false);
+                            void askCopilot(choice.prompt);
+                          }}
+                          className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-2xl border border-primary/20 bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95"
+                        >
+                          এই option নিন
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {suggestions.slice(0, 4).map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => {
+                          setQuestion(suggestion);
+                          void askCopilot(suggestion);
+                        }}
+                        className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-left text-sm font-medium text-foreground transition hover:border-primary/30 hover:text-primary"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {messages.length > 0 && followUpSuggestions.length > 0 && !pendingAction ? (
+              <div className="flex flex-wrap gap-2">
+                {followUpSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => {
+                      setQuestion(suggestion);
+                      void askCopilot(suggestion);
+                    }}
+                    className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {followUpSuggestions.map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                onClick={() => {
-                  setQuestion(suggestion);
-                  void askCopilot(suggestion);
+        )}
+      </div>
+
+      <div className="border-t border-border/70 bg-background/95 px-4 py-4 backdrop-blur sm:px-5">
+        <div className="mx-auto max-w-4xl space-y-3">
+          {(listening || voiceDraft) && online ? (
+            <div className="rounded-2xl border border-primary/20 bg-primary-soft/20 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/20 bg-card text-primary">
+                    <Waves className={`h-4 w-4 ${listening ? "animate-pulse" : ""}`} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">
+                      {listening ? "Voice capture চলছে" : "শেষ transcript ধরা হয়েছে"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {voiceAttemptLabel || "Bangla first, English fallback"}
+                    </div>
+                  </div>
+                </div>
+                {listening ? (
+                  <button
+                    type="button"
+                    onClick={stopListening}
+                    className="inline-flex h-9 items-center justify-center rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
+                  >
+                    Stop
+                  </button>
+                ) : null}
+              </div>
+              <div className="mt-3 rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm leading-7 text-foreground">
+                {voiceDraft || "শুনছি..."}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="rounded-[26px] border border-border/80 bg-card shadow-sm">
+            <div className="flex items-end gap-2 px-3 py-3">
+              <textarea
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void askCopilot();
+                  }
                 }}
-                className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:text-primary"
-              >
-                {suggestion}
-              </button>
-            ))}
+                placeholder="আজ দোকান কেমন চলছে? / কোন product-এর stock কত?"
+                rows={1}
+                className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              />
+              <div className="flex items-center gap-2 pb-1">
+                <button
+                  type="button"
+                  onClick={listening ? stopListening : startListening}
+                  disabled={!online}
+                  aria-label={listening ? "শোনা বন্ধ করুন" : "মাইক্রোফোনে প্রশ্ন করুন"}
+                  className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
+                    listening
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-primary"
+                  } ${!online ? "cursor-not-allowed opacity-50" : ""}`}
+                >
+                  <Mic className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void askCopilot()}
+                  disabled={loading || !online || !question.trim()}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-primary/20 bg-primary text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-label="জিজ্ঞেস করুন"
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <SendHorizonal className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
+
+          {messages.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {starterSuggestions.slice(0, 3).map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => {
+                    setQuestion(suggestion);
+                    void askCopilot(suggestion);
+                  }}
+                  className="rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
 
       {showChoiceCompareModal && currentClarificationChoices.length > 0 ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
