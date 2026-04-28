@@ -25,8 +25,14 @@ const expenseCategoryKeywords = [
   "স্টেশনারি",
 ] as const;
 
+function normalizeDigits(value: string) {
+  return value.replace(/[০-৯]/g, (digit) =>
+    String("০১২৩৪৫৬৭৮৯".indexOf(digit))
+  );
+}
+
 function extractAmount(question: string) {
-  const match = question.match(amountPattern);
+  const match = normalizeDigits(question).match(amountPattern);
   return match ? match[1].replace(",", "") : null;
 }
 
@@ -494,9 +500,13 @@ export function parseOwnerCopilotActionDraft(
 
   const cashInIntent =
     (normalized.includes("ক্যাশ ইন") ||
+      normalized.includes("ক্যাশ in") ||
       normalized.includes("cash in") ||
+      normalized.includes("cash ইন") ||
       normalized.includes("জমা") ||
-      normalized.includes("ঢুকাও")) &&
+      normalized.includes("ঢুকাও") ||
+      (normalized.includes("ক্যাশ") &&
+        includesAny(normalized, [" in ", " ইন ", "যুক্ত", "যোগ", "add"]))) &&
     Boolean(extractAmount(question));
 
   if (cashInIntent) {
@@ -505,9 +515,13 @@ export function parseOwnerCopilotActionDraft(
 
   const cashOutIntent =
     (normalized.includes("ক্যাশ আউট") ||
+      normalized.includes("ক্যাশ out") ||
       normalized.includes("cash out") ||
+      normalized.includes("cash আউট") ||
       normalized.includes("ক্যাশ থেকে বের") ||
-      normalized.includes("উঠাও")) &&
+      normalized.includes("উঠাও") ||
+      (normalized.includes("ক্যাশ") &&
+        includesAny(normalized, [" out ", " আউট ", "বের", "withdraw"]))) &&
     Boolean(extractAmount(question));
 
   if (cashOutIntent) {

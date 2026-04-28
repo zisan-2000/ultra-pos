@@ -46,6 +46,19 @@ export async function runOwnerCopilotActionTests() {
       },
     },
     {
+      name: "creates cash in draft from mixed Bangla-English prompt",
+      fn: () => {
+        const draft = parseOwnerCopilotActionDraft("১০০ টাকা ক্যাশ in যুক্ত করুন");
+
+        assert.ok(draft);
+        assert.equal(draft?.kind, "cash_entry");
+        if (draft?.kind === "cash_entry") {
+          assert.equal(draft.entryType, "IN");
+          assert.equal(draft.amount, "100");
+        }
+      },
+    },
+    {
       name: "does not create draft for read-only questions",
       fn: () => {
         const draft = parseOwnerCopilotActionDraft("আজ বিক্রি কত?");
