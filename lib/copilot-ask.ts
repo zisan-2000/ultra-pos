@@ -192,8 +192,10 @@ function extractCustomerDueName(question: string) {
     .trim();
 
   const patterns = [
-    /^(.+?)(?:এর|র|য়ের)?\s*কাছে\s*কত\s*বাকি$/i,
-    /^(.+?)(?:এর|র|য়ের)?\s*বাকি\s*কত$/i,
+    /^(.+?)(?:এর|র|য়ের)?\s*কাছে\s*কত\s*বাকি$/i,
+    /^(.+?)(?:এর|র|য়ের)?\s*বাকি\s*কত$/i,
+    /^(.+?)(?:er|r)?\s*kashe\s*koto\s*baki$/i,
+    /^(.+?)(?:er|r)?\s*baki\s*koto$/i,
   ];
 
   for (const pattern of patterns) {
@@ -222,19 +224,19 @@ function extractProductQuery(question: string):
     mode: "exists" | "stock" | "details";
   }> = [
     {
-      pattern: /^(.+?)(?:এর|র|য়ের)?\s*(?:stock|স্টক)\s*(?:কত|আছে|কি|কী)?$/i,
+      pattern: /^(.+?)(?:এর|র|য়ের|er|r)?\s*(?:stock|স্টক|stok)\s*(?:কত|আছে|কি|কী|koto|ache)?$/i,
       mode: "stock",
     },
     {
-      pattern: /^(.+?)(?:এর|র|য়ের)?\s*(?:বিস্তারিত|details|detail|info|তথ্য)\s*(?:কি|কী)?$/i,
+      pattern: /^(.+?)(?:এর|র|য়ের)?\s*(?:বিস্তারিত|details|detail|info|তথ্য)\s*(?:কি|কী)?$/i,
       mode: "details",
     },
     {
-      pattern: /^(.+?)(?:এর|র|য়ের)?\s*(?:দাম|price)\s*(?:কত|কি|কী)?$/i,
+      pattern: /^(.+?)(?:এর|র|য়ের|er|r)?\s*(?:দাম|price|dam|daam)\s*(?:কত|কি|কী|koto)?$/i,
       mode: "details",
     },
     {
-      pattern: /^(.+?)\s*আছে(?:\s*কি|\s*নাকি|\s*না)?$/i,
+      pattern: /^(.+?)\s*(?:আছে|ache)(?:\s*কি|\s*নাকি|\s*না|\s*ki)?$/i,
       mode: "exists",
     },
   ];
@@ -258,72 +260,72 @@ export function parseCopilotQuestion(question: string): CopilotQuestionIntent {
     return { type: "unsupported" };
   }
 
-  const isToday = includesAny(normalized, ["আজ", "today"]);
-  const isYesterday = includesAny(normalized, ["কাল", "গতকাল", "yesterday"]);
+  const isToday = includesAny(normalized, ["আজ", "today", "aj", "aaj", "ajke"]);
+  const isYesterday = includesAny(normalized, ["কাল", "গতকাল", "yesterday", "kal", "gotokal"]);
 
   if (
-    includesAny(normalized, ["কেমন চলছে", "how running", "status", "আজ কেমন", "আজকের অবস্থা"]) ||
-    (isToday && includesAny(normalized, ["দোকান", "shop"]) && includesAny(normalized, ["কেমন", "status"]))
+    includesAny(normalized, ["কেমন চলছে", "how running", "status", "আজ কেমন", "আজকের অবস্থা", "kemon cholche", "kemon", "ajker obostha"]) ||
+    (isToday && includesAny(normalized, ["দোকান", "shop", "dokan"]) && includesAny(normalized, ["কেমন", "status", "kemon"]))
   ) {
     return { type: "today_status" };
   }
 
   if (
-    includesAny(normalized, ["সবচেয়ে বেশি", "most", "top"]) &&
-    includesAny(normalized, ["বিক্রি", "sale", "sales", "item", "product"])
+    includesAny(normalized, ["সবচেয়ে বেশি", "most", "top", "sobcheye beshi"]) &&
+    includesAny(normalized, ["বিক্রি", "sale", "sales", "item", "product", "bikri"])
   ) {
     return { type: "top_product_today" };
   }
 
   if (
-    includesAny(normalized, ["low stock", "স্টক কম", "কম স্টক", "শেষ হয়ে", "restock"]) &&
-    !includesAny(normalized, ["কত", "stock কত"])
+    includesAny(normalized, ["low stock", "স্টক কম", "কম স্টক", "শেষ হয়ে", "restock", "stock kom", "kom stock", "stok kom"]) &&
+    !includesAny(normalized, ["কত", "stock কত", "koto", "stock koto"])
   ) {
     return { type: "low_stock_list" };
   }
 
-  if (includesAny(normalized, ["payable", "supplier due", "supplier payable", "সাপ্লায়ার", "supplier"])) {
+  if (includesAny(normalized, ["payable", "supplier due", "supplier payable", "সাপ্লায়ার", "supplier", "sapplier", "paikar"])) {
     return { type: "payables_total" };
   }
 
-  if (includesAny(normalized, ["queue", "token", "কিউ", "টোকেন"])) {
+  if (includesAny(normalized, ["queue", "token", "কিউ", "টোকেন", "kiu"])) {
     return { type: "queue_pending" };
   }
 
   if (
-    includesAny(normalized, ["মোট বাকি", "total due", "due total"]) &&
-    !normalized.includes("কাছে")
+    includesAny(normalized, ["মোট বাকি", "total due", "due total", "mot baki", "total baki"]) &&
+    !includesAny(normalized, ["কাছে", "kashe"])
   ) {
     return { type: "due_total" };
   }
 
-  if ((isToday || includesAny(normalized, ["আজকের"])) && includesAny(normalized, ["বিক্রি", "sale", "sales"])) {
+  if ((isToday || includesAny(normalized, ["আজকের", "ajker"])) && includesAny(normalized, ["বিক্রি", "sale", "sales", "bikri"])) {
     return { type: "today_sales" };
   }
-  if ((isToday || includesAny(normalized, ["আজকের"])) && includesAny(normalized, ["লাভ", "profit"])) {
+  if ((isToday || includesAny(normalized, ["আজকের", "ajker"])) && includesAny(normalized, ["লাভ", "profit", "labh", "lab"])) {
     return { type: "today_profit" };
   }
-  if ((isToday || includesAny(normalized, ["আজকের"])) && includesAny(normalized, ["খরচ", "expense", "expenses"])) {
+  if ((isToday || includesAny(normalized, ["আজকের", "ajker"])) && includesAny(normalized, ["খরচ", "expense", "expenses", "khoroch", "khorch"])) {
     return { type: "today_expenses" };
   }
-  if ((isToday || includesAny(normalized, ["আজকের"])) && includesAny(normalized, ["ক্যাশ", "cash"])) {
+  if ((isToday || includesAny(normalized, ["আজকের", "ajker"])) && includesAny(normalized, ["ক্যাশ", "cash"])) {
     return { type: "today_cash" };
   }
 
-  if (isYesterday && includesAny(normalized, ["বিক্রি", "sale", "sales"])) {
+  if (isYesterday && includesAny(normalized, ["বিক্রি", "sale", "sales", "bikri"])) {
     return { type: "yesterday_sales" };
   }
-  if (isYesterday && includesAny(normalized, ["লাভ", "profit"])) {
+  if (isYesterday && includesAny(normalized, ["লাভ", "profit", "labh", "lab"])) {
     return { type: "yesterday_profit" };
   }
-  if (isYesterday && includesAny(normalized, ["খরচ", "expense", "expenses"])) {
+  if (isYesterday && includesAny(normalized, ["খরচ", "expense", "expenses", "khoroch", "khorch"])) {
     return { type: "yesterday_expenses" };
   }
   if (isYesterday && includesAny(normalized, ["ক্যাশ", "cash"])) {
     return { type: "yesterday_cash" };
   }
 
-  if (normalized.includes("বাকি")) {
+  if (includesAny(normalized, ["বাকি", "baki"])) {
     const customerName = extractCustomerDueName(question);
     if (customerName) {
       return { type: "customer_due", customerName };
@@ -332,16 +334,11 @@ export function parseCopilotQuestion(question: string): CopilotQuestionIntent {
 
   if (
     includesAny(normalized, [
-      "স্টক",
-      "stock",
-      "আছে",
-      "details",
-      "detail",
-      "বিস্তারিত",
-      "price",
-      "দাম",
-      "তথ্য",
-      "info",
+      "স্টক", "stock", "stok",
+      "আছে", "ache",
+      "details", "detail", "বিস্তারিত",
+      "price", "দাম", "dam", "daam",
+      "তথ্য", "info",
     ])
   ) {
     const productQuery = extractProductQuery(question);
@@ -354,13 +351,13 @@ export function parseCopilotQuestion(question: string): CopilotQuestionIntent {
     }
   }
 
-  if (includesAny(normalized, ["বিক্রি", "sale", "sales"])) {
+  if (includesAny(normalized, ["বিক্রি", "sale", "sales", "bikri"])) {
     return { type: "today_sales" };
   }
-  if (includesAny(normalized, ["লাভ", "profit"])) {
+  if (includesAny(normalized, ["লাভ", "profit", "labh", "lab"])) {
     return { type: "today_profit" };
   }
-  if (includesAny(normalized, ["খরচ", "expense", "expenses"])) {
+  if (includesAny(normalized, ["খরচ", "expense", "expenses", "khoroch", "khorch"])) {
     return { type: "today_expenses" };
   }
   if (includesAny(normalized, ["ক্যাশ", "cash"])) {

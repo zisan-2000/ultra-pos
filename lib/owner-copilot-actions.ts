@@ -23,6 +23,12 @@ const expenseCategoryKeywords = [
   "বাজার",
   "stationery",
   "স্টেশনারি",
+  "bidyut",
+  "bhara",
+  "nasta",
+  "beton",
+  "bazar",
+  "jatayat",
 ] as const;
 
 function normalizeDigits(value: string) {
@@ -40,7 +46,7 @@ function extractReason(question: string, amount: string) {
   return question
     .replace(amount, " ")
     .replace(/[?？！!।,]/g, " ")
-    .replace(/\b(টাকা|taka|tk|৳|খরচ|expense|add|যোগ|করো|করুন|লেখো|write|cash|ক্যাশ|in|out|ইন|আউট|entry|এন্ট্রি)\b/gi, " ")
+    .replace(/(টাকা|taka|tk|৳|খরচ|khoroch|khorch|expense|add|যোগ|jog|করো|koro|করুন|korun|লেখো|lekho|write|cash|ক্যাশ|in|out|ইন|আউট|entry|এন্ট্রি)/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -244,10 +250,10 @@ function buildCashDraft(
 function cleanEntityPhrase(raw: string) {
   return raw
     .replace(/[?？！!।,\-]/g, " ")
-    .replace(/\b(টাকা|taka|tk|৳|due|payment|collect|supplier|customer|stock|set|update|adjust|করো|করুন|দাও|দিন|নাও|নিন|নিলাম|গ্রহণ|জমা|pay|পরিশোধ|সাপ্লায়ার|সরবরাহকারী|product|পণ্য)\b/gi, " ")
+    .replace(/(টাকা|taka|tk|৳|due|baki|payment|collect|nao|nin|joma|stock|stok|set|update|adjust|করো|koro|করুন|korun|দাও|dao|দিন|din|নাও|নিন|গ্রহণ|grohon|জমা|pay|পরিশোধ|porishod)/gi, " ")
     .replace(/\s+/g, " ")
     .trim()
-    .replace(/(?:ের|য়ের|র|কে)$/u, "")
+    .replace(/(?:ের|য়ের|কে)$/u, "")
     .trim();
 }
 
@@ -396,23 +402,23 @@ function cleanCreationName(raw: string) {
   return raw
     .replace(/[?？！!।,\-]/g, " ")
     .replace(bangladeshPhonePattern, " ")
-    .replace(/নতুন/gi, " ")
-    .replace(/customer/gi, " ")
-    .replace(/supplier/gi, " ")
-    .replace(/product/gi, " ")
+    .replace(/নতুন|notun/gi, " ")
+    .replace(/customer|kastomar/gi, " ")
+    .replace(/supplier|sapplier|sappliyer/gi, " ")
+    .replace(/product|ponno/gi, " ")
     .replace(/item/gi, " ")
-    .replace(/কাস্টমার/gi, " ")
-    .replace(/সাপ্লায়ার/gi, " ")
+    .replace(/কাস্টমার|kastomar/gi, " ")
+    .replace(/সাপ্লায়ার|sapplier/gi, " ")
     .replace(/সরবরাহকারী/gi, " ")
-    .replace(/পণ্য/gi, " ")
-    .replace(/যোগ/gi, " ")
+    .replace(/পণ্য|ponno/gi, " ")
+    .replace(/যোগ|jog/gi, " ")
     .replace(/add/gi, " ")
     .replace(/create/gi, " ")
-    .replace(/করো/gi, " ")
-    .replace(/করুন/gi, " ")
-    .replace(/বানাও/gi, " ")
-    .replace(/খুলো/gi, " ")
-    .replace(/লেখো/gi, " ")
+    .replace(/করো|koro/gi, " ")
+    .replace(/করুন|korun/gi, " ")
+    .replace(/বানাও|banao/gi, " ")
+    .replace(/খুলো|khulo/gi, " ")
+    .replace(/লেখো|lekho/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -486,13 +492,11 @@ export function parseOwnerCopilotActionDraft(
   if (!normalized) return null;
 
   const expenseIntent =
-    (normalized.includes("খরচ") || normalized.includes("expense")) &&
-    (normalized.includes("যোগ") ||
-      normalized.includes("করো") ||
-      normalized.includes("করুন") ||
-      normalized.includes("লেখো") ||
-      normalized.includes("add") ||
-      normalized.includes("write"));
+    includesAny(normalized, ["খরচ", "expense", "khoroch", "khorch"]) &&
+    includesAny(normalized, [
+      "যোগ", "করো", "করুন", "লেখো",
+      "add", "write", "jog", "koro", "korun", "lekho",
+    ]);
 
   if (expenseIntent) {
     return buildExpenseDraft(question);
@@ -505,8 +509,10 @@ export function parseOwnerCopilotActionDraft(
       normalized.includes("cash ইন") ||
       normalized.includes("জমা") ||
       normalized.includes("ঢুকাও") ||
-      (normalized.includes("ক্যাশ") &&
-        includesAny(normalized, [" in ", " ইন ", "যুক্ত", "যোগ", "add"]))) &&
+      normalized.includes("joma") ||
+      normalized.includes("dhukao") ||
+      (includesAny(normalized, ["ক্যাশ", "cash"]) &&
+        includesAny(normalized, [" in ", " ইন ", "যুক্ত", "যোগ", "add", "jog"]))) &&
     Boolean(extractAmount(question));
 
   if (cashInIntent) {
@@ -520,8 +526,9 @@ export function parseOwnerCopilotActionDraft(
       normalized.includes("cash আউট") ||
       normalized.includes("ক্যাশ থেকে বের") ||
       normalized.includes("উঠাও") ||
-      (normalized.includes("ক্যাশ") &&
-        includesAny(normalized, [" out ", " আউট ", "বের", "withdraw"]))) &&
+      normalized.includes("uthao") ||
+      (includesAny(normalized, ["ক্যাশ", "cash"]) &&
+        includesAny(normalized, [" out ", " আউট ", "বের", "withdraw", "ber"]))) &&
     Boolean(extractAmount(question));
 
   if (cashOutIntent) {
@@ -529,15 +536,10 @@ export function parseOwnerCopilotActionDraft(
   }
 
   const dueCollectionIntent =
-    includesAny(normalized, ["বাকি", "due"]) &&
+    includesAny(normalized, ["বাকি", "due", "baki"]) &&
     includesAny(normalized, [
-      "collect",
-      "নাও",
-      "নিন",
-      "নিলাম",
-      "গ্রহণ",
-      "জমা",
-      "received",
+      "collect", "নাও", "নিন", "নিলাম", "গ্রহণ", "জমা", "received",
+      "nao", "nin", "joma", "grohon",
     ]) &&
     Boolean(extractAmount(question));
 
@@ -546,8 +548,8 @@ export function parseOwnerCopilotActionDraft(
   }
 
   const supplierPaymentIntent =
-    includesAny(normalized, ["supplier", "সাপ্লায়ার", "সরবরাহকারী", "পাইকার", "payable"]) &&
-    includesAny(normalized, ["payment", "পরিশোধ", "pay", "করো", "করুন", "দাও", "দিন"]) &&
+    includesAny(normalized, ["supplier", "সাপ্লায়ার", "সরবরাহকারী", "পায়কার", "payable", "sapplier", "sappliyer", "paikar"]) &&
+    includesAny(normalized, ["payment", "পরিশোধ", "pay", "করো", "করুন", "দাও", "দিন", "koro", "korun", "dao", "din", "porishod"]) &&
     Boolean(extractAmount(question));
 
   if (supplierPaymentIntent) {
@@ -555,9 +557,9 @@ export function parseOwnerCopilotActionDraft(
   }
 
   const stockAdjustmentIntent =
-    includesAny(normalized, ["stock", "স্টক"]) &&
-    includesAny(normalized, ["set", "সেট", "update", "adjust", "করো", "করুন", "ঠিক"]) &&
-    !includesAny(normalized, ["কত", "কি", "কী", "আছে"]) &&
+    includesAny(normalized, ["stock", "স্টক", "stok"]) &&
+    includesAny(normalized, ["set", "সেট", "update", "adjust", "করো", "করুন", "ঠিক", "koro", "korun", "thik"]) &&
+    !includesAny(normalized, ["কত", "কি", "কী", "আছে", "koto", "ache"]) &&
     Boolean(extractAmount(question));
 
   if (stockAdjustmentIntent) {
@@ -565,8 +567,8 @@ export function parseOwnerCopilotActionDraft(
   }
 
   const productCreateIntent =
-    includesAny(normalized, ["product", "পণ্য", "item"]) &&
-    includesAny(normalized, ["নতুন", "new", "add", "create", "যোগ"]) &&
+    includesAny(normalized, ["product", "পণ্য", "item", "ponno"]) &&
+    includesAny(normalized, ["নতুন", "new", "add", "create", "যোগ", "notun", "jog"]) &&
     Boolean(extractAmount(question));
 
   if (productCreateIntent) {
@@ -574,9 +576,9 @@ export function parseOwnerCopilotActionDraft(
   }
 
   const productPriceUpdateIntent =
-    includesAny(normalized, ["দাম", "price"]) &&
-    includesAny(normalized, ["করো", "করুন", "set", "update"]) &&
-    !includesAny(normalized, ["stock", "স্টক", "কত", "কি", "কী", "আছে"]) &&
+    includesAny(normalized, ["দাম", "price", "dam", "daam"]) &&
+    includesAny(normalized, ["করো", "করুন", "set", "update", "koro", "korun"]) &&
+    !includesAny(normalized, ["stock", "স্টক", "stok", "কত", "কি", "কী", "আছে", "koto", "ache"]) &&
     Boolean(extractAmount(question));
 
   if (productPriceUpdateIntent) {
@@ -584,24 +586,24 @@ export function parseOwnerCopilotActionDraft(
   }
 
   const productDeactivateIntent =
-    includesAny(normalized, ["inactive", "disable", "বন্ধ"]) &&
-    includesAny(normalized, ["product", "পণ্য", "item", "করো", "করুন"]);
+    includesAny(normalized, ["inactive", "disable", "বন্ধ", "bondho", "bondo"]) &&
+    includesAny(normalized, ["product", "পণ্য", "item", "করো", "করুন", "ponno", "koro", "korun"]);
 
   if (productDeactivateIntent) {
     return buildProductToggleActiveDraft(question, false);
   }
 
   const productActivateIntent =
-    includesAny(normalized, ["active", "enable", "চালু"]) &&
-    includesAny(normalized, ["product", "পণ্য", "item", "করো", "করুন"]);
+    includesAny(normalized, ["active", "enable", "চালু", "chalu"]) &&
+    includesAny(normalized, ["product", "পণ্য", "item", "করো", "করুন", "ponno", "koro", "korun"]);
 
   if (productActivateIntent) {
     return buildProductToggleActiveDraft(question, true);
   }
 
   const dueEntryIntent =
-    includesAny(normalized, ["বাকি", "due"]) &&
-    includesAny(normalized, ["যোগ", "add", "create", "করো", "করুন", "লেখো"]) &&
+    includesAny(normalized, ["বাকি", "due", "baki"]) &&
+    includesAny(normalized, ["যোগ", "add", "create", "করো", "করুন", "লেখো", "jog", "koro", "korun", "lekho"]) &&
     Boolean(extractAmount(question));
 
   if (dueEntryIntent) {
@@ -609,24 +611,24 @@ export function parseOwnerCopilotActionDraft(
   }
 
   const saleVoidIntent =
-    includesAny(normalized, ["void", "cancel", "বাতিল"]) &&
-    includesAny(normalized, ["sale", "invoice", "ইনভয়েস", "বিক্রি"]);
+    includesAny(normalized, ["void", "cancel", "বাতিল", "batil", "cancelled"]) &&
+    includesAny(normalized, ["sale", "invoice", "ইনভয়েস", "বিক্রি", "bikri"]);
 
   if (saleVoidIntent) {
     return buildSaleVoidDraft(question);
   }
 
   const customerCreateIntent =
-    includesAny(normalized, ["customer", "কাস্টমার"]) &&
-    includesAny(normalized, ["নতুন", "new", "add", "create", "যোগ"]);
+    includesAny(normalized, ["customer", "কাস্টমার", "kastomar"]) &&
+    includesAny(normalized, ["নতুন", "new", "add", "create", "যোগ", "notun", "jog"]);
 
   if (customerCreateIntent) {
     return buildCustomerCreateDraft(question);
   }
 
   const supplierCreateIntent =
-    includesAny(normalized, ["supplier", "সাপ্লায়ার", "সরবরাহকারী"]) &&
-    includesAny(normalized, ["নতুন", "new", "add", "create", "যোগ"]);
+    includesAny(normalized, ["supplier", "সাপ্লায়ার", "সরবরাহকারী", "sapplier", "sappliyer"]) &&
+    includesAny(normalized, ["নতুন", "new", "add", "create", "যোগ", "notun", "jog"]);
 
   if (supplierCreateIntent) {
     return buildSupplierCreateDraft(question);
@@ -644,24 +646,21 @@ export function getOwnerCopilotActionClarification(question: string) {
   if (!normalized) return null;
 
   const actionLike = includesAny(normalized, [
-    "যোগ",
-    "add",
-    "create",
-    "করো",
-    "করুন",
-    "payment",
-    "পরিশোধ",
-    "stock",
-    "স্টক",
-    "বাকি",
-    "due",
+    "যোগ", "jog",
+    "add", "create",
+    "করো", "koro",
+    "করুন", "korun",
+    "payment", "পরিশোধ", "porishod",
+    "stock", "স্টক", "stok",
+    "বাকি", "due", "baki",
+    "khoroch", "khorch",
   ]);
 
   if (!actionLike) return null;
 
   if (
-    includesAny(normalized, ["product", "পণ্য", "item"]) &&
-    includesAny(normalized, ["নতুন", "new", "যোগ", "add"]) &&
+    includesAny(normalized, ["product", "পণ্য", "item", "ponno"]) &&
+    includesAny(normalized, ["নতুন", "new", "যোগ", "add", "notun", "jog"]) &&
     !extractAmount(question)
   ) {
     return {
@@ -676,8 +675,8 @@ export function getOwnerCopilotActionClarification(question: string) {
   }
 
   if (
-    includesAny(normalized, ["stock", "স্টক"]) &&
-    includesAny(normalized, ["set", "সেট", "update", "adjust", "করো", "করুন"]) &&
+    includesAny(normalized, ["stock", "স্টক", "stok"]) &&
+    includesAny(normalized, ["set", "সেট", "update", "adjust", "করো", "করুন", "koro", "korun", "thik"]) &&
     !extractAmount(question)
   ) {
     return {
@@ -689,8 +688,8 @@ export function getOwnerCopilotActionClarification(question: string) {
   }
 
   if (
-    includesAny(normalized, ["দাম", "price"]) &&
-    includesAny(normalized, ["করো", "করুন", "set", "update"]) &&
+    includesAny(normalized, ["দাম", "price", "dam", "daam"]) &&
+    includesAny(normalized, ["করো", "করুন", "set", "update", "koro", "korun"]) &&
     !extractAmount(question)
   ) {
     return {
@@ -702,8 +701,8 @@ export function getOwnerCopilotActionClarification(question: string) {
   }
 
   if (
-    includesAny(normalized, ["বাকি", "due"]) &&
-    includesAny(normalized, ["যোগ", "add", "create", "করো", "করুন"]) &&
+    includesAny(normalized, ["বাকি", "due", "baki"]) &&
+    includesAny(normalized, ["যোগ", "add", "create", "করো", "করুন", "jog", "koro", "korun"]) &&
     !extractAmount(question)
   ) {
     return {
@@ -718,8 +717,8 @@ export function getOwnerCopilotActionClarification(question: string) {
   }
 
   if (
-    includesAny(normalized, ["বাকি", "due"]) &&
-    includesAny(normalized, ["নাও", "নিন", "collect", "গ্রহণ", "জমা"]) &&
+    includesAny(normalized, ["বাকি", "due", "baki"]) &&
+    includesAny(normalized, ["নাও", "নিন", "collect", "গ্রহণ", "জমা", "nao", "nin", "joma", "grohon"]) &&
     !extractAmount(question)
   ) {
     return {

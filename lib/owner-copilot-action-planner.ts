@@ -4,6 +4,11 @@ import type {
   OwnerCopilotActionDraft,
 } from "@/lib/owner-copilot-actions";
 import type { OwnerCopilotConversationMessageWithMetadata } from "@/lib/owner-copilot-memory";
+import {
+  normalizeSearchValue,
+  scoreEntityMatch,
+  formatMoney,
+} from "@/lib/copilot-utils";
 
 type ClarificationChoice = {
   prompt: string;
@@ -33,26 +38,7 @@ type PreparedActionPlan =
       clarification: ClarificationResult;
     };
 
-function normalizeSearchValue(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[?？！!।,]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/(?:এর|র|য়ের|কে)$/u, "")
-    .trim();
-}
 
-function scoreEntityMatch(candidate: string, asked: string) {
-  const left = normalizeSearchValue(candidate).replace(/\s+/g, "");
-  const right = normalizeSearchValue(asked).replace(/\s+/g, "");
-  if (!left || !right) return 0;
-  if (left === right) return 100;
-  if (left.startsWith(right)) return 80;
-  if (left.includes(right)) return 60;
-  if (right.includes(left)) return 40;
-  return 0;
-}
 
 function isImplicitReference(value: string | undefined | null) {
   const normalized = normalizeSearchValue(String(value || ""));
@@ -196,13 +182,6 @@ function buildMultiMatchClarification(
   };
 }
 
-function formatMoney(value: unknown) {
-  const numeric = Number(
-    typeof value === "object" && value !== null ? String(value) : value ?? 0
-  );
-  if (!Number.isFinite(numeric)) return "৳ 0";
-  return `৳ ${numeric.toFixed(2)}`;
-}
 
 async function resolveCustomerDraft(
   shopId: string,

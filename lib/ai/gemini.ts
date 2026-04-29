@@ -23,6 +23,20 @@ type GeminiGenerateContentResponse = {
   };
 };
 
+const MAX_RETRIES = 2;
+const BACKOFF_BASE_MS = 1000;
+
+function isRetryable(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error instanceof TypeError) return true;
+  if (error instanceof Error && error.message.startsWith("gemini_http_5")) return true;
+  return false;
+}
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function generateTextWithGemini({
   apiKey,
   model,
@@ -31,59 +45,91 @@ export async function generateTextWithGemini({
   timeoutMs,
   temperature = 0.3,
 }: GeminiGenerateTextOptions) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let lastError: unknown;
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: systemInstruction }],
-          },
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: prompt }],
-            },
-          ],
-          generationConfig: {
-            temperature,
-          },
-        }),
-        cache: "no-store",
-        signal: controller.signal,
-      }
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await sleep(BACKOFF_BASE_MS * attempt);
+    }
+
+    const perAttemptTimeout = Math.min(
+      timeoutMs,
+      Math.floor((timeoutMs * 0.8) / (MAX_RETRIES + 1 - attempt))
     );
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), perAttemptTimeout);
 
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      throw new Error(`gemini_http_${response.status}:${body.slice(0, 240)}`);
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey,
+          },
+          body: JSON.stringify({
+            system_instruction: {
+              parts: [{ text: systemInstruction }],
+            },
+            contents: [
+              {
+                role: "user",
+                parts: [{ text: prompt }],
+              },
+            ],
+            generationConfig: {
+              temperature,
+            },
+          }),
+          cache: "no-store",
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        const err = new Error(
+          `gemini_http_${response.status}:${body.slice(0, 240)}`
+        );
+        if (response.status >= 500 && attempt < MAX_RETRIES) {
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+
+      const payload =
+        (await response.json()) as GeminiGenerateContentResponse;
+      const text = payload.candidates
+        ?.flatMap((candidate) => candidate.content?.parts ?? [])
+        .map((part) => part.text ?? "")
+        .join("")
+        .trim();
+
+      if (!text) {
+        const blockReason = payload.promptFeedback?.blockReason;
+        throw new Error(
+          blockReason
+            ? `gemini_blocked_${blockReason}`
+            : "gemini_empty_response"
+        );
+      }
+
+      return {
+        text,
+        model,
+      };
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_RETRIES && isRetryable(error)) {
+        continue;
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const payload = (await response.json()) as GeminiGenerateContentResponse;
-    const text = payload.candidates
-      ?.flatMap((candidate) => candidate.content?.parts ?? [])
-      .map((part) => part.text ?? "")
-      .join("")
-      .trim();
-
-    if (!text) {
-      const blockReason = payload.promptFeedback?.blockReason;
-      throw new Error(blockReason ? `gemini_blocked_${blockReason}` : "gemini_empty_response");
-    }
-
-    return {
-      text,
-      model,
-    };
-  } finally {
-    clearTimeout(timeout);
   }
+
+  throw lastError;
 }

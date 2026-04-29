@@ -15,6 +15,7 @@ import { createProduct } from "@/app/actions/products";
 import { voidSale } from "@/app/actions/sales";
 import { shopHasInventoryModule } from "@/lib/accounting/cogs";
 import { addDueSaleEntry } from "@/app/actions/customers";
+import { scoreEntityMatch, validateCopilotAmount, findSaleByQuery } from "@/lib/copilot-utils";
 
 function revalidateExpensePaths() {
   revalidatePath("/dashboard");
@@ -50,26 +51,7 @@ function revalidateProductPaths() {
   revalidatePath("/dashboard/reports");
 }
 
-function normalizeSearchValue(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[?？！!।,]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/(?:এর|র|য়ের|কে)$/u, "")
-    .trim();
-}
 
-function scoreEntityMatch(candidate: string, asked: string) {
-  const left = normalizeSearchValue(candidate).replace(/\s+/g, "");
-  const right = normalizeSearchValue(asked).replace(/\s+/g, "");
-  if (!left || !right) return 0;
-  if (left === right) return 100;
-  if (left.startsWith(right)) return 80;
-  if (left.includes(right)) return 60;
-  if (right.includes(left)) return 40;
-  return 0;
-}
 
 async function resolveCustomerForDueCollection(shopId: string, customerName: string) {
   const candidates = await prisma.customer.findMany({
@@ -261,6 +243,12 @@ async function resolveProductById(shopId: string, productId: string) {
   });
 }
 
+
+  const DEDUP_WINDOW_MS = 5 * 60 * 1000;
+  function fiveMinAgo() {
+    return new Date(Date.now() - DEDUP_WINDOW_MS);
+  }
+
 export async function executeOwnerCopilotActionDraft({
   shopId,
   user,
@@ -275,6 +263,23 @@ export async function executeOwnerCopilotActionDraft({
 
   if (parsed.kind === "expense") {
     requirePermission(user, "create_expense");
+
+    const validatedExpenseAmount = validateCopilotAmount(parsed.amount);
+    const recentExpense = await prisma.expense.findFirst({
+      where: {
+        shopId,
+        category: parsed.category,
+        amount: validatedExpenseAmount,
+        createdAt: { gte: fiveMinAgo() },
+      },
+      select: { id: true },
+    });
+    if (recentExpense) {
+      return {
+        success: true,
+        answer: `এই খরচটি (৳ ${parsed.amount} | ${parsed.category}) গত ৫ মিনিটে ইতিমধ্যে যোগ করা হয়েছে। ডুপ্লিকেট এড়ানো হলো।`,
+      };
+    }
 
     let createdExpenseId = "";
     await prisma.$transaction(async (tx) => {
@@ -383,6 +388,21 @@ export async function executeOwnerCopilotActionDraft({
       throw new Error(`"${parsed.customerName}" নামে customer পাওয়া যায়নি`);
     }
 
+    const recentDue = await prisma.customerLedger.findFirst({
+      where: {
+        customerId: customer.id,
+        amount: Number(parsed.amount),
+        createdAt: { gte: fiveMinAgo() },
+      },
+      select: { id: true },
+    });
+    if (recentDue) {
+      return {
+        success: true,
+        answer: `${customer.name}-এর নামে ৳ ${parsed.amount} due গত ৫ মিনিটে ইতিমধ্যে যোগ করা হয়েছে। ডুপ্লিকেট এড়ানো হলো।`,
+      };
+    }
+
     await addDueSaleEntry({
       shopId,
       customerId: customer.id,
@@ -416,7 +436,22 @@ export async function executeOwnerCopilotActionDraft({
       throw new Error(`"${parsed.supplierName}" নামে due থাকা supplier পাওয়া যায়নি`);
     }
 
-    let remaining = Number(parsed.amount);
+const recentSupplierPayment = await prisma.purchasePayment.findFirst({
+      where: {
+        purchase: { supplierId: supplier.id },
+        amount: Number(parsed.amount),
+        createdAt: { gte: fiveMinAgo() },
+      },
+      select: { id: true },
+    });
+    if (recentSupplierPayment) {
+      return {
+        success: true,
+        answer: `${supplier.name}-কে ৳ ${parsed.amount} payment গত ৫ মিনিটে ইতিমধ্যে করা হয়েছে। ডুপ্লিকেট এড়ানো হলো।`,
+      };
+    }
+
+        let remaining = Number(parsed.amount);
     if (!Number.isFinite(remaining) || remaining <= 0) {
       throw new Error("Amount must be positive");
     }
@@ -571,12 +606,23 @@ export async function executeOwnerCopilotActionDraft({
   if (parsed.kind === "void_sale") {
     requirePermission(user, "cancel_sale");
 
-    if (!parsed.saleId) {
-      throw new Error(`"${parsed.saleQuery}" sale/invoice resolve করা যায়নি`);
+    let resolvedSaleId = parsed.saleId;
+    if (!resolvedSaleId) {
+      const found = await findSaleByQuery(shopId, parsed.invoiceNo || parsed.saleQuery);
+      if (!found) {
+        throw new Error(`"${parsed.saleQuery}" sale/invoice resolve করা যায়নি`)
+      }
+      if (found.status === "VOIDED") {
+        return {
+          success: true,
+          answer: `${found.invoiceNo || found.id} sale আগেই void করা ছিল।`,
+        };
+      }
+      resolvedSaleId = found.id;
     }
 
     const result = await voidSale(
-      parsed.saleId,
+      resolvedSaleId,
       parsed.note || `Copilot void action for ${parsed.invoiceNo || parsed.saleQuery}`
     );
 
@@ -667,7 +713,24 @@ export async function executeOwnerCopilotActionDraft({
 
   requirePermission(user, "create_cash_entry");
 
-  await prisma.cashEntry.create({
+  const validatedCashAmount = validateCopilotAmount(parsed.amount);
+    const recentCash = await prisma.cashEntry.findFirst({
+      where: {
+        shopId,
+        entryType: parsed.entryType,
+        amount: validatedCashAmount,
+        createdAt: { gte: fiveMinAgo() },
+      },
+      select: { id: true },
+    });
+    if (recentCash) {
+      return {
+        success: true,
+        answer: `এই ${parsed.entryType === "IN" ? "ক্যাশ ইন" : "ক্যাশ আউট"} এন্ট্রি (৳ ${parsed.amount}) গত ৫ মিনিটে ইতিমধ্যে যোগ করা হয়েছে। ডুপ্লিকেট এড়ানো হলো।`,
+      };
+    }
+
+    await prisma.cashEntry.create({
     data: {
       shopId,
       entryType: parsed.entryType,

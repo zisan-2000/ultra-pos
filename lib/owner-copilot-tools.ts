@@ -4,7 +4,13 @@ import { getDhakaDateOnlyRange, getDhakaDateString, parseDhakaDateOnlyRange } fr
 import { buildOwnerCopilotInsight, type OwnerCopilotSnapshot } from "@/lib/owner-copilot";
 import { prisma } from "@/lib/prisma";
 import type { TodaySummary } from "@/lib/reports/today-summary";
-import { normalizeCopilotQuestion } from "@/lib/copilot-ask";
+import {
+  scoreCustomerMatch,
+  scoreProductMatch,
+  findBestCustomer,
+  findBestProduct,
+  normalizeName,
+} from "@/lib/copilot-utils";
 
 type OwnerCopilotPayloadForTools = {
   summary: TodaySummary;
@@ -314,123 +320,10 @@ const toolSchemaMap: Record<OwnerCopilotToolName, z.ZodTypeAny> = {
   get_billing_status: billingStatusArgsSchema,
 };
 
-function normalizeName(value: string) {
-  return normalizeCopilotQuestion(value).replace(/\s+/g, "");
-}
 
-function scoreCustomerMatch(customerName: string, askedName: string) {
-  const customer = normalizeName(customerName);
-  const asked = normalizeName(askedName);
-  if (!customer || !asked) return 0;
-  if (customer === asked) return 100;
-  if (customer.startsWith(asked)) return 80;
-  if (customer.includes(asked)) return 60;
-  if (asked.includes(customer)) return 40;
-  return 0;
-}
 
-function scoreProductMatch(productName: string, askedName: string) {
-  const product = normalizeName(productName);
-  const asked = normalizeName(askedName);
-  if (!product || !asked) return 0;
-  if (product === asked) return 100;
-  if (product.startsWith(asked)) return 85;
-  if (product.includes(asked)) return 65;
-  if (asked.includes(product)) return 45;
-  return 0;
-}
 
-async function findBestCustomer(shopId: string, askedName: string) {
-  const candidates = await prisma.customer.findMany({
-    where: {
-      shopId,
-      name: {
-        contains: askedName.trim(),
-        mode: "insensitive",
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      totalDue: true,
-      lastPaymentAt: true,
-    },
-    orderBy: [{ totalDue: "desc" }, { name: "asc" }],
-    take: 8,
-  });
 
-  if (candidates.length === 0) return null;
-
-  const scored = candidates
-    .map((candidate) => ({
-      candidate,
-      score: scoreCustomerMatch(candidate.name, askedName),
-    }))
-    .sort((a, b) => b.score - a.score || Number(b.candidate.totalDue) - Number(a.candidate.totalDue));
-
-  return scored[0]?.score > 0 ? scored[0].candidate : null;
-}
-
-async function findBestProduct(shopId: string, askedName: string) {
-  const candidates = await prisma.product.findMany({
-    where: {
-      shopId,
-      OR: [
-        {
-          name: {
-            contains: askedName.trim(),
-            mode: "insensitive",
-          },
-        },
-        {
-          sku: {
-            contains: askedName.trim(),
-            mode: "insensitive",
-          },
-        },
-        {
-          barcode: {
-            contains: askedName.trim(),
-            mode: "insensitive",
-          },
-        },
-      ],
-    },
-    select: {
-      id: true,
-      name: true,
-      category: true,
-      sellPrice: true,
-      stockQty: true,
-      baseUnit: true,
-      sku: true,
-      barcode: true,
-      isActive: true,
-      trackStock: true,
-    },
-    orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
-    take: 10,
-  });
-
-  if (candidates.length === 0) return null;
-
-  const scored = candidates
-    .map((candidate) => ({
-      candidate,
-      score: Math.max(
-        scoreProductMatch(candidate.name, askedName),
-        candidate.sku ? scoreProductMatch(candidate.sku, askedName) - 10 : 0,
-        candidate.barcode ? scoreProductMatch(candidate.barcode, askedName) - 10 : 0
-      ),
-    }))
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        Number(b.candidate.isActive) - Number(a.candidate.isActive)
-    );
-
-  return scored[0]?.score > 0 ? scored[0].candidate : null;
-}
 
 function getRangeForPeriod(period: "today" | "7d") {
   if (period === "today") {

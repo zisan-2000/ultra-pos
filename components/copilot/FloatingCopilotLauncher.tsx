@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, GripVertical, Loader2, X } from "lucide-reac
 import CopilotInsightPanel from "@/components/copilot/CopilotInsightPanel";
 import CopilotMoodOrb from "@/components/copilot/CopilotMoodOrb";
 import CopilotVoiceAsk from "@/components/copilot/CopilotVoiceAsk";
+import { CopilotErrorBoundary } from "@/components/copilot/CopilotErrorBoundary";
 import RefreshIconButton from "@/components/ui/refresh-icon-button";
 import {
   Dialog,
@@ -452,11 +453,11 @@ export default function FloatingCopilotLauncher() {
         <DialogContent
           forceMount
           overlayClassName="bg-black/55 data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:[animation-duration:260ms] data-[state=closed]:[animation-duration:380ms] data-[state=open]:[animation-timing-function:cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:[animation-timing-function:cubic-bezier(0.22,1,0.36,1)]"
-          className="bottom-0 left-0 right-0 top-auto z-[70] flex h-dvh max-h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col overflow-y-auto overflow-x-hidden overscroll-contain rounded-t-[24px] border-border/70 bg-background/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_28px_80px_rgba(15,23,42,0.24)] will-change-transform will-change-opacity data-[state=closed]:slide-out-to-bottom-[4%] data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-bottom-[10%] data-[state=open]:fade-in-0 data-[state=open]:[animation-duration:320ms] data-[state=closed]:[animation-duration:520ms] data-[state=open]:[animation-timing-function:cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:[animation-timing-function:cubic-bezier(0.22,1,0.36,1)] sm:bottom-auto sm:left-auto sm:right-4 sm:top-4 sm:h-[calc(100vh-2rem)] sm:w-[min(560px,calc(100vw-2rem))] sm:max-h-none sm:overflow-hidden sm:rounded-[28px] sm:border sm:p-4 sm:translate-x-0 sm:translate-y-0 sm:data-[state=closed]:slide-out-to-right-[3%] sm:data-[state=closed]:slide-out-to-top-0 sm:data-[state=open]:slide-in-from-right-[7%] sm:data-[state=open]:slide-in-from-top-0"
+          className="bottom-0 left-0 right-0 top-auto z-[70] flex h-dvh max-h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col overflow-y-auto overflow-x-hidden overscroll-contain rounded-t-3xl border-border/70 bg-background p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-lg will-change-transform will-change-opacity data-[state=closed]:slide-out-to-bottom-[4%] data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-bottom-[10%] data-[state=open]:fade-in-0 data-[state=open]:[animation-duration:320ms] data-[state=closed]:[animation-duration:520ms] data-[state=open]:[animation-timing-function:cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:[animation-timing-function:cubic-bezier(0.22,1,0.36,1)] sm:bottom-auto sm:left-auto sm:right-4 sm:top-4 sm:h-[calc(100vh-2rem)] sm:w-[min(560px,calc(100vw-2rem))] sm:max-h-none sm:overflow-hidden sm:rounded-3xl sm:border sm:p-4 sm:translate-x-0 sm:translate-y-0 sm:data-[state=closed]:slide-out-to-right-[3%] sm:data-[state=closed]:slide-out-to-top-0 sm:data-[state=open]:slide-in-from-right-[7%] sm:data-[state=open]:slide-in-from-top-0"
         >
           <DialogHeader className={`shrink-0 ${activeTab === "ask" ? "space-y-0 pb-0" : "space-y-1.5 pb-0"}`}>
             <div className={`flex items-start gap-2 pr-10 ${activeTab === "ask" ? "pb-1" : ""}`}>
-              <div className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+              <div className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
                 স্মার্ট কপাইলট
               </div>
               <RefreshIconButton
@@ -488,7 +489,7 @@ export default function FloatingCopilotLauncher() {
 
           <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-hidden pb-1">
             {loading && !insight ? (
-              <div className="flex min-h-[240px] items-center justify-center rounded-[28px] border border-dashed border-border/70 bg-muted/20">
+              <div className="flex min-h-[240px] items-center justify-center rounded-3xl border border-dashed border-border/70 bg-muted/20">
                 <div className="flex items-center gap-3 text-sm font-medium text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin text-primary" />
                   Smart Copilot loading হচ্ছে...
@@ -496,12 +497,12 @@ export default function FloatingCopilotLauncher() {
               </div>
             ) : null}
 
-            <div className="inline-flex w-full rounded-2xl border border-border/70 bg-muted/35 p-1 shadow-[0_10px_22px_rgba(15,23,42,0.04)] sm:p-1.5">
+            <div className="inline-flex w-full rounded-2xl border border-border/70 bg-muted/35 p-1 shadow-sm sm:p-1.5">
               <button
                 type="button"
                 onClick={() => setActiveTab("insights")}
                 aria-pressed={activeTab === "insights"}
-                className={`flex-1 rounded-[14px] px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 ${
+                className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 ${
                   activeTab === "insights"
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
@@ -513,7 +514,7 @@ export default function FloatingCopilotLauncher() {
                 type="button"
                 onClick={() => setActiveTab("ask")}
                 aria-pressed={activeTab === "ask"}
-                className={`flex-1 rounded-[14px] px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 ${
+                className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 ${
                   activeTab === "ask"
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
@@ -534,13 +535,15 @@ export default function FloatingCopilotLauncher() {
               className={activeTab === "ask" ? "min-h-0 flex-1" : "hidden"}
               aria-hidden={activeTab !== "ask"}
             >
-              {activeShopId ? (
-                <CopilotVoiceAsk
-                  shopId={activeShopId}
-                  shopName={payload?.snapshot.shopName ?? null}
-                  online={online}
-                />
-              ) : null}
+              <CopilotErrorBoundary>
+                {activeShopId ? (
+                  <CopilotVoiceAsk
+                    shopId={activeShopId}
+                    shopName={payload?.snapshot.shopName ?? null}
+                    online={online}
+                  />
+                ) : null}
+              </CopilotErrorBoundary>
             </div>
 
             {error ? (

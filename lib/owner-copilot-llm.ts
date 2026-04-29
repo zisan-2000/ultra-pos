@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { extractJsonObject, wrapUserContent } from "@/lib/copilot-utils";
 import { generateTextWithGemini } from "@/lib/ai/gemini";
 import { getAiProviderConfig } from "@/lib/ai/provider";
 import { getCopilotLanguageInstruction } from "@/lib/copilot-language";
@@ -31,29 +32,6 @@ export type OwnerCopilotLlmAnswer = z.infer<typeof llmResponseSchema> & {
   model: string;
 };
 
-function extractJsonObject(rawText: string) {
-  const trimmed = rawText.trim();
-  const cleaned = trimmed
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const firstBrace = cleaned.indexOf("{");
-    const lastBrace = cleaned.lastIndexOf("}");
-    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-      return null;
-    }
-    try {
-      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
-    } catch {
-      return null;
-    }
-  }
-}
 
 function buildContext(payload: OwnerCopilotPayloadForLlm) {
   const insight = buildOwnerCopilotInsight("shop", payload.summary, payload.snapshot);
@@ -153,7 +131,7 @@ function buildPrompt(
 ) {
   return [
     "USER_QUESTION:",
-    question.trim(),
+    wrapUserContent(question),
     "",
     "RECENT_CONVERSATION_JSON:",
     JSON.stringify(conversationTurns),

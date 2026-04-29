@@ -28,15 +28,15 @@ import {
   normalizeCopilotQuestion,
   parseCopilotQuestion,
 } from "@/lib/copilot-ask";
+import {
+  formatMoney,
+  findBestCustomer,
+  findBestProduct,
+  sanitizeCopilotInput,
+} from "@/lib/copilot-utils";
 
 type OwnerCopilotResponseMode = "auto" | "verified" | "fast";
 
-function formatMoney(value: number) {
-  return `৳ ${new Intl.NumberFormat("bn-BD", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0))}`;
-}
 
 function formatCount(value: number) {
   return new Intl.NumberFormat("bn-BD").format(Number(value || 0));
@@ -55,118 +55,9 @@ function formatCompactValue(value: number) {
       }).format(value);
 }
 
-function scoreCustomerMatch(customerName: string, askedName: string) {
-  const customer = normalizeName(customerName);
-  const asked = normalizeName(askedName);
-  if (!customer || !asked) return 0;
-  if (customer === asked) return 100;
-  if (customer.startsWith(asked)) return 80;
-  if (customer.includes(asked)) return 60;
-  if (asked.includes(customer)) return 40;
-  return 0;
-}
 
-async function findBestCustomer(shopId: string, askedName: string) {
-  const candidates = await prisma.customer.findMany({
-    where: {
-      shopId,
-      name: {
-        contains: askedName.trim(),
-        mode: "insensitive",
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      totalDue: true,
-    },
-    orderBy: [{ totalDue: "desc" }, { name: "asc" }],
-    take: 8,
-  });
 
-  if (candidates.length === 0) return null;
 
-  const scored = candidates
-    .map((candidate) => ({
-      candidate,
-      score: scoreCustomerMatch(candidate.name, askedName),
-    }))
-    .sort((a, b) => b.score - a.score || Number(b.candidate.totalDue) - Number(a.candidate.totalDue));
-
-  return scored[0]?.score > 0 ? scored[0].candidate : null;
-}
-
-function scoreProductMatch(productName: string, askedName: string) {
-  const product = normalizeName(productName);
-  const asked = normalizeName(askedName);
-  if (!product || !asked) return 0;
-  if (product === asked) return 100;
-  if (product.startsWith(asked)) return 85;
-  if (product.includes(asked)) return 65;
-  if (asked.includes(product)) return 45;
-  return 0;
-}
-
-async function findBestProduct(shopId: string, askedName: string) {
-  const candidates = await prisma.product.findMany({
-    where: {
-      shopId,
-      OR: [
-        {
-          name: {
-            contains: askedName.trim(),
-            mode: "insensitive",
-          },
-        },
-        {
-          sku: {
-            contains: askedName.trim(),
-            mode: "insensitive",
-          },
-        },
-        {
-          barcode: {
-            contains: askedName.trim(),
-            mode: "insensitive",
-          },
-        },
-      ],
-    },
-    select: {
-      id: true,
-      name: true,
-      category: true,
-      sellPrice: true,
-      stockQty: true,
-      baseUnit: true,
-      sku: true,
-      barcode: true,
-      isActive: true,
-      trackStock: true,
-    },
-    orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
-    take: 10,
-  });
-
-  if (candidates.length === 0) return null;
-
-  const scored = candidates
-    .map((candidate) => ({
-      candidate,
-      score: Math.max(
-        scoreProductMatch(candidate.name, askedName),
-        candidate.sku ? scoreProductMatch(candidate.sku, askedName) - 10 : 0,
-        candidate.barcode ? scoreProductMatch(candidate.barcode, askedName) - 10 : 0
-      ),
-    }))
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        Number(b.candidate.isActive) - Number(a.candidate.isActive)
-    );
-
-  return scored[0]?.score > 0 ? scored[0].candidate : null;
-}
 
 async function getLowStockPreview(shopId: string) {
   return prisma.product.findMany({
@@ -221,7 +112,14 @@ export async function POST(req: Request) {
       };
 
       const shopId = String(body.shopId || "").trim();
-      const question = String(body.question || "").trim();
+      const rawQuestion = String(body.question || "").trim();
+      if (rawQuestion.length > 500) {
+        return NextResponse.json(
+          { error: "প্রশ্ন সর্বোচ্চ ৫০০ অক্ষর হতে পারবে।" },
+          { status: 400 }
+        );
+      }
+      const question = sanitizeCopilotInput(rawQuestion);
       const requestedConversationId = String(body.conversationId || "").trim() || null;
       const responseMode = parseOwnerCopilotResponseMode(body.responseMode);
 
