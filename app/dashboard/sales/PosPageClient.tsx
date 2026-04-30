@@ -1536,10 +1536,12 @@ export function PosPageClient({
             </div>
 
             {/* Header row — always visible, tap to expand/collapse */}
-            <button
-              type="button"
-              className="w-full flex items-center justify-between gap-3 px-3 pb-2 text-left"
+            <div
+              role="button"
+              tabIndex={0}
+              className="w-full flex items-center justify-between gap-3 px-3 pb-2 text-left cursor-pointer"
               onClick={() => setBarExpanded((v) => !v)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setBarExpanded((v) => !v); }}
             >
               <div className="min-w-0 flex-1">
                 <p className="text-base font-bold text-foreground leading-tight">
@@ -1583,7 +1585,7 @@ export function PosPageClient({
                   )}
                 </button>
               </div>
-            </button>
+            </div>
 
             {/* Expanded panel */}
             {barExpanded && (

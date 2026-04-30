@@ -30,6 +30,13 @@ export async function seedShops(
       phone: "01700-555555",
       businessType: "restaurant",
     },
+    {
+      key: "hardware",
+      name: "মেসার্স রহিম হার্ডওয়্যার",
+      address: "কলেজ রোড, নারায়ণগঞ্জ",
+      phone: "01700-777000",
+      businessType: "hardware",
+    },
   ];
 
   const shops: ShopMap = {};
