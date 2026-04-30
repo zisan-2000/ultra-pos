@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getActiveProductsByShop } from "@/app/actions/products";
-import { createSale } from "@/app/actions/sales";
+import { createSale, getTopSoldProductIds } from "@/app/actions/sales";
 import Link from "next/link";
 import { PosPageClient } from "../PosPageClient";
 import { requireUser } from "@/lib/auth-session";
@@ -95,7 +95,10 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
     canIssueSalesInvoicePermission;
   const saleTaxLabel = String((selectedShop as any).taxLabel || "VAT");
   const saleTaxRate = Number((selectedShop as any).taxRate ?? 0);
-  const products = await getActiveProductsByShop(selectedShopId);
+  const [products, topProductIds] = await Promise.all([
+    getActiveProductsByShop(selectedShopId),
+    getTopSoldProductIds(selectedShopId, 8).catch(() => [] as string[]),
+  ]);
 
   async function submitSale(formData: FormData) {
     "use server";
@@ -160,6 +163,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       salesInvoicePrefix={(selectedShop as any).salesInvoicePrefix ?? null}
       nextSalesInvoiceSeq={Number((selectedShop as any).nextSalesInvoiceSeq ?? 1)}
       submitSale={submitSale}
+      topProductIds={topProductIds}
     />
   );
 }

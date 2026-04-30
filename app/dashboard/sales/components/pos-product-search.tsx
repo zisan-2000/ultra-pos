@@ -27,6 +27,7 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 type PosProductSearchProps = {
   shopId: string;
   canUseBarcodeScan: boolean;
+  topProductIds?: string[];
   products: {
     id: string;
     name: string;
@@ -444,7 +445,8 @@ function formatCategoryLabel(raw: string) {
 
 function buildQuickSlots(
   products: EnrichedProduct[],
-  usageSeed: Record<string, UsageEntry>
+  usageSeed: Record<string, UsageEntry>,
+  dbRankMap: Map<string, number> = new Map()
 ): QuickSlot[] {
   const sorted = products.slice().sort((a, b) => {
     const ua = usageSeed[a.id] || {};
@@ -459,6 +461,10 @@ function buildQuickSlots(
 
     const recencyDiff = (ub.lastUsed ?? 0) - (ua.lastUsed ?? 0);
     if (recencyDiff !== 0) return recencyDiff;
+
+    // DB rank: lower index = top seller (only kicks in when localStorage has no data)
+    const dbDiff = (dbRankMap.get(a.id) ?? 9999) - (dbRankMap.get(b.id) ?? 9999);
+    if (dbDiff !== 0) return dbDiff;
 
     return a.name.localeCompare(b.name);
   });
@@ -545,6 +551,7 @@ export const PosProductSearch = memo(function PosProductSearch({
   products,
   shopId,
   canUseBarcodeScan,
+  topProductIds,
 }: PosProductSearchProps) {
   const [query, setQuery] = useState("");
   const [scanCode, setScanCode] = useState("");
@@ -627,6 +634,10 @@ export const PosProductSearch = memo(function PosProductSearch({
   const quickSlotStorageKey = useMemo(
     () => `pos-quick-slots-${shopId}`,
     [shopId]
+  );
+  const dbRankMap = useMemo(
+    () => new Map((topProductIds ?? []).map((id, i) => [id, i])),
+    [topProductIds]
   );
   const [renderCount, setRenderCount] = useState(INITIAL_RENDER);
   const [showCategoryOverflowCue, setShowCategoryOverflowCue] = useState(false);
@@ -959,7 +970,8 @@ export const PosProductSearch = memo(function PosProductSearch({
 
     const fallbackIds = (buildQuickSlots(
       productsWithCategory,
-      sessionUsageSnapshot
+      sessionUsageSnapshot,
+      dbRankMap
     ).filter(Boolean) as EnrichedProduct[])
       .map((p) => p.id)
       .filter((id) => !taken.has(id));

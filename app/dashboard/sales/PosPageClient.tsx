@@ -118,6 +118,7 @@ type PosPageClientProps = {
   canIssueSalesInvoice: boolean;
   salesInvoicePrefix?: string | null;
   nextSalesInvoiceSeq?: number;
+  topProductIds?: string[];
   submitSale: (formData: FormData) => Promise<{
     success: boolean;
     saleId: string;
@@ -143,6 +144,7 @@ export function PosPageClient({
   canIssueSalesInvoice,
   salesInvoicePrefix,
   nextSalesInvoiceSeq,
+  topProductIds,
   submitSale,
 }: PosPageClientProps) {
   const router = useRouter();
@@ -1239,6 +1241,7 @@ export function PosPageClient({
             products={productOptions}
             shopId={shopId}
             canUseBarcodeScan={canUseBarcodeScan}
+            topProductIds={topProductIds}
           />
         </div>
       </div>

@@ -9,21 +9,22 @@ export const PosMiniCartItem = memo(function PosMiniCartItem({
 }: {
   item: CartItem;
 }) {
-  const { increase, decrease, remove, updatePrice } = useCart(
+  const { increase, decrease, remove, updatePrice, updateQty } = useCart(
     useShallow((s) => ({
       increase: s.increase,
       decrease: s.decrease,
       remove: s.remove,
       updatePrice: s.updatePrice,
+      updateQty: s.updateQty,
     }))
   );
 
   const [priceInput, setPriceInput] = useState(() => String(item.unitPrice));
+  const [qtyInput, setQtyInput] = useState(() => String(item.qty));
   const lockRef = useRef(false);
 
-  useEffect(() => {
-    setPriceInput(String(item.unitPrice));
-  }, [item.unitPrice]);
+  useEffect(() => { setPriceInput(String(item.unitPrice)); }, [item.unitPrice]);
+  useEffect(() => { setQtyInput(String(item.qty)); }, [item.qty]);
 
   const commitPrice = useCallback(() => {
     const parsed = parseFloat(priceInput);
@@ -33,6 +34,15 @@ export const PosMiniCartItem = memo(function PosMiniCartItem({
       updatePrice(item.itemKey, parsed);
     }
   }, [priceInput, item.unitPrice, item.itemKey, updatePrice]);
+
+  const commitQty = useCallback(() => {
+    const parsed = parseFloat(qtyInput);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setQtyInput(String(item.qty));
+    } else if (parsed !== item.qty) {
+      updateQty(item.itemKey, parsed);
+    }
+  }, [qtyInput, item.qty, item.itemKey, updateQty]);
 
   const guard = useCallback((fn: () => void) => {
     if (lockRef.current) return;
@@ -74,7 +84,18 @@ export const PosMiniCartItem = memo(function PosMiniCartItem({
         >
           −
         </button>
-        <span className="w-6 text-center text-xs font-bold">{item.qty}</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={qtyInput}
+          onChange={(e) => setQtyInput(e.target.value)}
+          onBlur={commitQty}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { commitQty(); (e.target as HTMLInputElement).blur(); }
+          }}
+          onFocus={(e) => e.target.select()}
+          className="h-7 w-10 rounded-lg border border-border bg-card px-1 text-center text-xs font-semibold text-foreground outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+        />
         <button
           type="button"
           onClick={() => guard(() => increase(item.itemKey))}

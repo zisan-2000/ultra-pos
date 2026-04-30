@@ -10,20 +10,21 @@ export const PosCartItem = memo(function PosCartItem({
 }: {
   item: CartItem;
 }) {
-  const { increase, decrease, remove, updatePrice } = useCart(
+  const { increase, decrease, remove, updatePrice, updateQty } = useCart(
     useShallow((s) => ({
       increase: s.increase,
       decrease: s.decrease,
       remove: s.remove,
       updatePrice: s.updatePrice,
+      updateQty: s.updateQty,
     }))
   );
   const lockRef = useRef(false);
   const [priceInput, setPriceInput] = useState(() => String(item.unitPrice));
+  const [qtyInput, setQtyInput] = useState(() => String(item.qty));
 
-  useEffect(() => {
-    setPriceInput(String(item.unitPrice));
-  }, [item.unitPrice]);
+  useEffect(() => { setPriceInput(String(item.unitPrice)); }, [item.unitPrice]);
+  useEffect(() => { setQtyInput(String(item.qty)); }, [item.qty]);
 
   const commitPrice = useCallback(() => {
     const parsed = parseFloat(priceInput);
@@ -34,18 +35,23 @@ export const PosCartItem = memo(function PosCartItem({
     }
   }, [priceInput, item.unitPrice, item.itemKey, updatePrice]);
 
+  const commitQty = useCallback(() => {
+    const parsed = parseFloat(qtyInput);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setQtyInput(String(item.qty));
+    } else if (parsed !== item.qty) {
+      updateQty(item.itemKey, parsed);
+    }
+  }, [qtyInput, item.qty, item.itemKey, updateQty]);
+
   const runOncePerFrame = useCallback((action: () => void) => {
     if (lockRef.current) return;
     lockRef.current = true;
     action();
     if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(() => {
-        lockRef.current = false;
-      });
+      requestAnimationFrame(() => { lockRef.current = false; });
     } else {
-      setTimeout(() => {
-        lockRef.current = false;
-      }, 16);
+      setTimeout(() => { lockRef.current = false; }, 16);
     }
   }, []);
 
@@ -88,10 +94,7 @@ export const PosCartItem = memo(function PosCartItem({
             onChange={(e) => setPriceInput(e.target.value)}
             onBlur={commitPrice}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                commitPrice();
-                (e.target as HTMLInputElement).blur();
-              }
+              if (e.key === "Enter") { commitPrice(); (e.target as HTMLInputElement).blur(); }
             }}
             onFocus={(e) => e.target.select()}
             className="h-8 w-16 sm:w-20 rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold text-foreground outline-none transition focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
@@ -107,7 +110,18 @@ export const PosCartItem = memo(function PosCartItem({
           >
             −
           </button>
-          <span className="w-8 text-center text-sm font-semibold">{item.qty}</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={qtyInput}
+            onChange={(e) => setQtyInput(e.target.value)}
+            onBlur={commitQty}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { commitQty(); (e.target as HTMLInputElement).blur(); }
+            }}
+            onFocus={(e) => e.target.select()}
+            className="h-8 w-14 rounded-lg border border-border bg-background px-1 text-center text-sm font-semibold text-foreground outline-none transition focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+          />
           <button
             type="button"
             onClick={handleIncrease}

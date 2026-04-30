@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
 import { publishRealtimeEvent } from "@/lib/realtime/publisher";
 import { REALTIME_EVENTS } from "@/lib/realtime/events";
 import { revalidateReportsForSale } from "@/lib/reports/revalidate";
@@ -2462,3 +2462,26 @@ export async function voidSale(saleId: string, reason?: string | null) {
 
   return { success: true };
 }
+
+export const getTopSoldProductIds = unstable_cache(
+  async (shopId: string, limit = 8): Promise<string[]> => {
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const rows = await prisma.saleItem.groupBy({
+      by: ["productId"],
+      where: {
+        sale: {
+          shopId,
+          status: { not: "VOIDED" },
+          createdAt: { gte: since },
+        },
+      },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: limit,
+    });
+    return rows.map((r) => r.productId);
+  },
+  ["pos-top-product-ids"],
+  { revalidate: 300 }
+);
