@@ -51,6 +51,7 @@ type Customer = {
   phone?: string | null;
   address?: string | null;
   totalDue: string | number;
+  creditLimit?: number | null;
   lastPaymentAt?: string | null;
 };
 
@@ -70,6 +71,32 @@ type StatementRow = {
   amount: string | number;
   description?: string | null;
   entryDate: string;
+  saleId?: string | null;
+  dueDate?: string | null;
+  invoiceNo?: string | null;
+};
+
+type AgingReport = {
+  asOf: string;
+  totals: {
+    current: string;
+    b1_30: string;
+    b31_60: string;
+    b61_90: string;
+    b90plus: string;
+    total: string;
+  };
+  rows: {
+    customerId: string;
+    customerName: string;
+    phone: string | null;
+    current: string;
+    b1_30: string;
+    b31_60: string;
+    b61_90: string;
+    b90plus: string;
+    totalDue: string;
+  }[];
 };
 
 type SpeechRecognitionInstance = {
@@ -213,7 +240,7 @@ type Props = {
   canTakeDuePayment: boolean;
 };
 
-type DueTabId = "summary" | "add" | "payment" | "list";
+type DueTabId = "summary" | "add" | "payment" | "list" | "aging";
 
 export default function DuePageClient({
   shopId,
@@ -259,7 +286,10 @@ export default function DuePageClient({
     name: "",
     phone: "",
     address: "",
+    creditLimit: "",
   });
+  const [agingReport, setAgingReport] = useState<AgingReport | null>(null);
+  const [loadingAging, setLoadingAging] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     customerId: "",
     amount: "",
@@ -707,7 +737,7 @@ export default function DuePageClient({
       const merged = mergeCustomerTemplates(customerTemplates, template);
       setCustomerTemplates(merged);
       safeLocalStorageSet(customerTemplateKey, JSON.stringify(merged));
-      setNewCustomer({ name: "", phone: "", address: "" });
+      setNewCustomer({ name: "", phone: "", address: "", creditLimit: "" });
       await loadCustomersFromDexie();
       emitDueCustomersEvent({ shopId, at: Date.now(), source: "local" });
       return;
@@ -721,6 +751,9 @@ export default function DuePageClient({
         name: newCustomer.name.trim(),
         phone: newCustomer.phone.trim() || undefined,
         address: newCustomer.address.trim() || undefined,
+        creditLimit: newCustomer.creditLimit
+          ? Number(newCustomer.creditLimit) || undefined
+          : undefined,
       }),
     });
 
@@ -735,7 +768,7 @@ export default function DuePageClient({
     setCustomerTemplates(merged);
     safeLocalStorageSet(customerTemplateKey, JSON.stringify(merged));
 
-    setNewCustomer({ name: "", phone: "", address: "" });
+    setNewCustomer({ name: "", phone: "", address: "", creditLimit: "" });
     await refreshData({ force: true, source: "create" });
   }
 
@@ -1009,6 +1042,17 @@ export default function DuePageClient({
     [isMobileViewport]
   );
 
+  // Fetch aging report when aging tab becomes active
+  useEffect(() => {
+    if (activeTab !== "aging") return;
+    setLoadingAging(true);
+    fetch(`/api/due/aging?shopId=${shopId}`)
+      .then((r) => r.json())
+      .then((data) => setAgingReport(data))
+      .catch(() => setAgingReport(null))
+      .finally(() => setLoadingAging(false));
+  }, [activeTab, shopId]);
+
   const openStatementFor = (customerId: string) => {
     handleTabSelect("list");
     setSelectedCustomerId(customerId);
@@ -1132,12 +1176,14 @@ export default function DuePageClient({
           ? [
               { id: "summary", label: "সারাংশ", enabled: true },
               { id: "list", label: "স্টেটমেন্ট", enabled: true },
+              { id: "aging", label: "বকেয়া রিপোর্ট", enabled: true },
             ]
           : [
               { id: "summary", label: "সারাংশ", enabled: true },
               { id: "add", label: "গ্রাহক যোগ", enabled: canCreateCustomer },
               { id: "payment", label: "পেমেন্ট নিন", enabled: canTakeDuePayment },
               { id: "list", label: "স্টেটমেন্ট", enabled: true },
+              { id: "aging", label: "বকেয়া রিপোর্ট", enabled: true },
             ]
       ).filter((tab) => tab.enabled),
     [canCreateCustomer, canTakeDuePayment, isMobileViewport, mobileAdvancedMode]
@@ -1344,7 +1390,7 @@ export default function DuePageClient({
                               </p>
                             </div>
                           </div>
-                          <div className="text-right">
+                          <div className="text-right space-y-1.5">
                             <span
                               className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
                                 hasDue
@@ -1354,9 +1400,21 @@ export default function DuePageClient({
                             >
                               {hasDue ? `বাকি ${dueAmount} ৳` : "পরিশোধিত"}
                             </span>
+                            {(c as any).creditLimit != null && (
+                              <p
+                                className={`text-[11px] font-medium ${
+                                  Number(c.totalDue || 0) >=
+                                  Number((c as any).creditLimit) * 0.9
+                                    ? "text-danger"
+                                    : "text-muted-foreground"
+                                }`}
+                              >
+                                সীমা: {Number((c as any).creditLimit).toFixed(0)} ৳
+                              </p>
+                            )}
                             {c.lastPaymentAt && (
-                              <p className="text-[11px] text-muted-foreground mt-2">
-                                শেষ পেমেন্ট: {" "}
+                              <p className="text-[11px] text-muted-foreground">
+                                শেষ পেমেন্ট:{" "}
                                 {new Date(c.lastPaymentAt).toLocaleDateString(
                                   "bn-BD"
                                 )}
@@ -1569,6 +1627,25 @@ export default function DuePageClient({
                   {voiceErrorText ? (
                     <span className="text-danger">{voiceErrorText}</span>
                   ) : null}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-foreground">
+                  ক্রেডিট সীমা (ঐচ্ছিক)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="h-12 w-full rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="যেমন: 50000 (ফাঁকা রাখলে কোনো সীমা নেই)"
+                  value={newCustomer.creditLimit}
+                  onChange={(e) =>
+                    setNewCustomer((p) => ({ ...p, creditLimit: e.target.value }))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  সর্বোচ্চ কত টাকা বাকি দেওয়া যাবে তা এখানে লিখুন।
                 </p>
               </div>
               <button
@@ -1906,6 +1983,7 @@ export default function DuePageClient({
                         <tr>
                           <th className="p-3 text-left">তারিখ</th>
                           <th className="p-3 text-left">বিবরণ</th>
+                          <th className="p-3 text-left">বাকির মেয়াদ</th>
                           <th className="p-3 text-right">বিক্রয়</th>
                           <th className="p-3 text-right">পেমেন্ট</th>
                           <th className="p-3 text-right">ব্যালেন্স</th>
@@ -1914,24 +1992,54 @@ export default function DuePageClient({
                       <tbody>
                         {loadingStatement ? (
                           <tr>
-                            <td className="p-3 text-center" colSpan={5}>
+                            <td className="p-3 text-center" colSpan={6}>
                               লোড হচ্ছে...
                             </td>
                           </tr>
                         ) : statementWithBalance.length === 0 ? (
                           <tr>
-                            <td className="p-3 text-center" colSpan={5}>
+                            <td className="p-3 text-center" colSpan={6}>
                               কোনো লেনদেন নেই।
                             </td>
                           </tr>
                         ) : (
-                          statementWithBalance.map((row) => (
+                          statementWithBalance.map((row) => {
+                            const dueDateStr = (row as any).dueDate as string | null | undefined;
+                            const isOverdue =
+                              dueDateStr &&
+                              row.entryType === "SALE" &&
+                              new Date(dueDateStr) < new Date(new Date().toDateString());
+                            const nearDue =
+                              dueDateStr &&
+                              row.entryType === "SALE" &&
+                              !isOverdue &&
+                              (new Date(dueDateStr).getTime() - Date.now()) <
+                                3 * 86400000;
+                            return (
                             <tr key={row.id} className="border-t border-border/70">
                               <td className="p-3">
                                 {formatStatementDateTime(row.entryDate)}
                               </td>
                               <td className="p-3 text-left">
                                 {row.description || "-"}
+                              </td>
+                              <td className="p-3 text-left">
+                                {row.entryType === "SALE" && dueDateStr ? (
+                                  <span
+                                    className={`text-xs font-medium ${
+                                      isOverdue
+                                        ? "text-danger"
+                                        : nearDue
+                                        ? "text-warning"
+                                        : "text-muted-foreground"
+                                    }`}
+                                  >
+                                    {dueDateStr}
+                                    {isOverdue && " ⚠️"}
+                                  </span>
+                                ) : (
+                                  "-"
+                                )}
                               </td>
                               <td className="p-3 text-right">
                                 {row.entryType === "SALE"
@@ -1947,7 +2055,8 @@ export default function DuePageClient({
                                 {Number((row as any).running || 0).toFixed(2)} ৳
                               </td>
                             </tr>
-                          ))
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
@@ -1970,6 +2079,11 @@ export default function DuePageClient({
                         const running = Number((row as any).running || 0).toFixed(2);
                         const title = row.description || (sale ? "বিক্রি" : "পেমেন্ট");
                         const sign = sale ? "+" : "-";
+                        const dueDateStr = (row as any).dueDate as string | null | undefined;
+                        const isOverdue =
+                          sale &&
+                          dueDateStr &&
+                          new Date(dueDateStr) < new Date(new Date().toDateString());
 
                         return (
                           <div
@@ -1985,6 +2099,16 @@ export default function DuePageClient({
                               <div>
                                 <p className="text-xs text-muted-foreground">
                                   {formatStatementDateTime(row.entryDate)}
+                                  {sale && dueDateStr && (
+                                    <span
+                                      className={`ml-2 ${
+                                        isOverdue ? "text-danger font-semibold" : "text-muted-foreground"
+                                      }`}
+                                    >
+                                      মেয়াদ: {dueDateStr}
+                                      {isOverdue && " ⚠️"}
+                                    </span>
+                                  )}
                                 </p>
                                 <p className="text-base font-semibold text-foreground mt-1">
                                   {title}
@@ -2027,6 +2151,205 @@ export default function DuePageClient({
                     )}
                   </div>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Aging Report Tab */}
+          {activeTab === "aging" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-foreground">বকেয়া রিপোর্ট</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAgingReport(null);
+                    setLoadingAging(true);
+                    fetch(`/api/due/aging?shopId=${shopId}`)
+                      .then((r) => r.json())
+                      .then(setAgingReport)
+                      .catch(() => setAgingReport(null))
+                      .finally(() => setLoadingAging(false));
+                  }}
+                  className="h-8 px-3 rounded-full border border-border text-xs font-semibold text-foreground hover:border-primary/40 hover:text-primary transition-colors"
+                >
+                  রিফ্রেশ
+                </button>
+              </div>
+
+              {loadingAging ? (
+                <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+                  লোড হচ্ছে...
+                </div>
+              ) : !agingReport ? (
+                <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+                  ডেটা পাওয়া যায়নি
+                </div>
+              ) : (
+                <>
+                  {/* Summary Totals */}
+                  <div className="rounded-xl border border-border bg-card overflow-hidden">
+                    <div className="px-4 py-3 bg-muted/50 border-b border-border">
+                      <p className="text-sm font-semibold text-foreground">
+                        মোট বকেয়া সারসংক্ষেপ — {agingReport.asOf} পর্যন্ত
+                      </p>
+                    </div>
+                    <div className="divide-y divide-border/60">
+                      {[
+                        { label: "চলতি (এখনো মেয়াদ আছে)", value: agingReport.totals.current, color: "text-success" },
+                        { label: "১–৩০ দিন অতিক্রান্ত", value: agingReport.totals.b1_30, color: "text-warning" },
+                        { label: "৩১–৬০ দিন অতিক্রান্ত", value: agingReport.totals.b31_60, color: "text-warning" },
+                        { label: "৬১–৯০ দিন অতিক্রান্ত", value: agingReport.totals.b61_90, color: "text-danger" },
+                        { label: "৯০+ দিন অতিক্রান্ত", value: agingReport.totals.b90plus, color: "text-danger" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="flex items-center justify-between px-4 py-2.5">
+                          <span className="text-sm text-foreground">{label}</span>
+                          <span className={`text-sm font-semibold ${parseFloat(value) > 0 ? color : "text-muted-foreground"}`}>
+                            {parseFloat(value) > 0 ? `${parseFloat(value).toFixed(2)} ৳` : "—"}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30">
+                        <span className="text-sm font-bold text-foreground">মোট বকেয়া</span>
+                        <span className="text-sm font-bold text-foreground">
+                          {parseFloat(agingReport.totals.total).toFixed(2)} ৳
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Per-Customer Breakdown */}
+                  {agingReport.rows.length === 0 ? (
+                    <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                      কোনো বকেয়া নেই
+                    </div>
+                  ) : (
+                    <>
+                      {/* Desktop table */}
+                      <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/70">
+                            <tr>
+                              <th className="p-3 text-left">গ্রাহক</th>
+                              <th className="p-3 text-right text-success">চলতি</th>
+                              <th className="p-3 text-right text-warning">১–৩০</th>
+                              <th className="p-3 text-right text-warning">৩১–৬০</th>
+                              <th className="p-3 text-right text-danger">৬১–৯০</th>
+                              <th className="p-3 text-right text-danger">৯০+</th>
+                              <th className="p-3 text-right font-bold">মোট</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {agingReport.rows.map((row) => {
+                              const hasCritical =
+                                parseFloat(row.b61_90) > 0 ||
+                                parseFloat(row.b90plus) > 0;
+                              const hasWarning =
+                                !hasCritical &&
+                                (parseFloat(row.b1_30) > 0 ||
+                                  parseFloat(row.b31_60) > 0);
+                              return (
+                                <tr
+                                  key={row.customerId}
+                                  className={`border-t border-border/70 ${
+                                    hasCritical
+                                      ? "bg-danger/5"
+                                      : hasWarning
+                                      ? "bg-warning/5"
+                                      : ""
+                                  }`}
+                                >
+                                  <td className="p-3">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openStatementFor(row.customerId)
+                                      }
+                                      className="text-left font-semibold text-primary hover:underline"
+                                    >
+                                      {row.customerName}
+                                    </button>
+                                    {row.phone && (
+                                      <p className="text-xs text-muted-foreground">
+                                        {row.phone}
+                                      </p>
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-right text-success">
+                                    {parseFloat(row.current) > 0 ? `${parseFloat(row.current).toFixed(2)}` : "—"}
+                                  </td>
+                                  <td className="p-3 text-right text-warning">
+                                    {parseFloat(row.b1_30) > 0 ? `${parseFloat(row.b1_30).toFixed(2)}` : "—"}
+                                  </td>
+                                  <td className="p-3 text-right text-warning">
+                                    {parseFloat(row.b31_60) > 0 ? `${parseFloat(row.b31_60).toFixed(2)}` : "—"}
+                                  </td>
+                                  <td className="p-3 text-right text-danger">
+                                    {parseFloat(row.b61_90) > 0 ? `${parseFloat(row.b61_90).toFixed(2)}` : "—"}
+                                  </td>
+                                  <td className="p-3 text-right text-danger font-semibold">
+                                    {parseFloat(row.b90plus) > 0 ? `${parseFloat(row.b90plus).toFixed(2)}` : "—"}
+                                  </td>
+                                  <td className="p-3 text-right font-bold">
+                                    {parseFloat(row.totalDue).toFixed(2)} ৳
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Mobile cards */}
+                      <div className="space-y-3 md:hidden">
+                        {agingReport.rows.map((row) => {
+                          const hasCritical =
+                            parseFloat(row.b61_90) > 0 ||
+                            parseFloat(row.b90plus) > 0;
+                          return (
+                            <div
+                              key={row.customerId}
+                              className={`rounded-2xl border p-4 space-y-2 ${
+                                hasCritical
+                                  ? "border-danger/30 bg-danger/5"
+                                  : "border-border bg-card"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    openStatementFor(row.customerId)
+                                  }
+                                  className="font-semibold text-primary hover:underline text-sm"
+                                >
+                                  {row.customerName}
+                                </button>
+                                <span className="text-sm font-bold">
+                                  {parseFloat(row.totalDue).toFixed(2)} ৳
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-1 text-xs">
+                                {parseFloat(row.b1_30) > 0 && (
+                                  <span className="text-warning">১–৩০: {parseFloat(row.b1_30).toFixed(0)}</span>
+                                )}
+                                {parseFloat(row.b31_60) > 0 && (
+                                  <span className="text-warning">৩১–৬০: {parseFloat(row.b31_60).toFixed(0)}</span>
+                                )}
+                                {parseFloat(row.b61_90) > 0 && (
+                                  <span className="text-danger font-semibold">৬১–৯০: {parseFloat(row.b61_90).toFixed(0)}</span>
+                                )}
+                                {parseFloat(row.b90plus) > 0 && (
+                                  <span className="text-danger font-bold">৯০+: {parseFloat(row.b90plus).toFixed(0)}</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </>
               )}
             </div>
           )}

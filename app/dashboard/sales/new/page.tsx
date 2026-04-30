@@ -107,6 +107,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
     const paymentMethod = (formData.get("paymentMethod") as string) || "cash";
     const customerId = (formData.get("customerId") as string) || null;
     const paidNowStr = formData.get("paidNow") as string;
+    const dueDaysStr = formData.get("dueDays") as string;
     const discountTypeRaw = (formData.get("discountType") as string) || "";
     const discountValueStr = (formData.get("discountValue") as string) || "";
     const note = (formData.get("note") as string) || "";
@@ -131,6 +132,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       paymentMethod,
       customerId,
       paidNow: paidNowStr ? Number(paidNowStr) : 0,
+      dueDays: dueDaysStr ? Number(dueDaysStr) : 30,
       discountType:
         discountTypeRaw === "amount" || discountTypeRaw === "percent"
           ? discountTypeRaw

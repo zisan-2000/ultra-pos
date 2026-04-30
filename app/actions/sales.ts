@@ -53,6 +53,7 @@ type CreateSaleInput = {
   note?: string | null;
   customerId?: string | null;
   paidNow?: number | null;
+  dueDays?: number | null;
   discountType?: SaleDiscountType | null;
   discountValue?: number | null;
 };
@@ -995,7 +996,7 @@ export async function createSale(input: CreateSaleInput) {
     throw new Error("Cart is empty");
   }
 
-  let dueCustomer: { id: string } | null = null;
+  let dueCustomer: { id: string; totalDue: number; creditLimit: number | null } | null = null;
   if (input.paymentMethod === "due") {
     requirePermission(user, "create_due_sale");
     if (!input.customerId) {
@@ -1004,14 +1005,18 @@ export async function createSale(input: CreateSaleInput) {
 
     const c = await prisma.customer.findFirst({
       where: { id: input.customerId },
-      select: { id: true, shopId: true },
+      select: { id: true, shopId: true, totalDue: true, creditLimit: true },
     });
 
     if (!c || c.shopId !== input.shopId) {
       throw new Error("Customer not found for this shop");
     }
 
-    dueCustomer = { id: c.id };
+    dueCustomer = {
+      id: c.id,
+      totalDue: Number(c.totalDue ?? 0),
+      creditLimit: c.creditLimit !== null ? Number(c.creditLimit) : null,
+    };
   }
 
   // Product IDs
@@ -1104,6 +1109,42 @@ export async function createSale(input: CreateSaleInput) {
       : null;
   const saleTimestamp = new Date();
 
+  // Compute due date and credit limit warning before the transaction
+  const dueDays =
+    normalizedPaymentMethod === "due" &&
+    typeof input.dueDays === "number" &&
+    input.dueDays > 0
+      ? input.dueDays
+      : 30;
+  const dueDate =
+    normalizedPaymentMethod === "due"
+      ? (() => {
+          const dd = new Date(saleTimestamp);
+          dd.setDate(dd.getDate() + dueDays);
+          return dd;
+        })()
+      : null;
+
+  let creditLimitWarning: {
+    exceeded: boolean;
+    limit: number;
+    projected: number;
+  } | null = null;
+  if (
+    normalizedPaymentMethod === "due" &&
+    dueCustomer &&
+    dueCustomer.creditLimit !== null
+  ) {
+    const projected = dueCustomer.totalDue + (totalNum - payNow);
+    if (projected > dueCustomer.creditLimit) {
+      creditLimitWarning = {
+        exceeded: true,
+        limit: dueCustomer.creditLimit,
+        projected,
+      };
+    }
+  }
+
   const createdSale = await prisma.$transaction(async (tx) => {
     const transactionStart = Date.now();
     logPerf(`🔄 [PERF] Transaction started at: ${new Date().toISOString()}`);
@@ -1134,6 +1175,11 @@ export async function createSale(input: CreateSaleInput) {
         taxAmount: taxAmountStr,
         totalAmount: totalStr,
         paymentMethod: input.paymentMethod || "cash",
+        dueDate: dueDate,
+        paidAmount:
+          normalizedPaymentMethod === "due"
+            ? payNow.toFixed(2)
+            : totalStr,
         note: input.note || null,
         invoiceNo: issuedInvoice?.invoiceNo ?? null,
         invoiceIssuedAt: issuedInvoice?.issuedAt ?? null,
@@ -1224,6 +1270,7 @@ export async function createSale(input: CreateSaleInput) {
         data: {
           shopId: input.shopId,
           customerId: dueCustomer.id,
+          saleId: inserted.id,
           entryType: "SALE",
           amount: totalStr,
           description: input.note || "Due sale",
@@ -1273,6 +1320,11 @@ export async function createSale(input: CreateSaleInput) {
       invoiceNo: inserted.invoiceNo ?? null,
     };
   });
+
+  const result = {
+    ...createdSale,
+    creditLimitWarning,
+  };
 
   // Move revalidate outside transaction for better performance
   // Revalidate paths in parallel (non-blocking)
@@ -1333,8 +1385,9 @@ export async function createSale(input: CreateSaleInput) {
 
   return {
     success: true,
-    saleId: createdSale.saleId,
-    invoiceNo: createdSale.invoiceNo,
+    saleId: result.saleId,
+    invoiceNo: result.invoiceNo,
+    creditLimitWarning: result.creditLimitWarning,
   };
 }
 
@@ -1465,6 +1518,8 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
             totalDue: true,
           },
         },
+        totalAmount: true,
+        paidAmount: true,
       },
     });
 
@@ -1785,6 +1840,18 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
             entryDate: now,
             businessDate,
           },
+        });
+
+        // Update the original invoice's paidAmount so aging report stays accurate
+        const cappedPaid = Prisma.Decimal.min(
+          new Prisma.Decimal(sale.totalAmount),
+          new Prisma.Decimal(sale.paidAmount).add(
+            new Prisma.Decimal(toMoney(dueAdjustmentAmount))
+          )
+        );
+        await tx.sale.update({
+          where: { id: sale.id },
+          data: { paidAmount: cappedPaid.toFixed(2) },
         });
       }
 

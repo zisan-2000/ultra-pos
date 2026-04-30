@@ -202,6 +202,7 @@ export function PosPageClient({
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [customerId, setCustomerId] = useState<string>("");
   const [paidNow, setPaidNow] = useState<string>("");
+  const [dueDays, setDueDays] = useState<string>("30");
   const [discountType, setDiscountType] = useState<SaleDiscountType>("amount");
   const [discountValue, setDiscountValue] = useState<string>("");
   const [note, setNote] = useState("");
@@ -682,6 +683,7 @@ export function PosPageClient({
         formData.set("paymentMethod", paymentMethod);
         formData.set("customerId", customerId);
         formData.set("paidNow", paidNowNumber.toString());
+        formData.set("dueDays", dueDays || "30");
         formData.set(
           "discountType",
           canUseSaleDiscount && saleDiscount.hasDiscount ? discountType : ""
@@ -901,6 +903,21 @@ export function PosPageClient({
     "ক্যাশ";
   const selectedCustomerName =
     customerList.find((customer) => customer.id === customerId)?.name ?? "";
+
+  const selectedCustomer = useMemo(
+    () => customerList.find((c) => c.id === customerId) ?? null,
+    [customerList, customerId]
+  );
+
+  const creditLimitWarning = useMemo(() => {
+    if (!isDue || !selectedCustomer) return null;
+    const limit = (selectedCustomer as any).creditLimit as number | null | undefined;
+    if (limit == null) return null;
+    const paidNowNum = Math.min(Math.max(Number(paidNow) || 0, 0), payableTotal);
+    const projected = Number(selectedCustomer.totalDue || 0) + (payableTotal - paidNowNum);
+    if (projected > limit) return { limit, projected };
+    return null;
+  }, [isDue, selectedCustomer, paidNow, payableTotal]);
 
   const sortCustomers = useCallback(
     (list: typeof customers) =>
@@ -1475,6 +1492,41 @@ export function PosPageClient({
               <p className="text-xs text-muted-foreground">
                 মোট {payableTotal.toFixed(2)} ৳ | আংশিক দিলে বাকি ধার হিসেবে
                 থাকবে।
+              </p>
+            </div>
+          )}
+
+          {/* Due days input */}
+          {isDue && canUseDueSale && (
+            <div className="rounded-xl border border-warning/30 bg-warning-soft/40 p-3 space-y-2">
+              <label className="text-base font-medium text-foreground">
+                পরিশোধের সময়সীমা
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={dueDays}
+                  onChange={(e) => setDueDays(e.target.value)}
+                  className="h-11 w-24 rounded-xl border border-border bg-card px-3 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <span className="text-sm text-muted-foreground">দিন পর</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                বিক্রির তারিখ থেকে গণনা হবে। ডিফল্ট ৩০ দিন।
+              </p>
+            </div>
+          )}
+
+          {/* Credit limit warning */}
+          {isDue && creditLimitWarning && (
+            <div className="rounded-xl border border-danger/40 bg-danger/10 p-3 text-xs text-danger-foreground space-y-0.5">
+              <p className="font-semibold">⚠️ ক্রেডিট সীমা অতিক্রান্ত</p>
+              <p>
+                সীমা: <span className="font-semibold">{creditLimitWarning.limit.toFixed(2)} ৳</span>
+                {" "}— এই বিক্রির পর মোট বাকি হবে:{" "}
+                <span className="font-semibold">{creditLimitWarning.projected.toFixed(2)} ৳</span>
               </p>
             </div>
           )}

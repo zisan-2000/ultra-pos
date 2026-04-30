@@ -979,6 +979,8 @@ model Sale {
   taxAmount        Decimal     @default(0) @map("tax_amount") @db.Decimal(12, 2)
   totalAmount      Decimal     @map("total_amount") @db.Decimal(12, 2)
   paymentMethod    String      @default("cash") @map("payment_method")
+  dueDate          DateTime?   @map("due_date") @db.Date
+  paidAmount       Decimal     @default(0) @map("paid_amount") @db.Decimal(12, 2)
   note             String?
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   status           String      @default("COMPLETED")
@@ -986,10 +988,11 @@ model Sale {
   voidAt           DateTime?   @map("void_at") @db.Timestamptz(6)
   voidByUserId     String?     @map("void_by_user_id")
 
-  shop      Shop       @relation(fields: [shopId], references: [id])
-  customer  Customer?  @relation(fields: [customerId], references: [id])
-  saleItems SaleItem[]
-  returns   SaleReturn[]
+  shop          Shop             @relation(fields: [shopId], references: [id])
+  customer      Customer?        @relation(fields: [customerId], references: [id])
+  saleItems     SaleItem[]
+  returns       SaleReturn[]
+  ledgerEntries CustomerLedger[]
 
   @@unique([shopId, invoiceNo], map: "uq_sales_shop_invoice_no")
   @@index([shopId], map: "idx_sales_shop")
@@ -1001,6 +1004,7 @@ model Sale {
   @@index([shopId, businessDate], map: "idx_sales_shop_business_date")
   @@index([shopId, status, businessDate], map: "idx_sales_shop_status_business_date")
   @@index([customerId], map: "idx_sales_customer")
+  @@index([shopId, paymentMethod, dueDate], map: "idx_sales_shop_payment_due")
   @@map("sales")
 }
 
@@ -1120,6 +1124,7 @@ model Customer {
   phone         String?
   address       String?
   totalDue      Decimal   @default("0") @map("total_due") @db.Decimal(12, 2)
+  creditLimit   Decimal?  @map("credit_limit") @db.Decimal(12, 2)
   lastPaymentAt DateTime? @map("last_payment_at") @db.Timestamptz(6)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -1139,17 +1144,20 @@ model CustomerLedger {
   entryType    String    @map("entry_type")
   amount       Decimal   @db.Decimal(12, 2)
   description  String?
+  saleId       String?   @map("sale_id") @db.Uuid
   entryDate    DateTime  @default(now()) @map("entry_date") @db.Timestamptz(6)
   businessDate DateTime? @map("business_date") @db.Date
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   shop     Shop     @relation(fields: [shopId], references: [id])
   customer Customer @relation(fields: [customerId], references: [id])
+  sale     Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
 
   @@index([shopId], map: "idx_customer_ledger_shop")
   @@index([customerId], map: "idx_customer_ledger_customer")
   @@index([entryDate], map: "idx_customer_ledger_entry_date")
   @@index([shopId, businessDate], map: "idx_customer_ledger_shop_business_date")
+  @@index([saleId], map: "idx_customer_ledger_sale")
   @@map("customer_ledger")
 }
 

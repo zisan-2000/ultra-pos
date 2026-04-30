@@ -24,7 +24,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { shopId, name, phone, address } = body || {};
+    const { shopId, name, phone, address, creditLimit } = body || {};
 
     if (!shopId || !name) {
       return NextResponse.json(
@@ -38,6 +38,7 @@ export async function POST(req: Request) {
       name,
       phone,
       address,
+      creditLimit: typeof creditLimit === "number" ? creditLimit : null,
     });
 
     return NextResponse.json({ success: true, id: result.id });
