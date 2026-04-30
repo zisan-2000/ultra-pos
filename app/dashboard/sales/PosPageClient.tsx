@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
+import { PosMiniCartItem } from "./components/pos-mini-cart-item";
 import { useCart } from "@/hooks/use-cart";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -162,9 +163,10 @@ export function PosPageClient({
   );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
+  const [barExpanded, setBarExpanded] = useState(false);
   const [barFlash, setBarFlash] = useState(false);
+  const prevItemCountRef = useRef(0);
   const cartPanelRef = useRef<HTMLDivElement | null>(null);
   const saleFormRef = useRef<HTMLFormElement | null>(null);
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -484,6 +486,12 @@ export function PosPageClient({
       setPaidNow("");
     }
   }, [canUseDueSale, paymentMethod]);
+
+  // Auto-expand bar when a new item is added
+  useEffect(() => {
+    if (items.length === 0) setBarExpanded(false);
+    prevItemCountRef.current = items.length;
+  }, [items.length]);
 
   useEffect(() => {
     if (!isDue) return;
@@ -873,6 +881,10 @@ export function PosPageClient({
     () => items.map((i) => <PosCartItem key={i.itemKey} item={i} />),
     [items]
   );
+  const miniCartList = useMemo(
+    () => items.map((i) => <PosMiniCartItem key={i.itemKey} item={i} />),
+    [items]
+  );
   const customerOptions = useMemo(
     () =>
       customerList.map((c) => (
@@ -1026,7 +1038,7 @@ export function PosPageClient({
   }
 
   const scrollToCart = () => {
-    setDrawerOpen(false);
+    setBarExpanded(false);
     if (cartPanelRef.current) {
       cartPanelRef.current.scrollIntoView({
         behavior: "smooth",
@@ -1507,144 +1519,181 @@ export function PosPageClient({
           </button>
         </form>
       </div>
-      {/* Sticky mini-bill for mobile */}
+      {/* Sticky collapsible mini-bill for mobile */}
       {items.length > 0 && (
-        <div className="lg:hidden fixed bottom-16 inset-x-0 z-40 px-4">
+        <div className="lg:hidden fixed bottom-16 inset-x-0 z-40 px-3">
           <div
-            className={`relative bg-card/95 backdrop-blur rounded-3xl border border-border shadow-[0_-10px_30px_rgba(15,23,42,0.18)] px-4 py-3 space-y-3 ${
+            className={`relative bg-card/95 backdrop-blur-md rounded-3xl border border-border shadow-[0_-10px_30px_rgba(15,23,42,0.18)] overflow-hidden ${
               barFlash ? "flash-bar" : ""
             }`}
           >
-            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-muted-foreground/30" />
-            <div className="flex items-start justify-between gap-3">
+            {/* Drag handle */}
+            <div
+              className="flex justify-center pt-2 pb-1 cursor-pointer"
+              onClick={() => setBarExpanded((v) => !v)}
+            >
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+
+            {/* Header row — always visible, tap to expand/collapse */}
+            <button
+              type="button"
+              className="w-full flex items-center justify-between gap-3 px-3 pb-2 text-left"
+              onClick={() => setBarExpanded((v) => !v)}
+            >
               <div className="min-w-0 flex-1">
-                <div className="inline-flex items-center gap-1 text-[11px] text-muted-foreground leading-tight">
-                  <span>মোট বিল</span>
-                  <button
-                    type="button"
-                    aria-label="বিল বিস্তারিত দেখুন"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() => setDrawerOpen(true)}
-                  >
-                    ▼
-                  </button>
-                </div>
-                <p className="text-base font-semibold text-foreground leading-tight">
-                  {payableTotal.toFixed(2)} ৳ — {itemCount} আইটেম
+                <p className="text-base font-bold text-foreground leading-tight">
+                  {payableTotal.toFixed(2)} ৳
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {itemCount} আইটেম
+                  </span>
                 </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentSheetOpen(true)}
-                    className="inline-flex h-8 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-xs font-semibold text-primary"
-                  >
-                    পেমেন্ট: {currentPaymentLabel} ▼
-                  </button>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   {saleDiscount.hasDiscount ? (
-                    <span className="inline-flex h-8 items-center rounded-full border border-success/30 bg-success-soft px-3 text-[11px] font-semibold text-success">
-                      ছাড় {saleDiscount.discountAmount.toFixed(2)} ৳
+                    <span className="inline-flex h-6 items-center rounded-full border border-success/30 bg-success-soft px-2 text-[10px] font-semibold text-success">
+                      ছাড় {saleDiscount.discountAmount.toFixed(2)} ৳
                     </span>
                   ) : null}
                   {saleTax.taxAmount > 0 ? (
-                    <span className="inline-flex h-8 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-[11px] font-semibold text-primary">
+                    <span className="inline-flex h-6 items-center rounded-full border border-primary/30 bg-primary-soft px-2 text-[10px] font-semibold text-primary">
                       {saleTax.label} {saleTax.taxAmount.toFixed(2)} ৳
                     </span>
                   ) : null}
-                  {isDue ? (
-                    <span className="text-[11px] text-muted-foreground">
-                      {selectedCustomerName
-                        ? `গ্রাহক: ${selectedCustomerName}`
-                        : "গ্রাহক বাছাই বাকি"}
-                    </span>
-                  ) : null}
+                  <span className="inline-flex h-6 items-center rounded-full border border-border px-2 text-[10px] font-semibold text-muted-foreground">
+                    {currentPaymentLabel}
+                  </span>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleClearFromBar}
-                className="flex-1 px-3 py-2 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted"
-              >
-                পরিষ্কার
-              </button>
-              <button
-                type="button"
-                onPointerDown={() => suspendScannerBeforeCheckout()}
-                onClick={handleSellFromBar}
-                disabled={isSubmitting || !canCreateSale}
-                className="flex-[1.2] px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold min-w-[140px] flex items-center justify-center gap-1 shadow-[0_10px_18px_rgba(22,163,74,0.28)] disabled:opacity-60"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                    সম্পন্ন হচ্ছে...
-                  </>
-                ) : (
-                  "বিল সম্পন্ন"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {drawerOpen && (
-        <div className="lg:hidden fixed inset-0 z-50">
-          <div
-            className="absolute inset-0 bg-foreground/30 animate-fade-in"
-            onClick={() => setDrawerOpen(false)}
-          />
-          <div className="absolute inset-x-0 bottom-0 bg-card rounded-t-3xl shadow-[0_-20px_50px_rgba(15,23,42,0.2)] p-5 space-y-4 max-h-[70vh] overflow-y-auto animate-slide-up">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">বর্তমান বিল</p>
-                <p className="text-lg font-semibold text-foreground">
-                  {payableTotal.toFixed(2)} ৳ • {itemCount} আইটেম
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  সাব-টোটাল {safeTotalAmount.toFixed(2)} ৳
-                  {saleDiscount.hasDiscount
-                    ? ` • ছাড় ${saleDiscount.discountAmount.toFixed(2)} ৳`
-                    : ""}
-                  {saleTax.taxAmount > 0
-                    ? ` • ${saleTax.label} ${saleTax.taxAmount.toFixed(2)} ৳`
-                    : ""}
-                </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-muted-foreground">{barExpanded ? "▼" : "▲"}</span>
+                <button
+                  type="button"
+                  onPointerDown={() => suspendScannerBeforeCheckout()}
+                  onClick={(e) => { e.stopPropagation(); handleSellFromBar(); }}
+                  disabled={isSubmitting || !canCreateSale}
+                  className="h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold flex items-center gap-1 shadow-[0_6px_14px_rgba(22,163,74,0.28)] disabled:opacity-60"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      হচ্ছে...
+                    </>
+                  ) : (
+                    "বিল সম্পন্ন"
+                  )}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(false)}
-                className="px-3 py-2 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted"
-              >
-                বন্ধ
-              </button>
-            </div>
+            </button>
 
-            {items.length === 0 ? (
-              <p className="text-center text-muted-foreground py-6">কার্ট খালি</p>
-            ) : (
-              <div className="space-y-3">
-                {cartList}
+            {/* Expanded panel */}
+            {barExpanded && (
+              <div className="px-3 pb-3 space-y-3 border-t border-border/60 pt-3">
+                {/* Mini cart list */}
+                <div className="max-h-44 overflow-y-auto space-y-2 overscroll-contain">
+                  {miniCartList}
+                </div>
+
+                {/* Payment method pills */}
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">পেমেন্ট পদ্ধতি</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {paymentOptions.map((method) => (
+                      <button
+                        key={`bar-${method.value}`}
+                        type="button"
+                        onClick={() => setPaymentMethod(method.value)}
+                        className={`h-8 px-3 rounded-full border text-xs font-semibold transition-colors ${
+                          paymentMethod === method.value
+                            ? "bg-primary-soft text-primary border-primary/40"
+                            : "bg-card text-foreground border-border"
+                        }`}
+                      >
+                        {method.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Customer selector (due only) */}
+                {isDue && canUseDueSale ? (
+                  <div className="space-y-2 rounded-2xl border border-warning/30 bg-warning-soft/40 p-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-foreground">গ্রাহক</p>
+                      {canCreateCustomer ? (
+                        <button
+                          type="button"
+                          onClick={() => setQuickCustomerOpen(true)}
+                          className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-2.5 text-[10px] font-semibold text-primary"
+                        >
+                          + নতুন
+                        </button>
+                      ) : null}
+                    </div>
+                    <Select
+                      value={customerId || undefined}
+                      onValueChange={setCustomerId}
+                      disabled={customersLoading || customerList.length === 0}
+                    >
+                      <SelectTrigger className="h-10 w-full rounded-xl border border-border bg-card px-3 text-left text-xs text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                        <SelectValue placeholder="গ্রাহক বাছাই করুন" />
+                      </SelectTrigger>
+                      <SelectContent align="start" className="min-w-[var(--radix-select-trigger-width)]">
+                        {customersLoading ? (
+                          <SelectItem value="__loading-bar" disabled>লোড হচ্ছে...</SelectItem>
+                        ) : customerList.length === 0 ? (
+                          <SelectItem value="__empty-bar" disabled>কোনো গ্রাহক নেই</SelectItem>
+                        ) : (
+                          customerList.map((customer) => (
+                            <SelectItem key={`bar-${customer.id}`} value={customer.id}>
+                              {customer.name} — বকেয়া: {Number(customer.totalDue || 0).toFixed(2)} ৳
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+
+                {/* Action row */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleClearFromBar}
+                    className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted"
+                  >
+                    পরিষ্কার
+                  </button>
+                  <button
+                    type="button"
+                    onPointerDown={() => suspendScannerBeforeCheckout()}
+                    onClick={handleSellFromBar}
+                    disabled={isSubmitting || !canCreateSale}
+                    className="flex-[1.5] h-10 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold flex items-center justify-center gap-1 shadow-[0_8px_16px_rgba(22,163,74,0.28)] disabled:opacity-60"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        সম্পন্ন হচ্ছে...
+                      </>
+                    ) : (
+                      "✓ বিল সম্পন্ন করুন"
+                    )}
+                  </button>
+                </div>
+
+                {/* Subtle full-form link */}
+                <p className="text-center text-[10px] text-muted-foreground/70">
+                  নোট / ছাড় / বিস্তারিত →{" "}
+                  <button
+                    type="button"
+                    onClick={scrollToCart}
+                    className="underline underline-offset-2 hover:text-foreground"
+                  >
+                    পূর্ণ ফর্ম
+                  </button>
+                </p>
               </div>
             )}
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={scrollToCart}
-                className="flex-1 rounded-xl border border-border py-3 text-sm font-semibold text-foreground"
-              >
-                পূর্ণ বিল ফর্ম দেখুন
-              </button>
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(false)}
-                className="px-4 py-3 rounded-xl bg-primary-soft text-primary border border-primary/30 text-sm font-semibold"
-              >
-                ঠিক আছে
-              </button>
-            </div>
           </div>
         </div>
       )}

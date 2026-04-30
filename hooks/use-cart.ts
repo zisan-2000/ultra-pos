@@ -29,6 +29,7 @@ type CartState = {
   remove: (itemKey: string) => void;
   increase: (itemKey: string) => void;
   decrease: (itemKey: string) => void;
+  updatePrice: (itemKey: string, newPrice: number) => void;
   clear: () => void;
   totalAmount: () => number;
 };
@@ -124,6 +125,17 @@ export const useCart = create<CartState>((set, get) => ({
         )
         .filter((i) => i.qty > 0),
     }),
+
+  updatePrice: (itemKey, newPrice) => {
+    const price = Math.max(0, newPrice);
+    set({
+      items: get().items.map((i) =>
+        i.itemKey === itemKey
+          ? { ...i, unitPrice: price, total: i.qty * price }
+          : i
+      ),
+    });
+  },
 
   clear: () => set({ items: [] }),
 

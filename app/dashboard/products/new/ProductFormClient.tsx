@@ -201,6 +201,12 @@ const BUSINESS_ASSISTS: Record<
     categoryChips: ["হোলসেল", "মুদি", "স্ন্যাক্স"],
     priceHints: ["500", "1000", "1500", "2000"],
   },
+  hardware: {
+    defaultCategory: "হার্ডওয়্যার",
+    quickNames: [],
+    categoryChips: ["সিমেন্ট/বিল্ডিং", "পাইপ/ফিটিংস", "ইলেকট্রিক্যাল", "রং/কেমিক্যাল"],
+    priceHints: ["50", "120", "250", "500"],
+  },
 };
 
 

@@ -8,7 +8,8 @@ export type BusinessType =
   | "clothing"
   | "cosmetics_gift"
   | "pharmacy"
-  | "mini_wholesale";
+  | "mini_wholesale"
+  | "hardware";
 
 export type Field =
   | "name"
@@ -54,6 +55,7 @@ export const businessOptions: { id: BusinessType; label: string }[] = [
   { id: "cosmetics_gift", label: "কসমেটিকস/গিফট" },
   { id: "pharmacy", label: "ফার্মেসি" },
   { id: "mini_wholesale", label: "হোলসেল" },
+  { id: "hardware", label: "হার্ডওয়্যার/সিমেন্ট/ফিটিংস" },
 ];
 
 const COMMON_FIELDS: Field[] = ["name", "sellPrice", "buyPrice", "unit", "expiry", "size"];
@@ -65,6 +67,17 @@ export const DEFAULT_UNIT_KEYWORD_RULES: UnitKeywordRule[] = [
   { keywords: ["চিপস", "প্যাকেট", "বিস্কুট", "চকলেট"], unit: "packet" },
   { keywords: ["স্ট্রিপ", "ট্যাবলেট", "capsule"], unit: "strip" },
   { keywords: ["কাপড়", "টি শার্ট", "শার্ট", "প্যান্ট"], unit: "pcs" },
+];
+
+export const HARDWARE_UNIT_KEYWORD_RULES: UnitKeywordRule[] = [
+  { keywords: ["সিমেন্ট", "cement", "বালু", "sand"], unit: "bag" },
+  { keywords: ["রড", "rod", "পেরেক", "nail", "তার", "wire"], unit: "kg" },
+  { keywords: ["পাইপ", "pipe", "এঙ্গেল", "angle", "চ্যানেল"], unit: "ft" },
+  { keywords: ["স্ক্রু", "screw", "বোল্ট", "bolt", "নাট", "nut"], unit: "box" },
+  { keywords: ["রং", "paint", "থিনার", "thinner", "পুটি"], unit: "liter" },
+  { keywords: ["ইট", "brick", "টাইলস", "tiles", "সুইচ", "switch", "সকেট", "socket", "হোল্ডার"], unit: "pcs" },
+  { keywords: ["ক্যাবল", "cable"], unit: "coil" },
+  { keywords: ["ফিটিংস", "fitting", "এলবো", "elbow", "টি", "tee", "কাপলিং"], unit: "pcs" },
 ];
 
 function buildFields(overrides: Partial<Record<Field, FieldRule>>): Record<Field, FieldRule> {
@@ -213,6 +226,23 @@ export const businessFieldConfig: Record<BusinessType, BusinessFieldConfig> = {
       options: ["kg", "carton", "box"],
       default: "carton",
       keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
+    },
+  },
+  hardware: {
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: {},
+      unit: { required: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: true, requiredWhenEnabled: true },
+    unit: {
+      enabled: true,
+      options: ["pcs", "bag", "kg", "ft", "box", "bundle", "coil", "liter"],
+      default: "pcs",
+      keywordRules: HARDWARE_UNIT_KEYWORD_RULES,
     },
   },
 };
