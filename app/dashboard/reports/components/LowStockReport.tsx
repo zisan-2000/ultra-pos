@@ -127,7 +127,19 @@ export default function LowStockReport({
   const lowestStockItem = items[0] ?? null;
   const showSummaryPlaceholder = loading && items.length === 0;
 
-  const renderStatus = (qty: number) => (qty <= 5 ? "জরুরি" : "কম");
+  // Items in this list are always low — never show green "ok" tone.
+  // qty > 5 maps to the "warning" (yellow) band, not "ok" (green).
+  const getLowStockToneClasses = (qty: number) => {
+    if (qty <= 0) return getStockToneClasses(0);   // danger (red)
+    if (qty <= 5) return getStockToneClasses(qty); // warning-strong or warning
+    return getStockToneClasses(5);                  // warning (yellow), never green
+  };
+
+  const renderStatus = (qty: number) => {
+    if (qty <= 0) return "শেষ";
+    if (qty <= 5) return "জরুরি";
+    return "কম";
+  };
 
   return (
     <div className="space-y-4">
@@ -238,7 +250,7 @@ export default function LowStockReport({
             ) : (
               items.map((p, i) => {
                 const qty = Number(p.stockQty || 0);
-                const stockClasses = getStockToneClasses(qty);
+                const stockClasses = getLowStockToneClasses(qty);
                 return (
                   <tr key={p.id ?? p.name ?? i} className="border-t hover:bg-muted">
                     <td className="p-3 text-foreground">
