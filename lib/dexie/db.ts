@@ -21,6 +21,7 @@ export type LocalProduct = {
   stockQty: string;
   isActive: boolean;
   trackStock?: boolean;
+  reorderPoint?: number | null;
   businessType?: string;
   expiryDate?: string | null;
   size?: string | null;

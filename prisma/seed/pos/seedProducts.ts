@@ -14,6 +14,7 @@ type ProductSeed = {
   sellPrice: number;
   stockQty: number;
   trackStock: boolean;
+  reorderPoint?: number | null;
   variants?: VariantSeed[];
 };
 
@@ -47,18 +48,18 @@ export async function seedProducts(
     ],
     hardware: [
       // Simple products
-      { name: "সিমেন্ট (৫০ কেজি)",      category: "সিমেন্ট/বিল্ডিং", unit: "bag",   buyPrice: 440, sellPrice: 480, stockQty: 200, trackStock: true },
-      { name: "এলবো ১ ইঞ্চি",           category: "পাইপ/ফিটিংস",      unit: "pcs",   buyPrice: 8,   sellPrice: 12,  stockQty: 150, trackStock: true },
-      { name: "সুইচ (সিঙ্গেল)",         category: "ইলেকট্রিক্যাল",    unit: "pcs",   buyPrice: 35,  sellPrice: 45,  stockQty: 100, trackStock: true },
-      { name: "সকেট (২ পিন)",           category: "ইলেকট্রিক্যাল",    unit: "pcs",   buyPrice: 30,  sellPrice: 40,  stockQty: 100, trackStock: true },
-      { name: "পেরেক ২ ইঞ্চি",          category: "সিমেন্ট/বিল্ডিং", unit: "kg",    buyPrice: 100, sellPrice: 120, stockQty: 80,  trackStock: true },
-      { name: "স্ক্রু সেট",             category: "হার্ডওয়্যার",      unit: "box",   buyPrice: 45,  sellPrice: 60,  stockQty: 60,  trackStock: true },
-      { name: "ইট",                     category: "সিমেন্ট/বিল্ডিং", unit: "pcs",   buyPrice: 10,  sellPrice: 12,  stockQty: 1000,trackStock: true },
+      { name: "সিমেন্ট (৫০ কেজি)",      category: "সিমেন্ট/বিল্ডিং", unit: "bag",   buyPrice: 440, sellPrice: 480, stockQty: 200, trackStock: true, reorderPoint: 50 },
+      { name: "এলবো ১ ইঞ্চি",           category: "পাইপ/ফিটিংস",      unit: "pcs",   buyPrice: 8,   sellPrice: 12,  stockQty: 150, trackStock: true, reorderPoint: 30 },
+      { name: "সুইচ (সিঙ্গেল)",         category: "ইলেকট্রিক্যাল",    unit: "pcs",   buyPrice: 35,  sellPrice: 45,  stockQty: 100, trackStock: true, reorderPoint: 20 },
+      { name: "সকেট (২ পিন)",           category: "ইলেকট্রিক্যাল",    unit: "pcs",   buyPrice: 30,  sellPrice: 40,  stockQty: 100, trackStock: true, reorderPoint: 20 },
+      { name: "পেরেক ২ ইঞ্চি",          category: "সিমেন্ট/বিল্ডিং", unit: "kg",    buyPrice: 100, sellPrice: 120, stockQty: 80,  trackStock: true, reorderPoint: 20 },
+      { name: "স্ক্রু সেট",             category: "হার্ডওয়্যার",      unit: "box",   buyPrice: 45,  sellPrice: 60,  stockQty: 60,  trackStock: true, reorderPoint: 15 },
+      { name: "ইট",                     category: "সিমেন্ট/বিল্ডিং", unit: "pcs",   buyPrice: 10,  sellPrice: 12,  stockQty: 1000,trackStock: true, reorderPoint: 200 },
 
       // Variant: রড — by size
       {
         name: "রড", category: "সিমেন্ট/বিল্ডিং", unit: "kg",
-        buyPrice: 78, sellPrice: 85, stockQty: 800, trackStock: true,
+        buyPrice: 78, sellPrice: 85, stockQty: 800, trackStock: true, reorderPoint: 200,
         variants: [
           { label: "৮মিমি",  sellPrice: 80,  sortOrder: 1 },
           { label: "১০মিমি", sellPrice: 83,  sortOrder: 2 },
@@ -71,7 +72,7 @@ export async function seedProducts(
       // Variant: PVC পাইপ — by diameter
       {
         name: "PVC পাইপ", category: "পাইপ/ফিটিংস", unit: "ft",
-        buyPrice: 28, sellPrice: 35, stockQty: 700, trackStock: true,
+        buyPrice: 28, sellPrice: 35, stockQty: 700, trackStock: true, reorderPoint: 150,
         variants: [
           { label: "½ ইঞ্চি",   sellPrice: 22,  sortOrder: 1 },
           { label: "¾ ইঞ্চি",   sellPrice: 28,  sortOrder: 2 },
@@ -84,7 +85,7 @@ export async function seedProducts(
       // Variant: তার — by size
       {
         name: "তার", category: "ইলেকট্রিক্যাল", unit: "coil",
-        buyPrice: 350, sellPrice: 420, stockQty: 80, trackStock: true,
+        buyPrice: 350, sellPrice: 420, stockQty: 80, trackStock: true, reorderPoint: 20,
         variants: [
           { label: "১ স্কোয়ার",   sellPrice: 380, sortOrder: 1 },
           { label: "১.৫ স্কোয়ার", sellPrice: 450, sortOrder: 2 },
@@ -96,7 +97,7 @@ export async function seedProducts(
       // Variant: রং — by size
       {
         name: "রং (অ্যাপেক্স)", category: "রং/কেমিক্যাল", unit: "liter",
-        buyPrice: 290, sellPrice: 350, stockQty: 100, trackStock: true,
+        buyPrice: 290, sellPrice: 350, stockQty: 100, trackStock: true, reorderPoint: 20,
         variants: [
           { label: "১ লিটার",  sellPrice: 350,  sortOrder: 1 },
           { label: "৪ লিটার",  sellPrice: 1300, sortOrder: 2 },
@@ -108,7 +109,7 @@ export async function seedProducts(
       // Variant: টাইলস — by size
       {
         name: "টাইলস", category: "সিমেন্ট/বিল্ডিং", unit: "pcs",
-        buyPrice: 45, sellPrice: 55, stockQty: 500, trackStock: true,
+        buyPrice: 45, sellPrice: 55, stockQty: 500, trackStock: true, reorderPoint: 100,
         variants: [
           { label: "১×১ ফুট",   sellPrice: 55,  sortOrder: 1 },
           { label: "১.৫×১.৫ ফুট", sellPrice: 110, sortOrder: 2 },
@@ -142,6 +143,7 @@ export async function seedProducts(
             sellPrice: toMoney(product.sellPrice),
             stockQty: toMoney(product.stockQty),
             trackStock: product.trackStock,
+            reorderPoint: product.reorderPoint ?? null,
             isActive: true,
           },
         }));

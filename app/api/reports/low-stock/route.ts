@@ -20,30 +20,21 @@ async function computeLowStockReport(
   threshold: number,
   limit: number
 ) {
-  const lowStockProducts = await prisma.product.findMany({
-    where: {
-      shopId,
-      isActive: true,
-      trackStock: true,
-      stockQty: {
-        lte: threshold,
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      stockQty: true,
-    },
-    orderBy: {
-      stockQty: "asc",
-    },
-    take: limit,
-  });
+  const rows = await prisma.$queryRaw<Array<{ id: string; name: string; stock_qty: string }>>`
+    SELECT id, name, stock_qty
+    FROM products
+    WHERE shop_id = ${shopId}::uuid
+      AND is_active = true
+      AND track_stock = true
+      AND stock_qty <= COALESCE(reorder_point, ${threshold})
+    ORDER BY stock_qty ASC
+    LIMIT ${limit}
+  `;
 
-  return lowStockProducts.map((p) => ({
-    id: p.id,
-    name: p.name,
-    stockQty: Number(p.stockQty),
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    stockQty: Number(r.stock_qty),
   }));
 }
 

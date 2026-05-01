@@ -1419,6 +1419,10 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       : undefined;
 
     const stockQty = stockEnabled ? ((form.get("stockQty") as string) || "0") : "0";
+    const reorderPointRaw = stockEnabled ? (form.get("reorderPoint") as string) : null;
+    const reorderPoint = reorderPointRaw && reorderPointRaw.trim() !== ""
+      ? Math.max(1, parseInt(reorderPointRaw, 10))
+      : null;
 
     const expiryDate = isFieldVisible("expiry")
       ? ((form.get("expiryDate") as string) || null)
@@ -1487,6 +1491,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       stockQty,
       isActive: form.get("isActive") === "on",
       trackStock: stockEnabled,
+      reorderPoint,
       businessType,
       expiryDate,
       size,
@@ -2276,6 +2281,26 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
               className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
               placeholder="যেমন: 10, 5.50"
             />
+            {stockEnabled && (
+              <div className="space-y-1 pt-2">
+                <label className="block text-sm font-medium text-foreground">
+                  রিস্টক সীমা (ঐচ্ছিক)
+                </label>
+                <input
+                  name="reorderPoint"
+                  type="number"
+                  step="1"
+                  min="1"
+                  disabled={!stockEnabled}
+                  defaultValue={product.reorderPoint ?? ""}
+                  className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
+                  placeholder="যেমন: 50 — এর নিচে গেলে alert দেখাবে"
+                />
+                <p className="text-xs text-muted-foreground">
+                  খালি রাখলে report-এর global threshold ব্যবহার হবে
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

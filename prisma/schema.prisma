@@ -718,9 +718,10 @@ model Product {
   size       String?  @db.VarChar(80)
   buyPrice   Decimal? @map("buy_price") @db.Decimal(12, 2)
   sellPrice  Decimal  @map("sell_price") @db.Decimal(12, 2)
-  stockQty   Decimal  @default("0") @map("stock_qty") @db.Decimal(12, 2)
-  trackStock Boolean  @default(false) @map("track_stock")
-  isActive   Boolean  @default(true) @map("is_active")
+  stockQty      Decimal  @default("0") @map("stock_qty") @db.Decimal(12, 2)
+  trackStock    Boolean  @default(false) @map("track_stock")
+  reorderPoint  Int?     @map("reorder_point")
+  isActive      Boolean  @default(true) @map("is_active")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

@@ -37,6 +37,7 @@ type CreateProductInput = {
   stockQty: string;
   isActive: boolean;
   trackStock?: boolean;
+  reorderPoint?: number | null;
   businessType?: string;
   expiryDate?: string | null;
   size?: string | null;
@@ -62,6 +63,7 @@ type UpdateProductInput = {
   stockQty?: string;
   isActive?: boolean;
   trackStock?: boolean;
+  reorderPoint?: number | null;
   businessType?: string;
   expiryDate?: string | null;
   size?: string | null;
@@ -775,6 +777,7 @@ export async function createProduct(input: CreateProductInput) {
     stockQty,
     isActive: input.isActive,
     trackStock,
+    reorderPoint: trackStock && input.reorderPoint != null ? input.reorderPoint : null,
   };
 
   if (input.id) {
@@ -1503,6 +1506,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   if (buyPrice !== undefined) payload.buyPrice = buyPrice;
   if (sellPrice !== undefined) payload.sellPrice = sellPrice;
   if (resolvedStockQty !== undefined) payload.stockQty = resolvedStockQty;
+  if (data.reorderPoint !== undefined) payload.reorderPoint = data.reorderPoint ?? null;
 
   await assertNoCodeCollisionsInShop({
     shopId: product.shopId,

@@ -1482,6 +1482,10 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       : undefined;
 
     const stockQty = stockEnabled ? ((form.get("stockQty") as string) || "0") : "0";
+    const reorderPointRaw = stockEnabled ? (form.get("reorderPoint") as string) : null;
+    const reorderPoint = reorderPointRaw && reorderPointRaw.trim() !== ""
+      ? Math.max(1, parseInt(reorderPointRaw, 10))
+      : null;
 
     const expiryDate = isFieldVisible("expiry")
       ? ((form.get("expiryDate") as string) || null)
@@ -1544,6 +1548,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       stockQty,
       isActive: form.get("isActive") === "on",
       trackStock: stockEnabled,
+      reorderPoint,
       businessType,
       expiryDate,
       size,
@@ -2486,6 +2491,25 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
               className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
               placeholder="যেমন: 10, 5.50"
             />
+            {stockEnabled && (
+              <div className="space-y-1 pt-1">
+                <label className="block text-sm font-medium text-foreground">
+                  রিস্টক সীমা (ঐচ্ছিক)
+                </label>
+                <input
+                  name="reorderPoint"
+                  type="number"
+                  step="1"
+                  min="1"
+                  disabled={!stockEnabled}
+                  className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
+                  placeholder="যেমন: 50 — এর নিচে গেলে alert দেখাবে"
+                />
+                <p className="text-xs text-muted-foreground">
+                  খালি রাখলে report-এর global threshold ব্যবহার হবে
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
