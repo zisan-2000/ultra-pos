@@ -47,12 +47,24 @@ import {
 import { matchesProductSearchQuery } from "@/lib/product-search";
 
 type Shop = { id: string; name: string };
+type ProductVariant = {
+  id?: string;
+  label: string;
+  sellPrice: string | number;
+  stockQty?: string | number | null;
+  sku?: string | null;
+  barcode?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+};
+
 type Product = {
   id: string;
   name: string;
   category: string;
   sku?: string | null;
   barcode?: string | null;
+  baseUnit?: string;
   buyPrice?: string | null;
   sellPrice: string;
   stockQty: string;
@@ -60,6 +72,7 @@ type Product = {
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+  variants?: ProductVariant[];
   metrics?: ProductCardMetrics | null;
 };
 
@@ -200,6 +213,110 @@ function toSafeNumber(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function formatCategoryLabel(raw?: string | null) {
+  if (!raw) return "বিভাগহীন";
+  const normalized = raw.trim();
+  if (!normalized) return "বিভাগহীন";
+
+  const dictionary: Record<string, string> = {
+    uncategorized: "বিভাগহীন",
+    category: "ক্যাটাগরি",
+    cement: "সিমেন্ট",
+    building: "বিল্ডিং",
+    hardware: "হার্ডওয়্যার",
+    rod: "রড",
+    steel: "স্টিল",
+    rice: "চাল/ভাত",
+    grocery: "মুদি",
+    snacks: "স্ন্যাক্স",
+    beverage: "পানীয়",
+    beverages: "পানীয়",
+    tea: "চা",
+    coffee: "কফি",
+    juice: "জুস",
+    dairy: "দুগ্ধ",
+    medicine: "ঔষধ",
+    pharmacy: "ফার্মেসি",
+    cosmetics: "কসমেটিকস",
+    stationery: "স্টেশনারি",
+    clothes: "কাপড়",
+    clothing: "কাপড়",
+    vegetables: "সবজি",
+    vegetable: "সবজি",
+    fruits: "ফল",
+    fruit: "ফল",
+    recharge: "রিচার্জ",
+  };
+
+  return normalized
+    .split(/[\s/_&-]+/)
+    .filter(Boolean)
+    .map((token) => {
+      const lower = token.toLowerCase();
+      return (
+        dictionary[lower] ??
+        token.charAt(0).toUpperCase() + token.slice(1).toLowerCase()
+      );
+    })
+    .join(" / ");
+}
+
+function getActiveVariants(product?: Product | null) {
+  if (!product || !Array.isArray(product.variants)) return [];
+  return product.variants
+    .filter((variant) => variant && variant.isActive !== false)
+    .sort(
+      (a, b) =>
+        Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0) ||
+        String(a.label || "").localeCompare(String(b.label || ""))
+    );
+}
+
+function getDisplayStockQty(product?: Product | null) {
+  if (!product || product.trackStock !== true) return 0;
+  const activeVariants = getActiveVariants(product);
+  if (activeVariants.length > 0) {
+    return activeVariants.reduce(
+      (sum, variant) => sum + toSafeNumber(variant.stockQty),
+      0
+    );
+  }
+  return toSafeNumber(product.stockQty);
+}
+
+function formatStockNumber(value: number) {
+  return value.toLocaleString("bn-BD", {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
+  });
+}
+
+function formatStockText(product?: Product | null) {
+  if (!product || product.trackStock !== true) return "ট্র্যাক নয়";
+  const qty = getDisplayStockQty(product);
+  const unit = product.baseUnit ? ` ${product.baseUnit}` : "";
+  return `${formatStockNumber(qty)}${unit}`;
+}
+
+function getVariantSummary(product?: Product | null) {
+  const activeVariants = getActiveVariants(product);
+  if (activeVariants.length === 0) return null;
+  if (activeVariants.length <= 3) {
+    return activeVariants
+      .map((variant) => String(variant.label || "").trim())
+      .filter(Boolean)
+      .join(" · ");
+  }
+  return `${activeVariants.length.toLocaleString("bn-BD")}টি সাইজ`;
+}
+
+function formatCompactMetric(value: unknown) {
+  return toSafeNumber(value).toLocaleString("bn-BD", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
 function formatQty(value: unknown) {
   return toSafeNumber(value).toLocaleString("bn-BD", {
     minimumFractionDigits: 2,
@@ -215,9 +332,9 @@ function formatPercent(value: unknown) {
 }
 
 function formatDateTime(value?: string | null) {
-  if (!value) return "N/A";
+  if (!value) return "তথ্য নেই";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "N/A";
+  if (Number.isNaN(date.getTime())) return "তথ্য নেই";
   return date.toLocaleString("bn-BD", {
     year: "numeric",
     month: "short",
@@ -403,7 +520,7 @@ export default function ProductsListClient({
         handlePermissionError(err);
         setCatalogItems([]);
         setCatalogError(
-          err instanceof Error ? err.message : "Catalog load failed",
+          err instanceof Error ? err.message : "ক্যাটালগ লোড করা যায়নি",
         );
       } finally {
         if (!cancelled) {
@@ -491,7 +608,7 @@ export default function ProductsListClient({
         if (cancelled) return;
         handlePermissionError(err);
         setInsightError(
-          err instanceof Error ? err.message : "Insight load failed"
+          err instanceof Error ? err.message : "ইনসাইট লোড করা যায়নি"
         );
       } finally {
         if (cancelled) return;
@@ -584,11 +701,13 @@ export default function ProductsListClient({
         category: p.category || "Uncategorized",
         sku: (p as any).sku ?? null,
         barcode: (p as any).barcode ?? null,
+        baseUnit: p.baseUnit || "pcs",
         buyPrice: p.buyPrice ?? null,
         sellPrice: p.sellPrice.toString(),
         stockQty: (p.stockQty ?? "0").toString(),
         isActive: p.isActive,
         trackStock: (p as any).trackStock ?? false,
+        variants: Array.isArray(p.variants) ? p.variants : [],
         updatedAt: (() => {
           const raw = (p as any).updatedAt;
           if (!raw) return Date.now();
@@ -751,7 +870,7 @@ export default function ProductsListClient({
   const selectedStockClasses = useMemo(
     () =>
       selectedProduct?.trackStock === true
-        ? getStockToneClasses(Number(selectedProduct.stockQty ?? 0))
+        ? getStockToneClasses(getDisplayStockQty(selectedProduct))
         : UNTRACKED_STOCK_CLASSES,
     [selectedProduct]
   );
@@ -901,14 +1020,14 @@ export default function ProductsListClient({
 
   async function handleAddTemplates() {
     if (!canCreateProducts) {
-      alert("You do not have permission to add products.");
+      alert("পণ্য যোগ করার অনুমতি নেই।");
       return;
     }
     if (addingTemplates) return;
 
     const selected = selectedTemplates.filter((template) => !template.alreadyExists);
     if (selected.length === 0) {
-      alert("Select at least one item to add.");
+      alert("অন্তত একটি আইটেম বেছে নিন।");
       return;
     }
 
@@ -928,10 +1047,10 @@ export default function ProductsListClient({
         setTemplateSelections({});
         router.refresh();
 
-        const parts = [`${createdCount} products added`];
-        if (skippedCount) parts.push(`${skippedCount} skipped`);
+        const parts = [`${createdCount}টি পণ্য যোগ হয়েছে`];
+        if (skippedCount) parts.push(`${skippedCount}টি বাদ গেছে`);
         if (inactiveCount)
-          parts.push(`${inactiveCount} added as inactive (missing price)`);
+          parts.push(`${inactiveCount}টি দাম না থাকায় নিষ্ক্রিয় হিসেবে যোগ হয়েছে`);
         alert(parts.join(". "));
         return;
       }
@@ -999,7 +1118,7 @@ export default function ProductsListClient({
             id: crypto.randomUUID(),
             shopId: activeShopId,
             name: template.name,
-            category: template.category || "Uncategorized",
+            category: template.category || "বিভাগহীন",
             sku: null,
             barcode: resolvedBarcode,
             baseUnit: template.defaultBaseUnit || "pcs",
@@ -1016,7 +1135,7 @@ export default function ProductsListClient({
         }
 
       if (localProducts.length === 0) {
-        alert("All selected items already exist in this shop.");
+        alert("নির্বাচিত সব আইটেম এই দোকানে আগেই আছে।");
         return;
       }
 
@@ -1034,22 +1153,24 @@ export default function ProductsListClient({
           category: item.category,
           sku: item.sku ?? null,
           barcode: item.barcode ?? null,
+          baseUnit: item.baseUnit || "pcs",
           buyPrice: item.buyPrice ?? null,
           sellPrice: item.sellPrice,
           stockQty: item.stockQty,
           trackStock: item.trackStock ?? false,
           isActive: item.isActive,
+          variants: Array.isArray(item.variants) ? item.variants : [],
           createdAt: item.updatedAt.toString(),
         })),
         ...prev,
       ]);
 
       setTemplateSelections({});
-      const parts = [`${localProducts.length} products added offline`];
-      if (skipped) parts.push(`${skipped} skipped`);
+      const parts = [`${localProducts.length}টি পণ্য অফলাইনে যোগ হয়েছে`];
+      if (skipped) parts.push(`${skipped}টি বাদ গেছে`);
       if (inactiveCount)
-        parts.push(`${inactiveCount} added as inactive (missing price)`);
-      parts.push("Will sync when online.");
+        parts.push(`${inactiveCount}টি দাম না থাকায় নিষ্ক্রিয় হিসেবে যোগ হয়েছে`);
+      parts.push("অনলাইনে এলে সিঙ্ক হবে।");
       alert(parts.join(". "));
     } catch (err) {
       handlePermissionError(err);
@@ -1057,7 +1178,7 @@ export default function ProductsListClient({
       const message =
         err instanceof Error && err.message
           ? err.message
-          : "Failed to add templates";
+          : "টেমপ্লেট যোগ করা যায়নি";
       alert(message);
     } finally {
       setAddingTemplates(false);
@@ -1066,14 +1187,14 @@ export default function ProductsListClient({
 
   async function handleAddCatalogProducts() {
     if (!canCreateProducts) {
-      alert("You do not have permission to add products.");
+      alert("পণ্য যোগ করার অনুমতি নেই।");
       return;
     }
     if (addingCatalog) return;
 
     const selected = selectedCatalogItems.filter((item) => !item.alreadyExists);
     if (selected.length === 0) {
-      alert("Select at least one catalog item to add.");
+      alert("অন্তত একটি ক্যাটালগ আইটেম বেছে নিন।");
       return;
     }
 
@@ -1094,13 +1215,13 @@ export default function ProductsListClient({
         setCatalogSelections({});
         router.refresh();
 
-        const parts = [`${createdCount} catalog products added`];
-        if (skippedCount) parts.push(`${skippedCount} skipped`);
+        const parts = [`${createdCount}টি ক্যাটালগ পণ্য যোগ হয়েছে`];
+        if (skippedCount) parts.push(`${skippedCount}টি বাদ গেছে`);
         if (inactiveCount) {
-          parts.push(`${inactiveCount} added as inactive (missing price)`);
+          parts.push(`${inactiveCount}টি দাম না থাকায় নিষ্ক্রিয় হিসেবে যোগ হয়েছে`);
         }
         if (adjustedCodeCount) {
-          parts.push(`${adjustedCodeCount} barcode adjusted`);
+          parts.push(`${adjustedCodeCount}টি বারকোড সামঞ্জস্য করা হয়েছে`);
         }
         alert(parts.join(". "));
         return;
@@ -1150,7 +1271,7 @@ export default function ProductsListClient({
           catalogProductId: item.id,
           productSource: "catalog",
           name: item.name,
-          category: item.category || "Uncategorized",
+          category: item.category || "বিভাগহীন",
           sku: null,
           barcode: resolvedBarcode,
           baseUnit: item.defaultBaseUnit || "pcs",
@@ -1166,7 +1287,7 @@ export default function ProductsListClient({
       }
 
       if (localProducts.length === 0) {
-        alert("All selected catalog items already exist in this shop.");
+        alert("নির্বাচিত সব ক্যাটালগ আইটেম এই দোকানে আগেই আছে।");
         return;
       }
 
@@ -1184,26 +1305,28 @@ export default function ProductsListClient({
           category: item.category,
           sku: item.sku ?? null,
           barcode: item.barcode ?? null,
+          baseUnit: item.baseUnit || "pcs",
           buyPrice: item.buyPrice ?? null,
           sellPrice: item.sellPrice,
           stockQty: item.stockQty,
           trackStock: item.trackStock ?? false,
           isActive: item.isActive,
+          variants: Array.isArray(item.variants) ? item.variants : [],
           createdAt: item.updatedAt.toString(),
         })),
         ...prev,
       ]);
 
       setCatalogSelections({});
-      const parts = [`${localProducts.length} catalog products added offline`];
-      if (skipped) parts.push(`${skipped} skipped`);
+      const parts = [`${localProducts.length}টি ক্যাটালগ পণ্য অফলাইনে যোগ হয়েছে`];
+      if (skipped) parts.push(`${skipped}টি বাদ গেছে`);
       if (inactiveCount) {
-        parts.push(`${inactiveCount} added as inactive (missing price)`);
+        parts.push(`${inactiveCount}টি দাম না থাকায় নিষ্ক্রিয় হিসেবে যোগ হয়েছে`);
       }
       if (adjustedCodeCount) {
-        parts.push(`${adjustedCodeCount} barcode adjusted`);
+        parts.push(`${adjustedCodeCount}টি বারকোড সামঞ্জস্য করা হয়েছে`);
       }
-      parts.push("Will sync when online.");
+      parts.push("অনলাইনে এলে সিঙ্ক হবে।");
       alert(parts.join(". "));
     } catch (err) {
       handlePermissionError(err);
@@ -1211,7 +1334,7 @@ export default function ProductsListClient({
       const message =
         err instanceof Error && err.message
           ? err.message
-          : "Failed to add catalog products";
+          : "ক্যাটালগ পণ্য যোগ করা যায়নি";
       alert(message);
     } finally {
       setAddingCatalog(false);
@@ -1221,7 +1344,7 @@ export default function ProductsListClient({
   const handleDelete = useCallback(
     async (id: string) => {
       if (!canDeleteProducts) {
-        alert("You do not have permission to delete products.");
+        alert("পণ্য মুছার অনুমতি নেই।");
         return;
       }
       if (deletingId) return;
@@ -1391,7 +1514,7 @@ export default function ProductsListClient({
         setVoiceError(
           voiceMode === "bn"
             ? "বাংলায় আবার পরিষ্কার করে বলুন।"
-            : "Please say the product name clearly in English."
+            : "ইংরেজিতে পণ্যের নাম পরিষ্কার করে আবার বলুন।"
         );
         return;
       }
@@ -1586,7 +1709,7 @@ export default function ProductsListClient({
                           ? "ভয়েস সার্চ বন্ধ করুন"
                           : voiceMode === "bn"
                           ? "বাংলায় ভয়েস সার্চ চালু করুন"
-                          : "Enable English voice search"
+                          : "ইংরেজিতে ভয়েস সার্চ চালু করুন"
                       }
                       className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border text-sm font-semibold transition ${
                         listening
@@ -1612,7 +1735,7 @@ export default function ProductsListClient({
                   {listening
                     ? voiceMode === "bn"
                       ? "বাংলা শুনছে..."
-                      : "EN listening..."
+                      : "ইংরেজি শুনছে..."
                     : voiceError}
                 </span>
               </div>
@@ -1653,7 +1776,9 @@ export default function ProductsListClient({
       </div>
 
       {templateItems.length > 0 && (
-        <div className="rounded-2xl border border-border bg-card p-3 sm:p-4 shadow-sm">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 via-card to-card" />
+          <div className="relative">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-foreground truncate sm:text-base">
@@ -1694,8 +1819,8 @@ export default function ProductsListClient({
           </div>
 
           {templateOpen && (
-            <div id="product-template-section" className="mt-3 space-y-2">
-              <div className="rounded-xl border border-border/70 bg-muted/30 p-2.5">
+            <div id="product-template-section" className="mt-3 space-y-2 animate-fade-in">
+              <div className="rounded-xl border border-border/70 bg-background/80 p-2.5 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <label className="inline-flex items-center gap-2 text-xs font-medium text-foreground">
                     <input
@@ -1788,12 +1913,12 @@ export default function ProductsListClient({
                   return (
                     <label
                       key={template.id}
-                      className={`block rounded-xl border p-3 transition ${
+                      className={`block rounded-xl border p-3 shadow-[0_1px_0_rgba(0,0,0,0.02)] transition-all duration-200 ${
                         disabled
                           ? "border-border bg-muted/50 text-muted-foreground"
                           : checked
-                          ? "border-primary/40 bg-primary-soft/50"
-                          : "border-border bg-card hover:border-primary/40"
+                          ? "border-primary/40 bg-primary-soft/50 shadow-[0_8px_24px_rgba(16,185,129,0.08)]"
+                          : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -1922,10 +2047,13 @@ export default function ProductsListClient({
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
 
-      <div className="rounded-2xl border border-border bg-card p-3 sm:p-4 shadow-sm">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-success/5 via-card to-card" />
+        <div className="relative">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground truncate sm:text-base">
@@ -1969,15 +2097,15 @@ export default function ProductsListClient({
           <div
             id="product-catalog-section"
             ref={catalogSectionRef}
-            className="mt-3 space-y-3"
+            className="mt-3 space-y-3 animate-fade-in"
           >
-            <div className="rounded-xl border border-border/70 bg-muted/30 p-2.5 space-y-2">
+            <div className="rounded-xl border border-border/70 bg-background/80 p-2.5 space-y-2 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
                   type="search"
                   value={catalogQuery}
                   onChange={(event) => setCatalogQuery(event.target.value)}
-                  placeholder="নাম, brand, category, alias, barcode"
+                  placeholder="নাম, ব্র্যান্ড, ক্যাটাগরি, বিকল্প নাম, বারকোড"
                   className="h-10 flex-1 rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary/40"
                 />
                 <div className="flex items-center gap-2">
@@ -2015,13 +2143,13 @@ export default function ProductsListClient({
                     }
                     className="inline-flex h-8 items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary-soft px-4 text-xs font-semibold text-primary shadow-sm hover:bg-primary/15 hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {addingCatalog ? "যোগ হচ্ছে..." : "Catalog যোগ করুন"}
+                    {addingCatalog ? "যোগ হচ্ছে..." : "ক্যাটালগ থেকে যোগ করুন"}
                   </button>
                 </div>
               </div>
               {!online ? (
                 <p className="text-xs text-muted-foreground">
-                  Offline mode: catalog search unavailable. অনলাইনে এলে search করা যাবে।
+                  অফলাইনে আছেন। অনলাইনে এলে ক্যাটালগ search করা যাবে।
                 </p>
               ) : null}
               {canOfferCatalogFallback && catalogQuery.trim() !== trimmedQuery ? (
@@ -2051,15 +2179,15 @@ export default function ProductsListClient({
 
             {online && catalogLoading ? (
               <div className="rounded-xl border border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-                Catalog search লোড হচ্ছে...
+                ক্যাটালগ search লোড হচ্ছে...
               </div>
             ) : null}
 
             {online && !catalogLoading && catalogCards.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border bg-muted/10 px-3 py-5 text-sm text-muted-foreground">
                 {debouncedCatalogQuery.trim()
-                  ? "এই search-এ কোনো catalog item পাওয়া যায়নি।"
-                  : "এই business-এর জন্য এখনো কোনো catalog suggestion নেই।"}
+                  ? "এই search-এ কোনো ক্যাটালগ আইটেম পাওয়া যায়নি।"
+                  : "এই ব্যবসার জন্য এখনো কোনো ক্যাটালগ suggestion নেই।"}
               </div>
             ) : null}
 
@@ -2086,12 +2214,12 @@ export default function ProductsListClient({
                   return (
                     <label
                       key={item.id}
-                      className={`block rounded-xl border p-3 transition ${
+                      className={`block rounded-xl border p-3 shadow-[0_1px_0_rgba(0,0,0,0.02)] transition-all duration-200 ${
                         disabled
                           ? "border-border bg-muted/50 text-muted-foreground"
-                          : checked
-                          ? "border-primary/40 bg-primary-soft/50"
-                          : "border-border bg-card hover:border-primary/40"
+                        : checked
+                          ? "border-primary/40 bg-primary-soft/50 shadow-[0_8px_24px_rgba(16,185,129,0.08)]"
+                          : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -2124,7 +2252,7 @@ export default function ProductsListClient({
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                 <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                  {item.category || "Uncategorized"}
+                                  {formatCategoryLabel(item.category || "বিভাগহীন")}
                                 </span>
                                 {item.packSize ? (
                                   <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
@@ -2172,7 +2300,7 @@ export default function ProductsListClient({
                               {Array.isArray(item.barcodes) &&
                               item.barcodes.length > barcodePreview.length ? (
                                 <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                  +{item.barcodes.length - barcodePreview.length} barcode
+                                  +{item.barcodes.length - barcodePreview.length} বারকোড
                                 </span>
                               ) : null}
                             </div>
@@ -2191,7 +2319,7 @@ export default function ProductsListClient({
                               {Array.isArray(item.aliases) &&
                               item.aliases.length > aliasPreview.length ? (
                                 <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                  +{item.aliases.length - aliasPreview.length} alias
+                                  +{item.aliases.length - aliasPreview.length} বিকল্প নাম
                                 </span>
                               ) : null}
                             </div>
@@ -2205,6 +2333,7 @@ export default function ProductsListClient({
             )}
           </div>
         )}
+        </div>
       </div>
 
 
@@ -2217,29 +2346,31 @@ export default function ProductsListClient({
         }
       >
         {visibleProducts.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">📦</div>
+          <div className="rounded-3xl border border-dashed border-border bg-card/70 px-6 py-14 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-primary/15 bg-primary-soft/60 text-4xl shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+              📦
+            </div>
             <h3 className="text-lg font-semibold text-foreground mb-2">
               কোনো পণ্য পাওয়া যায়নি
             </h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="mx-auto max-w-md text-sm leading-6 text-muted-foreground">
               {query || status !== "all"
                 ? "ফিল্টার পরিবর্তন করে আবার চেষ্টা করুন"
                 : "নতুন পণ্য যোগ করতে + বাটনে ক্লিক করুন"}
             </p>
             {canOfferCatalogFallback ? (
-              <div className="mt-4 space-y-2">
-                <p className="text-xs text-muted-foreground">
+              <div className="mx-auto mt-5 max-w-lg rounded-2xl border border-primary/20 bg-primary-soft/35 px-4 py-3 space-y-2">
+                <p className="text-xs leading-5 text-muted-foreground">
                   {queryLooksLikeCode
-                    ? "এই barcode/SKU shop-এ নেই। catalog-এ খুঁজে import করা যেতে পারে।"
-                    : "এই search-এর local result নেই। catalog alias/barcode থেকেও খুঁজে দেখতে পারেন।"}
+                    ? "এই barcode/SKU দোকানে নেই। ক্যাটালগে খুঁজে import করা যেতে পারে।"
+                    : "এই search-এর local result নেই। ক্যাটালগ alias/barcode দিয়েও খুঁজে দেখতে পারেন।"}
                 </p>
                 <button
                   type="button"
                   onClick={handleUseQueryInCatalog}
-                  className="inline-flex h-10 items-center justify-center rounded-full border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/15 hover:border-primary/40"
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-primary/30 bg-background px-4 text-sm font-semibold text-primary hover:bg-primary/10 hover:border-primary/40"
                 >
-                  Catalog-এ এই search চালান
+                  ক্যাটালগে এই search চালান
                 </button>
               </div>
             ) : null}
@@ -2249,9 +2380,13 @@ export default function ProductsListClient({
             const tracksStock = product.trackStock === true;
             const metrics = getProductMetrics(product);
             const isKpiExpanded = Boolean(expandedKpiByProductId[product.id]);
+            const displayStockQty = getDisplayStockQty(product);
             const stockClasses = tracksStock
-              ? getStockToneClasses(Number(product.stockQty ?? 0))
+              ? getStockToneClasses(displayStockQty)
               : UNTRACKED_STOCK_CLASSES;
+            const categoryLabel = formatCategoryLabel(product.category);
+            const variantSummary = getVariantSummary(product);
+            const stockText = formatStockText(product);
             const cardAccent = product.isActive
               ? "border-l-4 border-l-success/60"
               : "border-l-4 border-l-muted-foreground/30";
@@ -2273,13 +2408,26 @@ export default function ProductsListClient({
                       {product.name}
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      {product.category || "অনির্ধারিত"}
+                      {categoryLabel}
                     </p>
-                    {product.sku || product.barcode ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {product.sku ? `SKU: ${product.sku}` : "SKU: -"}{" · "}
-                        {product.barcode ? `Barcode: ${product.barcode}` : "Barcode: -"}
+                    {variantSummary ? (
+                      <p className="mt-1 text-xs font-medium text-primary">
+                        {variantSummary}
                       </p>
+                    ) : null}
+                    {product.sku || product.barcode ? (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {product.sku ? (
+                          <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            SKU {product.sku}
+                          </span>
+                        ) : null}
+                        {product.barcode ? (
+                          <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            বারকোড {product.barcode}
+                          </span>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                   <span
@@ -2315,12 +2463,12 @@ export default function ProductsListClient({
                       স্টক
                     </p>
                     <p className="text-lg font-bold text-foreground">
-                      {tracksStock ? product.stockQty : "N/A"}
+                      {stockText}
                     </p>
                   </div>
                 </div>
 
-                <div className="mb-4 rounded-xl border border-border bg-muted/20 p-2.5">
+                <div className="mb-4 rounded-xl border border-border bg-muted/20 p-2.5 transition-all duration-200">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -2333,13 +2481,21 @@ export default function ProductsListClient({
                     }}
                     className="flex w-full items-center justify-between gap-2 text-left"
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-[11px] font-semibold text-foreground">
-                        KPI Summary
+                        বিক্রি সারাংশ
                       </p>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        আজ বিক্রি {formatQty(metrics.soldQtyToday)} · আজ রিটার্ন {formatQty(metrics.returnedQtyToday)} · নেট বিক্রি {formatQty(metrics.netQtyToday)} · রিটার্ন রেট {formatPercent(metrics.returnRate30d)}%
-                      </p>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        <span className="inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          আজ {formatCompactMetric(metrics.soldQtyToday)}
+                        </span>
+                        <span className="inline-flex items-center rounded-full border border-success/20 bg-success-soft/70 px-2 py-0.5 text-[10px] font-semibold text-success">
+                          নেট {formatCompactMetric(metrics.netQtyToday)}
+                        </span>
+                        <span className="inline-flex items-center rounded-full border border-danger/20 bg-danger-soft/60 px-2 py-0.5 text-[10px] font-medium text-danger">
+                          রিটার্ন {formatCompactMetric(metrics.returnedQtyToday)}
+                        </span>
+                      </div>
                     </div>
                     <svg
                       aria-hidden="true"
@@ -2357,27 +2513,27 @@ export default function ProductsListClient({
                     </svg>
                   </button>
                   {isKpiExpanded && (
-                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border/70 pt-2">
-                      <div className="rounded-lg border border-border bg-card px-2.5 py-2">
+                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border/70 pt-2 animate-fade-in">
+                      <div className="rounded-lg border border-border bg-card px-2.5 py-2.5">
                         <p className="text-[10px] text-muted-foreground">আজ বিক্রি</p>
                         <p className="text-sm font-semibold text-foreground">
                           {formatQty(metrics.soldQtyToday)}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-danger/20 bg-danger-soft/50 px-2.5 py-2">
+                      <div className="rounded-lg border border-danger/20 bg-danger-soft/50 px-2.5 py-2.5">
                         <p className="text-[10px] text-danger/80">আজ রিটার্ন</p>
                         <p className="text-sm font-semibold text-danger">
                           {formatQty(metrics.returnedQtyToday)}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-success/20 bg-success-soft/60 px-2.5 py-2">
+                      <div className="rounded-lg border border-success/20 bg-success-soft/60 px-2.5 py-2.5">
                         <p className="text-[10px] text-success/80">নেট বিক্রি</p>
                         <p className="text-sm font-semibold text-success">
                           {formatQty(metrics.netQtyToday)}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-warning/25 bg-warning-soft/40 px-2.5 py-2">
-                        <p className="text-[10px] text-warning">রিটার্ন রেট (30d)</p>
+                      <div className="rounded-lg border border-warning/25 bg-warning-soft/40 px-2.5 py-2.5">
+                        <p className="text-[10px] text-warning">রিটার্ন রেট · ৩০ দিন</p>
                         <p className="text-sm font-semibold text-warning">
                           {formatPercent(metrics.returnRate30d)}%
                         </p>
@@ -2516,14 +2672,26 @@ export default function ProductsListClient({
                 <h4 className="text-2xl font-bold text-foreground mb-2">
                   {selectedProduct.name}
                 </h4>
-                <p className="text-sm text-muted-foreground">
-                  {selectedProduct.category}
-                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                    {formatCategoryLabel(selectedProduct.category)}
+                  </span>
+                  {getVariantSummary(selectedProduct) ? (
+                    <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft/80 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                      {getVariantSummary(selectedProduct)}
+                    </span>
+                  ) : null}
+                  {selectedProduct.barcode ? (
+                    <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                      বারকোড {selectedProduct.barcode}
+                    </span>
+                  ) : null}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-primary-soft rounded-xl p-4 border border-primary/30">
-                  <p className="text-xs text-primary font-medium mb-1">
+                <div className="rounded-xl border border-primary/30 bg-primary-soft p-4 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
+                  <p className="text-xs font-medium text-primary mb-1">
                     বিক্রয় মূল্য
                   </p>
                   <p className="text-2xl font-bold text-foreground">
@@ -2531,8 +2699,8 @@ export default function ProductsListClient({
                   </p>
                 </div>
                 {selectedProduct.buyPrice && (
-                  <div className="bg-success-soft rounded-xl p-4 border border-success/30">
-  <p className="text-xs text-success font-medium mb-1">
+                  <div className="rounded-xl border border-success/30 bg-success-soft p-4 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
+  <p className="text-xs font-medium text-success mb-1">
     ক্রয় মূল্য
                     </p>
                     <p className="text-2xl font-bold text-foreground">
@@ -2540,15 +2708,15 @@ export default function ProductsListClient({
                     </p>
                   </div>
                 )}
-                <div className={`rounded-xl p-4 border ${selectedStockClasses.card}`}>
+                <div className={`rounded-xl border p-4 shadow-[0_1px_0_rgba(0,0,0,0.02)] ${selectedStockClasses.card}`}>
                   <p className={`text-xs font-medium mb-1 ${selectedStockClasses.label}`}>
                     স্টক
   </p>
   <p className="text-2xl font-bold text-foreground">
-    {selectedProduct.trackStock === true ? selectedProduct.stockQty : "N/A"}
+    {formatStockText(selectedProduct)}
   </p>
 </div>
-                <div className="bg-muted rounded-xl p-4 border border-border">
+                <div className="rounded-xl border border-border bg-muted/50 p-4 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
                   <p className="text-xs text-muted-foreground font-medium mb-1">
                     স্ট্যাটাস
                   </p>
@@ -2561,34 +2729,34 @@ export default function ProductsListClient({
               <div className="rounded-2xl border border-border bg-muted/30 p-3 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <h5 className="text-sm font-semibold text-foreground">
-                    Return / Exchange Insight
+                    রিটার্ন ও এক্সচেঞ্জ সারাংশ
                   </h5>
-                  <p className="text-[11px] text-muted-foreground">
-                    Last Return: {formatDateTime(selectedMetrics.lastReturnAt)}
-                  </p>
+                  <span className="inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    শেষ রিটার্ন: {formatDateTime(selectedMetrics.lastReturnAt)}
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-border bg-card px-2.5 py-2">
+                  <div className="rounded-lg border border-border bg-card px-2.5 py-2.5">
                     <p className="text-[10px] text-muted-foreground">আজ বিক্রি</p>
                     <p className="text-sm font-semibold text-foreground">
                       {formatQty(selectedMetrics.soldQtyToday)}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-danger/20 bg-danger-soft/50 px-2.5 py-2">
+                  <div className="rounded-lg border border-danger/20 bg-danger-soft/50 px-2.5 py-2.5">
                     <p className="text-[10px] text-danger/80">আজ রিটার্ন</p>
                     <p className="text-sm font-semibold text-danger">
                       {formatQty(selectedMetrics.returnedQtyToday)}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-success/20 bg-success-soft/60 px-2.5 py-2">
+                  <div className="rounded-lg border border-success/20 bg-success-soft/60 px-2.5 py-2.5">
                     <p className="text-[10px] text-success/80">আজ নেট বিক্রি</p>
                     <p className="text-sm font-semibold text-success">
                       {formatQty(selectedMetrics.netQtyToday)}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-warning/25 bg-warning-soft/40 px-2.5 py-2">
-                    <p className="text-[10px] text-warning">রিটার্ন রেট (30d)</p>
+                  <div className="rounded-lg border border-warning/25 bg-warning-soft/40 px-2.5 py-2.5">
+                    <p className="text-[10px] text-warning">রিটার্ন রেট · ৩০ দিন</p>
                     <p className="text-sm font-semibold text-warning">
                       {formatPercent(selectedMetrics.returnRate30d)}%
                     </p>
@@ -2597,11 +2765,11 @@ export default function ProductsListClient({
 
                 {!online ? (
                   <p className="text-xs text-muted-foreground">
-                    Offline mode: return/exchange history দেখতে অনলাইনে আসুন।
+                    অফলাইনে আছেন। রিটার্ন/এক্সচেঞ্জ history দেখতে অনলাইনে আসুন।
                   </p>
                 ) : insightLoadingProductId === selectedProduct.id ? (
                   <p className="text-xs text-muted-foreground">
-                    Return history লোড হচ্ছে...
+                    রিটার্ন history লোড হচ্ছে...
                   </p>
                 ) : insightError ? (
                   <p className="text-xs text-danger">{insightError}</p>
@@ -2610,7 +2778,7 @@ export default function ProductsListClient({
                     <div className="grid grid-cols-2 gap-2">
                       <div className="rounded-lg border border-border bg-card px-2.5 py-2">
                         <p className="text-[10px] text-muted-foreground">
-                          Recent Returned Qty
+                          সাম্প্রতিক রিটার্ন
                         </p>
                         <p className="text-sm font-semibold text-danger">
                           {formatQty(selectedInsight.totals.returnedQty)}
@@ -2618,7 +2786,7 @@ export default function ProductsListClient({
                       </div>
                       <div className="rounded-lg border border-border bg-card px-2.5 py-2">
                         <p className="text-[10px] text-muted-foreground">
-                          Recent Exchange Qty
+                          সাম্প্রতিক এক্সচেঞ্জ
                         </p>
                         <p className="text-sm font-semibold text-success">
                           {formatQty(selectedInsight.totals.exchangeQty)}
@@ -2629,7 +2797,7 @@ export default function ProductsListClient({
                       {selectedInsight.events.map((event) => (
                         <div
                           key={event.id}
-                          className="rounded-lg border border-border bg-card px-2.5 py-2"
+                          className="rounded-xl border border-border bg-card px-3 py-2.5 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span
@@ -2639,7 +2807,7 @@ export default function ProductsListClient({
                                   : "border-success/30 bg-success-soft text-success"
                               }`}
                             >
-                              {event.kind === "returned" ? "Returned" : "Exchange Out"}
+                              {event.kind === "returned" ? "রিটার্ন" : "এক্সচেঞ্জ আউট"}
                             </span>
                             <span className="text-[10px] text-muted-foreground">
                               {formatDateTime(event.createdAt)}
@@ -2647,14 +2815,19 @@ export default function ProductsListClient({
                           </div>
                           <p className="mt-1 text-xs text-foreground">
                             {event.returnNo}
-                            {event.saleInvoiceNo ? ` · Invoice ${event.saleInvoiceNo}` : ""}
+                            {event.saleInvoiceNo ? ` · ইনভয়েস ${event.saleInvoiceNo}` : ""}
                           </p>
-                          <p className="mt-1 text-[11px] text-muted-foreground">
-                            Qty {formatQty(event.quantity)} · Line ৳ {formatQty(event.lineTotal)}
-                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              পরিমাণ {formatQty(event.quantity)}
+                            </span>
+                            <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              লাইন ৳ {formatQty(event.lineTotal)}
+                            </span>
+                          </div>
                           {event.reason ? (
-                            <p className="mt-1 text-[11px] text-muted-foreground">
-                              Reason: {event.reason}
+                            <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+                              কারণ: {event.reason}
                             </p>
                           ) : null}
                         </div>
@@ -2663,7 +2836,7 @@ export default function ProductsListClient({
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    এই পণ্যে এখনো কোনো return/exchange event নেই।
+                    এই পণ্যে এখনো কোনো রিটার্ন/এক্সচেঞ্জ ইভেন্ট নেই।
                   </p>
                 )}
               </div>

@@ -97,6 +97,16 @@ type ProductListRow = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  variants?: Array<{
+    id: string;
+    label: string;
+    sellPrice: string;
+    stockQty: string;
+    sku?: string | null;
+    barcode?: string | null;
+    sortOrder?: number;
+    isActive?: boolean;
+  }>;
   metrics?: ProductCardMetrics;
 };
 
@@ -1193,6 +1203,20 @@ export async function getProductsByShopCursorPaginated({
         isActive: true,
         createdAt: true,
         updatedAt: true,
+        variants: {
+          where: { isActive: true },
+          orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+          select: {
+            id: true,
+            label: true,
+            sellPrice: true,
+            stockQty: true,
+            sku: true,
+            barcode: true,
+            sortOrder: true,
+            isActive: true,
+          },
+        },
       },
     }),
     prisma.product.count({ where: baseWhere }),
@@ -1221,6 +1245,17 @@ export async function getProductsByShopCursorPaginated({
     isActive: p.isActive,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
+    variants: (p.variants || []).map((variant) => ({
+      id: variant.id,
+      label: variant.label,
+      sellPrice: variant.sellPrice?.toString?.() ?? String(variant.sellPrice ?? "0"),
+      stockQty: variant.stockQty?.toString?.() ?? (variant as any).stockQty ?? "0",
+      sku: variant.sku ?? null,
+      barcode: variant.barcode ?? null,
+      sortOrder:
+        typeof variant.sortOrder === "number" ? variant.sortOrder : undefined,
+      isActive: variant.isActive,
+    })),
     metrics: metricsByProduct.get(p.id) ?? emptyProductCardMetrics(),
   }));
 
