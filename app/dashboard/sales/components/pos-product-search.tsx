@@ -37,6 +37,7 @@ type PosProductSearchProps = {
     stockQty?: string | number;
     category?: string | null;
     trackStock?: boolean | null;
+    baseUnit?: string | null;
     variants?: Array<{
       id: string;
       label: string;
@@ -1228,6 +1229,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         variantLabel: variant?.label ?? null,
         name: buildCartItemName(product, variant),
         unitPrice: productPrice,
+        baseUnit: product.baseUnit ?? null,
       });
 
       // UI feedback

@@ -11,6 +11,7 @@ export type CartItem = {
   unitPrice: number;
   qty: number;
   total: number;
+  baseUnit?: string | null;
 };
 
 type CartState = {
@@ -25,6 +26,7 @@ type CartState = {
     variantLabel?: string | null;
     name: string;
     unitPrice: number;
+    baseUnit?: string | null;
   }) => void;
   remove: (itemKey: string) => void;
   increase: (itemKey: string) => void;

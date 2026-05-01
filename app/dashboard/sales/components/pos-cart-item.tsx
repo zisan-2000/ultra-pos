@@ -67,11 +67,20 @@ export const PosCartItem = memo(function PosCartItem({
     runOncePerFrame(() => remove(item.itemKey));
   }, [remove, item.itemKey, runOncePerFrame]);
 
+  const showUnit = item.baseUnit && item.baseUnit !== "pcs";
+
   return (
     <div className="rounded-2xl border border-border bg-card p-3 shadow-sm text-foreground space-y-2.5">
-      {/* Row 1: Name + Remove */}
+      {/* Row 1: Name + Unit badge + Remove */}
       <div className="flex items-start justify-between gap-2">
-        <h3 className="flex-1 text-sm font-semibold leading-snug">{item.name}</h3>
+        <div className="flex flex-1 min-w-0 items-start gap-1.5">
+          <h3 className="text-sm font-semibold leading-snug">{item.name}</h3>
+          {showUnit && (
+            <span className="shrink-0 mt-0.5 inline-flex items-center rounded-md border border-primary/20 bg-primary/8 px-1.5 py-0.5 text-[10px] font-semibold text-primary/70 leading-none">
+              {item.baseUnit}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={handleRemove}
@@ -134,7 +143,9 @@ export const PosCartItem = memo(function PosCartItem({
 
       {/* Row 3: Line total */}
       <div className="flex items-center justify-end text-xs text-muted-foreground">
-        <span>{item.unitPrice} × {item.qty} = </span>
+        <span>
+          {item.unitPrice} × {item.qty}{showUnit ? ` ${item.baseUnit}` : ""} ={" "}
+        </span>
         <span className="ml-1 text-sm font-bold text-foreground">{item.total} ৳</span>
       </div>
     </div>
