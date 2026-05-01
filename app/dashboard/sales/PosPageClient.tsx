@@ -1467,8 +1467,9 @@ export function PosPageClient({
                   <SelectValue placeholder="একজন গ্রাহক নির্বাচন করুন" />
                 </SelectTrigger>
                 <SelectContent
+                  position="popper"
                   align="start"
-                  className="min-w-[var(--radix-select-trigger-width)]"
+                  className="max-h-48 overflow-y-auto min-w-[var(--radix-select-trigger-width)]"
                 >
                   {customersLoading ? (
                     <SelectItem value="__loading" disabled>
@@ -1690,9 +1691,9 @@ export function PosPageClient({
 
               {/* Expanded panel */}
               {barExpanded && (
-                <div className="px-3 pb-3 space-y-3 border-t border-border/60 pt-3">
+                <div className="max-h-[55vh] overflow-y-auto overscroll-contain px-3 pb-3 space-y-2.5 border-t border-border/60 pt-2.5">
                   {/* Mini cart list */}
-                  <div className="max-h-44 overflow-y-auto space-y-2 overscroll-contain">
+                  <div className="max-h-36 overflow-y-auto space-y-2 overscroll-contain">
                     {miniCartList}
                   </div>
 
@@ -1717,7 +1718,7 @@ export function PosPageClient({
                     </div>
                   </div>
 
-                  {/* Customer selector (due only) */}
+                  {/* Customer selector (due only) - compact */}
                   {isDue && canUseDueSale ? (
                     <div className="space-y-2 rounded-2xl border border-warning/30 bg-warning-soft/40 p-2.5">
                       <div className="flex items-center justify-between gap-2">
@@ -1740,7 +1741,12 @@ export function PosPageClient({
                         <SelectTrigger className="h-10 w-full rounded-xl border border-border bg-card px-3 text-left text-xs text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
                           <SelectValue placeholder="গ্রাহক বাছাই করুন" />
                         </SelectTrigger>
-                        <SelectContent align="start" className="min-w-[var(--radix-select-trigger-width)]">
+                        <SelectContent
+                          position="item-aligned"
+                          side="top"
+                          sideOffset={4}
+                          className="max-h-40 overflow-y-auto"
+                        >
                           {customersLoading ? (
                             <SelectItem value="__loading-bar" disabled>লোড হচ্ছে...</SelectItem>
                           ) : customerList.length === 0 ? (
@@ -1754,6 +1760,56 @@ export function PosPageClient({
                           )}
                         </SelectContent>
                       </Select>
+
+                      {/* Due extra fields compact row */}
+                      <div className="flex items-center justify-between gap-3 pt-2">
+                        {/* Partial payment */}
+                        <div className="flex items-center gap-1.5 flex-1">
+                          <label className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
+                            আংশিক
+                          </label>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-muted-foreground">৳</span>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={0}
+                              max={payableTotal}
+                              placeholder="০"
+                              value={paidNow}
+                              onChange={(e) => setPaidNow(e.target.value)}
+                              className="h-8 w-20 rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold text-foreground outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Due days */}
+                        <div className="flex items-center gap-1.5 flex-1 justify-end">
+                          <label className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
+                            সময়সীমা
+                          </label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={1}
+                              max={365}
+                              value={dueDays}
+                              onChange={(e) => setDueDays(e.target.value)}
+                              className="h-8 w-16 rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold text-foreground outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+                            />
+                            <span className="text-xs text-muted-foreground shrink-0">দিন</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Credit limit warning */}
+                      {creditLimitWarning && (
+                        <div className="rounded-lg border border-danger/30 bg-danger/8 px-2 py-1.5 text-[10px] text-danger mt-2">
+                          ⚠️ সীমা: <span className="font-semibold">{creditLimitWarning.limit.toFixed(0)} ৳</span>
+                          {" — "}প্রক্ষেপিত: <span className="font-semibold">{creditLimitWarning.projected.toFixed(0)} ৳</span>
+                        </div>
+                      )}
                     </div>
                   ) : null}
 
@@ -1889,8 +1945,9 @@ export function PosPageClient({
                     <SelectValue placeholder="একজন গ্রাহক নির্বাচন করুন" />
                   </SelectTrigger>
                   <SelectContent
+                    position="popper"
                     align="start"
-                    className="min-w-[var(--radix-select-trigger-width)]"
+                    className="max-h-48 overflow-y-auto min-w-[var(--radix-select-trigger-width)]"
                   >
                     {customersLoading ? (
                       <SelectItem value="__loading-mobile" disabled>

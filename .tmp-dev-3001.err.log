@@ -1,0 +1,8 @@
+⨯ Another next dev server is already running.
+
+- Local:        http://localhost:3000
+- PID:          13776
+- Dir:          E:\pos\pos-app-supabase
+- Log:          .next-build\dev\logs\next-development.log
+
+Run taskkill /PID 13776 /F to stop it.
