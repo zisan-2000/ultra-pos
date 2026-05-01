@@ -1149,11 +1149,17 @@ export async function createSale(input: CreateSaleInput) {
     const transactionStart = Date.now();
     logPerf(`🔄 [PERF] Transaction started at: ${new Date().toISOString()}`);
 
-    // Pre-calculate stock changes for O(1) lookup
-    const stockMap = new Map<string, number>();
+    // Pre-calculate stock changes — split by variant vs product-level
+    const stockMap = new Map<string, number>();        // productId → qty (no variant)
+    const variantStockMap = new Map<string, number>(); // variantId → qty
     input.items.forEach(item => {
-      const current = stockMap.get(item.productId) || 0;
-      stockMap.set(item.productId, current + item.qty);
+      if (item.variantId) {
+        const current = variantStockMap.get(item.variantId) || 0;
+        variantStockMap.set(item.variantId, current + item.qty);
+      } else {
+        const current = stockMap.get(item.productId) || 0;
+        stockMap.set(item.productId, current + item.qty);
+      }
     });
 
     const issuedInvoice = shouldIssueSalesInvoice
@@ -1203,6 +1209,7 @@ export async function createSale(input: CreateSaleInput) {
       return {
         saleId: inserted.id,
         productId: item.productId,
+        variantId: item.variantId ?? null,
         productNameSnapshot: item.name || product?.name || null,
         quantity: item.qty.toString(),
         unitPrice: item.unitPrice.toFixed(2),
@@ -1231,12 +1238,30 @@ export async function createSale(input: CreateSaleInput) {
     // Update stock atomically with non-negative guard
     logPerf(`📊 [DEBUG] Starting stock updates for ${dbProducts.length} products`);
     let stockUpdateCount = 0;
-    
+
+    // Variant-level stock deduction
+    for (const [variantId, soldQty] of variantStockMap.entries()) {
+      if (soldQty <= 0) continue;
+      const soldQtyDecimal = new Prisma.Decimal(soldQty.toFixed(2));
+      const updated = await tx.productVariant.updateMany({
+        where: {
+          id: variantId,
+          stockQty: { gte: soldQtyDecimal },
+        },
+        data: { stockQty: { decrement: soldQtyDecimal } },
+      });
+      if (updated.count !== 1) {
+        throw new Error(`Insufficient stock for variant`);
+      }
+      stockUpdateCount++;
+    }
+
+    // Product-level stock deduction (no variant)
     for (const p of dbProducts) {
       const soldQty = stockMap.get(p.id) || 0;
       if (soldQty > 0 && p.trackStock !== false) {
         const soldQtyDecimal = new Prisma.Decimal(soldQty.toFixed(2));
-        
+
         const singleUpdateStart = Date.now();
         const updated = await tx.product.updateMany({
           where: {
@@ -1252,14 +1277,14 @@ export async function createSale(input: CreateSaleInput) {
           throw new Error(`Insufficient stock for product "${p.name}"`);
         }
         const singleUpdateEnd = Date.now();
-        
+
         stockUpdateCount++;
         logPerf(
           `🔄 [DEBUG] Stock update ${stockUpdateCount}/${dbProducts.length}: ${singleUpdateEnd - singleUpdateStart}ms for product ${p.id}`
         );
       }
     }
-    
+
     logPerf(`📈 [DEBUG] Total stock updates: ${stockUpdateCount} products updated`);
 
     // Handle due customer

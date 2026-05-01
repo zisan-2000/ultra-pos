@@ -28,6 +28,7 @@ type CartState = {
     name: string;
     unitPrice: number;
     baseUnit?: string | null;
+    qty?: number;
   }) => void;
   remove: (itemKey: string) => void;
   increase: (itemKey: string) => void;
@@ -54,6 +55,7 @@ export const useCart = create<CartState>((set, get) => ({
 
   add: (item) => {
     const { currentShopId, items } = get();
+    const nextQty = Math.max(1, Number(item.qty || 1));
 
     // If shop changed (or not set yet), reset cart to this shop before adding
     if (!currentShopId || currentShopId !== item.shopId) {
@@ -62,9 +64,9 @@ export const useCart = create<CartState>((set, get) => ({
         items: [
           {
             ...item,
-            qty: 1,
+            qty: nextQty,
             originalPrice: item.unitPrice,
-            total: item.unitPrice,
+            total: nextQty * item.unitPrice,
           },
         ],
       });
@@ -78,8 +80,8 @@ export const useCart = create<CartState>((set, get) => ({
           i.itemKey === item.itemKey
             ? {
                 ...i,
-                qty: i.qty + 1,
-                total: (i.qty + 1) * i.unitPrice,
+                qty: i.qty + nextQty,
+                total: (i.qty + nextQty) * i.unitPrice,
               }
             : i
         ),
@@ -91,9 +93,9 @@ export const useCart = create<CartState>((set, get) => ({
         ...items,
         {
           ...item,
-          qty: 1,
+          qty: nextQty,
           originalPrice: item.unitPrice,
-          total: item.unitPrice,
+          total: nextQty * item.unitPrice,
         },
       ],
     });

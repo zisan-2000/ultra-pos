@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import type { ProductMap, ShopMap } from "../utils";
 import { toMoney } from "../utils";
 
-type VariantSeed = { label: string; sellPrice: number; sortOrder: number };
+type VariantSeed = { label: string; sellPrice: number; sortOrder: number; stockQty?: number };
 
 type ProductSeed = {
   name: string;
@@ -61,11 +61,11 @@ export async function seedProducts(
         name: "রড", category: "সিমেন্ট/বিল্ডিং", unit: "kg",
         buyPrice: 78, sellPrice: 85, stockQty: 800, trackStock: true, reorderPoint: 200,
         variants: [
-          { label: "৮মিমি",  sellPrice: 80,  sortOrder: 1 },
-          { label: "১০মিমি", sellPrice: 83,  sortOrder: 2 },
-          { label: "১২মিমি", sellPrice: 85,  sortOrder: 3 },
-          { label: "১৬মিমি", sellPrice: 90,  sortOrder: 4 },
-          { label: "২০মিমি", sellPrice: 100, sortOrder: 5 },
+          { label: "৮মিমি",  sellPrice: 80,  sortOrder: 1, stockQty: 200 },
+          { label: "১০মিমি", sellPrice: 83,  sortOrder: 2, stockQty: 200 },
+          { label: "১২মিমি", sellPrice: 85,  sortOrder: 3, stockQty: 180 },
+          { label: "১৬মিমি", sellPrice: 90,  sortOrder: 4, stockQty: 130 },
+          { label: "২০মিমি", sellPrice: 100, sortOrder: 5, stockQty: 90  },
         ],
       },
 
@@ -74,11 +74,11 @@ export async function seedProducts(
         name: "PVC পাইপ", category: "পাইপ/ফিটিংস", unit: "ft",
         buyPrice: 28, sellPrice: 35, stockQty: 700, trackStock: true, reorderPoint: 150,
         variants: [
-          { label: "½ ইঞ্চি",   sellPrice: 22,  sortOrder: 1 },
-          { label: "¾ ইঞ্চি",   sellPrice: 28,  sortOrder: 2 },
-          { label: "১ ইঞ্চি",   sellPrice: 35,  sortOrder: 3 },
-          { label: "১.৫ ইঞ্চি", sellPrice: 50,  sortOrder: 4 },
-          { label: "২ ইঞ্চি",   sellPrice: 70,  sortOrder: 5 },
+          { label: "½ ইঞ্চি",   sellPrice: 22,  sortOrder: 1, stockQty: 200 },
+          { label: "¾ ইঞ্চি",   sellPrice: 28,  sortOrder: 2, stockQty: 200 },
+          { label: "১ ইঞ্চি",   sellPrice: 35,  sortOrder: 3, stockQty: 150 },
+          { label: "১.৫ ইঞ্চি", sellPrice: 50,  sortOrder: 4, stockQty: 100 },
+          { label: "২ ইঞ্চি",   sellPrice: 70,  sortOrder: 5, stockQty: 50  },
         ],
       },
 
@@ -87,10 +87,10 @@ export async function seedProducts(
         name: "তার", category: "ইলেকট্রিক্যাল", unit: "coil",
         buyPrice: 350, sellPrice: 420, stockQty: 80, trackStock: true, reorderPoint: 20,
         variants: [
-          { label: "১ স্কোয়ার",   sellPrice: 380, sortOrder: 1 },
-          { label: "১.৫ স্কোয়ার", sellPrice: 450, sortOrder: 2 },
-          { label: "২.৫ স্কোয়ার", sellPrice: 680, sortOrder: 3 },
-          { label: "৪ স্কোয়ার",   sellPrice: 950, sortOrder: 4 },
+          { label: "১ স্কোয়ার",   sellPrice: 380, sortOrder: 1, stockQty: 20 },
+          { label: "১.৫ স্কোয়ার", sellPrice: 450, sortOrder: 2, stockQty: 20 },
+          { label: "২.৫ স্কোয়ার", sellPrice: 680, sortOrder: 3, stockQty: 15 },
+          { label: "৪ স্কোয়ার",   sellPrice: 950, sortOrder: 4, stockQty: 5  },
         ],
       },
 
@@ -99,10 +99,10 @@ export async function seedProducts(
         name: "রং (অ্যাপেক্স)", category: "রং/কেমিক্যাল", unit: "liter",
         buyPrice: 290, sellPrice: 350, stockQty: 100, trackStock: true, reorderPoint: 20,
         variants: [
-          { label: "১ লিটার",  sellPrice: 350,  sortOrder: 1 },
-          { label: "৪ লিটার",  sellPrice: 1300, sortOrder: 2 },
-          { label: "১০ লিটার", sellPrice: 3100, sortOrder: 3 },
-          { label: "১৮ লিটার", sellPrice: 5400, sortOrder: 4 },
+          { label: "১ লিটার",  sellPrice: 350,  sortOrder: 1, stockQty: 30 },
+          { label: "৪ লিটার",  sellPrice: 1300, sortOrder: 2, stockQty: 25 },
+          { label: "১০ লিটার", sellPrice: 3100, sortOrder: 3, stockQty: 15 },
+          { label: "১৮ লিটার", sellPrice: 5400, sortOrder: 4, stockQty: 10 },
         ],
       },
 
@@ -111,9 +111,9 @@ export async function seedProducts(
         name: "টাইলস", category: "সিমেন্ট/বিল্ডিং", unit: "pcs",
         buyPrice: 45, sellPrice: 55, stockQty: 500, trackStock: true, reorderPoint: 100,
         variants: [
-          { label: "১×১ ফুট",   sellPrice: 55,  sortOrder: 1 },
-          { label: "১.৫×১.৫ ফুট", sellPrice: 110, sortOrder: 2 },
-          { label: "২×২ ফুট",   sellPrice: 180, sortOrder: 3 },
+          { label: "১×১ ফুট",     sellPrice: 55,  sortOrder: 1, stockQty: 200 },
+          { label: "১.৫×১.৫ ফুট", sellPrice: 110, sortOrder: 2, stockQty: 150 },
+          { label: "২×২ ফুট",     sellPrice: 180, sortOrder: 3, stockQty: 80  },
         ],
       },
     ],
@@ -161,6 +161,7 @@ export async function seedProducts(
                 label: v.label,
                 sellPrice: toMoney(v.sellPrice),
                 sortOrder: v.sortOrder,
+                stockQty: v.stockQty != null ? toMoney(v.stockQty) : "0",
                 isActive: true,
               },
             });

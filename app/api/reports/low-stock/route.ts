@@ -21,12 +21,29 @@ async function computeLowStockReport(
   limit: number
 ) {
   const rows = await prisma.$queryRaw<Array<{ id: string; name: string; stock_qty: string }>>`
-    SELECT id, name, stock_qty
-    FROM products
-    WHERE shop_id = ${shopId}::uuid
-      AND is_active = true
-      AND track_stock = true
-      AND stock_qty <= COALESCE(reorder_point, ${threshold})
+    SELECT p.id, p.name, p.stock_qty
+    FROM products p
+    WHERE p.shop_id = ${shopId}::uuid
+      AND p.is_active = true
+      AND p.track_stock = true
+      AND NOT EXISTS (
+        SELECT 1 FROM product_variants pv
+        WHERE pv.product_id = p.id AND pv.is_active = true
+      )
+      AND p.stock_qty <= COALESCE(p.reorder_point, ${threshold})
+
+    UNION ALL
+
+    SELECT p.id,
+           p.name || ' (' || pv.label || ')' AS name,
+           pv.stock_qty
+    FROM products p
+    JOIN product_variants pv ON pv.product_id = p.id AND pv.is_active = true
+    WHERE p.shop_id = ${shopId}::uuid
+      AND p.is_active = true
+      AND p.track_stock = true
+      AND pv.stock_qty <= COALESCE(p.reorder_point, ${threshold})
+
     ORDER BY stock_qty ASC
     LIMIT ${limit}
   `;

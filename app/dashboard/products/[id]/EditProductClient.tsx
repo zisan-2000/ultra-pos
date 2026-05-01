@@ -95,6 +95,7 @@ type VariantDraft = {
   id?: string;
   label: string;
   sellPrice: string;
+  stockQty: string;
   sku: string;
   barcode: string;
   sortOrder: number;
@@ -194,11 +195,23 @@ function normalizeCodeInput(value: string) {
   return value.trim().replace(/\s+/g, "").toUpperCase().slice(0, 80);
 }
 
+function getVariantStockInputTone(value: string) {
+  const stock = Number(value || "0");
+  if (!Number.isFinite(stock) || stock <= 0) {
+    return "border-danger/40 bg-danger-soft/30 text-danger focus:ring-danger/20";
+  }
+  if (stock <= 10) {
+    return "border-warning/40 bg-warning-soft/30 text-warning focus:ring-warning/20";
+  }
+  return "border-success/30 bg-success-soft/20 text-foreground focus:ring-primary/30";
+}
+
 function createVariantDraft(seed?: Partial<VariantDraft>): VariantDraft {
   return {
     id: seed?.id,
     label: seed?.label ?? "",
     sellPrice: seed?.sellPrice ?? "",
+    stockQty: seed?.stockQty ?? "0",
     sku: seed?.sku ?? "",
     barcode: seed?.barcode ?? "",
     sortOrder: seed?.sortOrder ?? 0,
@@ -352,6 +365,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             id: typeof variant?.id === "string" ? variant.id : undefined,
             label: String(variant?.label || ""),
             sellPrice: String(variant?.sellPrice ?? ""),
+            stockQty: String(variant?.stockQty ?? "0"),
             sku: String(variant?.sku ?? ""),
             barcode: String(variant?.barcode ?? ""),
             sortOrder:
@@ -1446,6 +1460,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             id: variant.id,
             label: variant.label.trim(),
             sellPrice: variant.sellPrice.trim(),
+            stockQty: variant.stockQty || "0",
             sku: normalizeCodeInput(variant.sku || ""),
             barcode: normalizeCodeInput(variant.barcode || ""),
             sortOrder: index,
@@ -1837,15 +1852,37 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                 </p>
               ) : (
                 <div className="max-h-[340px] space-y-2 overflow-y-auto pr-1">
+                  <div
+                    className={`hidden items-center gap-2 rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground md:grid ${
+                      stockEnabled
+                        ? "md:grid-cols-[32px_minmax(0,1fr)_96px_84px_40px]"
+                        : "md:grid-cols-[32px_minmax(0,1fr)_96px_40px]"
+                    }`}
+                  >
+                    <span>#</span>
+                    <span>লেবেল</span>
+                    <span>বিক্রয়মূল্য</span>
+                    {stockEnabled ? <span>স্টক</span> : null}
+                    <span className="text-right">×</span>
+                  </div>
                   {variants.map((variant, index) => (
                     <div
                       key={`${variant.id || "new"}-${index}`}
                       className="rounded-xl border border-border bg-card p-3 shadow-sm space-y-2"
                     >
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-border bg-muted px-1 text-[11px] font-semibold text-muted-foreground">
-                            {index + 1}
+                      <div
+                        className={`grid gap-2 md:items-start ${
+                          stockEnabled
+                            ? "md:grid-cols-[32px_minmax(0,1fr)_96px_84px_40px]"
+                            : "md:grid-cols-[32px_minmax(0,1fr)_96px_40px]"
+                        }`}
+                      >
+                        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-border bg-muted px-1 text-[11px] font-semibold text-muted-foreground">
+                          {index + 1}
+                        </span>
+                        <label className="space-y-1">
+                          <span className="block text-[11px] font-semibold text-muted-foreground md:hidden">
+                            লেবেল
                           </span>
                           <input
                             type="text"
@@ -1854,10 +1891,13 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                               upsertVariant(index, { label: e.target.value })
                             }
                             placeholder="Label (যেমন: Small, 500ml)"
-                            className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 text-sm"
+                            className="h-9 min-w-0 w-full rounded-lg border border-border bg-card px-3 text-sm"
                           />
-                        </div>
-                        <div className="flex items-center gap-2 sm:w-auto">
+                        </label>
+                        <label className="space-y-1">
+                          <span className="block text-[11px] font-semibold text-muted-foreground md:hidden">
+                            বিক্রয়মূল্য
+                          </span>
                           <input
                             type="number"
                             step="0.01"
@@ -1866,18 +1906,39 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                             onChange={(e) =>
                               upsertVariant(index, { sellPrice: e.target.value })
                             }
-                            placeholder="Price"
-                            className="h-9 w-full min-w-0 rounded-lg border border-border bg-card px-3 text-sm sm:w-36"
+                            placeholder="দাম"
+                            className="h-9 w-full min-w-0 rounded-lg border border-border bg-card px-3 text-sm"
                           />
-                          <button
-                            type="button"
-                            onClick={() => removeVariant(index)}
-                            aria-label="ভ্যারিয়েন্ট মুছুন"
-                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-danger/30 bg-danger-soft text-sm font-bold text-danger"
-                          >
-                            ✕
-                          </button>
-                        </div>
+                        </label>
+                        {stockEnabled ? (
+                          <label className="space-y-1">
+                            <span className="block text-[11px] font-semibold text-muted-foreground md:hidden">
+                              স্টক
+                            </span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={variant.stockQty}
+                              onChange={(e) =>
+                                upsertVariant(index, { stockQty: e.target.value })
+                              }
+                              placeholder="স্টক"
+                              className={`h-9 w-full min-w-0 rounded-lg border px-3 text-sm ${getVariantStockInputTone(
+                                variant.stockQty
+                              )}`}
+                              title="এই variant-এর স্টক পরিমাণ"
+                            />
+                          </label>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => removeVariant(index)}
+                          aria-label="ভ্যারিয়েন্ট মুছুন"
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-danger/30 bg-danger-soft text-sm font-bold text-danger"
+                        >
+                          ✕
+                        </button>
                       </div>
                       {canUseBarcodeScan && showVariantCodeFields ? (
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

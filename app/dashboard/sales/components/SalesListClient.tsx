@@ -424,6 +424,26 @@ export default function SalesListClient({
           const hasExchangeDetail = Boolean(
             latestReturnedPreview || latestExchangePreview
           );
+          const compactMetaChips = [
+            !isVoided && discountAmount > 0
+              ? `ছাড় ৳${discountAmount.toFixed(2)}${
+                  s.discountType === "percent" && s.discountValue
+                    ? ` (${Number(s.discountValue).toFixed(2)}%)`
+                    : ""
+                }`
+              : null,
+            !isVoided && discountAmount > 0
+              ? `সাব-টোটাল ৳${subtotalAmount.toFixed(2)}`
+              : null,
+            !isVoided && taxAmount > 0
+              ? `${(s.taxLabel || "VAT").trim()} ৳${taxAmount.toFixed(2)}${
+                  s.taxRate ? ` (${Number(s.taxRate).toFixed(2)}%)` : ""
+                }`
+              : null,
+            !isVoided && taxAmount > 0
+              ? `করযোগ্য ৳${Number(s.taxableAmount ?? baseTotal).toFixed(2)}`
+              : null,
+          ].filter((value): value is string => Boolean(value));
           const statusPill = isVoided
             ? "bg-danger-soft text-danger border-danger/30"
             : hasRefundFlow && hasExchangeFlow
@@ -528,29 +548,25 @@ export default function SalesListClient({
                     </button>
                   ) : null}
                 </div>
+                {compactMetaChips.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {compactMetaChips.map((chip) => (
+                      <span
+                        key={chip}
+                        className="inline-flex items-center rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+                      >
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 {isVoided && voidReason && (
                   <p className="text-xs text-danger">
                     বাতিলের কারণ: {voidReason}
                   </p>
                 )}
-                {!isVoided && discountAmount > 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Discount: ৳{discountAmount.toFixed(2)} কমেছে
-                    {s.discountType === "percent" && s.discountValue
-                      ? ` (${Number(s.discountValue).toFixed(2)}%)`
-                      : ""}
-                    {" "}· সাব-টোটাল ৳{subtotalAmount.toFixed(2)}
-                  </p>
-                ) : null}
-                {!isVoided && taxAmount > 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    {(s.taxLabel || "VAT").trim()}: ৳{taxAmount.toFixed(2)}
-                    {s.taxRate ? ` (${Number(s.taxRate).toFixed(2)}%)` : ""}
-                    {" "}· taxable ৳{Number(s.taxableAmount ?? baseTotal).toFixed(2)}
-                  </p>
-                ) : null}
                 {hasReturnFlow && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="rounded-xl border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                     {hasRefundFlow && hasExchangeFlow
                       ? `রিটার্ন+এক্সচেঞ্জ সমন্বয়: ${
                           returnNet > 0
@@ -617,17 +633,18 @@ export default function SalesListClient({
                       href={`/dashboard/sales/${s.id}/edit`}
                       className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary border border-primary/30 hover:bg-primary/15"
                     >
-                      Due Edit / Reissue
+                      বাকির বিল সম্পাদনা
                     </Link>
                   ) : null}
+                  {isPending && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary border border-primary/30 shadow-sm">
+                      ⏳ সিঙ্ক বাকি
+                      {!online ? " · Offline" : ""}
+                    </span>
+                  )}
                   {!online && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning border border-warning/30">
                       বাতিল করা যাবে না (Offline)
-                    </span>
-                  )}
-                  {!online && isPending && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning border border-warning/30">
-                      Pending sync
                     </span>
                   )}
                   {online && isDueSale && !isVoided && (

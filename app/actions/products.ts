@@ -74,6 +74,7 @@ export type ProductVariantInput = {
   id?: string;
   label: string;
   sellPrice: string | number;
+  stockQty?: string | number | null;
   sku?: string | null;
   barcode?: string | null;
   sortOrder?: number;
@@ -398,6 +399,7 @@ type NormalizedProductVariant = {
   id?: string;
   label: string;
   sellPrice: string;
+  stockQty: string;
   sku: string | null;
   barcode: string | null;
   sortOrder: number;
@@ -446,10 +448,17 @@ function normalizeVariantInputs(
         ? row.id.trim()
         : undefined;
 
+    const stockQtyRaw = normalizeNumberInput(
+      row?.stockQty as string | number | null | undefined,
+      { defaultValue: "0", field: `Variant stock (${label})` }
+    );
+    const stockQty = stockQtyRaw ?? "0";
+
     normalized.push({
       id,
       label,
       sellPrice,
+      stockQty,
       sku,
       barcode,
       sortOrder,
@@ -796,6 +805,7 @@ export async function createProduct(input: CreateProductInput) {
             productId: createdProduct.id,
             label: variant.label,
             sellPrice: variant.sellPrice,
+            stockQty: variant.stockQty ?? "0",
             sku: variant.sku,
             barcode: variant.barcode,
             sortOrder: variant.sortOrder ?? index,
@@ -1472,6 +1482,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
       barcode: variant.barcode ?? null,
       sortOrder: variant.sortOrder,
       isActive: variant.isActive,
+      stockQty: "0",
     }));
   const resolvedStockQty = trackStockFlag ? stockQty : "0";
   const payload: Record<string, any> = {};
@@ -1533,6 +1544,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
               productId: id,
               label: variant.label,
               sellPrice: variant.sellPrice,
+              stockQty: variant.stockQty ?? "0",
               sku: variant.sku,
               barcode: variant.barcode,
               sortOrder: variant.sortOrder ?? index,
@@ -1623,6 +1635,7 @@ export async function getActiveProductsByShop(shopId: string) {
           id: true,
           label: true,
           sellPrice: true,
+          stockQty: true,
           sku: true,
           barcode: true,
           sortOrder: true,
@@ -1649,6 +1662,7 @@ export async function getActiveProductsByShop(shopId: string) {
       id: variant.id,
       label: variant.label,
       sellPrice: variant.sellPrice.toString(),
+      stockQty: variant.stockQty?.toString() ?? "0",
       sku: variant.sku ?? null,
       barcode: variant.barcode ?? null,
       sortOrder: variant.sortOrder,

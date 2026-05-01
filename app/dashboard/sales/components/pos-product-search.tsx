@@ -42,6 +42,7 @@ type PosProductSearchProps = {
       id: string;
       label: string;
       sellPrice: string;
+      stockQty?: string | number;
       sku?: string | null;
       barcode?: string | null;
       sortOrder?: number;
@@ -83,6 +84,7 @@ type PosProductViewMode = "grid" | "list";
 type VoiceSearchMode = "bn" | "en";
 type VariantPickerState = {
   product: EnrichedProduct;
+  quantity: number;
 };
 type CodeLookupMatch = {
   product: EnrichedProduct;
@@ -440,8 +442,56 @@ function buildCartItemKey(productId: string, variantId?: string | null) {
 
 function formatCategoryLabel(raw: string) {
   if (!raw) return "বিভাগহীন";
-  if (raw.toLowerCase() === "uncategorized") return "বিভাগহীন";
-  return raw.replace("&", "and");
+  const normalized = raw.trim();
+  if (!normalized) return "বিভাগহীন";
+
+  const dictionary: Record<string, string> = {
+    uncategorized: "বিভাগহীন",
+    category: "ক্যাটাগরি",
+    cement: "সিমেন্ট",
+    building: "বিল্ডিং",
+    hardware: "হার্ডওয়্যার",
+    rod: "রড",
+    steel: "স্টিল",
+    rice: "চাল/ভাত",
+    grocery: "মুদি",
+    snacks: "স্ন্যাক্স",
+    beverage: "পানীয়",
+    beverages: "পানীয়",
+    tea: "চা",
+    coffee: "কফি",
+    juice: "জুস",
+    dairy: "দুগ্ধ",
+    medicine: "ঔষধ",
+    pharmacy: "ফার্মেসি",
+    cosmetics: "কসমেটিকস",
+    stationery: "স্টেশনারি",
+    clothes: "কাপড়",
+    clothing: "কাপড়",
+    vegetables: "সবজি",
+    vegetable: "সবজি",
+    fruits: "ফল",
+    fruit: "ফল",
+    recharge: "রিচার্জ",
+  };
+
+  const translated = normalized
+    .split(/[\s/_&-]+/)
+    .filter(Boolean)
+    .map((token) => {
+      const lower = token.toLowerCase();
+      return dictionary[lower] ?? token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+    });
+
+  return translated.join(" / ");
+}
+
+function buildVariantStockLabel(stock: number, unit: string, tracksStock: boolean) {
+  if (!tracksStock) return null;
+  if (stock <= 0) return "শেষ হয়েছে";
+  const suffix = unit ? ` ${unit}` : "";
+  if (stock <= 5) return `⚠ ${stock.toFixed(0)}${suffix}`;
+  return `✓ ${stock.toFixed(0)}${suffix}`;
 }
 
 function buildQuickSlots(
@@ -501,10 +551,17 @@ const ProductButton = memo(function ProductButton({
   isCooldown: boolean;
 }) {
   const tracksStock = product.trackStock === true;
-  const stock = toNumber(product.stockQty);
-  const variantCount = getActiveVariants(product).length;
+  const activeVariants = getActiveVariants(product);
+  const variantCount = activeVariants.length;
+  const hasVariants = variantCount > 0;
+
+  // For variant products, use sum of variant stocks (parent stock is never decremented)
+  const displayStock = hasVariants
+    ? activeVariants.reduce((sum, v) => sum + toNumber(v.stockQty), 0)
+    : toNumber(product.stockQty);
+
   const stockStyle = tracksStock
-    ? getStockToneClasses(stock).badge
+    ? getStockToneClasses(displayStock).badge
     : "bg-muted text-muted-foreground border border-border/60";
 
   return (
@@ -513,7 +570,7 @@ const ProductButton = memo(function ProductButton({
       type="button"
       className={`relative w-full h-full min-h-[150px] text-left rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 shadow-[0_8px_20px_rgba(15,23,42,0.08)] hover:border-primary/40 hover:shadow-[0_12px_26px_rgba(15,23,42,0.12)] transition-all p-3.5 pressable active:scale-[0.98] active:translate-y-[1px] ${
         isRecentlyAdded ? "ring-2 ring-success/30" : ""
-      } ${tracksStock && stock <= 0 ? "opacity-80" : ""} ${
+      } ${tracksStock && displayStock <= 0 ? "opacity-80" : ""} ${
         isCooldown ? "opacity-95 shadow-inner border-success/30" : ""
       }`}
       onClick={() => onAdd(product)}
@@ -525,7 +582,7 @@ const ProductButton = memo(function ProductButton({
         <span
           className={`inline-flex items-center justify-center px-2.5 py-1 min-w-[44px] rounded-full text-[11px] font-semibold shadow-sm ${stockStyle}`}
         >
-          {tracksStock ? stock.toFixed(0) : "N/A"}
+          {tracksStock ? displayStock.toFixed(0) : "N/A"}
         </span>
         {isRecentlyAdded && (
           <span className="absolute -top-1 -right-1 bg-success text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
@@ -536,12 +593,12 @@ const ProductButton = memo(function ProductButton({
       <p className="text-lg font-bold text-foreground mt-2">
         <span className="text-muted-foreground">৳</span> {product.sellPrice}
       </p>
-      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mt-2">
+      <p className="mt-2 text-[11px] font-medium tracking-[0.08em] text-muted-foreground">
         {formatCategoryLabel(product.category)}
       </p>
-      {variantCount > 0 ? (
+      {hasVariants ? (
         <p className="mt-1 text-[11px] font-semibold text-primary">
-          {variantCount} variant
+          {variantCount}টি সাইজ →
         </p>
       ) : null}
     </button>
@@ -598,6 +655,7 @@ export const PosProductSearch = memo(function PosProductSearch({
   const [stockConfirm, setStockConfirm] = useState<{
     product: EnrichedProduct;
     variant?: ProductVariantOption;
+    quantity: number;
     message: string;
   } | null>(null);
   const [variantPicker, setVariantPicker] = useState<VariantPickerState | null>(
@@ -992,6 +1050,7 @@ export const PosProductSearch = memo(function PosProductSearch({
     );
     setQuickSlotsReady(true);
   }, [
+    dbRankMap,
     productsWithCategory,
     quickSlotStorageKey,
     quickSlotIds,
@@ -1212,7 +1271,11 @@ export const PosProductSearch = memo(function PosProductSearch({
   }, [showAllProducts, availableCategories.length]);
 
   const addToCart = useCallback(
-    (product: EnrichedProduct, variant?: ProductVariantOption) => {
+    (
+      product: EnrichedProduct,
+      variant?: ProductVariantOption,
+      quantity = 1
+    ) => {
       // Prevent double clicks within 300ms (ref-based, not state-based)
       const now = Date.now();
       if (now - lastAddRef.current < 300) return;
@@ -1220,6 +1283,7 @@ export const PosProductSearch = memo(function PosProductSearch({
 
       const productPrice = Number(variant?.sellPrice ?? product.sellPrice ?? 0);
       const itemKey = buildCartItemKey(product.id, variant?.id ?? null);
+      const safeQuantity = Math.max(1, Math.floor(quantity || 1));
 
       add({
         itemKey,
@@ -1230,6 +1294,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         name: buildCartItemName(product, variant),
         unitPrice: productPrice,
         baseUnit: product.baseUnit ?? null,
+        qty: safeQuantity,
       });
 
       // UI feedback
@@ -1255,24 +1320,38 @@ export const PosProductSearch = memo(function PosProductSearch({
   );
 
   const handleAddToCart = useCallback(
-    (product: EnrichedProduct, variant?: ProductVariantOption) => {
-      const stock = toNumber(product.stockQty);
+    (
+      product: EnrichedProduct,
+      variant?: ProductVariantOption,
+      quantity = 1
+    ) => {
+      const safeQuantity = Math.max(1, Math.floor(quantity || 1));
+      const stock = variant
+        ? toNumber(variant.stockQty)
+        : toNumber(product.stockQty);
       const cartItems = useCart.getState().items;
       const inCart = cartItems
-        .filter((i: any) => i.productId === product.id)
+        .filter((i: any) =>
+          variant
+            ? i.productId === product.id && i.variantId === variant.id
+            : i.productId === product.id && !i.variantId
+        )
         .reduce((sum: number, item: any) => sum + Number(item.qty || 0), 0);
       const tracksStock = product.trackStock === true;
 
-      if (tracksStock && stock <= inCart) {
+      if (tracksStock && stock < inCart + safeQuantity) {
+        const remaining = Math.max(0, stock - inCart);
         const message =
           stock <= 0
             ? `${product.name} এর স্টক নেই। তবুও যোগ করবেন?`
-            : `${product.name} এর মাত্র ${stock}টি আছে। তবুও যোগ করবেন?`;
-        setStockConfirm({ product, variant, message });
+            : `${buildCartItemName(product, variant)} এর মাত্র ${remaining} ${
+                product.baseUnit || "টি"
+              } বাকি। তবুও ${safeQuantity} যোগ করবেন?`;
+        setStockConfirm({ product, variant, quantity: safeQuantity, message });
         return;
       }
 
-      addToCart(product, variant);
+      addToCart(product, variant, safeQuantity);
     },
     [addToCart]
   );
@@ -1288,7 +1367,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         handleAddToCart(product, variants[0]);
         return;
       }
-      setVariantPicker({ product });
+      setVariantPicker({ product, quantity: 1 });
     },
     [handleAddToCart]
   );
@@ -1934,7 +2013,7 @@ export const PosProductSearch = memo(function PosProductSearch({
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold text-foreground sm:text-xs">
-                  Input Mode
+                  ইনপুট মোড
                 </p>
                 <p className="truncate text-[11px] text-muted-foreground">
                   {mobileScannerSummary}
@@ -1947,7 +2026,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                     : "border-border bg-card text-muted-foreground"
                 }`}
               >
-                {inputMode === "scanner" ? "Scan Ready" : "Search Ready"}
+                {inputMode === "scanner" ? "স্ক্যান প্রস্তুত" : "খোঁজার জন্য প্রস্তুত"}
               </span>
             </div>
 
@@ -1962,7 +2041,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
-                🔎 Search
+                🔎 খুঁজুন
               </button>
               <button
                 type="button"
@@ -1974,7 +2053,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
-                📷 Scanner
+                📷 স্ক্যানার
               </button>
             </div>
 
@@ -1984,9 +2063,9 @@ export const PosProductSearch = memo(function PosProductSearch({
               <div className="rounded-xl border border-success/20 bg-success-soft/35 p-2.5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold text-foreground">Scanner Mode</p>
+                    <p className="text-xs font-semibold text-foreground">স্ক্যানার মোড</p>
                     <p className="text-[11px] text-muted-foreground">
-                      scan input active, search typing pause করা আছে
+                      স্ক্যান ইনপুট চালু আছে, search typing pause করা আছে
                     </p>
                   </div>
                   <button
@@ -2272,9 +2351,9 @@ export const PosProductSearch = memo(function PosProductSearch({
         }}
         onConfirm={() => {
           if (!stockConfirm) return;
-          const { product, variant } = stockConfirm;
+          const { product, variant, quantity } = stockConfirm;
           setStockConfirm(null);
-          addToCart(product, variant);
+          addToCart(product, variant, quantity);
         }}
       />
       {variantPicker ? (
@@ -2284,7 +2363,7 @@ export const PosProductSearch = memo(function PosProductSearch({
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-foreground">
-                    ভ্যারিয়েন্ট বাছাই করুন
+                    সাইজ / ধরন বাছাই করুন
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {variantPicker.product.name}
@@ -2293,39 +2372,113 @@ export const PosProductSearch = memo(function PosProductSearch({
                 <button
                   type="button"
                   onClick={() => setVariantPicker(null)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:bg-muted"
                 >
                   ✕
                 </button>
               </div>
-              <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
-                {getActiveVariants(variantPicker.product).map((variant) => (
+              <div className="mb-3 flex items-center justify-between rounded-xl border border-border/70 bg-muted/30 px-3 py-2">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">কতটি যোগ করবেন</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    আগে quantity ঠিক করুন, তারপর variant বাছাই করুন
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
                   <button
-                    key={variant.id}
                     type="button"
-                    onClick={() => {
-                      handleAddToCart(variantPicker.product, variant);
-                      setVariantPicker(null);
-                    }}
-                    className="w-full rounded-xl border border-border bg-card px-3 py-2 text-left transition hover:border-primary/35 hover:bg-primary-soft/15"
+                    onClick={() =>
+                      setVariantPicker((current) =>
+                        current
+                          ? { ...current, quantity: Math.max(1, current.quantity - 1) }
+                          : current
+                      )
+                    }
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-sm font-bold text-foreground hover:bg-muted"
+                    aria-label="পরিমাণ কমান"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold text-foreground">
-                        {variant.label}
-                      </span>
-                      <span className="text-sm font-bold text-foreground">
-                        <span className="text-muted-foreground">৳</span>{" "}
-                        {variant.sellPrice}
-                      </span>
-                    </div>
-                    {variant.sku || variant.barcode ? (
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        {variant.sku ? `SKU: ${variant.sku}` : ""}{" "}
-                        {variant.barcode ? `Barcode: ${variant.barcode}` : ""}
-                      </p>
-                    ) : null}
+                    −
                   </button>
-                ))}
+                  <span className="inline-flex min-w-[42px] items-center justify-center rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-sm font-bold text-primary">
+                    {variantPicker.quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setVariantPicker((current) =>
+                        current
+                          ? { ...current, quantity: Math.min(999, current.quantity + 1) }
+                          : current
+                      )
+                    }
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-sm font-bold text-foreground hover:bg-muted"
+                    aria-label="পরিমাণ বাড়ান"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+                {getActiveVariants(variantPicker.product).map((variant) => {
+                  const tracksStock = variantPicker.product.trackStock === true;
+                  const unit = variantPicker.product.baseUnit || "";
+                  const vStock = Number(variant.stockQty ?? 0);
+                  const outOfStock = tracksStock && vStock <= 0;
+                  const toneClasses = tracksStock ? getStockToneClasses(vStock) : null;
+                  const stockBadgeClass = toneClasses
+                    ? toneClasses.badge
+                    : "bg-muted text-muted-foreground border border-border/60";
+                  const stockLabel = buildVariantStockLabel(
+                    vStock,
+                    unit,
+                    tracksStock
+                  );
+                  return (
+                    <button
+                      key={variant.id}
+                      type="button"
+                      disabled={outOfStock}
+                      onClick={() => {
+                        handleAddToCart(
+                          variantPicker.product,
+                          variant,
+                          variantPicker.quantity
+                        );
+                        setVariantPicker(null);
+                      }}
+                      className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
+                        outOfStock
+                          ? "border-border/50 bg-muted/40 cursor-not-allowed"
+                          : "border-border bg-card hover:border-primary/35 hover:bg-primary-soft/15"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`truncate text-sm font-semibold ${outOfStock ? "text-muted-foreground" : "text-foreground"}`}>
+                          {variant.label}
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {tracksStock && (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${stockBadgeClass}`}>
+                              {stockLabel}
+                            </span>
+                          )}
+                          {!outOfStock && (
+                            <span className="text-sm font-bold text-foreground">
+                              <span className="text-muted-foreground">৳</span>{" "}
+                              {variant.sellPrice}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {variant.sku || variant.barcode ? (
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {variant.sku ? `SKU: ${variant.sku}` : ""}{" "}
+                          {variant.barcode ? `বারকোড: ${variant.barcode}` : ""}
+                        </p>
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -2375,7 +2528,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                     onChange={(e) => setCameraContinuousMode(e.target.checked)}
                     className="h-4 w-4 rounded border-white/40 bg-transparent"
                   />
-                  Continuous scan
+                  টানা স্ক্যান
                 </label>
                 <button
                   type="button"
@@ -2383,7 +2536,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                   disabled={!cameraTorchSupported}
                   className="inline-flex h-9 items-center justify-center rounded-lg border border-white/30 bg-white/10 px-3 text-xs font-semibold disabled:opacity-50"
                 >
-                  {cameraTorchOn ? "Torch off" : "Torch on"}
+                  {cameraTorchOn ? "লাইট বন্ধ" : "লাইট চালু"}
                 </button>
               </div>
               <p className="text-[11px] text-white/75">
@@ -2414,10 +2567,16 @@ const ProductListButton = memo(function ProductListButton({
   isCooldown: boolean;
 }) {
   const tracksStock = product.trackStock === true;
-  const stock = toNumber(product.stockQty);
-  const variantCount = getActiveVariants(product).length;
+  const activeVariants = getActiveVariants(product);
+  const variantCount = activeVariants.length;
+  const hasVariants = variantCount > 0;
+
+  const displayStock = hasVariants
+    ? activeVariants.reduce((sum, v) => sum + toNumber(v.stockQty), 0)
+    : toNumber(product.stockQty);
+
   const stockStyle = tracksStock
-    ? getStockToneClasses(stock).badge
+    ? getStockToneClasses(displayStock).badge
     : "bg-muted text-muted-foreground border border-border/60";
 
   return (
@@ -2431,19 +2590,19 @@ const ProductListButton = memo(function ProductListButton({
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-foreground">{product.name}</p>
-          <p className="mt-0.5 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="mt-0.5 text-[11px] font-medium tracking-[0.08em] text-muted-foreground">
             {formatCategoryLabel(product.category)}
           </p>
-          {variantCount > 0 ? (
+          {hasVariants ? (
             <p className="mt-0.5 text-[11px] font-semibold text-primary">
-              {variantCount} variant
+              {variantCount}টি সাইজ →
             </p>
           ) : null}
         </div>
         <span
           className={`inline-flex h-6 items-center justify-center rounded-full px-2 text-[11px] font-semibold shadow-sm ${stockStyle}`}
         >
-          {tracksStock ? stock.toFixed(0) : "N/A"}
+          {tracksStock ? displayStock.toFixed(0) : "N/A"}
         </span>
         <p className="shrink-0 text-sm font-bold text-foreground">
           <span className="text-muted-foreground">৳</span> {product.sellPrice}
