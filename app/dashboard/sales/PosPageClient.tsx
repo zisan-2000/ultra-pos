@@ -1761,44 +1761,47 @@ export function PosPageClient({
                         </SelectContent>
                       </Select>
 
-                      {/* Due extra fields compact row */}
-                      <div className="flex items-center justify-between gap-3 pt-2">
-                        {/* Partial payment */}
-                        <div className="flex items-center gap-1.5 flex-1">
-                          <label className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
-                            আংশিক
-                          </label>
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-muted-foreground">৳</span>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              min={0}
-                              max={payableTotal}
-                              placeholder="০"
-                              value={paidNow}
-                              onChange={(e) => setPaidNow(e.target.value)}
-                              className="h-8 w-20 rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold text-foreground outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
-                            />
+                      <div className="grid grid-cols-1 gap-2 pt-2 min-[480px]:grid-cols-2">
+                        <div className="rounded-xl border border-border/70 bg-card/80 px-2.5 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="text-xs font-medium text-muted-foreground">
+                              আংশিক
+                            </label>
+                            <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+                              <span className="text-xs text-muted-foreground">৳</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                min={0}
+                                max={payableTotal}
+                                placeholder="০"
+                                value={paidNow}
+                                onChange={(e) => setPaidNow(e.target.value)}
+                                className="h-8 min-w-0 w-full max-w-[6.5rem] rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold text-foreground outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+                              />
+                            </div>
                           </div>
                         </div>
 
-                        {/* Due days */}
-                        <div className="flex items-center gap-1.5 flex-1 justify-end">
-                          <label className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
-                            সময়সীমা
-                          </label>
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              inputMode="numeric"
-                              min={1}
-                              max={365}
-                              value={dueDays}
-                              onChange={(e) => setDueDays(e.target.value)}
-                              className="h-8 w-16 rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold text-foreground outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
-                            />
-                            <span className="text-xs text-muted-foreground shrink-0">দিন</span>
+                        <div className="rounded-xl border border-border/70 bg-card/80 px-2.5 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="text-xs font-medium text-muted-foreground">
+                              সময়সীমা
+                            </label>
+                            <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                max={365}
+                                value={dueDays}
+                                onChange={(e) => setDueDays(e.target.value)}
+                                className="h-8 min-w-0 w-full max-w-[5rem] rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold text-foreground outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+                              />
+                              <span className="text-xs text-muted-foreground shrink-0">
+                                দিন
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1968,23 +1971,44 @@ export function PosPageClient({
                   </SelectContent>
                 </Select>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">
-                    এখন পরিশোধ (আংশিক হলে)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={payableTotal}
-                    step="0.01"
-                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    placeholder="যেমন: 100"
-                    value={paidNow}
-                    onChange={(e) => setPaidNow(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    গ্রাহক বাছাই করে আংশিক টাকা নিলে বাকি পরে দেখাবে।
-                  </p>
+                <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2">
+                  <div className="space-y-2 rounded-xl border border-border/70 bg-card/70 p-3">
+                    <label className="text-sm font-semibold text-foreground">
+                      এখন পরিশোধ
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={payableTotal}
+                      step="0.01"
+                      className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder="যেমন: 100"
+                      value={paidNow}
+                      onChange={(e) => setPaidNow(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      আংশিক টাকা নিলে বাকি পরে ধার হিসেবে থাকবে।
+                    </p>
+                  </div>
+                  <div className="space-y-2 rounded-xl border border-border/70 bg-card/70 p-3">
+                    <label className="text-sm font-semibold text-foreground">
+                      সময়সীমা
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={dueDays}
+                        onChange={(e) => setDueDays(e.target.value)}
+                        className="h-11 w-24 rounded-xl border border-border bg-card px-3 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <span className="text-sm text-muted-foreground">দিন</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      ডিফল্ট ৩০ দিন। বিক্রির তারিখ থেকে গণনা হবে।
+                    </p>
+                  </div>
                 </div>
               </div>
             ) : null}
