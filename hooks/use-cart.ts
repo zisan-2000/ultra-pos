@@ -9,6 +9,7 @@ export type CartItem = {
   variantLabel?: string | null;
   name: string;
   unitPrice: number;
+  originalPrice: number;
   qty: number;
   total: number;
   baseUnit?: string | null;
@@ -62,6 +63,7 @@ export const useCart = create<CartState>((set, get) => ({
           {
             ...item,
             qty: 1,
+            originalPrice: item.unitPrice,
             total: item.unitPrice,
           },
         ],
@@ -90,6 +92,7 @@ export const useCart = create<CartState>((set, get) => ({
         {
           ...item,
           qty: 1,
+          originalPrice: item.unitPrice,
           total: item.unitPrice,
         },
       ],
@@ -131,6 +134,7 @@ export const useCart = create<CartState>((set, get) => ({
 
   updatePrice: (itemKey, newPrice) => {
     const price = Math.max(0, newPrice);
+    if (price <= 0) return;
     set({
       items: get().items.map((i) =>
         i.itemKey === itemKey

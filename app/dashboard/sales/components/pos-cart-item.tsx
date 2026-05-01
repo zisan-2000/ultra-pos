@@ -28,7 +28,7 @@ export const PosCartItem = memo(function PosCartItem({
 
   const commitPrice = useCallback(() => {
     const parsed = parseFloat(priceInput);
-    if (!Number.isFinite(parsed) || parsed < 0) {
+    if (!Number.isFinite(parsed) || parsed <= 0) {
       setPriceInput(String(item.unitPrice));
     } else if (parsed !== item.unitPrice) {
       updatePrice(item.itemKey, parsed);
@@ -68,6 +68,7 @@ export const PosCartItem = memo(function PosCartItem({
   }, [remove, item.itemKey, runOncePerFrame]);
 
   const showUnit = item.baseUnit && item.baseUnit !== "pcs";
+  const isDiscounted = item.originalPrice > item.unitPrice;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-3 shadow-sm text-foreground space-y-2.5">
@@ -94,20 +95,27 @@ export const PosCartItem = memo(function PosCartItem({
       {/* Row 2: Price input + Qty controls */}
       <div className="flex items-center gap-2">
         {/* Price input */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold text-muted-foreground">৳</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={priceInput}
-            onChange={(e) => setPriceInput(e.target.value)}
-            onBlur={commitPrice}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") { commitPrice(); (e.target as HTMLInputElement).blur(); }
-            }}
-            onFocus={(e) => e.target.select()}
-            className="h-8 w-16 sm:w-20 rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold text-foreground outline-none transition focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
-          />
+        <div className="flex flex-col items-start gap-0.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-muted-foreground">৳</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={priceInput}
+              onChange={(e) => setPriceInput(e.target.value)}
+              onBlur={commitPrice}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { commitPrice(); (e.target as HTMLInputElement).blur(); }
+              }}
+              onFocus={(e) => e.target.select()}
+              className="h-8 w-16 sm:w-20 rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold text-foreground outline-none transition focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+            />
+          </div>
+          {isDiscounted && (
+            <span className="pl-4 text-[10px] text-muted-foreground/60 line-through leading-none">
+              ৳{item.originalPrice}
+            </span>
+          )}
         </div>
 
         {/* Qty controls */}
@@ -142,11 +150,18 @@ export const PosCartItem = memo(function PosCartItem({
       </div>
 
       {/* Row 3: Line total */}
-      <div className="flex items-center justify-end text-xs text-muted-foreground">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        {isDiscounted ? (
+          <span className="inline-flex items-center rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] font-semibold text-success leading-none">
+            -৳{(item.originalPrice - item.unitPrice).toFixed(2)} ছাড়
+          </span>
+        ) : (
+          <span />
+        )}
         <span>
           {item.unitPrice} × {item.qty}{showUnit ? ` ${item.baseUnit}` : ""} ={" "}
+          <span className="ml-1 text-sm font-bold text-foreground">{item.total} ৳</span>
         </span>
-        <span className="ml-1 text-sm font-bold text-foreground">{item.total} ৳</span>
       </div>
     </div>
   );
