@@ -52,7 +52,7 @@ export async function seedProducts(
       { name: "সুইচ (সিঙ্গেল)",         category: "ইলেকট্রিক্যাল",    unit: "pcs",   buyPrice: 35,  sellPrice: 45,  stockQty: 100, trackStock: true },
       { name: "সকেট (২ পিন)",           category: "ইলেকট্রিক্যাল",    unit: "pcs",   buyPrice: 30,  sellPrice: 40,  stockQty: 100, trackStock: true },
       { name: "পেরেক ২ ইঞ্চি",          category: "সিমেন্ট/বিল্ডিং", unit: "kg",    buyPrice: 100, sellPrice: 120, stockQty: 80,  trackStock: true },
-      { name: "স্ক্রু সেট",             category: "সিমেন্ট/বিল্ডিং", unit: "box",   buyPrice: 45,  sellPrice: 60,  stockQty: 60,  trackStock: true },
+      { name: "স্ক্রু সেট",             category: "হার্ডওয়্যার",      unit: "box",   buyPrice: 45,  sellPrice: 60,  stockQty: 60,  trackStock: true },
       { name: "ইট",                     category: "সিমেন্ট/বিল্ডিং", unit: "pcs",   buyPrice: 10,  sellPrice: 12,  stockQty: 1000,trackStock: true },
 
       // Variant: রড — by size
@@ -64,6 +64,7 @@ export async function seedProducts(
           { label: "১০মিমি", sellPrice: 83,  sortOrder: 2 },
           { label: "১২মিমি", sellPrice: 85,  sortOrder: 3 },
           { label: "১৬মিমি", sellPrice: 90,  sortOrder: 4 },
+          { label: "২০মিমি", sellPrice: 100, sortOrder: 5 },
         ],
       },
 
