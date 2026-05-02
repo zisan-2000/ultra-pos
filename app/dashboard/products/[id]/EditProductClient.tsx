@@ -94,6 +94,7 @@ type CatalogSearchItem = {
 type VariantDraft = {
   id?: string;
   label: string;
+  buyPrice: string;
   sellPrice: string;
   stockQty: string;
   sku: string;
@@ -210,6 +211,7 @@ function createVariantDraft(seed?: Partial<VariantDraft>): VariantDraft {
   return {
     id: seed?.id,
     label: seed?.label ?? "",
+    buyPrice: seed?.buyPrice ?? "",
     sellPrice: seed?.sellPrice ?? "",
     stockQty: seed?.stockQty ?? "0",
     sku: seed?.sku ?? "",
@@ -359,11 +361,12 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   );
   const [showVariantCodeFields, setShowVariantCodeFields] = useState(false);
   const [variants, setVariants] = useState<VariantDraft[]>(() =>
-    Array.isArray(product.variants)
+        Array.isArray(product.variants)
       ? product.variants.map((variant: any, index: number) =>
           createVariantDraft({
             id: typeof variant?.id === "string" ? variant.id : undefined,
             label: String(variant?.label || ""),
+            buyPrice: String(variant?.buyPrice ?? ""),
             sellPrice: String(variant?.sellPrice ?? ""),
             stockQty: String(variant?.stockQty ?? "0"),
             sku: String(variant?.sku ?? ""),

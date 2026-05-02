@@ -1221,30 +1221,40 @@ export async function getTopProductsReport(
    LOW STOCK REPORT
 -------------------------------------------------- */
 async function computeLowStockReport(shopId: string, limit: number) {
-  const lowStockProducts = await prisma.product.findMany({
-    where: {
-      shopId,
-      isActive: true,
-      trackStock: true,
-      stockQty: {
-        lte: limit,
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      stockQty: true,
-    },
-    orderBy: {
-      stockQty: "asc",
-    },
-    take: limit,
-  });
+  const rows = await prisma.$queryRaw<
+    Array<{ id: string; name: string; stock_qty: Prisma.Decimal | number | null }>
+  >(Prisma.sql`
+    SELECT p.id, p.name, p.stock_qty
+    FROM products p
+    WHERE p.shop_id = CAST(${shopId} AS uuid)
+      AND p.is_active = true
+      AND p.track_stock = true
+      AND NOT EXISTS (
+        SELECT 1 FROM product_variants pv
+        WHERE pv.product_id = p.id AND pv.is_active = true
+      )
+      AND p.stock_qty <= COALESCE(p.reorder_point, ${limit})
 
-  return lowStockProducts.map((p) => ({
-    id: p.id,
-    name: p.name,
-    stockQty: Number(p.stockQty),
+    UNION ALL
+
+    SELECT pv.id,
+           p.name || ' (' || pv.label || ')' AS name,
+           pv.stock_qty
+    FROM products p
+    JOIN product_variants pv ON pv.product_id = p.id AND pv.is_active = true
+    WHERE p.shop_id = CAST(${shopId} AS uuid)
+      AND p.is_active = true
+      AND p.track_stock = true
+      AND pv.stock_qty <= COALESCE(p.reorder_point, ${limit})
+
+    ORDER BY stock_qty ASC
+    LIMIT ${limit}
+  `);
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    stockQty: Number(row.stock_qty ?? 0),
   }));
 }
 

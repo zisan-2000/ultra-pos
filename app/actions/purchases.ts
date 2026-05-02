@@ -74,11 +74,12 @@ export async function createPurchase(input: CreatePurchaseInput) {
     | "due";
 
   const productIds = input.items.map((item) => item.productId);
+  const uniqueProductIds = Array.from(new Set(productIds));
   const products = await prisma.product.findMany({
-    where: { id: { in: productIds } },
+    where: { id: { in: uniqueProductIds } },
   });
 
-  if (products.length !== productIds.length) {
+  if (products.length !== uniqueProductIds.length) {
     throw new Error("Some products not found");
   }
 
@@ -123,11 +124,14 @@ export async function createPurchase(input: CreatePurchaseInput) {
     .map((i) => i.variantId)
     .filter((id): id is string => !!id);
 
-  const variantMap = new Map<string, { id: string; productId: string; stockQty: any }>();
+  const variantMap = new Map<
+    string,
+    { id: string; productId: string; stockQty: any; buyPrice: any }
+  >();
   if (variantIds.length > 0) {
     const variants = await prisma.productVariant.findMany({
       where: { id: { in: variantIds } },
-      select: { id: true, productId: true, stockQty: true },
+      select: { id: true, productId: true, stockQty: true, buyPrice: true },
     });
     for (const v of variants) variantMap.set(v.id, v);
   }
@@ -151,7 +155,14 @@ export async function createPurchase(input: CreatePurchaseInput) {
     if (qty <= 0) throw new Error("Quantity must be greater than 0");
     const lineTotal = qty * unitCost;
     totalAmount += lineTotal;
-    return { product, variantId, qty, unitCost, lineTotal };
+    return {
+      product,
+      variantId,
+      variant: variantId ? variantMap.get(variantId) ?? null : null,
+      qty,
+      unitCost,
+      lineTotal,
+    };
   });
 
   const paidNowRaw = Number(input.paidNow ?? 0);
@@ -197,32 +208,45 @@ export async function createPurchase(input: CreatePurchaseInput) {
 
     for (const row of rows) {
       const product = row.product;
-      const currentStock = Number(product.stockQty ?? 0);
-      const currentCost = Number(product.buyPrice ?? 0);
-      const baseStock = product.trackStock ? currentStock : 0;
-      const nextStock = product.trackStock ? currentStock + row.qty : currentStock;
-      const totalUnits = baseStock + row.qty;
-      const weighted =
-        totalUnits > 0
-          ? (baseStock * currentCost + row.qty * row.unitCost) / totalUnits
+      if (row.variantId && row.variant) {
+        const currentVariantStock = Number(row.variant.stockQty ?? 0);
+        const currentVariantCost = Number(row.variant.buyPrice ?? 0);
+        const variantBaseStock = product.trackStock ? currentVariantStock : 0;
+        const variantTotalUnits = variantBaseStock + row.qty;
+        const weightedVariantCost =
+          variantTotalUnits > 0
+            ? (variantBaseStock * currentVariantCost + row.qty * row.unitCost) /
+              variantTotalUnits
+            : row.unitCost;
+        const nextVariantCost = Number.isFinite(weightedVariantCost)
+          ? weightedVariantCost
           : row.unitCost;
-      const nextCost = Number.isFinite(weighted) ? weighted : row.unitCost;
 
-      await tx.product.update({
-        where: { id: product.id },
-        data: {
-          buyPrice: nextCost.toFixed(2),
-          ...(product.trackStock && !row.variantId
-            ? { stockQty: nextStock.toFixed(2) }
-            : {}),
-        },
-      });
-
-      // For variant products, increment the specific variant's stockQty
-      if (row.variantId && product.trackStock) {
         await tx.productVariant.update({
           where: { id: row.variantId },
-          data: { stockQty: { increment: row.qty } },
+          data: {
+            buyPrice: nextVariantCost.toFixed(2),
+            ...(product.trackStock ? { stockQty: { increment: row.qty } } : {}),
+          },
+        });
+      } else {
+        const currentStock = Number(product.stockQty ?? 0);
+        const currentCost = Number(product.buyPrice ?? 0);
+        const baseStock = product.trackStock ? currentStock : 0;
+        const nextStock = product.trackStock ? currentStock + row.qty : currentStock;
+        const totalUnits = baseStock + row.qty;
+        const weighted =
+          totalUnits > 0
+            ? (baseStock * currentCost + row.qty * row.unitCost) / totalUnits
+            : row.unitCost;
+        const nextCost = Number.isFinite(weighted) ? weighted : row.unitCost;
+
+        await tx.product.update({
+          where: { id: product.id },
+          data: {
+            buyPrice: nextCost.toFixed(2),
+            ...(product.trackStock ? { stockQty: nextStock.toFixed(2) } : {}),
+          },
         });
       }
     }

@@ -73,6 +73,7 @@ type UpdateProductInput = {
 export type ProductVariantInput = {
   id?: string;
   label: string;
+  buyPrice?: string | number | null;
   sellPrice: string | number;
   stockQty?: string | number | null;
   sku?: string | null;
@@ -100,6 +101,7 @@ type ProductListRow = {
   variants?: Array<{
     id: string;
     label: string;
+    buyPrice?: string | null;
     sellPrice: string;
     stockQty: string;
     sku?: string | null;
@@ -408,6 +410,7 @@ function normalizeDateOnlyInput(value: unknown) {
 type NormalizedProductVariant = {
   id?: string;
   label: string;
+  buyPrice: string | null;
   sellPrice: string;
   stockQty: string;
   sku: string | null;
@@ -446,6 +449,9 @@ function normalizeVariantInputs(
       field: `Variant sell price (${label})`,
       }
     );
+    const buyPrice = normalizeMoneyInput(
+      row?.buyPrice as string | number | null | undefined
+    );
     const sku = normalizeProductCodeInput(row?.sku) ?? null;
     const barcode = normalizeProductCodeInput(row?.barcode) ?? null;
     const sortOrderRaw = Number(row?.sortOrder ?? index);
@@ -467,6 +473,7 @@ function normalizeVariantInputs(
     normalized.push({
       id,
       label,
+      buyPrice: buyPrice === undefined ? null : buyPrice,
       sellPrice,
       stockQty,
       sku,
@@ -814,6 +821,7 @@ export async function createProduct(input: CreateProductInput) {
             shopId: input.shopId,
             productId: createdProduct.id,
             label: variant.label,
+            buyPrice: variant.buyPrice,
             sellPrice: variant.sellPrice,
             stockQty: variant.stockQty ?? "0",
             sku: variant.sku,
@@ -996,7 +1004,7 @@ export async function getProductsByShop(shopId: string) {
       updatedAt: true,
       variants: {
         where: { isActive: true },
-        select: { id: true, label: true, stockQty: true },
+        select: { id: true, label: true, buyPrice: true, stockQty: true },
         orderBy: { sortOrder: "asc" },
       },
     },
@@ -1214,6 +1222,7 @@ export async function getProductsByShopCursorPaginated({
           select: {
             id: true,
             label: true,
+            buyPrice: true,
             sellPrice: true,
             stockQty: true,
             sku: true,
@@ -1253,6 +1262,7 @@ export async function getProductsByShopCursorPaginated({
     variants: (p.variants || []).map((variant) => ({
       id: variant.id,
       label: variant.label,
+      buyPrice: variant.buyPrice?.toString?.() ?? null,
       sellPrice: variant.sellPrice?.toString?.() ?? String(variant.sellPrice ?? "0"),
       stockQty: variant.stockQty?.toString?.() ?? (variant as any).stockQty ?? "0",
       sku: variant.sku ?? null,
@@ -1504,6 +1514,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
           select: {
             id: true,
             label: true,
+            buyPrice: true,
             sellPrice: true,
             sku: true,
             barcode: true,
@@ -1517,6 +1528,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
     existingVariantsForCollisionCheck.map((variant) => ({
       id: variant.id,
       label: variant.label,
+      buyPrice: variant.buyPrice?.toString?.() ?? null,
       sellPrice: variant.sellPrice.toString(),
       sku: variant.sku ?? null,
       barcode: variant.barcode ?? null,
@@ -1583,6 +1595,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
               shopId: product.shopId,
               productId: id,
               label: variant.label,
+              buyPrice: variant.buyPrice,
               sellPrice: variant.sellPrice,
               stockQty: variant.stockQty ?? "0",
               sku: variant.sku,
@@ -1674,6 +1687,7 @@ export async function getActiveProductsByShop(shopId: string) {
         select: {
           id: true,
           label: true,
+          buyPrice: true,
           sellPrice: true,
           stockQty: true,
           sku: true,
@@ -1701,6 +1715,7 @@ export async function getActiveProductsByShop(shopId: string) {
     variants: (p.variants || []).map((variant) => ({
       id: variant.id,
       label: variant.label,
+      buyPrice: variant.buyPrice?.toString?.() ?? null,
       sellPrice: variant.sellPrice.toString(),
       stockQty: variant.stockQty?.toString() ?? "0",
       sku: variant.sku ?? null,

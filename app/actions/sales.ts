@@ -1040,6 +1040,26 @@ export async function createSale(input: CreateSaleInput) {
   }
 
   const productMap = new Map(dbProducts.map((p) => [p.id, p]));
+  const variantIds = input.items
+    .map((item) => item.variantId)
+    .filter((value): value is string => Boolean(value));
+  const variantMap = new Map<
+    string,
+    { id: string; productId: string; buyPrice: Prisma.Decimal | null }
+  >();
+  if (variantIds.length > 0) {
+    const variantRows = await prisma.productVariant.findMany({
+      where: { id: { in: Array.from(new Set(variantIds)) } },
+      select: {
+        id: true,
+        productId: true,
+        buyPrice: true,
+      },
+    });
+    for (const row of variantRows) {
+      variantMap.set(row.id, row);
+    }
+  }
 
   // Validate each item
   let computedTotal = 0;
@@ -1061,9 +1081,20 @@ export async function createSale(input: CreateSaleInput) {
   }
 
   if (needsCogs) {
-    const missing = dbProducts.filter((p) => p.buyPrice == null);
+    const missing = input.items
+      .map((item) => {
+        const product = productMap.get(item.productId);
+        const variant = item.variantId ? variantMap.get(item.variantId) : null;
+        const effectiveBuyPrice =
+          variant?.buyPrice ?? product?.buyPrice ?? null;
+        if (!product || effectiveBuyPrice == null) {
+          return product?.name ?? item.name ?? item.productId;
+        }
+        return null;
+      })
+      .filter((value): value is string => Boolean(value));
     if (missing.length > 0) {
-      const names = missing.map((p) => p.name).slice(0, 5).join(", ");
+      const names = Array.from(new Set(missing)).slice(0, 5).join(", ");
       throw new Error(
         `Purchase price missing for: ${names}${
           missing.length > 5 ? "..." : ""
@@ -1206,7 +1237,8 @@ export async function createSale(input: CreateSaleInput) {
     // Create sale items
     const saleItemRows = input.items.map((item) => {
       const product = productMap.get(item.productId);
-      const costAtSale = product?.buyPrice ?? null;
+      const variant = item.variantId ? variantMap.get(item.variantId) : null;
+      const costAtSale = variant?.buyPrice ?? product?.buyPrice ?? null;
       return {
         saleId: inserted.id,
         productId: item.productId,

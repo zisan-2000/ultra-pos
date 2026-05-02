@@ -112,6 +112,7 @@ type CatalogSearchItem = {
 type VariantDraft = {
   id?: string;
   label: string;
+  buyPrice: string;
   sellPrice: string;
   stockQty: string;
   sku: string;
@@ -244,6 +245,7 @@ function createVariantDraft(seed?: Partial<VariantDraft>): VariantDraft {
   return {
     id: seed?.id,
     label: seed?.label ?? "",
+    buyPrice: seed?.buyPrice ?? "",
     sellPrice: seed?.sellPrice ?? "",
     stockQty: seed?.stockQty ?? "0",
     sku: seed?.sku ?? "",
@@ -1521,6 +1523,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
           .map((variant, index) => ({
             id: variant.id,
             label: variant.label.trim(),
+            buyPrice: variant.buyPrice.trim() || null,
             sellPrice: variant.sellPrice.trim(),
             sku: normalizeCodeInput(variant.sku || ""),
             barcode: normalizeCodeInput(variant.barcode || ""),
@@ -1991,12 +1994,13 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
                     <div
                       className={`hidden items-center gap-2 rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground md:grid ${
                         stockEnabled
-                          ? "md:grid-cols-[32px_minmax(0,1fr)_96px_84px_40px]"
-                          : "md:grid-cols-[32px_minmax(0,1fr)_96px_40px]"
+                          ? "md:grid-cols-[32px_minmax(0,1fr)_96px_96px_84px_40px]"
+                          : "md:grid-cols-[32px_minmax(0,1fr)_96px_96px_40px]"
                       }`}
                     >
                       <span>#</span>
                       <span>লেবেল</span>
+                      <span>ক্রয়মূল্য</span>
                       <span>বিক্রয়মূল্য</span>
                       {stockEnabled ? <span>স্টক</span> : null}
                       <span className="text-right">×</span>
@@ -2009,8 +2013,8 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
                         <div
                           className={`grid gap-2 md:items-start ${
                             stockEnabled
-                              ? "md:grid-cols-[32px_minmax(0,1fr)_96px_84px_40px]"
-                              : "md:grid-cols-[32px_minmax(0,1fr)_96px_40px]"
+                              ? "md:grid-cols-[32px_minmax(0,1fr)_96px_96px_84px_40px]"
+                              : "md:grid-cols-[32px_minmax(0,1fr)_96px_96px_40px]"
                           }`}
                         >
                           <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-border bg-muted px-1 text-[11px] font-semibold text-muted-foreground">
@@ -2028,6 +2032,22 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
                               }
                               placeholder="Label (যেমন: Small, 500ml)"
                               className="h-9 min-w-0 w-full rounded-lg border border-border bg-card px-3 text-sm"
+                            />
+                          </label>
+                          <label className="space-y-1">
+                            <span className="block text-[11px] font-semibold text-muted-foreground md:hidden">
+                              ক্রয়মূল্য
+                            </span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={variant.buyPrice}
+                              onChange={(e) =>
+                                upsertVariant(index, { buyPrice: e.target.value })
+                              }
+                              placeholder="ক্রয়"
+                              className="h-9 w-full min-w-0 rounded-lg border border-border bg-card px-3 text-sm"
                             />
                           </label>
                           <label className="space-y-1">
