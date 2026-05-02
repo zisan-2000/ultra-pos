@@ -28,7 +28,9 @@ export type LocalProduct = {
   variants?: Array<{
     id?: string;
     label: string;
+    buyPrice?: string | number | null;
     sellPrice: string | number;
+    stockQty?: string | number | null;
     sku?: string | null;
     barcode?: string | null;
     sortOrder?: number;

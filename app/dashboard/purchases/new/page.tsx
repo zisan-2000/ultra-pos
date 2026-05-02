@@ -170,6 +170,7 @@ export default async function PurchaseNewPage({
             .map((v: any) => ({
               id: v.id,
               label: v.label,
+              buyPrice: v.buyPrice?.toString?.() ?? null,
               stockQty: v.stockQty?.toString?.() ?? "0",
             })),
         }))}

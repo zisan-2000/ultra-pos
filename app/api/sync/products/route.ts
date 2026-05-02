@@ -29,7 +29,9 @@ const productCreateSchema = z.object({
       z.object({
         id: z.string().optional(),
         label: z.string(),
+        buyPrice: z.union([z.string(), z.number()]).optional().nullable(),
         sellPrice: z.union([z.string(), z.number()]),
+        stockQty: z.union([z.string(), z.number()]).optional().nullable(),
         sku: z.string().optional().nullable(),
         barcode: z.string().optional().nullable(),
         sortOrder: z.number().int().nonnegative().optional(),
@@ -135,7 +137,9 @@ function sanitizeVariants(value: unknown) {
   if (value === null) return [] as Array<{
     id?: string;
     label: string;
+    buyPrice: string | null;
     sellPrice: string;
+    stockQty: string;
     sku: string | null;
     barcode: string | null;
     sortOrder: number;
@@ -148,7 +152,9 @@ function sanitizeVariants(value: unknown) {
   const normalized: Array<{
     id?: string;
     label: string;
+    buyPrice: string | null;
     sellPrice: string;
+    stockQty: string;
     sku: string | null;
     barcode: string | null;
     sortOrder: number;
@@ -172,10 +178,21 @@ function sanitizeVariants(value: unknown) {
           ? row.id.trim()
           : undefined,
       label,
+      buyPrice: toMoneyString(
+        row?.buyPrice as string | number | null | undefined,
+        "variant buyPrice",
+        { allowNull: true }
+      ),
       sellPrice: toMoneyString(
         row?.sellPrice as string | number | null | undefined,
         "variant sellPrice"
       ) as string,
+      stockQty:
+        (toMoneyString(
+          row?.stockQty as string | number | null | undefined,
+          "variant stockQty",
+          { defaultValue: "0.00" }
+        ) as string) ?? "0.00",
       sku: normalizeCode(row?.sku as string | null | undefined) ?? null,
       barcode: normalizeCode(row?.barcode as string | null | undefined) ?? null,
       sortOrder: Number.isFinite(sortOrderRaw)
@@ -403,7 +420,9 @@ export async function POST(req: Request) {
                 shopId: item.shopId,
                 productId: existing.id,
                 label: variant.label,
+                buyPrice: variant.buyPrice,
                 sellPrice: variant.sellPrice,
+                stockQty: variant.stockQty,
                 sku: variant.sku,
                 barcode: variant.barcode,
                 sortOrder: variant.sortOrder ?? index,
@@ -468,7 +487,9 @@ export async function POST(req: Request) {
                   shopId: existing.shopId,
                   productId: id,
                   label: variant.label,
+                  buyPrice: variant.buyPrice,
                   sellPrice: variant.sellPrice,
+                  stockQty: variant.stockQty,
                   sku: variant.sku,
                   barcode: variant.barcode,
                   sortOrder: variant.sortOrder ?? index,

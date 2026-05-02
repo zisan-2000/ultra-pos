@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 type ProductVariantOption = {
   id: string;
   label: string;
+  buyPrice?: string | null;
   stockQty: string;
 };
 
@@ -171,9 +172,26 @@ export default function PurchaseFormClient({
   };
 
   const handleVariantSelect = (itemId: string, variantId: string) => {
+    const currentItem = items.find((item) => item.id === itemId);
+    const selectedProduct = currentItem?.productId
+      ? productMap.get(currentItem.productId)
+      : null;
+    const selectedVariant = variantId
+      ? (selectedProduct?.variants ?? []).find((variant) => variant.id === variantId)
+      : null;
     setItems((prev) =>
       prev.map((item) =>
-        item.id === itemId ? { ...item, variantId: variantId || null } : item
+        item.id === itemId
+          ? {
+              ...item,
+              variantId: variantId || null,
+              unitCost:
+                item.unitCost ||
+                (selectedVariant?.buyPrice != null
+                  ? String(selectedVariant.buyPrice)
+                  : item.unitCost),
+            }
+          : item
       )
     );
   };
@@ -608,6 +626,7 @@ export default function PurchaseFormClient({
                           {(product.variants ?? []).map((v) => (
                             <option key={v.id} value={v.id}>
                               {v.label} — স্টক: {v.stockQty}
+                              {v.buyPrice != null ? ` — ক্রয়: ${v.buyPrice}` : ""}
                             </option>
                           ))}
                         </select>
@@ -625,7 +644,7 @@ export default function PurchaseFormClient({
                         : null;
                       return (
                         <div className="mt-3 rounded-xl border border-border bg-muted/35 px-3 py-2 text-[11px] text-muted-foreground">
-                          আগের ক্রয় মূল্য: {product.buyPrice ?? "N/A"}
+                          আগের ক্রয় মূল্য: {selectedVariant?.buyPrice ?? product.buyPrice ?? "N/A"}
                           {stockDisplay != null
                             ? ` | বর্তমান স্টক: ${stockDisplay}`
                             : " | স্টক ট্র্যাক নয়"}
