@@ -3,17 +3,25 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+type ProductVariantOption = {
+  id: string;
+  label: string;
+  stockQty: string;
+};
+
 type ProductOption = {
   id: string;
   name: string;
   buyPrice?: string | null;
   stockQty?: string | null;
   trackStock?: boolean | null;
+  variants?: ProductVariantOption[];
 };
 
 type PurchaseItemDraft = {
   id: string;
   productId: string;
+  variantId?: string | null;
   qty: string;
   unitCost: string;
 };
@@ -59,6 +67,7 @@ const PAYMENT_OPTIONS: Array<{
 const blankItem = (): PurchaseItemDraft => ({
   id: crypto.randomUUID(),
   productId: "",
+  variantId: null,
   qty: "1",
   unitCost: "",
 });
@@ -151,11 +160,20 @@ export default function PurchaseFormClient({
           ? {
               ...item,
               productId,
+              variantId: null,
               unitCost:
                 item.unitCost ||
                 (product?.buyPrice != null ? String(product.buyPrice) : ""),
             }
           : item
+      )
+    );
+  };
+
+  const handleVariantSelect = (itemId: string, variantId: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId ? { ...item, variantId: variantId || null } : item
       )
     );
   };
@@ -234,6 +252,7 @@ export default function PurchaseFormClient({
             shopId,
             items: items.map((item) => ({
               productId: item.productId,
+              variantId: item.variantId || null,
               qty: item.qty,
               unitCost: item.unitCost,
             })),
@@ -558,7 +577,7 @@ export default function PurchaseFormClient({
 
                       <div className="space-y-1">
                         <label className="text-[11px] font-semibold text-muted-foreground">
-                          ক্রয় মূল্য
+                          ক্রয় মূল্য
                         </label>
                         <input
                           type="number"
@@ -573,14 +592,47 @@ export default function PurchaseFormClient({
                       </div>
                     </div>
 
-                    {product ? (
-                      <div className="mt-3 rounded-xl border border-border bg-muted/35 px-3 py-2 text-[11px] text-muted-foreground">
-                        আগের ক্রয় মূল্য: {product.buyPrice ?? "N/A"} | বর্তমান স্টক:{" "}
-                        {product.trackStock
-                          ? product.stockQty ?? "0"
-                          : "স্টক ট্র্যাক নয়"}
+                    {product && (product.variants ?? []).length > 0 ? (
+                      <div className="mt-3 space-y-1">
+                        <label className="text-[11px] font-semibold text-muted-foreground">
+                          ভ্যারিয়েন্ট / সাইজ
+                        </label>
+                        <select
+                          value={item.variantId ?? ""}
+                          onChange={(e) =>
+                            handleVariantSelect(item.id, e.target.value)
+                          }
+                          className="h-11 w-full rounded-xl border border-primary/30 bg-primary-soft px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        >
+                          <option value="">ভ্যারিয়েন্ট নির্বাচন করুন</option>
+                          {(product.variants ?? []).map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.label} — স্টক: {v.stockQty}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     ) : null}
+
+                    {product ? (() => {
+                      const selectedVariant = item.variantId
+                        ? (product.variants ?? []).find((v) => v.id === item.variantId)
+                        : null;
+                      const stockDisplay = selectedVariant
+                        ? selectedVariant.stockQty
+                        : product.trackStock
+                        ? product.stockQty ?? "0"
+                        : null;
+                      return (
+                        <div className="mt-3 rounded-xl border border-border bg-muted/35 px-3 py-2 text-[11px] text-muted-foreground">
+                          আগের ক্রয় মূল্য: {product.buyPrice ?? "N/A"}
+                          {stockDisplay != null
+                            ? ` | বর্তমান স্টক: ${stockDisplay}`
+                            : " | স্টক ট্র্যাক নয়"}
+                          {selectedVariant ? ` (${selectedVariant.label})` : ""}
+                        </div>
+                      );
+                    })() : null}
                   </div>
                 );
               })}

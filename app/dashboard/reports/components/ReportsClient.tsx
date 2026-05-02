@@ -1681,11 +1681,11 @@ export default function ReportsClient({
 
       {/* Mobile controls */}
       <div className="md:hidden space-y-3">
-        <div className="sticky top-0 z-10 bg-card/95 backdrop-blur border-b border-border/70 pt-3 pb-2">
+        <div className="sticky top-0 z-10 border-b border-border/70 bg-card/95 pt-3 pb-3 backdrop-blur">
           <div className="px-3 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground">
                   রিপোর্ট হাব
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -1702,7 +1702,7 @@ export default function ReportsClient({
                 <button
                   key={item.key}
                   onClick={() => setActive(item.key)}
-                  className={`min-h-[46px] rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                  className={`min-h-[44px] rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors ${
                     active === item.key
                       ? "border-primary/30 bg-primary-soft text-primary shadow-sm"
                       : "border-border/70 bg-background text-foreground/85"
@@ -1715,7 +1715,7 @@ export default function ReportsClient({
               <button
                 type="button"
                 onClick={() => setMobileReportPickerOpen(true)}
-                className={`min-h-[46px] rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                className={`min-h-[44px] rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors ${
                   !MOBILE_PRIMARY_REPORT_KEYS.includes(active as (typeof MOBILE_PRIMARY_REPORT_KEYS)[number])
                     ? "border-primary/30 bg-primary-soft text-primary shadow-sm"
                     : "border-dashed border-border/70 bg-background text-foreground/85"
@@ -1733,7 +1733,7 @@ export default function ReportsClient({
 
           <div className="px-3 space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold text-muted-foreground"> সময়</p>
+            <p className="text-xs font-semibold text-muted-foreground">সময়</p>
             {rangeLabel ? (
               <span className="text-[11px] font-semibold text-muted-foreground">
                 {rangeLabel}
@@ -1836,31 +1836,48 @@ export default function ReportsClient({
       </Dialog>
       {/* Desktop: primary tabs + date filter separated */}
       <div className="hidden md:block space-y-4">
-        <div className="rounded-2xl bg-card border border-border shadow-sm px-4 py-3 relative">
-          <p className="text-xs font-semibold text-muted-foreground mb-2"> রিপোর্ট</p>
-          <div className="relative">
-            <div className="flex gap-2 overflow-x-auto no-scrollbar rounded-full bg-muted/70 p-1 pr-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/6 via-card to-card" />
+          <div className="relative space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground">
+                  রিপোর্ট হাব
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  যে রিপোর্ট দেখতে চান, নিচে থেকে বেছে নিন
+                </p>
+              </div>
+              <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-[11px] font-semibold text-primary">
+                এখন: {activeReportLabel}
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
               {NAV.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => setActive(item.key)}
-                  className={`h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border border-transparent transition-colors ${
+                  className={`min-h-[44px] rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors ${
                     active === item.key
-                      ? "bg-card text-foreground border-border shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                      ? "border-primary/30 bg-primary-soft text-primary shadow-sm"
+                      : "border-border/70 bg-background text-foreground/85"
                   }`}
                 >
                   {item.label}
                 </button>
               ))}
             </div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-card to-transparent" />
           </div>
         </div>
 
         <div className="rounded-2xl bg-card border border-border shadow-sm px-4 py-3 space-y-4">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-muted-foreground"> সময়</p>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground">সময়</p>
+              {rangeLabel ? (
+                <p className="mt-1 text-[11px] text-muted-foreground">{rangeLabel}</p>
+              ) : null}
+            </div>
             <RefreshIconButton
               onClick={handleManualRefresh}
               loading={summaryLoading}
@@ -1948,4 +1965,5 @@ export default function ReportsClient({
     </div>
   );
 }
+
 

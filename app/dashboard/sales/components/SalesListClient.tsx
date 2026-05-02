@@ -86,6 +86,13 @@ function formatTime(iso: string) {
   });
 }
 
+function formatTaxLabel(label?: string | null) {
+  const normalized = String(label || "").trim();
+  if (!normalized) return "ভ্যাট";
+  if (normalized.toLowerCase() === "vat") return "ভ্যাট";
+  return normalized;
+}
+
 function scheduleStateUpdate(fn: () => void) {
   if (typeof queueMicrotask === "function") {
     queueMicrotask(fn);
@@ -330,12 +337,12 @@ export default function SalesListClient({
   const renderedItems = useMemo(() => items, [items]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           {!online && (
             <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning border border-warning/30">
-              📡 Offline - শুধু দেখা যাবে
+              📡 অফলাইন - শুধু দেখা যাবে
             </span>
           )}
           {page > 1 && prevHref && (
@@ -359,11 +366,19 @@ export default function SalesListClient({
       </div>
 
       {renderedItems.length === 0 ? (
-        <p className="text-center text-muted-foreground py-10">
-          {online
-            ? "এই তারিখে কোনো বিক্রি নেই"
-            : "Offline: সর্বশেষ সিঙ্ককৃত বিক্রিগুলো দেখাচ্ছে"}
-        </p>
+        <div className="rounded-3xl border border-dashed border-border bg-card/70 px-6 py-12 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-primary/15 bg-primary-soft/60 text-3xl shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+            🧾
+          </div>
+          <p className="text-lg font-semibold text-foreground">
+            {online ? "এই তারিখে কোনো বিক্রি নেই" : "অফলাইনে বিক্রির তালিকা দেখছেন"}
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+            {online
+              ? "তারিখ বা ফিল্টার বদলে আবার দেখুন।"
+              : "সর্বশেষ সিঙ্ককৃত বিক্রিগুলো পাওয়া গেলে এখানে দেখাবে।"}
+          </p>
+        </div>
       ) : (
         renderedItems.map((s) => {
           const isVoided = (s.status || "").toUpperCase() === "VOIDED";
@@ -376,7 +391,7 @@ export default function SalesListClient({
           const isExpanded = Boolean(expandedItems[s.id]);
           const collapsedPreview = s.itemPreview || "";
           const fullPreview = s.itemPreviewFull || collapsedPreview;
-          const moreMatch = collapsedPreview.match(/^(.*)\s\+(\d+)\smore$/);
+          const moreMatch = collapsedPreview.match(/^(.*)\s\+(\d+)\s(?:আরও|more)$/);
           const hasExpandableMore =
             Boolean(moreMatch) &&
             Boolean(fullPreview) &&
@@ -436,7 +451,7 @@ export default function SalesListClient({
               ? `সাব-টোটাল ৳${subtotalAmount.toFixed(2)}`
               : null,
             !isVoided && taxAmount > 0
-              ? `${(s.taxLabel || "VAT").trim()} ৳${taxAmount.toFixed(2)}${
+              ? `${formatTaxLabel(s.taxLabel)} ৳${taxAmount.toFixed(2)}${
                   s.taxRate ? ` (${Number(s.taxRate).toFixed(2)}%)` : ""
                 }`
               : null,
@@ -473,8 +488,8 @@ export default function SalesListClient({
                 isVoided ? "opacity-90 border-danger/30" : "border-border"
               }`}
             >
-              <div className="space-y-1.5 p-2.5 sm:p-3">
-                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-2 p-3 sm:p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-1.5">
                     <div>
                       <p className="text-lg font-bold text-foreground sm:text-xl">
@@ -517,7 +532,7 @@ export default function SalesListClient({
                   ) : null}
                   {!isVoided && taxAmount > 0 ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary border border-primary/30">
-                      {(s.taxLabel || "VAT").trim()} {taxAmount.toFixed(2)} ৳
+                      {formatTaxLabel(s.taxLabel)} {taxAmount.toFixed(2)} ৳
                     </span>
                   ) : null}
                   {s.invoiceNo && (
@@ -544,7 +559,7 @@ export default function SalesListClient({
                       }
                       className="ml-2 inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-semibold text-primary hover:bg-primary-soft"
                     >
-                      {isExpanded ? "কম দেখুন" : `+${moreMatch?.[2]} more`}
+                      {isExpanded ? "কম দেখুন" : `+${moreMatch?.[2]} আরও`}
                     </button>
                   ) : null}
                 </div>
@@ -639,12 +654,12 @@ export default function SalesListClient({
                   {isPending && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary border border-primary/30 shadow-sm">
                       ⏳ সিঙ্ক বাকি
-                      {!online ? " · Offline" : ""}
+                      {!online ? " · অফলাইন" : ""}
                     </span>
                   )}
                   {!online && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning border border-warning/30">
-                      বাতিল করা যাবে না (Offline)
+                      বাতিল করা যাবে না (অফলাইন)
                     </span>
                   )}
                   {online && isDueSale && !isVoided && (

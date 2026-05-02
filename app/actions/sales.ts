@@ -467,7 +467,7 @@ async function attachSaleSummaries(
         previewCount === 0
           ? ""
           : remainingCount > 0
-          ? `${collapsedPreview} +${remainingCount} more`
+          ? `${collapsedPreview} +${remainingCount} আরও`
           : collapsedPreview,
       customerName: r.customerId ? customerMap[r.customerId] : null,
       subtotalAmountText: toMoney(Number(r.subtotalAmount ?? 0)),
@@ -1021,12 +1021,13 @@ export async function createSale(input: CreateSaleInput) {
 
   // Product IDs
   const productIds = input.items.map((i) => i.productId);
+  const uniqueProductIds = Array.from(new Set(productIds));
   logPerf(
-    `📦 [DEBUG] Processing ${input.items.length} items, ${productIds.length} products`
+    `📦 [DEBUG] Processing ${input.items.length} items, ${uniqueProductIds.length} unique products`
   );
 
   const dbProducts = await prisma.product.findMany({
-    where: { id: { in: productIds } },
+    where: { id: { in: uniqueProductIds } },
   });
 
   const dbTime = Date.now();
@@ -1034,7 +1035,7 @@ export async function createSale(input: CreateSaleInput) {
     `💾 [PERF] DB product fetch took: ${dbTime - authTime}ms for ${dbProducts.length} products`
   );
 
-  if (dbProducts.length !== productIds.length) {
+  if (dbProducts.length !== uniqueProductIds.length) {
     throw new Error("Some products not found");
   }
 
@@ -1387,9 +1388,6 @@ export async function createSale(input: CreateSaleInput) {
     );
   }
 
-  const uniqueProductIds = Array.from(
-    new Set(input.items.map((item) => item.productId))
-  );
   if (uniqueProductIds.length > 0) {
     publishTasks.push(
       publishRealtimeEvent(REALTIME_EVENTS.stockUpdated, input.shopId, {

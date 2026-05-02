@@ -1581,7 +1581,7 @@ export default function ProductsListClient({
         <div className="relative space-y-3 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+              <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground">
                 পণ্য
               </p>
               <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
@@ -2034,7 +2034,7 @@ export default function ProductsListClient({
                               {Array.isArray(template.aliases) &&
                               template.aliases.length > aliasPreview.length ? (
                                 <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                  +{template.aliases.length - aliasPreview.length} alias
+                                  +{template.aliases.length - aliasPreview.length} বিকল্প নাম
                                 </span>
                               ) : null}
                             </div>
@@ -2060,7 +2060,7 @@ export default function ProductsListClient({
               Catalog থেকে যোগ করুন
             </h3>
             <p className="mt-0.5 text-[11px] text-muted-foreground leading-tight sm:text-xs sm:leading-relaxed">
-              Search করে ready-made catalog item shop-এ import করুন।
+              নাম বা বারকোড খুঁজে প্রস্তুত catalog item shop-এ যোগ করুন।
             </p>
             {selectedCatalogIds.length > 0 && (
               <span className="mt-1 inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
@@ -2156,8 +2156,8 @@ export default function ProductsListClient({
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary-soft/40 px-3 py-2">
                   <p className="text-xs text-foreground">
                     {queryLooksLikeCode
-                      ? "এই barcode/SKU shop-এ মেলেনি। catalog-এ exact/related match খুঁজে দেখতে পারেন।"
-                      : "Local product না পেলে catalog alias/name দিয়েও খুঁজে import করতে পারেন।"}
+                      ? "এই বারকোড বা SKU shop-এ মেলেনি। catalog-এ কাছাকাছি match খুঁজে দেখতে পারেন।"
+                      : "লোকাল পণ্য না পেলে catalog-এর নাম বা বিকল্প নাম দিয়েও খুঁজে import করতে পারেন।"}
                   </p>
                   <button
                     type="button"
@@ -2179,7 +2179,7 @@ export default function ProductsListClient({
 
             {online && catalogLoading ? (
               <div className="rounded-xl border border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-                ক্যাটালগ search লোড হচ্ছে...
+                ক্যাটালগ খুঁজে আনা হচ্ছে...
               </div>
             ) : null}
 
@@ -2362,8 +2362,8 @@ export default function ProductsListClient({
               <div className="mx-auto mt-5 max-w-lg rounded-2xl border border-primary/20 bg-primary-soft/35 px-4 py-3 space-y-2">
                 <p className="text-xs leading-5 text-muted-foreground">
                   {queryLooksLikeCode
-                    ? "এই barcode/SKU দোকানে নেই। ক্যাটালগে খুঁজে import করা যেতে পারে।"
-                    : "এই search-এর local result নেই। ক্যাটালগ alias/barcode দিয়েও খুঁজে দেখতে পারেন।"}
+                    ? "এই বারকোড বা SKU দোকানে নেই। ক্যাটালগে খুঁজে import করা যেতে পারে।"
+                    : "এই খোঁজার local result নেই। ক্যাটালগের বিকল্প নাম বা বারকোড দিয়েও খুঁজে দেখতে পারেন।"}
                 </p>
                 <button
                   type="button"

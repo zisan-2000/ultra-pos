@@ -1283,7 +1283,7 @@ export const PosProductSearch = memo(function PosProductSearch({
 
       const productPrice = Number(variant?.sellPrice ?? product.sellPrice ?? 0);
       const itemKey = buildCartItemKey(product.id, variant?.id ?? null);
-      const safeQuantity = Math.max(1, Math.floor(quantity || 1));
+      const safeQuantity = Math.max(0.01, Number(quantity) || 1);
 
       add({
         itemKey,
@@ -1325,7 +1325,7 @@ export const PosProductSearch = memo(function PosProductSearch({
       variant?: ProductVariantOption,
       quantity = 1
     ) => {
-      const safeQuantity = Math.max(1, Math.floor(quantity || 1));
+      const safeQuantity = Math.max(0.01, Number(quantity) || 1);
       const stock = variant
         ? toNumber(variant.stockQty)
         : toNumber(product.stockQty);
@@ -2390,7 +2390,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                     onClick={() =>
                       setVariantPicker((current) =>
                         current
-                          ? { ...current, quantity: Math.max(1, current.quantity - 1) }
+                          ? { ...current, quantity: Math.max(0.01, current.quantity - 1) }
                           : current
                       )
                     }
@@ -2399,9 +2399,22 @@ export const PosProductSearch = memo(function PosProductSearch({
                   >
                     −
                   </button>
-                  <span className="inline-flex min-w-[42px] items-center justify-center rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-sm font-bold text-primary">
-                    {variantPicker.quantity}
-                  </span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0.01"
+                    value={variantPicker.quantity}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setVariantPicker((current) =>
+                        current
+                          ? { ...current, quantity: Number.isFinite(val) && val > 0 ? val : 0.01 }
+                          : current
+                      );
+                    }}
+                    className="w-[70px] rounded-xl border border-primary/20 bg-primary-soft px-2 py-1 text-center text-sm font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
                   <button
                     type="button"
                     onClick={() =>

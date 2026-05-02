@@ -123,6 +123,10 @@ function formatReason(reason?: string | null) {
   );
 }
 
+function getEntryFlowLabel(inFlow: boolean) {
+  return inFlow ? "নগদ জমা" : "নগদ খরচ";
+}
+
 function formatDate(d: Date) {
   const y = d.getFullYear();
   const m = `${d.getMonth() + 1}`.padStart(2, "0");
@@ -533,7 +537,7 @@ export function CashListClient({
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-foreground">নেট ব্যালেন্স</p>
+              <p className="text-sm font-semibold text-foreground">নেট নগদ</p>
               <p
                 className={`text-2xl font-bold ${
                   totals.net >= 0 ? "text-success" : "text-danger"
@@ -657,22 +661,22 @@ export function CashListClient({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-3 gap-2 md:gap-3">
-        <div className="rounded-2xl border border-success/30 bg-success-soft p-3 text-center shadow-sm">
-          <p className="text-xs font-semibold text-success">মোট ইন</p>
+      <div className="grid grid-cols-3 gap-2.5 md:gap-3">
+        <div className="rounded-2xl border border-success/30 bg-success-soft p-3.5 text-center shadow-sm">
+          <p className="text-xs font-semibold text-success">মোট জমা</p>
           <p className="text-lg font-bold text-success">
             + {totals.in.toFixed(2)} ৳
           </p>
         </div>
 
-        <div className="rounded-2xl border border-danger/30 bg-danger-soft p-3 text-center shadow-sm">
-          <p className="text-xs font-semibold text-danger">মোট আউট</p>
+        <div className="rounded-2xl border border-danger/30 bg-danger-soft p-3.5 text-center shadow-sm">
+          <p className="text-xs font-semibold text-danger">মোট খরচ</p>
           <p className="text-lg font-bold text-danger">
             - {totals.out.toFixed(2)} ৳
           </p>
         </div>
-        <div className="rounded-2xl border border-border bg-card p-3 text-center shadow-sm">
-          <p className="text-xs font-semibold text-muted-foreground">নেট ব্যালেন্স</p>
+        <div className="rounded-2xl border border-border bg-card p-3.5 text-center shadow-sm">
+          <p className="text-xs font-semibold text-muted-foreground">নেট নগদ</p>
           <p
             className={`text-lg font-bold ${
               totals.net >= 0 ? "text-success" : "text-danger"
@@ -695,7 +699,7 @@ export function CashListClient({
               return (
                 <div key={dateKey} className="space-y-2">
                   <div className="flex items-center justify-between px-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.2em]">
+                    <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground">
                       {friendly}
                     </p>
                     <span className="inline-flex h-7 items-center rounded-full border border-border bg-card px-3 text-xs font-semibold text-muted-foreground">
@@ -726,8 +730,8 @@ export function CashListClient({
                         >
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="space-y-2">
-                              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                                ক্যাশ {inFlow ? "ইন" : "আউট"}
+                              <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground">
+                                {getEntryFlowLabel(inFlow)}
                               </p>
                               <p
                                 className={`text-2xl font-bold ${
@@ -745,7 +749,7 @@ export function CashListClient({
                                       : "bg-danger-soft text-danger border-danger/30"
                                   }`}
                                 >
-                                  {inFlow ? "ইন" : "আউট"}
+                                  {inFlow ? "জমা" : "খরচ"}
                                 </span>
                                 {timeStr ? (
                                   <span className="inline-flex h-7 items-center rounded-full bg-card px-3 font-semibold text-muted-foreground border border-border">
@@ -753,12 +757,11 @@ export function CashListClient({
                                   </span>
                                 ) : null}
                               </div>
-                              <p className="text-sm text-foreground/80 break-words leading-snug">
-                                <span className="text-xs font-semibold text-muted-foreground">
-                                  বিবরণ:
-                                </span>{" "}
-                                {reasonLabel || "নোট নেই"}
-                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                                  বিবরণ {reasonLabel || "নোট নেই"}
+                                </span>
+                              </div>
                               <div className="flex flex-wrap items-center gap-2 sm:hidden">
                                 {online && canUpdateCashEntry ? (
                                   <Link
@@ -769,11 +772,11 @@ export function CashListClient({
                                   </Link>
                                 ) : online ? (
                                   <span className="inline-flex h-9 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs font-semibold border border-border px-3">
-                                    Edit নিষ্ক্রিয়
+                                    এডিট বন্ধ
                                   </span>
                                 ) : (
                                   <span className="inline-flex h-9 items-center justify-center rounded-full bg-warning-soft text-warning text-xs font-semibold border border-warning/30 px-3">
-                                    Offline
+                                    অফলাইন
                                   </span>
                                 )}
                                 {canDeleteCashEntry ? (
@@ -794,11 +797,11 @@ export function CashListClient({
                                 </Link>
                               ) : online ? (
                                 <span className="inline-flex h-10 items-center justify-center rounded-xl bg-muted text-muted-foreground text-xs font-semibold border border-border px-4">
-                                  Edit নিষ্ক্রিয়
+                                  এডিট বন্ধ
                                 </span>
                               ) : (
                                 <span className="inline-flex h-10 items-center justify-center rounded-xl bg-warning-soft text-warning text-xs font-semibold border border-warning/30 px-4">
-                                  Offline
+                                  অফলাইন
                                 </span>
                               )}
                               {canDeleteCashEntry ? (
@@ -819,10 +822,13 @@ export function CashListClient({
             })}
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-2xl p-6 text-center space-y-2 shadow-sm">
+        <div className="rounded-3xl border border-dashed border-border bg-card/70 p-8 text-center space-y-3 shadow-sm">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-primary/15 bg-primary-soft/60 text-4xl shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+            💵
+          </div>
           <p className="text-lg font-semibold text-foreground">এখনো কোনো এন্ট্রি নেই</p>
-          <p className="text-sm text-muted-foreground">
-            {online ? "প্রথম ক্যাশ এন্ট্রি যোগ করুন" : "Offline: ক্যাশ এন্ট্রি ক্যাশে নেই"}
+          <p className="mx-auto max-w-md text-sm leading-6 text-muted-foreground">
+            {online ? "প্রথম নগদ এন্ট্রি যোগ করুন" : "অফলাইনে আছেন। নগদ এন্ট্রির cached data নেই।"}
           </p>
           {online && canCreateCashEntry ? (
             <QuickCashEntrySheet

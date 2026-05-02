@@ -5,6 +5,7 @@ import { apiErrorResponse } from "@/lib/http/api-errors";
 
 const itemSchema = z.object({
   productId: z.string().min(1),
+  variantId: z.string().optional().nullable(),
   qty: z.union([z.string(), z.number()]),
   unitCost: z.union([z.string(), z.number()]),
 });

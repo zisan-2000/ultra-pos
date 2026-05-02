@@ -994,6 +994,11 @@ export async function getProductsByShop(shopId: string) {
       trackStock: true,
       createdAt: true,
       updatedAt: true,
+      variants: {
+        where: { isActive: true },
+        select: { id: true, label: true, stockQty: true },
+        orderBy: { sortOrder: "asc" },
+      },
     },
   });
 }

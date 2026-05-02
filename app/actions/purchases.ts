@@ -17,6 +17,7 @@ import {
 
 type PurchaseItemInput = {
   productId: string;
+  variantId?: string | null;
   qty: number | string;
   unitCost: number | string;
 };
@@ -118,18 +119,39 @@ export async function createPurchase(input: CreatePurchaseInput) {
   }
 
   let totalAmount = 0;
+  const variantIds = input.items
+    .map((i) => i.variantId)
+    .filter((id): id is string => !!id);
+
+  const variantMap = new Map<string, { id: string; productId: string; stockQty: any }>();
+  if (variantIds.length > 0) {
+    const variants = await prisma.productVariant.findMany({
+      where: { id: { in: variantIds } },
+      select: { id: true, productId: true, stockQty: true },
+    });
+    for (const v of variants) variantMap.set(v.id, v);
+  }
+
   const rows = input.items.map((item) => {
     const product = productMap.get(item.productId);
     if (!product) throw new Error("Product not found");
     if (product.shopId !== input.shopId) {
       throw new Error("Product does not belong to this shop");
     }
+    const variantId = item.variantId ?? null;
+    if (variantId) {
+      const variant = variantMap.get(variantId);
+      if (!variant) throw new Error(`Variant not found: ${variantId}`);
+      if (variant.productId !== item.productId) {
+        throw new Error("Variant does not belong to the given product");
+      }
+    }
     const qty = toMoney(item.qty, "Quantity");
     const unitCost = toMoney(item.unitCost, "Unit cost");
     if (qty <= 0) throw new Error("Quantity must be greater than 0");
     const lineTotal = qty * unitCost;
     totalAmount += lineTotal;
-    return { product, qty, unitCost, lineTotal };
+    return { product, variantId, qty, unitCost, lineTotal };
   });
 
   const paidNowRaw = Number(input.paidNow ?? 0);
@@ -166,6 +188,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
       data: rows.map((row) => ({
         purchaseId: created.id,
         productId: row.product.id,
+        variantId: row.variantId,
         quantity: row.qty.toFixed(2),
         unitCost: row.unitCost.toFixed(2),
         lineTotal: row.lineTotal.toFixed(2),
@@ -189,9 +212,19 @@ export async function createPurchase(input: CreatePurchaseInput) {
         where: { id: product.id },
         data: {
           buyPrice: nextCost.toFixed(2),
-          ...(product.trackStock ? { stockQty: nextStock.toFixed(2) } : {}),
+          ...(product.trackStock && !row.variantId
+            ? { stockQty: nextStock.toFixed(2) }
+            : {}),
         },
       });
+
+      // For variant products, increment the specific variant's stockQty
+      if (row.variantId && product.trackStock) {
+        await tx.productVariant.update({
+          where: { id: row.variantId },
+          data: { stockQty: { increment: row.qty } },
+        });
+      }
     }
 
     if (paidAmount > 0) {

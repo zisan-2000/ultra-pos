@@ -165,6 +165,13 @@ export default async function PurchaseNewPage({
           buyPrice: p.buyPrice?.toString?.() ?? null,
           stockQty: p.stockQty?.toString?.() ?? null,
           trackStock: p.trackStock,
+          variants: (p.variants ?? [])
+            .filter((v: any) => v.isActive !== false)
+            .map((v: any) => ({
+              id: v.id,
+              label: v.label,
+              stockQty: v.stockQty?.toString?.() ?? "0",
+            })),
         }))}
         suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
       />
