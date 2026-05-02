@@ -212,6 +212,8 @@ type CatalogSegmentId =
   | "paint_chemical"
   | "structural";
 
+type OnboardingSection = "starter" | "template" | "catalog";
+
 const MAX_PAGE_BUTTONS = 5;
 const OFFLINE_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -574,6 +576,12 @@ function getCatalogSecondaryBadges(item: CatalogProduct) {
   return badges;
 }
 
+function getUniqueTemplateCategoryCount(items: TemplateProduct[]) {
+  return new Set(
+    items.map((item) => formatCategoryLabel(item.category || "বিভাগহীন")),
+  ).size;
+}
+
 function emptyMetrics(): ProductCardMetrics {
   return {
     soldQtyToday: "0.00",
@@ -648,12 +656,17 @@ export default function ProductsListClient({
     name: string;
   } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [templateOpen, setTemplateOpen] = useState(serverProducts.length === 0);
+  const [starterPackOpen, setStarterPackOpen] = useState(
+    serverProducts.length === 0 && businessType === "hardware"
+  );
+  const [templateOpen, setTemplateOpen] = useState(
+    serverProducts.length === 0 && businessType !== "hardware"
+  );
   const [templateSelections, setTemplateSelections] = useState<Record<string, boolean>>({});
   const [templateSetupOpen, setTemplateSetupOpen] = useState(false);
   const [templateSetupDrafts, setTemplateSetupDrafts] = useState<TemplateSetupDraft[]>([]);
   const [addingTemplates, setAddingTemplates] = useState(false);
-  const [catalogOpen, setCatalogOpen] = useState(serverProducts.length === 0);
+  const [catalogOpen, setCatalogOpen] = useState(false);
   const [catalogSegment, setCatalogSegment] = useState<CatalogSegmentId>("all");
   const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogItems, setCatalogItems] = useState<CatalogProduct[]>([]);
@@ -681,6 +694,12 @@ export default function ProductsListClient({
     () => `products-voice-mode:${activeShopId}`,
     [activeShopId]
   );
+
+  const setOnboardingSection = useCallback((section: OnboardingSection | null) => {
+    setStarterPackOpen(section === "starter");
+    setTemplateOpen(section === "template");
+    setCatalogOpen(section === "catalog");
+  }, []);
 
   useEffect(() => {
     setShop(activeShopId);
@@ -715,12 +734,15 @@ export default function ProductsListClient({
 
   useEffect(() => {
     if (serverProducts.length === 0 && templateProducts.length > 0) {
-      setTemplateOpen(true);
+      if (businessType === "hardware") {
+        setOnboardingSection("starter");
+      } else {
+        setOnboardingSection("template");
+      }
+    } else if (serverProducts.length > 0) {
+      setOnboardingSection(null);
     }
-    if (serverProducts.length === 0) {
-      setCatalogOpen(true);
-    }
-  }, [serverProducts.length, templateProducts.length]);
+  }, [businessType, serverProducts.length, setOnboardingSection, templateProducts.length]);
 
   useEffect(() => {
     if (!online) {
@@ -1146,6 +1168,24 @@ export default function ProductsListClient({
     [visibleCatalogCards, catalogSelections],
   );
 
+  const templateCategoryCount = useMemo(
+    () => getUniqueTemplateCategoryCount(templateItems),
+    [templateItems],
+  );
+
+  const templateVariantCount = useMemo(
+    () =>
+      templateItems.reduce(
+        (sum, template) =>
+          sum +
+          (Array.isArray(template.variants)
+            ? template.variants.filter((variant) => variant?.isActive !== false).length
+            : 0),
+        0,
+      ),
+    [templateItems],
+  );
+
   const filteredProducts = useMemo(() => {
     if (online) return products;
     return products.filter((product) => {
@@ -1234,7 +1274,7 @@ export default function ProductsListClient({
 
   const handleUseQueryInCatalog = useCallback(() => {
     const nextQuery = query.trim();
-    setCatalogOpen(true);
+    setOnboardingSection("catalog");
     setCatalogQuery(nextQuery);
 
     requestAnimationFrame(() => {
@@ -1243,7 +1283,7 @@ export default function ProductsListClient({
         block: "start",
       });
     });
-  }, [query]);
+  }, [query, setOnboardingSection]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1320,6 +1360,7 @@ export default function ProductsListClient({
     selected.forEach((template) => {
       nextSelections[template.id] = true;
     });
+    setOnboardingSection("starter");
     setTemplateSelections(nextSelections);
     setTemplateSetupDrafts(selected.map(buildTemplateSetupDraft));
     setTemplateSetupOpen(true);
@@ -2200,9 +2241,14 @@ export default function ProductsListClient({
           <div className="relative space-y-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                  দ্রুত শুরু
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2.5 py-1 text-[11px] font-semibold text-primary">
+                    ১. দ্রুত শুরু
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                    নতুন hardware shop-এর shortest path
+                  </span>
+                </div>
                 <h3 className="mt-1 text-lg font-bold text-foreground sm:text-xl">
                   হার্ডওয়্যার দোকানের স্টার্টার প্যাক
                 </h3>
@@ -2211,61 +2257,110 @@ export default function ProductsListClient({
                   stock আর ক্রয়মূল্য দিয়েই operational-ready product list বানাতে পারবেন।
                 </p>
               </div>
-              <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-[11px] font-semibold text-primary">
-                {hardwareStarterPacks.length.toLocaleString("bn-BD")}টি starter path
-              </span>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-[11px] font-semibold text-primary">
+                  {hardwareStarterPacks.length.toLocaleString("bn-BD")}টি starter path
+                </span>
+                <button
+                  type="button"
+                  aria-expanded={starterPackOpen}
+                  aria-controls="hardware-starter-pack-section"
+                  onClick={() =>
+                    setOnboardingSection(starterPackOpen ? null : "starter")
+                  }
+                  className="inline-flex h-8 items-center gap-2 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground shadow-sm transition hover:bg-muted hover:border-primary/30"
+                >
+                  {starterPackOpen ? "লুকান" : "দেখান"}
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className={`h-3.5 w-3.5 transition-transform ${
+                      starterPackOpen ? "rotate-180" : ""
+                    }`}
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.24a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
-              {hardwareStarterPacks.map((pack) => (
-                <div
-                  key={pack.id}
-                  className={`rounded-2xl border border-border/70 bg-gradient-to-br ${pack.accent} p-4 shadow-[0_6px_18px_rgba(15,23,42,0.05)]`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h4 className="text-base font-bold text-foreground">
-                        {pack.title}
-                      </h4>
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                        {pack.subtitle}
-                      </p>
-                    </div>
-                    <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-foreground">
-                      {pack.productCount.toLocaleString("bn-BD")}টি পণ্য
+            {!starterPackOpen ? (
+              <div className="rounded-2xl border border-border/70 bg-background/70 px-4 py-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    নতুন hardware shop হলে এখান থেকে quickest setup শুরু করা যাবে।
+                    অন্যথায় নিচের template বা catalog section ব্যবহার করুন।
+                  </p>
+                  <div className="flex flex-wrap gap-2 text-[11px] font-medium text-muted-foreground">
+                    <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
+                      {hardwareStarterPacks.reduce((sum, pack) => sum + pack.productCount, 0).toLocaleString("bn-BD")}টি মোট পণ্য
                     </span>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    <span className="inline-flex items-center rounded-full border border-border bg-white/75 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      {pack.variantCount.toLocaleString("bn-BD")}টি ভ্যারিয়েন্ট
+                    <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
+                      {hardwareStarterPacks.reduce((sum, pack) => sum + pack.variantCount, 0).toLocaleString("bn-BD")}টি ভ্যারিয়েন্ট
                     </span>
-                    {pack.sampleNames.map((name) => (
-                      <span
-                        key={`${pack.id}:${name}`}
-                        className="inline-flex items-center rounded-full border border-border bg-white/75 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-                      >
-                        {name}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between gap-2">
-                    <p className="text-[11px] text-muted-foreground">
-                      আগে preview, তারপর stock/cost setup
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => startHardwarePackSetup(pack)}
-                      disabled={!canCreateProducts || addingTemplates}
-                      className="inline-flex h-9 items-center justify-center rounded-full border border-primary/30 bg-primary-soft px-4 text-xs font-semibold text-primary shadow-sm hover:bg-primary/15 hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      এই সেটআপ নিন
-                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <div
+                id="hardware-starter-pack-section"
+                className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3 animate-fade-in"
+              >
+                {hardwareStarterPacks.map((pack) => (
+                  <div
+                    key={pack.id}
+                    className={`rounded-2xl border border-border/70 bg-gradient-to-br ${pack.accent} p-4 shadow-[0_6px_18px_rgba(15,23,42,0.05)]`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h4 className="text-base font-bold text-foreground">
+                          {pack.title}
+                        </h4>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          {pack.subtitle}
+                        </p>
+                      </div>
+                      <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-foreground">
+                        {pack.productCount.toLocaleString("bn-BD")}টি পণ্য
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <span className="inline-flex items-center rounded-full border border-border bg-white/75 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {pack.variantCount.toLocaleString("bn-BD")}টি ভ্যারিয়েন্ট
+                      </span>
+                      {pack.sampleNames.map((name) => (
+                        <span
+                          key={`${pack.id}:${name}`}
+                          className="inline-flex items-center rounded-full border border-border bg-white/75 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between gap-2">
+                      <p className="text-[11px] text-muted-foreground">
+                        আগে preview, তারপর stock/cost setup
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => startHardwarePackSetup(pack)}
+                        disabled={!canCreateProducts || addingTemplates}
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-primary/30 bg-primary-soft px-4 text-xs font-semibold text-primary shadow-sm hover:bg-primary/15 hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        এই সেটআপ নিন
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2276,23 +2371,38 @@ export default function ProductsListClient({
           <div className="relative">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2.5 py-1 text-[11px] font-semibold text-primary">
+                  ২. টেমপ্লেট
+                </span>
+                <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                  bulk add + setup
+                </span>
+              </div>
               <h3 className="text-sm font-semibold text-foreground truncate sm:text-base">
                 {businessLabel} এর কমন পণ্য
               </h3>
               <p className="mt-0.5 text-[11px] text-muted-foreground leading-tight sm:text-xs sm:leading-relaxed">
                 একসাথে অনেক পণ্য যোগ করুন। চাইলে স্টক আর ক্রয়মূল্য সেট করেই যোগ করতে পারবেন।
               </p>
-              {selectedTemplateIds.length > 0 && (
-                <span className="mt-1 inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
-                  {selectedTemplateIds.length} টি বাছাই
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {selectedTemplateIds.length > 0 && (
+                  <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                    {selectedTemplateIds.length.toLocaleString("bn-BD")}টি বাছাই
+                  </span>
+                )}
+                <span className="inline-flex items-center rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+                  setup review করুন
                 </span>
-              )}
+              </div>
             </div>
             <button
               type="button"
               aria-expanded={templateOpen}
               aria-controls="product-template-section"
-              onClick={() => setTemplateOpen((prev) => !prev)}
+              onClick={() =>
+                setOnboardingSection(templateOpen ? null : "template")
+              }
               className="inline-flex h-8 items-center gap-2 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground shadow-sm transition hover:bg-muted hover:border-primary/30"
             >
               {templateOpen ? "লুকান" : "দেখান"}
@@ -2313,7 +2423,27 @@ export default function ProductsListClient({
             </button>
           </div>
 
-          {templateOpen && (
+          {!templateOpen ? (
+            <div className="mt-3 rounded-xl border border-border/70 bg-background/70 px-4 py-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  bulk product add করতে চাইলে template section ব্যবহার করুন। stock আর
+                  ক্রয়মূল্য সেট করেও যোগ করা যাবে।
+                </p>
+                <div className="flex flex-wrap gap-2 text-[11px] font-medium text-muted-foreground">
+                  <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
+                    {templateItems.length.toLocaleString("bn-BD")}টি template
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
+                    {templateVariantCount.toLocaleString("bn-BD")}টি ভ্যারিয়েন্ট
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
+                    {templateCategoryCount.toLocaleString("bn-BD")}টি ক্যাটাগরি
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
             <div id="product-template-section" className="mt-3 space-y-2 animate-fade-in">
               <div className="rounded-xl border border-border/70 bg-background/80 p-2.5 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -2554,23 +2684,38 @@ export default function ProductsListClient({
         <div className="relative">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2.5 py-1 text-[11px] font-semibold text-primary">
+                ৩. ক্যাটালগ
+              </span>
+              <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                extra product library
+              </span>
+            </div>
             <h3 className="text-sm font-semibold text-foreground truncate sm:text-base">
               Catalog থেকে যোগ করুন
             </h3>
             <p className="mt-0.5 text-[11px] text-muted-foreground leading-tight sm:text-xs sm:leading-relaxed">
               নাম বা বারকোড খুঁজে প্রস্তুত catalog item shop-এ যোগ করুন।
             </p>
-            {selectedCatalogIds.length > 0 && (
-              <span className="mt-1 inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
-                {selectedCatalogIds.length} টি বাছাই
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {selectedCatalogIds.length > 0 && (
+                <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                  {selectedCatalogIds.length.toLocaleString("bn-BD")}টি বাছাই
+                </span>
+              )}
+              <span className="inline-flex items-center rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+                import-এর পর stock/cost দিন
               </span>
-            )}
+            </div>
           </div>
           <button
             type="button"
             aria-expanded={catalogOpen}
             aria-controls="product-catalog-section"
-            onClick={() => setCatalogOpen((prev) => !prev)}
+            onClick={() =>
+              setOnboardingSection(catalogOpen ? null : "catalog")
+            }
             className="inline-flex h-8 items-center gap-2 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground shadow-sm transition hover:bg-muted hover:border-primary/30"
           >
             {catalogOpen ? "লুকান" : "দেখান"}
@@ -2591,7 +2736,29 @@ export default function ProductsListClient({
           </button>
         </div>
 
-        {catalogOpen && (
+        {!catalogOpen ? (
+          <div className="mt-3 rounded-xl border border-border/70 bg-background/70 px-4 py-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                extra product library থেকে বেছে নিতে চাইলে catalog section খুলুন।
+                existing product না থাকলে search-driven import এখানেই পাবেন।
+              </p>
+              <div className="flex flex-wrap gap-2 text-[11px] font-medium text-muted-foreground">
+                <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
+                  {catalogCards.length.toLocaleString("bn-BD")}টি available
+                </span>
+                <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
+                  {selectedCatalogItems.length.toLocaleString("bn-BD")}টি বাছাই
+                </span>
+                {businessType === "hardware" ? (
+                  <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
+                    hardware filters ready
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : (
           <div
             id="product-catalog-section"
             ref={catalogSectionRef}
