@@ -1741,6 +1741,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
           ) : null}
         </div>
 
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-4">
         {/* Product Name */}
         {isFieldVisible("name") && (
           <div className="space-y-2">
@@ -2353,8 +2354,10 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
           ) : null}
           <p className="text-sm text-muted-foreground">নাম/ভয়েস থেকে ক্যাটাগরি অনুমান করার চেষ্টা করবে</p>
         </div>
+        </div>
 
         {/* Unit */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-4">
         {isFieldVisible("unit") && (
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-foreground">ইউনিট</label>
@@ -2418,49 +2421,25 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         )}
 
         {/* Stock toggle & qty */}
-        <div className="space-y-2">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input 
-              type="checkbox" 
-              checked={stockEnabled}
-              onChange={(e) => setStockEnabled(e.target.checked)}
-              className="w-5 h-5 border border-border rounded cursor-pointer"
-            />
-            <span className="text-sm font-semibold text-foreground">স্টক ট্র্যাক (অন/অফ)</span>
-          </label>
-          <div className="pt-2">
-            <input
-              name="stockQty"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={product.stockQty || "0"}
-              required={stockEnabled && stock.requiredWhenEnabled}
-              disabled={!stockEnabled}
-              className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
-              placeholder="যেমন: 10, 5.50"
-            />
-            {stockEnabled && (
-              <div className="space-y-1 pt-2">
-                <label className="block text-sm font-medium text-foreground">
-                  রিস্টক সীমা (ঐচ্ছিক)
-                </label>
-                <input
-                  name="reorderPoint"
-                  type="number"
-                  step="1"
-                  min="1"
-                  disabled={!stockEnabled}
-                  defaultValue={product.reorderPoint ?? ""}
-                  className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
-                  placeholder="যেমন: 50 — এর নিচে গেলে alert দেখাবে"
-                />
-                <p className="text-xs text-muted-foreground">
-                  খালি রাখলে report-এর global threshold ব্যবহার হবে
-                </p>
-              </div>
-            )}
+        <div className={`rounded-xl border border-border/70 bg-muted/30 p-3 space-y-3 ${stockEnabled ? "" : "blur-[1px]"}`}>
+          <div className="flex items-center justify-between gap-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" checked={stockEnabled} onChange={(e) => setStockEnabled(e.target.checked)} className="h-5 w-5 border border-border rounded cursor-pointer" />
+              <span className="text-sm font-semibold text-foreground">স্টক ট্র্যাক</span>
+            </label>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${stockEnabled ? "bg-success-soft text-success border border-success/30" : "bg-muted text-muted-foreground border border-border"}`}>
+              {stockEnabled ? "চালু" : "বন্ধ"}
+            </span>
           </div>
+          <p className="text-xs text-muted-foreground">দোকানের ধরন দেখে ডিফল্ট অন/অফ সেট হয়; লাগলে বন্ধ করুন</p>
+          <input name="stockQty" type="number" step="0.01" min="0" defaultValue={product.stockQty || "0"} required={stockEnabled && stock.requiredWhenEnabled} disabled={!stockEnabled} className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground" placeholder="যেমন: 10, 5.50" />
+          {stockEnabled && (
+            <div className="space-y-1 pt-1">
+              <label className="block text-sm font-medium text-foreground">রিস্টক সীমা (ঐচ্ছিক)</label>
+              <input name="reorderPoint" type="number" step="1" min="1" disabled={!stockEnabled} defaultValue={product.reorderPoint ?? ""} className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground" placeholder="যেমন: 50 — এর নিচে গেলে alert দেখাবে" />
+              <p className="text-xs text-muted-foreground">খালি রাখলে report-এর global threshold ব্যবহার হবে</p>
+            </div>
+          )}
         </div>
 
         {/* Advanced */}
@@ -2477,6 +2456,8 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
           </details>
         )}
 
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3">
         {/* Active Status */}
         <div className="space-y-2">
           <label className="flex items-center gap-3 cursor-pointer">
@@ -2488,6 +2469,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             />
             <span className="text-sm font-semibold text-foreground">পণ্য সক্রিয় রাখুন</span>
           </label>
+          <p className="text-xs text-muted-foreground">অফ-স্টক হলে চাইলে বন্ধ করতে পারেন</p>
         </div>
 
         {/* Recent templates */}
@@ -2520,8 +2502,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
           </div>
         )}
 
+        </div>
         {/* Buttons */}
-        <div className="flex gap-3 pt-4">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <button
             type="submit"
             className="flex-1 h-14 sm:h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
