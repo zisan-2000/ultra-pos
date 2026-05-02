@@ -35,6 +35,14 @@ import {
   startDualLanguageVoice,
   type VoiceSession,
 } from "@/lib/voice-recognition";
+import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Props = {
   product: any;
@@ -412,6 +420,12 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [catalogQuery, setCatalogQuery] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [customCategoryOpen, setCustomCategoryOpen] = useState(false);
+  const [customCategoryDraft, setCustomCategoryDraft] = useState("");
+  const [customUnitOpen, setCustomUnitOpen] = useState(false);
+  const [customUnitDraft, setCustomUnitDraft] = useState("");
   const [catalogItems, setCatalogItems] = useState<CatalogSearchItem[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -742,35 +756,40 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     };
   }, [product.trackStock, stock.enabledByDefault, businessType]);
 
-  function handleAddCustomCategory() {
-    const input = prompt("নতুন ক্যাটাগরি যোগ করুন");
-    if (!input) return;
-    const value = input.toString().trim();
-    if (!value) return;
+  useEffect(() => { setIsMounted(true); }, []);
 
+  function handleAddCustomCategory() {
+    setCustomCategoryOpen(true);
+    setCustomCategoryDraft("");
+  }
+
+  function confirmCustomCategory() {
+    const value = customCategoryDraft.trim();
+    if (!value) return;
     const merged = Array.from(new Set([...categoryOptions, value]));
     setCategoryOptions(merged);
     setSelectedCategory(value);
-
     const customOnly = merged.filter((c) => !baseCategories.includes(c));
-    safeLocalStorageSet(
-      `customCategories:${shopId}`,
-      JSON.stringify(customOnly)
-    );
+    safeLocalStorageSet(`customCategories:${shopId}`, JSON.stringify(customOnly));
+    setCustomCategoryOpen(false);
+    setCustomCategoryDraft("");
   }
 
   function handleAddCustomUnit() {
-    const input = prompt("নতুন ইউনিট লিখুন");
-    if (!input) return;
-    const value = input.toString().trim().toLowerCase();
-    if (!value) return;
+    setCustomUnitOpen(true);
+    setCustomUnitDraft("");
+  }
 
+  function confirmCustomUnit() {
+    const value = customUnitDraft.trim().toLowerCase();
+    if (!value) return;
     const merged = Array.from(new Set([...unitOptions, value]));
     setUnitOptions(merged);
     setSelectedUnit(value);
-
     const customOnly = merged.filter((u) => !configUnits.includes(u));
     safeLocalStorageSet(`customUnits:${shopId}`, JSON.stringify(customOnly));
+    setCustomUnitOpen(false);
+    setCustomUnitDraft("");
   }
 
   function setNameWithSmartDefaults(raw: string) {
@@ -1421,6 +1440,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
   async function handleSubmit(e: any) {
     e.preventDefault();
+    setSubmitted(true);
 
     const form = new FormData(e.target);
 
@@ -1479,13 +1499,13 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       : [];
 
     if (variantModeEnabled && resolvedVariants.length === 0) {
-      alert("ভ্যারিয়েন্ট চালু থাকলে অন্তত ১টি label + price দিন।");
+      toast.error("ভ্যারিয়েন্ট চালু থাকলে অন্তত ১টি label + price দিন।");
       return;
     }
     const resolvedSellPrice =
       requestedSellPrice || resolvedVariants[0]?.sellPrice || "";
     if (!resolvedSellPrice) {
-      alert("বিক্রয় মূল্য দিন।");
+      toast.error("বিক্রয় মূল্য দিন।");
       return;
     }
 
@@ -1535,13 +1555,13 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
     if (online) {
       await updateProduct(product.id, payload);
-      alert("পণ্য সফলভাবে আপডেট হয়েছে");
+      toast.success("পণ্য সফলভাবে আপডেট হয়েছে");
     } else {
       await db.transaction("rw", db.products, db.queue, async () => {
         await db.products.put(payload);
         await queueAdd("product", "update", payload);
       });
-      alert("পণ্য অফলাইনে আপডেট; অনলাইনে হলে সিঙ্ক হবে");
+      toast.success("পণ্য অফলাইনে আপডেট; অনলাইনে হলে সিঙ্ক হবে");
     }
 
     router.push(`/dashboard/products?shopId=${shopId}`);
@@ -1550,13 +1570,28 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">পণ্য তথ্য সম্পাদনা</h1>
-        <p className="text-muted-foreground mt-2">ভয়েস + অটো সাজেশন দিয়ে দ্রুত আপডেট</p>
-        <p className="text-sm text-muted-foreground mt-1">দোকান: {shop.name}</p>
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-card to-card" />
+        <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
+        <div className="relative space-y-3 p-4">
+          <div className="min-w-0 space-y-1">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">পণ্য</p>
+            <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">পণ্য তথ্য সম্পাদনা</h1>
+            <p className="text-sm text-muted-foreground">ভয়েস + অটো সাজেশন দিয়ে দ্রুত আপডেট</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+              দোকান: <span className="truncate font-semibold text-foreground">{shop.name}</span>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">ভয়েস ইনপুট</span>
+            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">স্মার্ট সাজেশন</span>
+            <span className={`inline-flex h-7 items-center gap-1 rounded-full px-3 font-semibold border ${online ? "bg-success-soft text-success border-success/30" : "bg-danger-soft text-danger border-danger/30"}`}>
+              {online ? "অনলাইন" : "অফলাইন"}
+            </span>
+          </div>
+        </div>
       </div>
-
-      <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card p-4 sm:p-6 space-y-4 shadow-sm">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -1896,7 +1931,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                               upsertVariant(index, { label: e.target.value })
                             }
                             placeholder="Label (যেমন: Small, 500ml)"
-                            className="h-9 min-w-0 w-full rounded-lg border border-border bg-card px-3 text-sm"
+                            className={`h-9 min-w-0 w-full rounded-lg border ${submitted && !variant.label.trim() ? "border-danger/50 bg-danger-soft/20 focus:ring-danger/20" : "border-border bg-card"} px-3 text-sm`}
                           />
                         </label>
                         <label className="space-y-1">
@@ -1912,7 +1947,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                               upsertVariant(index, { buyPrice: e.target.value })
                             }
                             placeholder="ক্রয়"
-                            className="h-9 w-full min-w-0 rounded-lg border border-border bg-card px-3 text-sm"
+                            className={`h-9 w-full min-w-0 rounded-lg border ${submitted && !variant.sellPrice.trim() ? "border-danger/50 bg-danger-soft/20" : "border-border bg-card"} px-3 text-sm`}
                           />
                         </label>
                         <label className="space-y-1">
@@ -2256,27 +2291,48 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         {/* Category */}
         <div className="space-y-2">
           <label className="block text-sm font-semibold text-foreground">ক্যাটাগরি</label>
-          <div className="flex gap-3">
-            <select
-              name="category"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">ক্যাটাগরি বাছাই করুন</option>
-              {categoryOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={handleAddCustomCategory}
-              className="shrink-0 h-11 px-4 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors"
-            >
-              + কাস্টম যোগ করুন
-            </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {isMounted ? (
+              <div className="w-full">
+                <input type="hidden" name="category" value={selectedCategory} />
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="h-11 w-full rounded-xl border border-border bg-card px-4 text-left text-base text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                    <SelectValue placeholder="ক্যাটাগরি বাছাই করুন" />
+                  </SelectTrigger>
+                  <SelectContent align="start" className="min-w-[var(--radix-select-trigger-width)]">
+                    {categoryOptions.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <select name="category" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="">ক্যাটাগরি বাছাই করুন</option>
+                {categoryOptions.map((c) => (<option key={c} value={c}>{c}</option>))}
+              </select>
+            )}
+            {customCategoryOpen ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  autoFocus
+                  value={customCategoryDraft}
+                  onChange={(e) => setCustomCategoryDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmCustomCategory(); } if (e.key === "Escape") { setCustomCategoryOpen(false); } }}
+                  placeholder="নতুন ক্যাটাগরির নাম"
+                  className="h-11 flex-1 min-w-0 rounded-xl border border-primary/30 bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <button type="button" onClick={confirmCustomCategory} className="shrink-0 h-11 px-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary-hover">যোগ</button>
+                <button type="button" onClick={() => { setCustomCategoryOpen(false); setCustomCategoryDraft(""); }} className="shrink-0 h-11 px-3 rounded-xl border border-border text-sm text-foreground hover:bg-muted">✕</button>
+              </div>
+            ) : (
+              <button type="button" onClick={handleAddCustomCategory}
+                className="shrink-0 h-11 px-4 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors">
+                + কাস্টম যোগ করুন
+              </button>
+            )}
           </div>
           {businessAssist?.categoryChips?.length ? (
             <div className="flex flex-wrap gap-2">
@@ -2303,28 +2359,49 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-foreground">ইউনিট</label>
             <div className="flex gap-3">
-              <select
-                name="baseUnit"
-                value={selectedUnit}
-                onChange={(e) => setSelectedUnit(e.target.value)}
-                required={isFieldRequired("unit")}
-                className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                {unitOptions.map((u) => (
-                  <option key={u} value={u}>
-                    {unitLabels[u as keyof typeof unitLabels] || u}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={handleAddCustomUnit}
-                className="shrink-0 h-11 px-4 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors"
-              >
-                + কাস্টম যোগ করুন
-              </button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {isMounted ? (
+                <div className="w-full">
+                  <input type="hidden" name="baseUnit" value={selectedUnit} />
+                  <Select value={selectedUnit} onValueChange={setSelectedUnit}>
+                    <SelectTrigger className="h-11 w-full rounded-xl border border-border bg-card px-4 text-left text-base text-foreground shadow-sm focus:ring-2 focus:ring-primary/30">
+                      <SelectValue placeholder="ইউনিট বাছাই করুন" />
+                    </SelectTrigger>
+                    <SelectContent align="start" className="min-w-[var(--radix-select-trigger-width)]">
+                      {unitOptions.map((u) => (
+                        <SelectItem key={u} value={u}>{unitLabels[u as keyof typeof unitLabels] || u}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <select name="baseUnit" value={selectedUnit} onChange={(e) => setSelectedUnit(e.target.value)}
+                  required={isFieldRequired("unit")}
+                  className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                  {unitOptions.map((u) => (<option key={u} value={u}>{unitLabels[u as keyof typeof unitLabels] || u}</option>))}
+                </select>
+              )}
+              {customUnitOpen ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={customUnitDraft}
+                    onChange={(e) => setCustomUnitDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmCustomUnit(); } if (e.key === "Escape") { setCustomUnitOpen(false); } }}
+                    placeholder="নতুন ইউনিট (যেমন: kg, ltr)"
+                    className="h-11 flex-1 min-w-0 rounded-xl border border-primary/30 bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <button type="button" onClick={confirmCustomUnit} className="shrink-0 h-11 px-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary-hover">যোগ</button>
+                  <button type="button" onClick={() => { setCustomUnitOpen(false); setCustomUnitDraft(""); }} className="shrink-0 h-11 px-3 rounded-xl border border-border text-sm text-foreground hover:bg-muted">✕</button>
+                </div>
+              ) : (
+                <button type="button" onClick={handleAddCustomUnit}
+                  className="shrink-0 h-11 px-4 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors">
+                  + কাস্টম যোগ করুন
+                </button>
+              )}
             </div>
-            <div className="flex flex-wrap gap-2">
               {unitOptions.slice(0, 5).map((u) => (
                 <button
                   key={u}
