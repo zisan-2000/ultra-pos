@@ -82,7 +82,9 @@ type TemplateProduct = {
   brand?: string | null;
   category: string | null;
   packSize?: string | null;
+  defaultBuyPrice?: string | null;
   defaultSellPrice: string | null;
+  defaultOpeningStock?: string | null;
   defaultBarcode?: string | null;
   defaultBaseUnit?: string | null;
   defaultTrackStock?: boolean;
@@ -92,12 +94,34 @@ type TemplateProduct = {
   imageUrl?: string | null;
   variants?: Array<{
     label: string;
+    buyPrice?: string | number | null;
     sellPrice: string | number;
+    openingStock?: string | number | null;
     sku?: string | null;
     barcode?: string | null;
     sortOrder?: number;
     isActive?: boolean;
   }>;
+};
+
+type TemplateSetupVariantDraft = {
+  label: string;
+  buyPrice: string;
+  openingStock: string;
+  sellPrice: string;
+  isActive: boolean;
+};
+
+type TemplateSetupDraft = {
+  templateId: string;
+  name: string;
+  category: string | null;
+  baseUnit: string;
+  trackStock: boolean;
+  hasVariants: boolean;
+  buyPrice: string;
+  openingStock: string;
+  variants: TemplateSetupVariantDraft[];
 };
 
 type CatalogProduct = {
@@ -152,6 +176,7 @@ type VoiceSearchMode = "bn" | "en";
 type Props = {
   shops: Shop[];
   activeShopId: string;
+  businessType?: string | null;
   businessLabel: string;
   templateProducts: TemplateProduct[];
   canCreateProducts: boolean;
@@ -167,6 +192,26 @@ type Props = {
   initialStatus: ProductStatusFilter;
 };
 
+type HardwareStarterPack = {
+  id: string;
+  title: string;
+  subtitle: string;
+  accent: string;
+  templateIds: string[];
+  sampleNames: string[];
+  productCount: number;
+  variantCount: number;
+};
+
+type CatalogSegmentId =
+  | "all"
+  | "cement_building"
+  | "rod_steel"
+  | "pipe_fittings"
+  | "electrical"
+  | "paint_chemical"
+  | "structural";
+
 const MAX_PAGE_BUTTONS = 5;
 const OFFLINE_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -178,6 +223,19 @@ const UNTRACKED_STOCK_CLASSES = {
   card: "border-border bg-muted/40",
   label: "text-muted-foreground",
 };
+
+const HARDWARE_CATALOG_FILTERS: Array<{
+  id: CatalogSegmentId;
+  label: string;
+}> = [
+  { id: "all", label: "সব" },
+  { id: "cement_building", label: "সিমেন্ট/বিল্ডিং" },
+  { id: "rod_steel", label: "রড/স্টিল" },
+  { id: "pipe_fittings", label: "পাইপ/ফিটিংস" },
+  { id: "electrical", label: "ইলেকট্রিক্যাল" },
+  { id: "paint_chemical", label: "রং/কেমিক্যাল" },
+  { id: "structural", label: "স্ট্রাকচারাল" },
+];
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -354,6 +412,168 @@ function formatTemplatePrice(value: string | number | null | undefined) {
   });
 }
 
+function buildTemplateSetupDraft(template: TemplateProduct): TemplateSetupDraft {
+  const activeVariants = Array.isArray(template.variants)
+    ? template.variants
+        .filter((variant) => variant?.isActive !== false)
+        .sort(
+          (left, right) =>
+            (Number(left.sortOrder ?? 0) || 0) - (Number(right.sortOrder ?? 0) || 0)
+        )
+    : [];
+
+  return {
+    templateId: template.id,
+    name: template.name,
+    category: template.category ?? null,
+    baseUnit: template.defaultBaseUnit || "pcs",
+    trackStock: template.defaultTrackStock === true,
+    hasVariants: activeVariants.length > 0,
+    buyPrice: template.defaultBuyPrice?.toString?.() ?? "",
+    openingStock: template.defaultOpeningStock?.toString?.() ?? "",
+    variants: activeVariants.map((variant) => ({
+      label: String(variant.label || "").trim(),
+      buyPrice: variant.buyPrice?.toString?.() ?? "",
+      openingStock: variant.openingStock?.toString?.() ?? "",
+      sellPrice: variant.sellPrice?.toString?.() ?? "",
+      isActive: variant.isActive !== false,
+    })),
+  };
+}
+
+function matchesHardwarePack(
+  template: TemplateProduct,
+  packId: string,
+) {
+  const category = String(template.category || "").toLowerCase();
+  const name = String(template.name || "").toLowerCase();
+  const keywords = Array.isArray(template.keywords)
+    ? template.keywords.map((item) => String(item || "").toLowerCase())
+    : [];
+  const haystack = [category, name, ...keywords].join(" ");
+
+  switch (packId) {
+    case "cement_building":
+      return /সিমেন্ট|building|cement|বালু|খোয়া|khoa|stone|aggregate|brick|ইট|tile|টাইল/.test(
+        haystack,
+      );
+    case "rod_steel":
+      return /rod|রড|steel|স্টিল|angle|এঙ্গেল|channel|চ্যানেল|binding wire|ওয়্যার|wire/.test(
+        haystack,
+      );
+    case "pipe_fittings":
+      return /পাইপ|pipe|fitting|fittings|elbow|এলবো|tee|ভাল্ব|valve|tank|ট্যাংক/.test(
+        haystack,
+      );
+    case "electrical":
+      return /ইলেকট্রিক|electrical|switch|socket|mcb|breaker|wire|তার/.test(
+        haystack,
+      );
+    case "paint_chemical":
+      return /রং|paint|chemical|কেমিক্যাল/.test(haystack);
+    case "full_hardware":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function getBaseUnitLabel(raw?: string | null) {
+  const normalized = String(raw || "pcs").trim().toLowerCase();
+  const dictionary: Record<string, string> = {
+    pcs: "পিস",
+    pc: "পিস",
+    piece: "পিস",
+    pieces: "পিস",
+    bag: "ব্যাগ",
+    kg: "কেজি",
+    g: "গ্রাম",
+    gm: "গ্রাম",
+    liter: "লিটার",
+    litre: "লিটার",
+    ml: "মিলি",
+    ft: "ফুট",
+    feet: "ফুট",
+    inch: "ইঞ্চি",
+    box: "বক্স",
+    bundle: "বান্ডিল",
+    coil: "কয়েল",
+    roll: "রোল",
+    packet: "প্যাকেট",
+    pack: "প্যাক",
+  };
+  return dictionary[normalized] ?? normalized.toUpperCase();
+}
+
+function getCatalogSegment(item: CatalogProduct): CatalogSegmentId {
+  const haystack = [
+    item.name,
+    item.category,
+    item.brand,
+    item.packSize,
+    ...(item.aliases?.map((alias) => alias.alias) ?? []),
+  ]
+    .map((value) => String(value || "").toLowerCase())
+    .join(" ");
+
+  if (
+    /cement|সিমেন্ট|building|ইট|brick|block|sand|বালু|stone|aggregate|tile|টাইল/.test(
+      haystack,
+    )
+  ) {
+    return "cement_building";
+  }
+  if (/rod|রড|steel|স্টিল|angle|channel|beam|girder|binding wire|ms /.test(haystack)) {
+    return "rod_steel";
+  }
+  if (/pipe|পাইপ|fitting|elbow|socket|tee|valve|tap|tank|pvc|cpvc|u?pc/.test(haystack)) {
+    return "pipe_fittings";
+  }
+  if (/switch|socket|wire|cable|mcb|breaker|bulb|light|electrical|ইলেকট্রিক/.test(haystack)) {
+    return "electrical";
+  }
+  if (/paint|রং|chemical|thinner|primer|putty|adhesive|epoxy/.test(haystack)) {
+    return "paint_chemical";
+  }
+  if (/sheet|channel|angle|flat bar|pipe|steel|rod|girder|beam/.test(haystack)) {
+    return "structural";
+  }
+  return "all";
+}
+
+function getCatalogPrimaryBadge(item: CatalogProduct) {
+  const hasPrice =
+    Number.isFinite(Number(item.latestPrice ?? 0)) &&
+    Number(item.latestPrice ?? 0) > 0;
+  if (!hasPrice) {
+    return {
+      label: "বিক্রয়মূল্য দিন",
+      className: "border-warning/30 bg-warning/10 text-warning",
+    };
+  }
+  return {
+    label: `দাম ৳ ${formatTemplatePrice(item.latestPrice)}`,
+    className: "border-primary/20 bg-primary-soft text-primary",
+  };
+}
+
+function getCatalogSecondaryBadges(item: CatalogProduct) {
+  const badges: Array<{ label: string; className: string }> = [];
+  if ((item.barcodes?.length ?? 0) > 0) {
+    badges.push({
+      label: `${item.barcodes!.length.toLocaleString("bn-BD")}টি বারকোড`,
+      className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    });
+  }
+  if ((item.aliases?.length ?? 0) > 0) {
+    badges.push({
+      label: `${item.aliases!.length.toLocaleString("bn-BD")}টি বিকল্প নাম`,
+      className: "border-border bg-muted/40 text-muted-foreground",
+    });
+  }
+  return badges;
+}
+
 function emptyMetrics(): ProductCardMetrics {
   return {
     soldQtyToday: "0.00",
@@ -378,6 +598,7 @@ function getProductMetrics(product?: Product | null): ProductCardMetrics {
 export default function ProductsListClient({
   shops,
   activeShopId,
+  businessType,
   businessLabel,
   templateProducts,
   canCreateProducts,
@@ -429,8 +650,11 @@ export default function ProductsListClient({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(serverProducts.length === 0);
   const [templateSelections, setTemplateSelections] = useState<Record<string, boolean>>({});
+  const [templateSetupOpen, setTemplateSetupOpen] = useState(false);
+  const [templateSetupDrafts, setTemplateSetupDrafts] = useState<TemplateSetupDraft[]>([]);
   const [addingTemplates, setAddingTemplates] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(serverProducts.length === 0);
+  const [catalogSegment, setCatalogSegment] = useState<CatalogSegmentId>("all");
   const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogItems, setCatalogItems] = useState<CatalogProduct[]>([]);
   const [catalogSelections, setCatalogSelections] = useState<Record<string, boolean>>({});
@@ -473,7 +697,10 @@ export default function ProductsListClient({
 
   useEffect(() => {
     setTemplateSelections({});
+    setTemplateSetupDrafts([]);
+    setTemplateSetupOpen(false);
     setCatalogSelections({});
+    setCatalogSegment("all");
     setCatalogQuery("");
     setCatalogError(null);
   }, [activeShopId, templateProducts]);
@@ -511,7 +738,7 @@ export default function ProductsListClient({
         const rows = await searchCatalogProductsForShop({
           shopId: activeShopId,
           query: debouncedCatalogQuery.trim() || undefined,
-          limit: 24,
+          limit: businessType === "hardware" ? 48 : 24,
         });
         if (cancelled) return;
         setCatalogItems(Array.isArray(rows) ? rows : []);
@@ -532,7 +759,7 @@ export default function ProductsListClient({
     return () => {
       cancelled = true;
     };
-  }, [activeShopId, catalogOpen, debouncedCatalogQuery, online]);
+  }, [activeShopId, businessType, catalogOpen, debouncedCatalogQuery, online]);
 
   useEffect(() => {
     if (online) {
@@ -806,6 +1033,75 @@ export default function ProductsListClient({
     [templateItems, templateSelections]
   );
 
+  const hardwareStarterPacks = useMemo<HardwareStarterPack[]>(() => {
+    if (String(businessType || "").trim().toLowerCase() !== "hardware") return [];
+
+    const definitions = [
+      {
+        id: "cement_building",
+        title: "সিমেন্ট ও বিল্ডিং",
+        subtitle: "সিমেন্ট, ইট, বালু, টাইলস ধরনের শুরু সেটআপ",
+        accent: "from-amber-100 via-orange-50 to-white",
+      },
+      {
+        id: "rod_steel",
+        title: "রড ও স্টিল",
+        subtitle: "রড, এঙ্গেল, চ্যানেল, বাইন্ডিং ওয়্যার",
+        accent: "from-slate-100 via-zinc-50 to-white",
+      },
+      {
+        id: "pipe_fittings",
+        title: "পাইপ ও ফিটিংস",
+        subtitle: "PVC/MS pipe, elbow, tee, valve, tank",
+        accent: "from-sky-100 via-cyan-50 to-white",
+      },
+      {
+        id: "electrical",
+        title: "ইলেকট্রিক্যাল",
+        subtitle: "switch, socket, breaker, wire",
+        accent: "from-yellow-100 via-lime-50 to-white",
+      },
+      {
+        id: "paint_chemical",
+        title: "রং ও কেমিক্যাল",
+        subtitle: "paint, thinner, finishing ধরনের common items",
+        accent: "from-emerald-100 via-teal-50 to-white",
+      },
+      {
+        id: "full_hardware",
+        title: "ফুল হার্ডওয়্যার স্টার্টার",
+        subtitle: "জনপ্রিয় সব hardware template একসাথে",
+        accent: "from-primary/15 via-primary/5 to-white",
+      },
+    ] as const;
+
+    const packs: HardwareStarterPack[] = [];
+    for (const definition of definitions) {
+        const packTemplates = templateItems.filter((template) =>
+          matchesHardwarePack(template, definition.id)
+        );
+        if (packTemplates.length === 0) continue;
+        packs.push({
+          id: definition.id,
+          title: definition.title,
+          subtitle: definition.subtitle,
+          accent: definition.accent,
+          templateIds: packTemplates.map((template) => template.id),
+          sampleNames: packTemplates.slice(0, 4).map((template) => template.name),
+          productCount: packTemplates.length,
+          variantCount: packTemplates.reduce(
+            (sum, template) =>
+              sum +
+              (Array.isArray(template.variants)
+                ? template.variants.filter((variant) => variant?.isActive !== false).length
+                : 0),
+            0
+          ),
+        });
+    }
+    return packs;
+  }, [businessType, templateItems]);
+
   const catalogCards = useMemo(() => {
     if (!catalogItems.length) return [];
     const seen = new Set<string>();
@@ -822,9 +1118,17 @@ export default function ProductsListClient({
       }));
   }, [catalogItems, normalizedExistingNames]);
 
+  const visibleCatalogCards = useMemo(() => {
+    if (catalogSegment === "all") return catalogCards;
+    return catalogCards.filter((item) => getCatalogSegment(item) === catalogSegment);
+  }, [catalogCards, catalogSegment]);
+
   const selectableCatalogIds = useMemo(
-    () => catalogCards.filter((item) => !item.alreadyExists).map((item) => item.id),
-    [catalogCards],
+    () =>
+      visibleCatalogCards
+        .filter((item) => !item.alreadyExists)
+        .map((item) => item.id),
+    [visibleCatalogCards],
   );
 
   const selectedCatalogIds = useMemo(
@@ -835,6 +1139,11 @@ export default function ProductsListClient({
   const selectedCatalogItems = useMemo(
     () => catalogCards.filter((item) => catalogSelections[item.id]),
     [catalogCards, catalogSelections],
+  );
+
+  const selectedVisibleCatalogCount = useMemo(
+    () => visibleCatalogCards.filter((item) => catalogSelections[item.id]).length,
+    [visibleCatalogCards, catalogSelections],
   );
 
   const filteredProducts = useMemo(() => {
@@ -998,6 +1307,64 @@ export default function ProductsListClient({
     setTemplateSelections({});
   }
 
+  function startHardwarePackSetup(pack: HardwareStarterPack) {
+    const selected = templateItems.filter(
+      (template) =>
+        pack.templateIds.includes(template.id) && !template.alreadyExists
+    );
+    if (selected.length === 0) {
+      alert("এই starter pack-এর সব পণ্য আগেই আছে।");
+      return;
+    }
+    const nextSelections: Record<string, boolean> = {};
+    selected.forEach((template) => {
+      nextSelections[template.id] = true;
+    });
+    setTemplateSelections(nextSelections);
+    setTemplateSetupDrafts(selected.map(buildTemplateSetupDraft));
+    setTemplateSetupOpen(true);
+  }
+
+  function openTemplateSetup() {
+    const selected = selectedTemplates.filter((template) => !template.alreadyExists);
+    if (selected.length === 0) {
+      alert("অন্তত একটি টেমপ্লেট বেছে নিন।");
+      return;
+    }
+    setTemplateSetupDrafts(selected.map(buildTemplateSetupDraft));
+    setTemplateSetupOpen(true);
+  }
+
+  function updateTemplateSetupDraft(
+    templateId: string,
+    patch: Partial<TemplateSetupDraft>,
+  ) {
+    setTemplateSetupDrafts((prev) =>
+      prev.map((draft) =>
+        draft.templateId === templateId ? { ...draft, ...patch } : draft
+      )
+    );
+  }
+
+  function updateTemplateSetupVariant(
+    templateId: string,
+    label: string,
+    patch: Partial<TemplateSetupVariantDraft>,
+  ) {
+    setTemplateSetupDrafts((prev) =>
+      prev.map((draft) =>
+        draft.templateId !== templateId
+          ? draft
+          : {
+              ...draft,
+              variants: draft.variants.map((variant) =>
+                variant.label === label ? { ...variant, ...patch } : variant
+              ),
+            }
+      )
+    );
+  }
+
   function toggleCatalogSelection(id: string, checked: boolean) {
     setCatalogSelections((prev) => ({ ...prev, [id]: checked }));
   }
@@ -1018,18 +1385,43 @@ export default function ProductsListClient({
     setCatalogSelections({});
   }
 
-  async function handleAddTemplates() {
+  async function handleAddTemplates(mode: "configured" | "plain" = "configured") {
     if (!canCreateProducts) {
       alert("পণ্য যোগ করার অনুমতি নেই।");
       return;
     }
     if (addingTemplates) return;
 
-    const selected = selectedTemplates.filter((template) => !template.alreadyExists);
+    const selected =
+      mode === "configured"
+        ? templateItems.filter((template) =>
+            templateSetupDrafts.some((draft) => draft.templateId === template.id)
+          )
+        : selectedTemplates.filter((template) => !template.alreadyExists);
     if (selected.length === 0) {
       alert("অন্তত একটি আইটেম বেছে নিন।");
       return;
     }
+
+    const setupMap = new Map(
+      templateSetupDrafts.map((draft) => [
+        draft.templateId,
+        {
+          templateId: draft.templateId,
+          buyPrice: draft.hasVariants ? null : draft.buyPrice.trim() || null,
+          openingStock: draft.hasVariants
+            ? null
+            : draft.openingStock.trim() || null,
+          variants: draft.hasVariants
+            ? draft.variants.map((variant) => ({
+                label: variant.label,
+                buyPrice: variant.buyPrice.trim() || null,
+                openingStock: variant.openingStock.trim() || null,
+              }))
+            : [],
+        },
+      ])
+    );
 
     setAddingTemplates(true);
     triggerHaptic("medium");
@@ -1039,12 +1431,15 @@ export default function ProductsListClient({
         const result = await addBusinessProductTemplatesToShop({
           shopId: activeShopId,
           templateIds: selected.map((template) => template.id),
+          setups: mode === "configured" ? Array.from(setupMap.values()) : [],
         });
         const createdCount = result?.createdCount ?? 0;
         const skippedCount = result?.skippedCount ?? 0;
         const inactiveCount = result?.inactiveCount ?? 0;
 
         setTemplateSelections({});
+        setTemplateSetupDrafts([]);
+        setTemplateSetupOpen(false);
         router.refresh();
 
         const parts = [`${createdCount}টি পণ্য যোগ হয়েছে`];
@@ -1067,6 +1462,10 @@ export default function ProductsListClient({
       );
 
         for (const template of selected) {
+          const draft = setupMap.get(template.id);
+          const draftSource = templateSetupDrafts.find(
+            (row) => row.templateId === template.id
+          );
           const key = normalizeText(template.name);
           if (!key || existingNames.has(key)) {
             skipped += 1;
@@ -1092,7 +1491,17 @@ export default function ProductsListClient({
             ? template.variants
                 .map((variant, index) => ({
                   label: String(variant.label || "").trim(),
+                  buyPrice:
+                    draft?.variants?.find((row) => row.label === String(variant.label || "").trim())
+                      ?.buyPrice ??
+                    variant.buyPrice?.toString?.() ??
+                    null,
                   sellPrice: String(variant.sellPrice ?? "0").trim() || "0",
+                  stockQty:
+                    draft?.variants?.find((row) => row.label === String(variant.label || "").trim())
+                      ?.openingStock ??
+                    variant.openingStock?.toString?.() ??
+                    "0",
                   sku: variant.sku ?? null,
                   barcode: variant.barcode ?? null,
                   sortOrder:
@@ -1122,9 +1531,17 @@ export default function ProductsListClient({
             sku: null,
             barcode: resolvedBarcode,
             baseUnit: template.defaultBaseUnit || "pcs",
-            buyPrice: null,
+            buyPrice:
+              draftSource?.hasVariants
+                ? null
+                : draftSource?.buyPrice?.trim() || template.defaultBuyPrice || null,
             sellPrice: defaultPrice || fallbackVariantPrice || "0",
-            stockQty: "0",
+            stockQty:
+              draftSource?.hasVariants
+                ? "0"
+                : draftSource?.openingStock?.trim() ||
+                  template.defaultOpeningStock ||
+                  "0",
             isActive: hasValidPrice,
             trackStock: template.defaultTrackStock === true,
             size: template.packSize ?? null,
@@ -1166,6 +1583,8 @@ export default function ProductsListClient({
       ]);
 
       setTemplateSelections({});
+      setTemplateSetupDrafts([]);
+      setTemplateSetupOpen(false);
       const parts = [`${localProducts.length}টি পণ্য অফলাইনে যোগ হয়েছে`];
       if (skipped) parts.push(`${skipped}টি বাদ গেছে`);
       if (inactiveCount)
@@ -1775,6 +2194,82 @@ export default function ProductsListClient({
         </div>
       </div>
 
+      {hardwareStarterPacks.length > 0 && (
+        <div className="relative overflow-hidden rounded-3xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.09),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.08),transparent_28%)]" />
+          <div className="relative space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                  দ্রুত শুরু
+                </p>
+                <h3 className="mt-1 text-lg font-bold text-foreground sm:text-xl">
+                  হার্ডওয়্যার দোকানের স্টার্টার প্যাক
+                </h3>
+                <p className="mt-1 max-w-2xl text-xs text-muted-foreground sm:text-sm">
+                  blank list থেকে শুরু না করে popular hardware set বেছে নিন। setup drawer-এ
+                  stock আর ক্রয়মূল্য দিয়েই operational-ready product list বানাতে পারবেন।
+                </p>
+              </div>
+              <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-[11px] font-semibold text-primary">
+                {hardwareStarterPacks.length.toLocaleString("bn-BD")}টি starter path
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
+              {hardwareStarterPacks.map((pack) => (
+                <div
+                  key={pack.id}
+                  className={`rounded-2xl border border-border/70 bg-gradient-to-br ${pack.accent} p-4 shadow-[0_6px_18px_rgba(15,23,42,0.05)]`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="text-base font-bold text-foreground">
+                        {pack.title}
+                      </h4>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        {pack.subtitle}
+                      </p>
+                    </div>
+                    <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-foreground">
+                      {pack.productCount.toLocaleString("bn-BD")}টি পণ্য
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    <span className="inline-flex items-center rounded-full border border-border bg-white/75 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {pack.variantCount.toLocaleString("bn-BD")}টি ভ্যারিয়েন্ট
+                    </span>
+                    {pack.sampleNames.map((name) => (
+                      <span
+                        key={`${pack.id}:${name}`}
+                        className="inline-flex items-center rounded-full border border-border bg-white/75 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                      >
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      আগে preview, তারপর stock/cost setup
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => startHardwarePackSetup(pack)}
+                      disabled={!canCreateProducts || addingTemplates}
+                      className="inline-flex h-9 items-center justify-center rounded-full border border-primary/30 bg-primary-soft px-4 text-xs font-semibold text-primary shadow-sm hover:bg-primary/15 hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      এই সেটআপ নিন
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {templateItems.length > 0 && (
         <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 via-card to-card" />
@@ -1785,7 +2280,7 @@ export default function ProductsListClient({
                 {businessLabel} এর কমন পণ্য
               </h3>
               <p className="mt-0.5 text-[11px] text-muted-foreground leading-tight sm:text-xs sm:leading-relaxed">
-                একসাথে অনেক পণ্য যোগ করুন। যেগুলোর দাম নেই সেগুলো নিষ্ক্রিয় থাকবে।
+                একসাথে অনেক পণ্য যোগ করুন। চাইলে স্টক আর ক্রয়মূল্য সেট করেই যোগ করতে পারবেন।
               </p>
               {selectedTemplateIds.length > 0 && (
                 <span className="mt-1 inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
@@ -1849,7 +2344,7 @@ export default function ProductsListClient({
                     )}
                     <button
                       type="button"
-                      onClick={handleAddTemplates}
+                      onClick={openTemplateSetup}
                       disabled={
                         !canCreateProducts ||
                         addingTemplates ||
@@ -1857,7 +2352,7 @@ export default function ProductsListClient({
                       }
                       className="inline-flex h-8 items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary-soft px-4 text-xs font-semibold text-primary shadow-sm hover:bg-primary/15 hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {addingTemplates ? "যোগ হচ্ছে..." : "বাছাইকৃত যোগ করুন"}
+                      {addingTemplates ? "যোগ হচ্ছে..." : "সেটআপ করে যোগ করুন"}
                     </button>
                   </div>
                 </div>
@@ -1952,6 +2447,9 @@ export default function ProductsListClient({
                               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                 <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                                   {template.category || "Uncategorized"}
+                                </span>
+                                <span className="inline-flex items-center rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+                                  সেটআপ লাগবে
                                 </span>
                                 {template.packSize ? (
                                   <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
@@ -2099,13 +2597,67 @@ export default function ProductsListClient({
             ref={catalogSectionRef}
             className="mt-3 space-y-3 animate-fade-in"
           >
-            <div className="rounded-xl border border-border/70 bg-background/80 p-2.5 space-y-2 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-sky-50 via-background to-primary-soft/30 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+              <div className="border-b border-border/60 px-3 py-3 sm:px-4">
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-[11px] font-semibold text-primary">
+                        হার্ডওয়্যার ক্যাটালগ
+                      </span>
+                      <h3 className="mt-2 text-base font-semibold text-foreground">
+                        লাইব্রেরি থেকে পণ্য বেছে দোকানে আনুন
+                      </h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        স্টার্টার প্যাকের বাইরে extra item লাগলে এখান থেকে বেছে নিন।
+                        যোগ হওয়ার পর স্টক ও ক্রয়মূল্য আলাদা করে পূরণ করতে পারবেন।
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[11px] font-medium text-muted-foreground">
+                      <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-2.5 py-1">
+                        দেখা যাচ্ছে {visibleCatalogCards.length.toLocaleString("bn-BD")}টি
+                      </span>
+                      <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-2.5 py-1">
+                        দেখা যাচ্ছে বাছাই {selectedVisibleCatalogCount.toLocaleString("bn-BD")}টি
+                      </span>
+                    </div>
+                  </div>
+
+                  {businessType === "hardware" ? (
+                    <div className="flex flex-wrap gap-2">
+                      {HARDWARE_CATALOG_FILTERS.map((filter) => {
+                        const active = catalogSegment === filter.id;
+                        return (
+                          <button
+                            key={filter.id}
+                            type="button"
+                            onClick={() => setCatalogSegment(filter.id)}
+                            className={`inline-flex h-8 items-center rounded-full border px-3 text-[11px] font-semibold transition ${
+                              active
+                                ? "border-primary/30 bg-primary-soft text-primary shadow-sm"
+                                : "border-border bg-background/80 text-muted-foreground hover:border-primary/20 hover:text-foreground"
+                            }`}
+                          >
+                            {filter.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="space-y-3 px-3 py-3 sm:px-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
                   type="search"
                   value={catalogQuery}
                   onChange={(event) => setCatalogQuery(event.target.value)}
-                  placeholder="নাম, ব্র্যান্ড, ক্যাটাগরি, বিকল্প নাম, বারকোড"
+                  placeholder={
+                    businessType === "hardware"
+                      ? "নাম, ব্র্যান্ড, ক্যাটাগরি, বিকল্প নাম, বারকোড"
+                      : "নাম, ব্র্যান্ড, ক্যাটাগরি, বিকল্প নাম, বারকোড"
+                  }
                   className="h-10 flex-1 rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary/40"
                 />
                 <div className="flex items-center gap-2">
@@ -2122,7 +2674,7 @@ export default function ProductsListClient({
                       disabled={!canCreateProducts || selectableCatalogIds.length === 0}
                       className="h-4 w-4"
                     />
-                    <span>সবগুলো</span>
+                    <span>দেখানো সব</span>
                   </label>
                   {selectedCatalogIds.length > 0 && (
                     <button
@@ -2141,7 +2693,7 @@ export default function ProductsListClient({
                       addingCatalog ||
                       selectedCatalogItems.length === 0
                     }
-                    className="inline-flex h-8 items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary-soft px-4 text-xs font-semibold text-primary shadow-sm hover:bg-primary/15 hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary-soft px-4 text-xs font-semibold text-primary shadow-sm hover:bg-primary/15 hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {addingCatalog ? "যোগ হচ্ছে..." : "ক্যাটালগ থেকে যোগ করুন"}
                   </button>
@@ -2149,7 +2701,7 @@ export default function ProductsListClient({
               </div>
               {!online ? (
                 <p className="text-xs text-muted-foreground">
-                  অফলাইনে আছেন। অনলাইনে এলে ক্যাটালগ search করা যাবে।
+                  অফলাইনে আছেন। অনলাইনে এলে ক্যাটালগ থেকে নতুন পণ্য খুঁজে নেওয়া যাবে।
                 </p>
               ) : null}
               {canOfferCatalogFallback && catalogQuery.trim() !== trimmedQuery ? (
@@ -2171,6 +2723,18 @@ export default function ProductsListClient({
               {catalogError ? (
                 <p className="text-xs text-danger">{catalogError}</p>
               ) : null}
+                <div className="flex flex-wrap gap-2 text-[11px]">
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-medium text-amber-700">
+                    যোগ হওয়ার পর স্টক দিন
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 font-medium text-sky-700">
+                    ক্রয়মূল্য পরে দিন
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
+                    বারকোড থাকলে স্ক্যান সহজ হবে
+                  </span>
+                </div>
+              </div>
             </div>
 
             {!canCreateProducts && (
@@ -2183,17 +2747,17 @@ export default function ProductsListClient({
               </div>
             ) : null}
 
-            {online && !catalogLoading && catalogCards.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border bg-muted/10 px-3 py-5 text-sm text-muted-foreground">
+            {online && !catalogLoading && visibleCatalogCards.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
                 {debouncedCatalogQuery.trim()
-                  ? "এই search-এ কোনো ক্যাটালগ আইটেম পাওয়া যায়নি।"
-                  : "এই ব্যবসার জন্য এখনো কোনো ক্যাটালগ suggestion নেই।"}
+                  ? "এই search ও filter-এ কোনো ক্যাটালগ আইটেম পাওয়া যায়নি।"
+                  : "এই filter-এ এখনো কোনো catalog item দেখানো যাচ্ছে না।"}
               </div>
             ) : null}
 
-            {catalogCards.length > 0 && (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {catalogCards.map((item) => {
+            {visibleCatalogCards.length > 0 && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {visibleCatalogCards.map((item) => {
                   const checked = Boolean(catalogSelections[item.id]);
                   const disabled = item.alreadyExists || !canCreateProducts;
                   const aliasPreview = Array.isArray(item.aliases)
@@ -2205,20 +2769,16 @@ export default function ProductsListClient({
                   const barcodePreview = Array.isArray(item.barcodes)
                     ? item.barcodes.slice(0, 2)
                     : [];
-                  const hasPrice =
-                    Number.isFinite(Number(item.latestPrice ?? 0)) &&
-                    Number(item.latestPrice ?? 0) > 0;
-                  const priceLabel = hasPrice
-                    ? `৳ ${formatTemplatePrice(item.latestPrice)}`
-                    : "দাম নেই";
+                  const primaryBadge = getCatalogPrimaryBadge(item);
+                  const secondaryBadges = getCatalogSecondaryBadges(item);
                   return (
                     <label
                       key={item.id}
-                      className={`block rounded-xl border p-3 shadow-[0_1px_0_rgba(0,0,0,0.02)] transition-all duration-200 ${
+                      className={`block rounded-2xl border p-3 shadow-[0_6px_20px_rgba(15,23,42,0.04)] transition-all duration-200 ${
                         disabled
                           ? "border-border bg-muted/50 text-muted-foreground"
                         : checked
-                          ? "border-primary/40 bg-primary-soft/50 shadow-[0_8px_24px_rgba(16,185,129,0.08)]"
+                          ? "border-primary/40 bg-primary-soft/50 shadow-[0_10px_28px_rgba(16,185,129,0.10)]"
                           : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
                       }`}
                     >
@@ -2254,30 +2814,26 @@ export default function ProductsListClient({
                                 <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                                   {formatCategoryLabel(item.category || "বিভাগহীন")}
                                 </span>
+                                <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  ইউনিট {getBaseUnitLabel(item.defaultBaseUnit)}
+                                </span>
                                 {item.packSize ? (
                                   <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                                     {item.packSize}
                                   </span>
                                 ) : null}
-                                <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                  ইউনিট: {(item.defaultBaseUnit || "pcs").toLowerCase()}
-                                </span>
-                                {item.sourceType ? (
+                                {item.importSource?.name ? (
                                   <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                    {item.sourceType}
+                                    {item.importSource.name}
                                   </span>
                                 ) : null}
                               </div>
                             </div>
                             <div className="shrink-0 space-y-1 text-right">
                               <span
-                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                                  hasPrice
-                                    ? "border-primary/20 bg-primary-soft text-primary"
-                                    : "border-warning/30 bg-warning/10 text-warning"
-                                }`}
+                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${primaryBadge.className}`}
                               >
-                                {priceLabel}
+                                {primaryBadge.label}
                               </span>
                               {item.alreadyExists ? (
                                 <span className="block text-[10px] font-semibold text-muted-foreground">
@@ -2306,6 +2862,19 @@ export default function ProductsListClient({
                             </div>
                           ) : null}
 
+                          {secondaryBadges.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {secondaryBadges.map((badge) => (
+                                <span
+                                  key={`${item.id}-${badge.label}`}
+                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${badge.className}`}
+                                >
+                                  {badge.label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+
                           {aliasPreview.length > 0 ? (
                             <div className="flex flex-wrap gap-1.5">
                               {aliasPreview.map((alias) => (
@@ -2324,6 +2893,12 @@ export default function ProductsListClient({
                               ) : null}
                             </div>
                           ) : null}
+
+                          <div className="rounded-xl border border-dashed border-border/80 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
+                            {item.alreadyExists
+                              ? "এই পণ্যটি আগে থেকেই দোকানে আছে। চাইলে detail দেখে আপডেট করুন।"
+                              : "যোগ করার পর স্টক, ক্রয়মূল্য এবং reorder level নিজের দোকান অনুযায়ী পূরণ করুন।"}
+                          </div>
                         </div>
                       </div>
                     </label>
@@ -2891,6 +3466,195 @@ export default function ProductsListClient({
           </div>
         </div>
       )}
+
+      <Dialog open={templateSetupOpen} onOpenChange={setTemplateSetupOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>টেমপ্লেট সেটআপ করে যোগ করুন</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-border bg-muted/30 p-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="inline-flex items-center rounded-full border border-border bg-card px-3 py-1 font-semibold text-foreground">
+                  {templateSetupDrafts.length.toLocaleString("bn-BD")}টি পণ্য
+                </span>
+                <span className="inline-flex items-center rounded-full border border-border bg-card px-3 py-1 font-semibold text-foreground">
+                  {templateSetupDrafts
+                    .reduce((sum, draft) => sum + draft.variants.length, 0)
+                    .toLocaleString("bn-BD")}
+                  টি ভ্যারিয়েন্ট
+                </span>
+                <span>প্রয়োজনে এখনই ক্রয়মূল্য আর opening stock সেট করুন।</span>
+              </div>
+            </div>
+
+            <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+              {templateSetupDrafts.map((draft) => (
+                <div
+                  key={draft.templateId}
+                  className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-sm font-semibold text-foreground">
+                          {draft.name}
+                        </h4>
+                        <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {draft.category || "বিভাগহীন"}
+                        </span>
+                        <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {draft.baseUnit}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {draft.hasVariants
+                          ? "ভ্যারিয়েন্টভিত্তিক স্টক/ক্রয়মূল্য দিন"
+                          : "এই পণ্যের opening stock আর ক্রয়মূল্য দিন"}
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                      {draft.hasVariants
+                        ? `${draft.variants.length.toLocaleString("bn-BD")}টি সাইজ`
+                        : "সিম্পল পণ্য"}
+                    </span>
+                  </div>
+
+                  {!draft.hasVariants ? (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="text-[11px] font-semibold text-muted-foreground">
+                          ক্রয়মূল্য
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={draft.buyPrice}
+                          onChange={(event) =>
+                            updateTemplateSetupDraft(draft.templateId, {
+                              buyPrice: event.target.value,
+                            })
+                          }
+                          placeholder="যেমন: 450"
+                          className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[11px] font-semibold text-muted-foreground">
+                          opening stock
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={draft.openingStock}
+                          onChange={(event) =>
+                            updateTemplateSetupDraft(draft.templateId, {
+                              openingStock: event.target.value,
+                            })
+                          }
+                          placeholder="যেমন: 100"
+                          className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm"
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      <div className="hidden rounded-xl border border-border/70 bg-muted/30 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_110px_120px_100px]">
+                        <span>ভ্যারিয়েন্ট</span>
+                        <span>বিক্রয়মূল্য</span>
+                        <span>ক্রয়মূল্য</span>
+                        <span>opening stock</span>
+                      </div>
+                      {draft.variants.map((variant) => (
+                        <div
+                          key={`${draft.templateId}:${variant.label}`}
+                          className="grid gap-2 rounded-xl border border-border/70 bg-card p-3 md:grid-cols-[minmax(0,1fr)_110px_120px_100px] md:items-center"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">
+                              {variant.label}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground md:hidden">
+                              বিক্রয় ৳{variant.sellPrice || "0"}
+                            </p>
+                          </div>
+                          <div className="hidden text-sm font-medium text-muted-foreground md:block">
+                            ৳{variant.sellPrice || "0"}
+                          </div>
+                          <label className="space-y-1 md:space-y-0">
+                            <span className="text-[11px] font-semibold text-muted-foreground md:hidden">
+                              ক্রয়মূল্য
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={variant.buyPrice}
+                              onChange={(event) =>
+                                updateTemplateSetupVariant(draft.templateId, variant.label, {
+                                  buyPrice: event.target.value,
+                                })
+                              }
+                              placeholder="ক্রয়"
+                              className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm"
+                            />
+                          </label>
+                          <label className="space-y-1 md:space-y-0">
+                            <span className="text-[11px] font-semibold text-muted-foreground md:hidden">
+                              opening stock
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={variant.openingStock}
+                              onChange={(event) =>
+                                updateTemplateSetupVariant(draft.templateId, variant.label, {
+                                  openingStock: event.target.value,
+                                })
+                              }
+                              placeholder="স্টক"
+                              className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm"
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setTemplateSetupOpen(false)}
+                className="h-10 rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
+              >
+                পরে করব
+              </button>
+              <button
+                type="button"
+                disabled={addingTemplates}
+                onClick={() => void handleAddTemplates("plain")}
+                className="h-10 rounded-xl border border-warning/30 bg-warning/10 px-4 text-sm font-semibold text-warning hover:bg-warning/15 disabled:opacity-60"
+              >
+                শুধু পণ্য যোগ করুন
+              </button>
+              <button
+                type="button"
+                disabled={addingTemplates}
+                onClick={() => void handleAddTemplates("configured")}
+                className="h-10 rounded-xl border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/15 disabled:opacity-60"
+              >
+                {addingTemplates ? "যোগ হচ্ছে..." : "স্টকসহ যোগ করুন"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(confirmDelete) && canDeleteProducts}

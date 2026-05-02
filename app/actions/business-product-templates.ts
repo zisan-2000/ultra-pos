@@ -15,7 +15,9 @@ type TemplateInput = {
   brand?: string | null;
   category?: string | null;
   packSize?: string | null;
+  defaultBuyPrice?: string | number | null;
   defaultSellPrice?: string | number | null;
+  defaultOpeningStock?: string | number | null;
   defaultBarcode?: string | null;
   defaultBaseUnit?: string | null;
   defaultTrackStock?: boolean;
@@ -29,7 +31,9 @@ type TemplateInput = {
 
 type TemplateVariantInput = {
   label?: string | null;
+  buyPrice?: string | number | null;
   sellPrice?: string | number | null;
+  openingStock?: string | number | null;
   sku?: string | null;
   barcode?: string | null;
   sortOrder?: number | null;
@@ -38,7 +42,9 @@ type TemplateVariantInput = {
 
 type NormalizedTemplateVariant = {
   label: string;
+  buyPrice: string | null;
   sellPrice: string;
+  openingStock: string | null;
   sku: string | null;
   barcode: string | null;
   sortOrder: number;
@@ -51,7 +57,9 @@ export type BusinessProductTemplateImportItem = {
   brand?: string | null;
   category?: string | null;
   packSize?: string | null;
+  defaultBuyPrice?: string | number | null;
   defaultSellPrice?: string | number | null;
+  defaultOpeningStock?: string | number | null;
   defaultBarcode?: string | null;
   defaultBaseUnit?: string | null;
   defaultTrackStock?: boolean | null;
@@ -81,7 +89,9 @@ type TemplateListRow = {
   brand: string | null;
   category: string | null;
   packSize: string | null;
+  defaultBuyPrice: string | null;
   defaultSellPrice: string | null;
+  defaultOpeningStock: string | null;
   defaultBarcode: string | null;
   defaultBaseUnit: string | null;
   defaultTrackStock: boolean;
@@ -93,6 +103,19 @@ type TemplateListRow = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+type TemplateSetupVariantInput = {
+  label: string;
+  buyPrice?: string | number | null;
+  openingStock?: string | number | null;
+};
+
+type TemplateSetupInput = {
+  templateId: string;
+  buyPrice?: string | number | null;
+  openingStock?: string | number | null;
+  variants?: TemplateSetupVariantInput[] | null;
 };
 
 function assertSuperAdmin(user: Awaited<ReturnType<typeof requireUser>>) {
@@ -209,7 +232,9 @@ function normalizeTemplateVariants(
 
     normalized.push({
       label,
+      buyPrice: normalizeOptionalMoney(row.buyPrice) ?? null,
       sellPrice,
+      openingStock: normalizeOptionalMoney(row.openingStock) ?? null,
       sku: normalizeProductCodeInput(row.sku),
       barcode: normalizeProductCodeInput(row.barcode),
       sortOrder:
@@ -274,7 +299,9 @@ function mapTemplateRow(row: {
   brand: string | null;
   category: string | null;
   packSize: string | null;
+  defaultBuyPrice: any;
   defaultSellPrice: any;
+  defaultOpeningStock: any;
   defaultBarcode: string | null;
   defaultBaseUnit: string | null;
   defaultTrackStock: boolean;
@@ -294,7 +321,9 @@ function mapTemplateRow(row: {
     brand: row.brand ?? null,
     category: row.category,
     packSize: row.packSize ?? null,
+    defaultBuyPrice: row.defaultBuyPrice?.toString?.() ?? null,
     defaultSellPrice: row.defaultSellPrice?.toString?.() ?? null,
+    defaultOpeningStock: row.defaultOpeningStock?.toString?.() ?? null,
     defaultBarcode: normalizeProductCodeInput(row.defaultBarcode) ?? null,
     defaultBaseUnit: row.defaultBaseUnit ?? null,
     defaultTrackStock: row.defaultTrackStock === true,
@@ -338,7 +367,9 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
   const brand = normalizeOptionalText(input.brand);
   const category = normalizeOptionalText(input.category);
   const packSize = normalizeOptionalText(input.packSize);
+  const defaultBuyPrice = normalizeOptionalMoney(input.defaultBuyPrice);
   const defaultSellPrice = normalizeOptionalMoney(input.defaultSellPrice);
+  const defaultOpeningStock = normalizeOptionalMoney(input.defaultOpeningStock);
   const defaultBarcode = normalizeProductCodeInput(input.defaultBarcode);
   const defaultBaseUnit = normalizeOptionalUnit(input.defaultBaseUnit);
   const defaultTrackStock = Boolean(input.defaultTrackStock);
@@ -359,7 +390,10 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
         brand: brand ?? null,
         category: category ?? null,
         packSize: packSize ?? null,
+        defaultBuyPrice: defaultBuyPrice === undefined ? null : defaultBuyPrice,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultOpeningStock:
+          defaultOpeningStock === undefined ? null : defaultOpeningStock,
         defaultBarcode,
         defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
         defaultTrackStock,
@@ -376,7 +410,10 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
         brand: brand ?? null,
         category: category ?? null,
         packSize: packSize ?? null,
+        defaultBuyPrice: defaultBuyPrice === undefined ? null : defaultBuyPrice,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultOpeningStock:
+          defaultOpeningStock === undefined ? null : defaultOpeningStock,
         defaultBarcode,
         defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
         defaultTrackStock,
@@ -396,7 +433,10 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
         brand: brand ?? null,
         category: category ?? null,
         packSize: packSize ?? null,
+        defaultBuyPrice: defaultBuyPrice === undefined ? null : defaultBuyPrice,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultOpeningStock:
+          defaultOpeningStock === undefined ? null : defaultOpeningStock,
         defaultBarcode,
         defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
         defaultTrackStock,
@@ -444,8 +484,14 @@ export async function updateBusinessProductTemplate(
   if (input.packSize !== undefined) {
     data.packSize = normalizeOptionalText(input.packSize);
   }
+  if (input.defaultBuyPrice !== undefined) {
+    data.defaultBuyPrice = normalizeOptionalMoney(input.defaultBuyPrice);
+  }
   if (input.defaultSellPrice !== undefined) {
     data.defaultSellPrice = normalizeOptionalMoney(input.defaultSellPrice);
+  }
+  if (input.defaultOpeningStock !== undefined) {
+    data.defaultOpeningStock = normalizeOptionalMoney(input.defaultOpeningStock);
   }
   if (input.defaultBarcode !== undefined) {
     data.defaultBarcode = normalizeProductCodeInput(input.defaultBarcode);
@@ -517,7 +563,9 @@ export async function importBusinessProductTemplates(
     brand: string | null;
     category: string | null;
     packSize: string | null;
+    defaultBuyPrice: string | null;
     defaultSellPrice: string | null;
+    defaultOpeningStock: string | null;
     defaultBarcode: string | null;
     defaultBaseUnit: string | null;
     defaultTrackStock: boolean;
@@ -543,7 +591,9 @@ export async function importBusinessProductTemplates(
       const brand = normalizeOptionalText(item.brand);
       const category = normalizeOptionalText(item.category);
       const packSize = normalizeOptionalText(item.packSize);
+      const defaultBuyPrice = normalizeOptionalMoney(item.defaultBuyPrice);
       const defaultSellPrice = normalizeOptionalMoney(item.defaultSellPrice);
+      const defaultOpeningStock = normalizeOptionalMoney(item.defaultOpeningStock);
       const defaultBarcode = normalizeProductCodeInput(item.defaultBarcode);
       const defaultBaseUnit = normalizeOptionalUnit(item.defaultBaseUnit);
       const defaultTrackStock = item.defaultTrackStock === true;
@@ -560,7 +610,10 @@ export async function importBusinessProductTemplates(
         brand: brand ?? null,
         category: category ?? null,
         packSize: packSize ?? null,
+        defaultBuyPrice: defaultBuyPrice === undefined ? null : defaultBuyPrice,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
+        defaultOpeningStock:
+          defaultOpeningStock === undefined ? null : defaultOpeningStock,
         defaultBarcode,
         defaultBaseUnit: defaultBaseUnit === undefined ? null : defaultBaseUnit,
         defaultTrackStock,
@@ -606,7 +659,9 @@ export async function importBusinessProductTemplates(
       brand: item.brand,
       category: item.category,
       packSize: item.packSize,
+      defaultBuyPrice: item.defaultBuyPrice,
       defaultSellPrice: item.defaultSellPrice,
+      defaultOpeningStock: item.defaultOpeningStock,
       defaultBarcode: item.defaultBarcode,
       defaultBaseUnit: item.defaultBaseUnit,
       defaultTrackStock: item.defaultTrackStock,
@@ -651,6 +706,7 @@ export async function listActiveBusinessProductTemplates(businessType: string) {
 export async function addBusinessProductTemplatesToShop(input: {
   shopId: string;
   templateIds: string[];
+  setups?: TemplateSetupInput[] | null;
 }) {
   const user = await requireUser();
   requirePermission(user, "create_product");
@@ -661,6 +717,12 @@ export async function addBusinessProductTemplatesToShop(input: {
   }
 
   const uniqueIds = Array.from(new Set(input.templateIds.filter(Boolean)));
+  const setupMap = new Map<string, TemplateSetupInput>();
+  for (const setup of input.setups ?? []) {
+    const templateId = String(setup?.templateId || "").trim();
+    if (!templateId) continue;
+    setupMap.set(templateId, setup);
+  }
   if (uniqueIds.length === 0) {
     return { createdCount: 0, skippedCount: 0, inactiveCount: 0 };
   }
@@ -743,6 +805,15 @@ export async function addBusinessProductTemplatesToShop(input: {
 
     const defaultPrice = template.defaultSellPrice?.toString();
     const numericPrice = defaultPrice ? Number(defaultPrice) : 0;
+    const setup = setupMap.get(template.id);
+    const resolvedBuyPrice =
+      normalizeOptionalMoney(setup?.buyPrice) ??
+      normalizeOptionalMoney((template as any).defaultBuyPrice) ??
+      null;
+    const resolvedOpeningStock =
+      normalizeOptionalMoney(setup?.openingStock) ??
+      normalizeOptionalMoney((template as any).defaultOpeningStock) ??
+      "0";
     let productBarcode = normalizeProductCodeInput((template as any).defaultBarcode);
     if (productBarcode && usedBarcodes.has(productBarcode)) {
       productBarcode = null;
@@ -752,6 +823,15 @@ export async function addBusinessProductTemplatesToShop(input: {
     }
     const rawVariants = parseTemplateVariantsFromJson(
       (template as any).variantsJson,
+    );
+    const variantSetupMap = new Map(
+      (setup?.variants ?? [])
+        .map((variant) => ({
+          label: normalizeRequiredText(String(variant.label ?? ""), "Variant label"),
+          buyPrice: normalizeOptionalMoney(variant.buyPrice) ?? null,
+          openingStock: normalizeOptionalMoney(variant.openingStock) ?? null,
+        }))
+        .map((variant) => [variant.label.toLowerCase(), variant] as const)
     );
     const preparedVariants = rawVariants.map((variant, index) => {
       let sku = normalizeProductCodeInput(variant.sku);
@@ -768,8 +848,11 @@ export async function addBusinessProductTemplatesToShop(input: {
       } else if (barcode) {
         usedBarcodes.add(barcode);
       }
+      const variantSetup = variantSetupMap.get(variant.label.toLowerCase()) ?? null;
       return {
         ...variant,
+        buyPrice: variantSetup?.buyPrice ?? variant.buyPrice ?? null,
+        openingStock: variantSetup?.openingStock ?? variant.openingStock ?? null,
         sku,
         barcode,
         sortOrder:
@@ -806,9 +889,9 @@ export async function addBusinessProductTemplatesToShop(input: {
             category: template.category || "Uncategorized",
             barcode: productBarcode,
             size: packSize ?? null,
-            buyPrice: null,
+            buyPrice: resolvedBuyPrice,
             sellPrice: resolvedSellPrice,
-            stockQty: "0",
+            stockQty: resolvedOpeningStock,
             isActive: hasValidPrice,
             trackStock: (template as any).defaultTrackStock === true,
             baseUnit: defaultUnit || "pcs",
@@ -821,7 +904,9 @@ export async function addBusinessProductTemplatesToShop(input: {
               shopId: shop.id,
               productId: createdProduct.id,
               label: variant.label,
+              buyPrice: variant.buyPrice,
               sellPrice: variant.sellPrice,
+              stockQty: variant.openingStock ?? "0",
               sku: variant.sku,
               barcode: variant.barcode,
               sortOrder: variant.sortOrder ?? index,

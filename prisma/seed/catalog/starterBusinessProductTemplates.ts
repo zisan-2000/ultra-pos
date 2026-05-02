@@ -1,6 +1,8 @@
 export type StarterTemplateVariant = {
   label: string;
+  buyPrice?: number | null;
   sellPrice: number;
+  openingStock?: number | null;
   sku?: string | null;
   barcode?: string | null;
   sortOrder?: number;
@@ -13,7 +15,9 @@ export type StarterBusinessProductTemplate = {
   brand?: string | null;
   category?: string | null;
   packSize?: string | null;
+  defaultBuyPrice?: number | null;
   defaultSellPrice?: number | null;
+  defaultOpeningStock?: number | null;
   defaultBarcode?: string | null;
   defaultBaseUnit?: string | null;
   defaultTrackStock?: boolean;

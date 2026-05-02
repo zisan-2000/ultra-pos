@@ -203,6 +203,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       <ProductsListClient
         shops={shops}
         activeShopId={activeShopId}
+        businessType={businessType}
         businessLabel={businessLabel}
         templateProducts={templateProducts}
         canCreateProducts={canCreateProducts}

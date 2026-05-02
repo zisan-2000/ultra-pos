@@ -35,10 +35,18 @@ function toTemplateCreateInput(template: StarterBusinessProductTemplate) {
     brand: template.brand ?? null,
     category: template.category ?? null,
     packSize: template.packSize ?? null,
+    defaultBuyPrice:
+      template.defaultBuyPrice === undefined || template.defaultBuyPrice === null
+        ? null
+        : toMoney(template.defaultBuyPrice),
     defaultSellPrice:
       template.defaultSellPrice === undefined || template.defaultSellPrice === null
         ? null
         : toMoney(template.defaultSellPrice),
+    defaultOpeningStock:
+      template.defaultOpeningStock === undefined || template.defaultOpeningStock === null
+        ? null
+        : toMoney(template.defaultOpeningStock),
     defaultBarcode: normalizeCode(template.defaultBarcode),
     defaultBaseUnit: template.defaultBaseUnit ?? null,
     defaultTrackStock: template.defaultTrackStock === true,
@@ -46,7 +54,15 @@ function toTemplateCreateInput(template: StarterBusinessProductTemplate) {
     keywordsJson: normalizeList(template.keywords),
     variantsJson: (template.variants ?? []).map((variant, index) => ({
       label: variant.label.trim(),
+      buyPrice:
+        variant.buyPrice === undefined || variant.buyPrice === null
+          ? null
+          : toMoney(variant.buyPrice),
       sellPrice: toMoney(variant.sellPrice),
+      openingStock:
+        variant.openingStock === undefined || variant.openingStock === null
+          ? null
+          : toMoney(variant.openingStock),
       sku: normalizeCode(variant.sku),
       barcode: normalizeCode(variant.barcode),
       sortOrder:

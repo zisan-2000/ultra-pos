@@ -680,7 +680,9 @@ model BusinessProductTemplate {
   brand            String?  @db.VarChar(120)
   category         String?
   packSize         String?  @map("pack_size") @db.VarChar(80)
+  defaultBuyPrice  Decimal? @map("default_buy_price") @db.Decimal(12, 2)
   defaultSellPrice Decimal? @map("default_sell_price") @db.Decimal(12, 2)
+  defaultOpeningStock Decimal? @map("default_opening_stock") @db.Decimal(12, 2)
   defaultBarcode   String?  @map("default_barcode") @db.VarChar(80)
   defaultBaseUnit  String?  @map("default_base_unit") @db.VarChar(40)
   defaultTrackStock Boolean @default(false) @map("default_track_stock")
