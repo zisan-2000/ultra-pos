@@ -2,9 +2,9 @@
 
 "use client";
 
-import { useState } from "react";
-import { authClient } from "@/lib/auth-client";
+import { useState, useTransition } from "react";
 import { clearOfflineData } from "@/lib/offline/cleanup";
+import { logout as completeLogout } from "@/app/actions/auth";
 
 function SubmitButton({
   variant,
@@ -38,23 +38,22 @@ export default function LogoutButton({
 }: {
   variant?: "default" | "menu";
 }) {
-  const [pending, setPending] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const handleLogout = async () => {
     if (pending) return;
-    setPending(true);
     setError(null);
-    try {
-      await authClient.signOut({
-        fetchOptions: { credentials: "include" },
-      } as any);
-    } catch (err) {
-      setError("লগ আউট হয়নি, আবার চেষ্টা করুন");
-    } finally {
-      await clearOfflineData();
-      window.location.assign("/login");
-    }
+    startTransition(async () => {
+      try {
+        await clearOfflineData();
+        const result = await completeLogout({});
+        window.location.assign(result?.redirectTo || "/login");
+      } catch (err) {
+        setError("লগ আউট হয়নি, আবার চেষ্টা করুন");
+        await clearOfflineData();
+      }
+    });
   };
 
   return (

@@ -69,6 +69,9 @@ model User {
   verifications      Verification[]
   adminSyncActions   AdminSyncAction[]
   createdSaleReturns SaleReturn[] @relation("SaleReturnCreatedBy")
+  impersonationAuditsStarted ImpersonationAudit[] @relation("ImpersonationAuditActor")
+  impersonationAuditsTargeted ImpersonationAudit[] @relation("ImpersonationAuditTarget")
+  impersonationAuditsEnded   ImpersonationAudit[] @relation("ImpersonationAuditEndedBy")
 
   roles               Role[]                   @relation("UserRoles")
   permissionOverrides UserPermissionOverride[]
@@ -148,6 +151,30 @@ model Verification {
   user User? @relation(fields: [userId], references: [id])
 
   @@map("verifications")
+}
+
+model ImpersonationAudit {
+  id               String    @id @default(cuid())
+  actorUserId      String    @map("actor_user_id")
+  targetUserId     String    @map("target_user_id")
+  startedSessionId String?   @map("started_session_id")
+  reason           String?
+  ipAddress        String?   @map("ip_address")
+  userAgent        String?   @map("user_agent")
+  startedAt        DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt          DateTime? @map("ended_at") @db.Timestamptz(6)
+  endedByUserId    String?   @map("ended_by_user_id")
+  status           String    @default("active")
+
+  actorUser   User  @relation("ImpersonationAuditActor", fields: [actorUserId], references: [id])
+  targetUser  User  @relation("ImpersonationAuditTarget", fields: [targetUserId], references: [id])
+  endedByUser User? @relation("ImpersonationAuditEndedBy", fields: [endedByUserId], references: [id])
+
+  @@index([actorUserId], map: "idx_impersonation_audits_actor_user_id")
+  @@index([targetUserId], map: "idx_impersonation_audits_target_user_id")
+  @@index([status], map: "idx_impersonation_audits_status")
+  @@index([startedAt], map: "idx_impersonation_audits_started_at")
+  @@map("impersonation_audits")
 }
 
 model Jwks {

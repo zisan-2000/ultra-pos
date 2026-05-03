@@ -1,53 +1,20 @@
-// app/api/auth/session-rbac/route.ts
-
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { getUserWithRolesAndPermissions } from "@/lib/rbac";
+import { getCurrentUser } from "@/lib/auth-session";
 
-type SessionPayload = {
-  session: { userId: string } | null;
-  user: { id: string; email?: string | null } | null;
-};
-
-async function fetchSession(req: Request): Promise<SessionPayload | null> {
-  const cookieHeader = req.headers.get("cookie") ?? "";
-
+export async function GET() {
   try {
-    const result: any = await (auth as any).api?.getSession?.({
-      headers: {
-        cookie: cookieHeader,
-      },
-    });
-
-    const session = result?.data?.session ?? result?.session ?? null;
-    const user = result?.data?.user ?? result?.user ?? null;
-    const userId = session?.userId ?? user?.id ?? null;
-    if (!userId) return { session: null, user: null };
-
-    return {
-      session: { userId },
-      user: user ? { id: user.id, email: user.email ?? null } : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export async function GET(req: Request) {
-  try {
-    const payload = await fetchSession(req);
-    const userId = payload?.session?.userId;
-    let user: SessionPayload["user"] = null;
-    if (userId !== undefined && userId !== null) {
-      try {
-        user = await getUserWithRolesAndPermissions(userId);
-      } catch (error) {
-        console.error("RBAC lookup failed in session-rbac endpoint", error);
-      }
-    }
-
+    const user = await getCurrentUser();
     return NextResponse.json({
-      session: payload?.session ?? null,
+      session: user
+        ? {
+            userId: user.id,
+            actorUserId: user.actorUserId ?? user.id,
+            effectiveUserId: user.effectiveUserId ?? user.id,
+            sessionId: user.sessionId ?? null,
+            isImpersonating: user.isImpersonating ?? false,
+            impersonatedBy: user.impersonatedBy ?? null,
+          }
+        : null,
       user,
     });
   } catch (error) {

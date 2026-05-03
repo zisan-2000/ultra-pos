@@ -16,6 +16,13 @@ type RbacUser = {
   name: string | null;
   roles: string[];
   permissions: string[];
+  actorUserId?: string;
+  effectiveUserId?: string;
+  sessionId?: string | null;
+  isImpersonating?: boolean;
+  impersonatedBy?: string | null;
+  impersonatorName?: string | null;
+  impersonatorEmail?: string | null;
 } | null;
 
 type DashboardShellProps = {

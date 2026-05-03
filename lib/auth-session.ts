@@ -6,6 +6,8 @@ import {
   getUserWithRolesAndPermissionsCached,
   type UserContext,
 } from "./rbac";
+import { prisma } from "./prisma";
+import { getCurrentSessionRecordFromCookieHeader } from "./impersonation";
 
 type SessionPayload = {
   session: { userId: string } | null;
@@ -40,11 +42,39 @@ const fetchSession = async (): Promise<SessionPayload | null> => {
 
 export async function getCurrentUser(): Promise<UserContext | null> {
   const payload = await fetchSession();
-  const userId = payload?.session?.userId;
-  if (!userId) return null;
+  const headerStore = await headers();
+  const cookieHeader = headerStore.get("cookie") ?? "";
+  const sessionRow = cookieHeader
+    ? await getCurrentSessionRecordFromCookieHeader(cookieHeader)
+    : null;
+  const effectiveUserId =
+    sessionRow?.userId ?? payload?.session?.userId ?? payload?.user?.id ?? null;
+  if (!effectiveUserId) return null;
 
-  const ctx = await getUserWithRolesAndPermissionsCached(userId);
-  return ctx;
+  const ctx = await getUserWithRolesAndPermissionsCached(effectiveUserId);
+  if (!ctx) return null;
+
+  let impersonatorName: string | null = null;
+  let impersonatorEmail: string | null = null;
+  if (sessionRow?.impersonatedBy) {
+    const impersonator = await prisma.user.findUnique({
+      where: { id: sessionRow.impersonatedBy },
+      select: { name: true, email: true },
+    });
+    impersonatorName = impersonator?.name ?? null;
+    impersonatorEmail = impersonator?.email ?? null;
+  }
+
+  return {
+    ...ctx,
+    actorUserId: sessionRow?.impersonatedBy ?? effectiveUserId,
+    effectiveUserId,
+    sessionId: sessionRow?.id ?? null,
+    isImpersonating: Boolean(sessionRow?.impersonatedBy),
+    impersonatedBy: sessionRow?.impersonatedBy ?? null,
+    impersonatorName,
+    impersonatorEmail,
+  };
 }
 
 export async function requireUser(): Promise<UserContext> {

@@ -8,6 +8,13 @@ export type UserContext = {
   roles: string[];
   permissions: string[];
   staffShopId: string | null;
+  actorUserId?: string;
+  effectiveUserId?: string;
+  sessionId?: string | null;
+  isImpersonating?: boolean;
+  impersonatedBy?: string | null;
+  impersonatorName?: string | null;
+  impersonatorEmail?: string | null;
 };
 
 export async function getUserWithRolesAndPermissions(

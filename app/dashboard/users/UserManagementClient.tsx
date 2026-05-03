@@ -8,6 +8,7 @@ import {
   getManageableUsers,
   getCreatableRoles,
 } from "@/app/actions/user-management";
+import { startImpersonation } from "@/app/actions/impersonation";
 import { CreateUserDialog } from "./CreateUserDialog";
 import { EditUserDialog } from "./EditUserDialog";
 import { DeleteUserDialog } from "./DeleteUserDialog";
@@ -46,10 +47,14 @@ type Role = {
 
 type UserManagementClientProps = {
   canManageStaffPermissions: boolean;
+  canImpersonate: boolean;
+  currentUserId: string;
 };
 
 export default function UserManagementPage({
   canManageStaffPermissions,
+  canImpersonate,
+  currentUserId,
 }: UserManagementClientProps) {
   const online = useOnlineStatus();
   const { pendingCount, syncing, lastSyncAt } = useSyncStatus();
@@ -61,6 +66,10 @@ export default function UserManagementPage({
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
   const [viewingUser, setViewingUser] = useState<User | null>(null);
+  const [impersonatingUser, setImpersonatingUser] = useState<User | null>(null);
+  const [impersonationReason, setImpersonationReason] = useState("");
+  const [impersonationPending, setImpersonationPending] = useState(false);
+  const [impersonationError, setImpersonationError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -278,6 +287,24 @@ export default function UserManagementPage({
       );
     });
   }, [users, searchQuery, roleFilter, fromDate, toDate]);
+
+  const handleStartImpersonation = async () => {
+    if (!impersonatingUser || impersonationPending) return;
+    setImpersonationPending(true);
+    setImpersonationError(null);
+    try {
+      const result = await startImpersonation(
+        impersonatingUser.id,
+        impersonationReason.trim() || null,
+      );
+      window.location.assign(result?.redirectTo || "/dashboard");
+    } catch (err) {
+      setImpersonationError(
+        err instanceof Error ? err.message : "ইমপার্সোনেশন শুরু করা যায়নি",
+      );
+      setImpersonationPending(false);
+    }
+  };
 
   const formatDateTime = (value: Date | string) => {
     const date = new Date(value);
@@ -549,6 +576,18 @@ export default function UserManagementPage({
                         অ্যাকসেস
                       </Link>
                     ) : null}
+                    {canImpersonate && user.id !== currentUserId ? (
+                      <button
+                        onClick={() => {
+                          setImpersonatingUser(user);
+                          setImpersonationReason("");
+                          setImpersonationError(null);
+                        }}
+                        className="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                      >
+                        হিসেবে দেখুন
+                      </button>
+                    ) : null}
                     <button
                       onClick={() => {
                         setDeletingUser(user);
@@ -645,6 +684,21 @@ export default function UserManagementPage({
                                 >
                                   অ্যাকসেস
                                 </Link>
+                              </>
+                            ) : null}
+                            {canImpersonate && user.id !== currentUserId ? (
+                              <>
+                                <span className="text-muted-foreground">|</span>
+                                <button
+                                  onClick={() => {
+                                    setImpersonatingUser(user);
+                                    setImpersonationReason("");
+                                    setImpersonationError(null);
+                                  }}
+                                  className="text-amber-700 hover:text-amber-800 font-medium"
+                                >
+                                  হিসেবে দেখুন
+                                </button>
                               </>
                             ) : null}
                             <span className="text-muted-foreground">|</span>
@@ -796,6 +850,89 @@ export default function UserManagementPage({
                     )}
                   </div>
                 ) : null}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={impersonatingUser !== null}
+        onOpenChange={(open) => {
+          if (!open && !impersonationPending) {
+            setImpersonatingUser(null);
+            setImpersonationReason("");
+            setImpersonationError(null);
+          }
+        }}
+      >
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader className="text-left">
+            <DialogTitle>ইমপার্সোনেশন শুরু করুন</DialogTitle>
+            <DialogDescription>
+              আপনি এই user-এর permissions দিয়েই app দেখবেন। সব action audit
+              log-এ থাকবে।
+            </DialogDescription>
+          </DialogHeader>
+          {impersonatingUser ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-muted/20 p-3">
+                <p className="text-sm font-semibold text-foreground">
+                  {impersonatingUser.name || "(নাম নেই)"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground break-all">
+                  {impersonatingUser.email || "(ইমেইল নেই)"}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {impersonatingUser.roles.map((role) => (
+                    <span
+                      key={`imp-role-${role.id}`}
+                      className="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground"
+                    >
+                      {role.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-foreground">
+                  কারণ লিখুন (optional)
+                </label>
+                <textarea
+                  value={impersonationReason}
+                  onChange={(event) => setImpersonationReason(event.target.value)}
+                  placeholder="support/debug/reproduce issue"
+                  rows={3}
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary/40"
+                />
+              </div>
+
+              {impersonationError ? (
+                <p className="text-xs text-danger">{impersonationError}</p>
+              ) : null}
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={impersonationPending}
+                  onClick={() => {
+                    setImpersonatingUser(null);
+                    setImpersonationReason("");
+                    setImpersonationError(null);
+                  }}
+                  className="inline-flex h-9 items-center justify-center rounded-full border border-border bg-background px-4 text-sm font-semibold text-foreground disabled:opacity-60"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="button"
+                  disabled={impersonationPending}
+                  onClick={handleStartImpersonation}
+                  className="inline-flex h-9 items-center justify-center rounded-full border border-amber-300 bg-amber-50 px-4 text-sm font-semibold text-amber-800 disabled:opacity-60"
+                >
+                  {impersonationPending ? "শুরু হচ্ছে..." : "ইমপার্সোনেশন শুরু করুন"}
+                </button>
               </div>
             </div>
           ) : null}

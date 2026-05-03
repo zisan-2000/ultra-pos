@@ -2,23 +2,43 @@
 
 "use server";
 
-import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import {
+  clearRestoreCookie,
+  getCurrentSessionRecordFromCookieHeader,
+} from "@/lib/impersonation";
 
-type LogoutState = { error?: string };
+type LogoutState = { error?: string; redirectTo?: string };
 
 export async function logout(_: LogoutState): Promise<LogoutState> {
   const ctx = await auth.$context;
   const cookieStore = await cookies();
   const headerStore = await headers();
+  const cookieHeader = headerStore.get("cookie") ?? "";
   const host = headerStore.get("host") || "";
   const proto =
     headerStore.get("x-forwarded-proto") ||
     (ctx.baseURL?.startsWith("https://") ? "https" : "http");
 
   try {
-    const cookieHeader = cookieStore
+    const currentSession = await getCurrentSessionRecordFromCookieHeader(cookieHeader);
+    if (currentSession?.impersonatedBy) {
+      await prisma.impersonationAudit.updateMany({
+        where: {
+          startedSessionId: currentSession.id,
+          status: "active",
+        },
+        data: {
+          endedAt: new Date(),
+          endedByUserId: currentSession.impersonatedBy,
+          status: "logged_out",
+        },
+      });
+    }
+
+    const cookieHeaderForFetch = cookieStore
       .getAll()
       .map((c) => `${c.name}=${c.value}`)
       .join("; ");
@@ -32,7 +52,7 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
     await fetch(`${baseURL}/api/auth/sign-out`, {
       method: "POST",
       headers: {
-        cookie: cookieHeader,
+        cookie: cookieHeaderForFetch,
         "content-type": "application/json",
       },
       body: "{}",
@@ -104,6 +124,8 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
     }
   }
 
+  clearRestoreCookie({ cookieStore, host, proto });
+
   // Fallback cleanup for any leftover better-auth cookies.
   cookieStore
     .getAll()
@@ -122,5 +144,5 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
       }
     });
 
-  redirect("/login");
+  return { redirectTo: "/login" };
 }

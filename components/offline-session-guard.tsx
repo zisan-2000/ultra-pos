@@ -24,12 +24,16 @@ export default function OfflineSessionGuard() {
         const res = await fetch("/api/auth/session-rbac", { cache: "no-store" });
         if (!res.ok) return;
         const data = (await res.json()) as {
-          session?: { userId?: string | null } | null;
+          session?: {
+            userId?: string | null;
+            isImpersonating?: boolean;
+          } | null;
           user?: OfflineAuthUser | null;
         };
         if (cancelled) return;
 
         const userId = data?.session?.userId ?? null;
+        const isImpersonating = data?.session?.isImpersonating === true;
         const sessionUser = data?.user ?? null;
         const stored = safeLocalStorageGet(STORAGE_KEY);
 
@@ -44,6 +48,13 @@ export default function OfflineSessionGuard() {
 
         if (stored && stored !== userId) {
           await clearOfflineData();
+        }
+        if (isImpersonating) {
+          await clearOfflineData();
+          safeLocalStorageRemove(STORAGE_KEY);
+          setDbUser(null);
+          clearRememberedOfflineAuth();
+          return;
         }
         safeLocalStorageSet(STORAGE_KEY, userId);
         setDbUser(userId);

@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import LogoutButton from "@/components/LogoutButton";
+import StopImpersonationButton from "@/components/impersonation/StopImpersonationButton";
 import { ThemeToggle } from "@/components/theme-toggle";
 import OwnerSummaryVoice from "@/components/voice/OwnerSummaryVoice";
 import { useOnlineStatus } from "@/lib/sync/net-status";
@@ -82,6 +83,13 @@ type RbacUser = {
   name: string | null;
   roles: string[];
   permissions: string[];
+  actorUserId?: string;
+  effectiveUserId?: string;
+  sessionId?: string | null;
+  isImpersonating?: boolean;
+  impersonatedBy?: string | null;
+  impersonatorName?: string | null;
+  impersonatorEmail?: string | null;
 } | null;
 
 const NAV_SKELETON_DELAY_MS = 180;
@@ -1163,6 +1171,20 @@ export function DashboardShell({
                         <span>Profile</span>
                       </Link>
 
+                      {rbacUser?.isImpersonating ? (
+                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
+                          <p className="text-xs font-semibold text-amber-900">
+                            ইমপার্সোনেশন চালু আছে
+                          </p>
+                          <p className="mt-1 text-[11px] text-amber-800/90">
+                            আপনি অন্য user-এর permission view করছেন।
+                          </p>
+                          <div className="mt-2">
+                            <StopImpersonationButton compact />
+                          </div>
+                        </div>
+                      ) : null}
+
                       <div className="mt-2">
                         <div className="flex items-center gap-2 px-3 pb-2 text-xs font-semibold text-muted-foreground">
                           <LogOut className="h-4 w-4" />
@@ -1187,6 +1209,19 @@ export function DashboardShell({
               </div>
             )}
             <div className="flex flex-col gap-2 px-4 sm:px-6 lg:px-8 py-3">
+              {rbacUser?.isImpersonating ? (
+                <div className="flex flex-col gap-2 rounded-2xl border border-amber-300 bg-amber-50/90 px-3 py-3 text-amber-900 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">
+                      আপনি এখন {userDisplayName} হিসেবে app দেখছেন
+                    </p>
+                    <p className="mt-1 text-xs text-amber-800/90">
+                      মূল account: {rbacUser.impersonatorName || rbacUser.impersonatorEmail || rbacUser.actorUserId || "super admin"}
+                    </p>
+                  </div>
+                  <StopImpersonationButton compact />
+                </div>
+              ) : null}
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-start gap-3 flex-1 min-w-0">
                   {/* Drawer toggle */}

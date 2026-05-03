@@ -10,5 +10,13 @@ export default async function UserManagementPage() {
     (user.roles.includes("owner") ||
       user.roles.includes("super_admin") ||
       user.roles.includes("manager"));
-  return <UserManagementClient canManageStaffPermissions={canManageStaffPermissions} />;
+  const canImpersonate =
+    user.roles.includes("super_admin") && !(user.isImpersonating ?? false);
+  return (
+    <UserManagementClient
+      canManageStaffPermissions={canManageStaffPermissions}
+      canImpersonate={canImpersonate}
+      currentUserId={user.id}
+    />
+  );
 }
