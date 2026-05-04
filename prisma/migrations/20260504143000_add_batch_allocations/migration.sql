@@ -1,8 +1,8 @@
 CREATE TABLE "batch_allocations" (
-  "id" TEXT NOT NULL,
-  "shop_id" TEXT NOT NULL,
-  "batch_id" TEXT NOT NULL,
-  "sale_item_id" TEXT NOT NULL,
+  "id" UUID NOT NULL,
+  "shop_id" UUID NOT NULL,
+  "batch_id" UUID NOT NULL,
+  "sale_item_id" UUID NOT NULL,
   "quantity_allocated" DECIMAL(12, 2) NOT NULL,
   "quantity_returned" DECIMAL(12, 2) NOT NULL DEFAULT 0,
   "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
