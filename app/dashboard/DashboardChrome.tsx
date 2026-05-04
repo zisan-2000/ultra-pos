@@ -38,6 +38,7 @@ import {
   HandCoins,
   LayoutDashboard,
   LayoutGrid,
+  LifeBuoy,
   List,
   LogOut,
   Menu,
@@ -65,6 +66,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SupportHeaderButton } from "@/components/SupportHeaderButton";
 
 type Shop = {
   id: string;
@@ -134,6 +136,7 @@ const navItems: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/dashboard/reports", label: "রিপোর্ট", Icon: BarChart3 },
   { href: "/dashboard/profile", label: "প্রোফাইল", Icon: User },
   { href: "/dashboard/users", label: "টিম", Icon: Users },
+  { href: "/dashboard/support", label: "সাপোর্ট", Icon: LifeBuoy },
 ];
 
 // ✅ mobile bottom nav: 6 -> 5 (profile removed)
@@ -218,6 +221,23 @@ export function DashboardShell({
   const [shopNameOpen, setShopNameOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const [dhakaDate, setDhakaDate] = useState<string>("");
+
+  useEffect(() => {
+    function updateDate() {
+      setDhakaDate(
+        new Intl.DateTimeFormat("bn-BD", {
+          timeZone: "Asia/Dhaka",
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+        }).format(new Date())
+      );
+    }
+    updateDate();
+    const t = setInterval(updateDate, 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   const safeShopId = useMemo(() => {
     if (!shops || shops.length === 0) return null;
@@ -369,8 +389,10 @@ export function DashboardShell({
     hasPermission("manage_feature_access_requests") ||
     hasPermission("view_shop_creation_requests") ||
     hasPermission("manage_shop_creation_requests");
+  const canManageSupportTickets = hasPermission("manage_support_tickets");
   const userCreationLogHref = "/dashboard/admin/user-creation-log";
   const featureAccessHref = "/dashboard/admin/feature-access";
+  const supportAdminHref = "/dashboard/admin/support";
   const systemSettingsHref = "/super-admin/system-settings";
 
   const buildShopHref = useMemo(() => {
@@ -447,6 +469,7 @@ export function DashboardShell({
     "/dashboard/reports": "view_reports",
     "/dashboard/profile": "view_settings",
     "/dashboard/users": "view_users_under_me",
+    "/dashboard/support": "view_support_tickets",
   };
 
   const isActive = (href: string) => {
@@ -619,7 +642,7 @@ export function DashboardShell({
       {drawerOpen && (
         <button
           aria-label="Close navigation"
-          className="fixed inset-0 bg-foreground/30 z-30 lg:hidden print:hidden"
+          className="fixed inset-0 bg-foreground/30 z-[49] lg:hidden print:hidden"
           onClick={() => setDrawerOpen(false)}
         />
       )}
@@ -627,7 +650,7 @@ export function DashboardShell({
       <div className="flex h-full print:block print:h-auto">
         {/* Sidebar / Drawer */}
         <aside
-          className={`fixed z-40 inset-y-0 left-0 bg-sidebar backdrop-blur border-r border-sidebar-border transform transition-[transform,width] duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:h-dvh lg:shadow-none print:hidden ${
+          className={`fixed z-50 inset-y-0 left-0 bg-sidebar backdrop-blur border-r border-sidebar-border transform transition-[transform,width] duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:h-dvh lg:shadow-none print:hidden ${
             drawerOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
           } ${sidebarCollapsed ? "lg:w-20 w-72" : "w-72"}`}
         >
@@ -773,7 +796,8 @@ export function DashboardShell({
 
               {(canAccessRbacAdmin ||
                 canViewUserCreationLog ||
-                canViewFeatureAccessRequests) && (
+                canViewFeatureAccessRequests ||
+                canManageSupportTickets) && (
                 <div className="mt-5">
                   <div
                     className={`px-2 pb-2 text-[11px] font-semibold text-sidebar-accent-foreground uppercase tracking-wider ${
@@ -852,6 +876,42 @@ export function DashboardShell({
 
                         <span className={navLabelClass}>
                           Feature Requests
+                        </span>
+                      </Link>
+                    )}
+
+                    {canManageSupportTickets && (
+                      <Link
+                        href={buildShopHref(supportAdminHref)}
+                        prefetch={false}
+                        onClick={(event) => {
+                          setDrawerOpen(false);
+                          handleNavClick(event, supportAdminHref);
+                        }}
+                        onMouseEnter={() =>
+                          handleNavPrefetch(supportAdminHref)
+                        }
+                        onTouchStart={() =>
+                          handleNavPrefetch(supportAdminHref)
+                        }
+                        className={navItemClass(isActive(supportAdminHref))}
+                      >
+                        <span
+                          className={navIconWrapClass(
+                            supportAdminHref,
+                            isActive(supportAdminHref)
+                          )}
+                        >
+                          <LifeBuoy
+                            className={`h-4 w-4 ${navIconClass(
+                              supportAdminHref,
+                              isActive(supportAdminHref)
+                            )}`}
+                          />
+                        </span>
+
+                        <span className={navLabelClass}>
+                          সব টিকেট
                         </span>
                       </Link>
                     )}
@@ -1223,8 +1283,8 @@ export function DashboardShell({
                 </div>
               ) : null}
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  {/* Drawer toggle */}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {/* Drawer toggle — mobile only */}
                   <button
                     className="lg:hidden inline-flex items-center justify-center rounded-lg border border-border bg-card text-foreground shadow-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background shrink-0 h-10 w-10"
                     onClick={() => setDrawerOpen((p) => !p)}
@@ -1233,13 +1293,13 @@ export function DashboardShell({
                     <Menu className="h-5 w-5" />
                   </button>
 
-                  {/* Shop name (click to view full name) */}
-                  <div className="flex-1 min-w-0">
+                  {/* Shop name — desktop only */}
+                  <div className="hidden lg:block flex-1 min-w-0">
                     <button
                       onClick={() => setShopNameOpen(true)}
                       className="text-left w-full"
                     >
-                      <h2 className="text-base font-bold text-foreground leading-snug tracking-tight line-clamp-1 sm:line-clamp-2 hover:underline">
+                      <h2 className="text-base font-bold text-foreground leading-snug tracking-tight line-clamp-1 hover:underline">
                         {currentShopName}
                       </h2>
                     </button>
@@ -1247,16 +1307,17 @@ export function DashboardShell({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* Online / Offline badge — always full text */}
                   <span
-                    className={`inline-flex h-7 items-center gap-1 rounded-full border px-3 text-[11px] font-semibold shadow-sm ${
+                    className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold shadow-sm ${
                       online
                         ? "border-success/30 bg-success-soft text-success"
                         : "border-danger/30 bg-danger-soft text-danger"
                     }`}
                   >
                     <span
-                      className={`inline-flex h-1.5 w-1.5 rounded-full ${
-                        online ? "bg-success" : "bg-danger"
+                      className={`inline-flex h-1.5 w-1.5 rounded-full shrink-0 ${
+                        online ? "bg-success animate-pulse" : "bg-danger"
                       }`}
                     />
                     {online ? "অনলাইন" : "অফলাইন"}
@@ -1271,6 +1332,12 @@ export function DashboardShell({
                     }
                     online={online}
                   />
+                  {hasPermission("view_support_tickets") && (
+                    <SupportHeaderButton
+                      shopId={safeShopId}
+                      canCreate={hasPermission("create_support_ticket")}
+                    />
+                  )}
                   <ThemeToggle />
                 </div>
               </div>

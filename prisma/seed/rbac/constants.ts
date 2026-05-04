@@ -113,6 +113,9 @@ export const PERMISSION_NAMES: string[] = [
   "view_dashboard_summary",
   "use_offline_pos",
   "sync_offline_data",
+  "view_support_tickets",
+  "create_support_ticket",
+  "manage_support_tickets",
 ];
 
 export const DEMO_USERS: {

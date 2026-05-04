@@ -87,6 +87,9 @@ model User {
   decidedFeatureAccessRequests FeatureAccessRequest[] @relation("FeatureAccessRequestDecider")
   ownedFeatureAccessRequests FeatureAccessRequest[] @relation("FeatureAccessRequestOwner")
   shops               Shop[]                   @relation("OwnerShops")
+  supportTicketsCreated SupportTicket[]        @relation("TicketCreatedBy")
+  supportTicketsAssigned SupportTicket[]       @relation("TicketAssignedTo")
+  supportTicketReplies SupportTicketReply[]
 
   // User hierarchy: who created this user
   createdBy     String? @map("created_by")
@@ -248,6 +251,7 @@ model Shop {
   paymentRequests  BillingPaymentRequest[]
   featureAccessRequests FeatureAccessRequest[]
   smsSummaryDispatches SmsSummaryDispatch[]
+  supportTickets       SupportTicket[]
 
   @@index([ownerId], map: "idx_shops_owner_id")
   @@map("shops")
@@ -1284,4 +1288,69 @@ model AdminSyncAction {
 
   @@index([userId], map: "idx_admin_sync_actions_user")
   @@map("admin_sync_actions")
+}
+
+// ======================
+// SUPPORT TICKET SYSTEM
+// ======================
+
+enum SupportTicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum SupportTicketPriority {
+  low
+  normal
+  high
+}
+
+enum SupportTicketCategory {
+  technical
+  billing
+  feature_request
+  other
+}
+
+model SupportTicket {
+  id               String                @id @default(uuid()) @db.Uuid
+  ticketNumber     Int                   @default(autoincrement()) @map("ticket_number")
+  shopId           String                @map("shop_id") @db.Uuid
+  createdByUserId  String                @map("created_by_user_id")
+  assignedToUserId String?               @map("assigned_to_user_id")
+  title            String
+  description      String
+  category         SupportTicketCategory @default(other)
+  priority         SupportTicketPriority @default(normal)
+  status           SupportTicketStatus   @default(open)
+  resolvedAt       DateTime?             @map("resolved_at") @db.Timestamptz(6)
+  resolvedNote     String?               @map("resolved_note")
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  shop       Shop                 @relation(fields: [shopId], references: [id])
+  createdBy  User                 @relation("TicketCreatedBy", fields: [createdByUserId], references: [id])
+  assignedTo User?                @relation("TicketAssignedTo", fields: [assignedToUserId], references: [id])
+  replies    SupportTicketReply[]
+
+  @@index([shopId], map: "idx_support_tickets_shop_id")
+  @@index([status, createdAt], map: "idx_support_tickets_status_created")
+  @@index([createdByUserId], map: "idx_support_tickets_created_by")
+  @@map("support_tickets")
+}
+
+model SupportTicketReply {
+  id        String        @id @default(uuid()) @db.Uuid
+  ticketId  String        @map("ticket_id") @db.Uuid
+  userId    String        @map("user_id")
+  content   String
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User          @relation(fields: [userId], references: [id])
+
+  @@index([ticketId], map: "idx_support_ticket_replies_ticket_id")
+  @@map("support_ticket_replies")
 }

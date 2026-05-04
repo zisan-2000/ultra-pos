@@ -64,6 +64,9 @@ export async function seedRBACAndUsers(prisma: PrismaClient): Promise<{
     "create_user_staff",
     "edit_users_under_me",
     "delete_users_under_me",
+    "view_support_tickets",
+    "create_support_ticket",
+    "manage_support_tickets",
   ];
 
   await prisma.rolePermission.createMany({
@@ -82,6 +85,9 @@ export async function seedRBACAndUsers(prisma: PrismaClient): Promise<{
     "create_user_staff",
     "edit_users_under_me",
     "delete_users_under_me",
+    "view_support_tickets",
+    "create_support_ticket",
+    "manage_support_tickets",
   ];
 
   await prisma.rolePermission.createMany({
@@ -165,6 +171,8 @@ export async function seedRBACAndUsers(prisma: PrismaClient): Promise<{
     "view_dashboard_summary",
     "use_offline_pos",
     "sync_offline_data",
+    "view_support_tickets",
+    "create_support_ticket",
   ];
 
   await prisma.rolePermission.createMany({
@@ -246,6 +254,8 @@ export async function seedRBACAndUsers(prisma: PrismaClient): Promise<{
     "view_dashboard_summary",
     "use_offline_pos",
     "sync_offline_data",
+    "view_support_tickets",
+    "create_support_ticket",
   ];
 
   await prisma.rolePermission.createMany({
@@ -301,6 +311,8 @@ export async function seedRBACAndUsers(prisma: PrismaClient): Promise<{
     "view_dashboard_summary",
     "use_offline_pos",
     "sync_offline_data",
+    "view_support_tickets",
+    "create_support_ticket",
   ];
 
   await prisma.rolePermission.createMany({
