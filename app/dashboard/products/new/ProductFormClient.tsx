@@ -468,6 +468,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   const [unitOptions, setUnitOptions] = useState<string[]>(configUnits);
   const [selectedUnit, setSelectedUnit] = useState(configDefaultUnit || configUnits[0] || "pcs");
   const [stockEnabled, setStockEnabled] = useState(stock.enabledByDefault);
+  const [serialEnabled, setSerialEnabled] = useState(false);
 
   const ensuredShopId = shop.id;
   const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
@@ -1571,6 +1572,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       stockQty,
       isActive: form.get("isActive") === "on",
       trackStock: stockEnabled,
+      trackSerialNumbers: serialEnabled && stockEnabled,
       reorderPoint,
       businessType,
       expiryDate,
@@ -2552,6 +2554,37 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
               <p className="text-xs text-muted-foreground">
                 নাম থেকেই ইউনিট অনুমান হবে: ডিম → পিস, তেল → লিটার, চিনি → কেজি
               </p>
+            </div>
+          )}
+
+          {/* Serial number tracking toggle */}
+          {stockEnabled && (
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={serialEnabled}
+                  onChange={(e) => setSerialEnabled(e.target.checked)}
+                  className="h-5 w-5 border border-border rounded cursor-pointer"
+                />
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-semibold text-foreground">
+                    Serial Number Tracking
+                  </span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    প্রতিটি unit এর জন্য আলাদা serial number ট্র্যাক হবে (দামি পণ্য, মোটর, ইনভার্টার ইত্যাদি)
+                  </p>
+                </div>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    serialEnabled
+                      ? "bg-blue-50 text-blue-700 border border-blue-200"
+                      : "bg-muted text-muted-foreground border border-border/50"
+                  }`}
+                >
+                  {serialEnabled ? "চালু" : "বন্ধ"}
+                </span>
+              </label>
             </div>
           )}
 

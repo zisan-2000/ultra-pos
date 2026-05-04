@@ -13,6 +13,7 @@ export type CartItem = {
   qty: number;
   total: number;
   baseUnit?: string | null;
+  serialNumbers?: string[] | null;
 };
 
 type CartState = {
@@ -35,6 +36,7 @@ type CartState = {
   decrease: (itemKey: string) => void;
   updatePrice: (itemKey: string, newPrice: number) => void;
   updateQty: (itemKey: string, newQty: number) => void;
+  setSerialNumbers: (itemKey: string, serials: string[]) => void;
   clear: () => void;
   totalAmount: () => number;
 };
@@ -160,6 +162,13 @@ export const useCart = create<CartState>((set, get) => ({
       });
     }
   },
+
+  setSerialNumbers: (itemKey, serials) =>
+    set({
+      items: get().items.map((i) =>
+        i.itemKey === itemKey ? { ...i, serialNumbers: serials } : i
+      ),
+    }),
 
   clear: () => set({ items: [] }),
 

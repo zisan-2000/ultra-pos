@@ -16,6 +16,7 @@ type ProductOption = {
   buyPrice?: string | null;
   stockQty?: string | null;
   trackStock?: boolean | null;
+  trackSerialNumbers?: boolean | null;
   variants?: ProductVariantOption[];
 };
 
@@ -25,6 +26,9 @@ type PurchaseItemDraft = {
   variantId?: string | null;
   qty: string;
   unitCost: string;
+  serialNumbers: string[];
+  serialInput: string;
+  serialTab: "bulk" | "one";
 };
 
 type Props = {
@@ -71,6 +75,9 @@ const blankItem = (): PurchaseItemDraft => ({
   variantId: null,
   qty: "1",
   unitCost: "",
+  serialNumbers: [],
+  serialInput: "",
+  serialTab: "bulk",
 });
 
 function formatMoney(value: number) {
@@ -150,6 +157,49 @@ export default function PurchaseFormClient({
   ) => {
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const handleBulkSerialChange = (itemId: string, raw: string) => {
+    const serials = raw
+      .split(/[\n,]+/)
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? { ...item, serialInput: raw, serialNumbers: serials }
+          : item
+      )
+    );
+  };
+
+  const handleAddOneSerial = (itemId: string, value: string) => {
+    const serial = value.trim().toUpperCase();
+    if (!serial) return;
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId && !item.serialNumbers.includes(serial)
+          ? {
+              ...item,
+              serialNumbers: [...item.serialNumbers, serial],
+              serialInput: "",
+            }
+          : item
+      )
+    );
+  };
+
+  const handleRemoveSerial = (itemId: string, serial: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              serialNumbers: item.serialNumbers.filter((s) => s !== serial),
+            }
+          : item
+      )
     );
   };
 
@@ -273,6 +323,7 @@ export default function PurchaseFormClient({
               variantId: item.variantId || null,
               qty: item.qty,
               unitCost: item.unitCost,
+              serialNumbers: item.serialNumbers.length > 0 ? item.serialNumbers : null,
             })),
             supplierId: supplierId || null,
             supplierName: supplierId ? null : supplierName || null,
@@ -652,6 +703,119 @@ export default function PurchaseFormClient({
                         </div>
                       );
                     })() : null}
+
+                    {/* Serial number input — shown when product has trackSerialNumbers */}
+                    {productMap.get(item.productId)?.trackSerialNumbers && (
+                      <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50/60 p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-blue-700">
+                            Serial Numbers
+                          </span>
+                          <span
+                            className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${
+                              item.serialNumbers.length === Math.round(Number(item.qty || 0))
+                                ? "bg-green-100 text-green-700"
+                                : "bg-orange-100 text-orange-700"
+                            }`}
+                          >
+                            {item.serialNumbers.length} / {Math.round(Number(item.qty || 0))}
+                          </span>
+                        </div>
+
+                        {/* Tab switcher */}
+                        <div className="flex gap-1">
+                          {(["bulk", "one"] as const).map((tab) => (
+                            <button
+                              key={tab}
+                              type="button"
+                              onClick={() =>
+                                setItems((prev) =>
+                                  prev.map((i) =>
+                                    i.id === item.id ? { ...i, serialTab: tab } : i
+                                  )
+                                )
+                              }
+                              className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                                item.serialTab === tab
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-white text-blue-700 border border-blue-200"
+                              }`}
+                            >
+                              {tab === "bulk" ? "একসাথে Paste" : "একটা একটা"}
+                            </button>
+                          ))}
+                        </div>
+
+                        {item.serialTab === "bulk" ? (
+                          <div className="space-y-1">
+                            <textarea
+                              rows={3}
+                              value={item.serialInput}
+                              onChange={(e) =>
+                                handleBulkSerialChange(item.id, e.target.value)
+                              }
+                              placeholder={"প্রতিটা serial এক লাইনে বা কমা দিয়ে আলাদা করুন\nযেমন: SN001\nSN002\nSN003"}
+                              className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                            />
+                            <p className="text-[10px] text-blue-600">
+                              Enter বা কমা দিয়ে আলাদা করুন — {item.serialNumbers.length}টি পাওয়া গেছে
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={item.serialInput}
+                                onChange={(e) =>
+                                  setItems((prev) =>
+                                    prev.map((i) =>
+                                      i.id === item.id
+                                        ? { ...i, serialInput: e.target.value }
+                                        : i
+                                    )
+                                  )
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleAddOneSerial(item.id, item.serialInput);
+                                  }
+                                }}
+                                placeholder="Serial scan/type করুন, Enter চাপুন"
+                                className="flex-1 h-9 rounded-lg border border-blue-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleAddOneSerial(item.id, item.serialInput)}
+                                className="h-9 px-3 rounded-lg bg-blue-600 text-white text-[11px] font-semibold hover:bg-blue-700"
+                              >
+                                যোগ
+                              </button>
+                            </div>
+                            {item.serialNumbers.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {item.serialNumbers.map((sn) => (
+                                  <span
+                                    key={sn}
+                                    className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 text-[11px] font-medium px-2 py-0.5"
+                                  >
+                                    {sn}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveSerial(item.id, sn)}
+                                      className="text-blue-500 hover:text-red-600 leading-none"
+                                    >
+                                      ×
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

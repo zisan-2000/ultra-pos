@@ -165,6 +165,7 @@ export default async function PurchaseNewPage({
           buyPrice: p.buyPrice?.toString?.() ?? null,
           stockQty: p.stockQty?.toString?.() ?? null,
           trackStock: p.trackStock,
+          trackSerialNumbers: Boolean((p as any).trackSerialNumbers),
           variants: (p.variants ?? [])
             .filter((v: any) => v.isActive !== false)
             .map((v: any) => ({

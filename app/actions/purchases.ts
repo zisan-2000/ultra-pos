@@ -20,6 +20,7 @@ type PurchaseItemInput = {
   variantId?: string | null;
   qty: number | string;
   unitCost: number | string;
+  serialNumbers?: string[] | null;
 };
 
 type CreatePurchaseInput = {
@@ -77,6 +78,15 @@ export async function createPurchase(input: CreatePurchaseInput) {
   const uniqueProductIds = Array.from(new Set(productIds));
   const products = await prisma.product.findMany({
     where: { id: { in: uniqueProductIds } },
+    select: {
+      id: true,
+      shopId: true,
+      name: true,
+      buyPrice: true,
+      stockQty: true,
+      trackStock: true,
+      trackSerialNumbers: true,
+    },
   });
 
   if (products.length !== uniqueProductIds.length) {
@@ -195,16 +205,75 @@ export async function createPurchase(input: CreatePurchaseInput) {
     });
     createdPurchaseId = created.id;
 
-    await tx.purchaseItem.createMany({
-      data: rows.map((row) => ({
-        purchaseId: created.id,
-        productId: row.product.id,
-        variantId: row.variantId,
-        quantity: row.qty.toFixed(2),
-        unitCost: row.unitCost.toFixed(2),
-        lineTotal: row.lineTotal.toFixed(2),
-      })),
-    });
+    // Create purchase items individually to capture IDs for serial number linking
+    const createdItemIds: Array<{ id: string; index: number }> = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const createdItem = await tx.purchaseItem.create({
+        data: {
+          purchaseId: created.id,
+          productId: row.product.id,
+          variantId: row.variantId,
+          quantity: row.qty.toFixed(2),
+          unitCost: row.unitCost.toFixed(2),
+          lineTotal: row.lineTotal.toFixed(2),
+        },
+        select: { id: true },
+      });
+      createdItemIds.push({ id: createdItem.id, index: i });
+    }
+
+    // Create serial number records for serialized products
+    for (const { id: purchaseItemId, index } of createdItemIds) {
+      const row = rows[index];
+      const inputItem = input.items[index];
+      const product = row.product;
+
+      if (product.trackSerialNumbers) {
+        const rawSerials = inputItem.serialNumbers ?? [];
+        const serials = rawSerials
+          .map((s) => s.trim().toUpperCase())
+          .filter(Boolean);
+        const expectedQty = Math.round(row.qty);
+
+        if (serials.length !== expectedQty) {
+          throw new Error(
+            `"${product.name}": ${serials.length}টি serial দেওয়া হয়েছে, কিন্তু qty হলো ${expectedQty}`
+          );
+        }
+
+        // Check for duplicates (within this batch or already in DB)
+        const uniqueSerials = new Set(serials);
+        if (uniqueSerials.size !== serials.length) {
+          throw new Error(`"${product.name}": batch-এ duplicate serial number আছে`);
+        }
+
+        const existing = await tx.serialNumber.findFirst({
+          where: {
+            shopId: input.shopId,
+            productId: product.id,
+            serialNo: { in: serials },
+          },
+          select: { serialNo: true },
+        });
+        if (existing) {
+          throw new Error(
+            `Serial "${existing.serialNo}" ইতিমধ্যে এই দোকানে নথিভুক্ত আছে`
+          );
+        }
+
+        await tx.serialNumber.createMany({
+          data: serials.map((serialNo) => ({
+            shopId: input.shopId,
+            productId: product.id,
+            variantId: row.variantId ?? null,
+            serialNo,
+            status: "IN_STOCK" as const,
+            purchaseItemId,
+          })),
+        });
+      }
+    }
 
     for (const row of rows) {
       const product = row.product;

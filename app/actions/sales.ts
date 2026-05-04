@@ -44,6 +44,7 @@ type CartItemInput = {
   variantLabel?: string | null;
   unitPrice: number;
   qty: number;
+  serialNumbers?: string[] | null;
 };
 
 type CreateSaleInput = {
@@ -1234,23 +1235,72 @@ export async function createSale(input: CreateSaleInput) {
         ? payNow.toFixed(2)
         : null;
 
-    // Create sale items
-    const saleItemRows = input.items.map((item) => {
+    // Create sale items (individually to capture IDs for serial number tracking)
+    const createdSaleItemIds: Array<{ id: string; index: number }> = [];
+    for (let i = 0; i < input.items.length; i++) {
+      const item = input.items[i];
       const product = productMap.get(item.productId);
       const variant = item.variantId ? variantMap.get(item.variantId) : null;
       const costAtSale = variant?.buyPrice ?? product?.buyPrice ?? null;
-      return {
-        saleId: inserted.id,
-        productId: item.productId,
-        variantId: item.variantId ?? null,
-        productNameSnapshot: item.name || product?.name || null,
-        quantity: item.qty.toString(),
-        unitPrice: item.unitPrice.toFixed(2),
-        costAtSale,
-        lineTotal: (item.qty * item.unitPrice).toFixed(2),
-      };
-    });
-    await tx.saleItem.createMany({ data: saleItemRows });
+      const createdSaleItem = await tx.saleItem.create({
+        data: {
+          saleId: inserted.id,
+          productId: item.productId,
+          variantId: item.variantId ?? null,
+          productNameSnapshot: item.name || product?.name || null,
+          quantity: item.qty.toString(),
+          unitPrice: item.unitPrice.toFixed(2),
+          costAtSale,
+          lineTotal: (item.qty * item.unitPrice).toFixed(2),
+        },
+        select: { id: true },
+      });
+      createdSaleItemIds.push({ id: createdSaleItem.id, index: i });
+    }
+
+    // Mark serial numbers as SOLD
+    for (const { id: saleItemId, index } of createdSaleItemIds) {
+      const item = input.items[index];
+      const product = productMap.get(item.productId);
+      if (!product) continue;
+
+      const serials = (item.serialNumbers ?? [])
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+
+      if (serials.length === 0) continue;
+
+      // Validate each serial is IN_STOCK in this shop
+      const foundSerials = await tx.serialNumber.findMany({
+        where: {
+          shopId: input.shopId,
+          productId: item.productId,
+          serialNo: { in: serials },
+          status: "IN_STOCK",
+        },
+        select: { id: true, serialNo: true },
+      });
+
+      if (foundSerials.length !== serials.length) {
+        const foundSet = new Set(foundSerials.map((s) => s.serialNo));
+        const missing = serials.find((s) => !foundSet.has(s));
+        throw new Error(
+          `Serial "${missing}" পাওয়া যায়নি বা ইতিমধ্যে বিক্রি হয়ে গেছে`
+        );
+      }
+
+      await tx.serialNumber.updateMany({
+        where: {
+          shopId: input.shopId,
+          productId: item.productId,
+          serialNo: { in: serials },
+        },
+        data: {
+          status: "SOLD",
+          saleItemId,
+        },
+      });
+    }
 
     // Create cash entry if needed
     if (cashCollected) {

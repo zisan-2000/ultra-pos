@@ -124,6 +124,7 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
       variantLabel?: string | null;
       unitPrice: number;
       qty: number;
+      serialNumbers?: string[] | null;
     }[];
 
     const result = await createSale({

@@ -163,6 +163,20 @@ export const PosCartItem = memo(function PosCartItem({
           <span className="ml-1 text-sm font-bold text-foreground">{item.total} ৳</span>
         </span>
       </div>
+
+      {/* Serial numbers badge */}
+      {item.serialNumbers && item.serialNumbers.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-0.5">
+          {item.serialNumbers.map((sn) => (
+            <span
+              key={sn}
+              className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-semibold px-2 py-0.5"
+            >
+              SN: {sn}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 });

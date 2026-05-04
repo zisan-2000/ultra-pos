@@ -37,6 +37,7 @@ type CreateProductInput = {
   stockQty: string;
   isActive: boolean;
   trackStock?: boolean;
+  trackSerialNumbers?: boolean;
   reorderPoint?: number | null;
   businessType?: string;
   expiryDate?: string | null;
@@ -63,6 +64,7 @@ type UpdateProductInput = {
   stockQty?: string;
   isActive?: boolean;
   trackStock?: boolean;
+  trackSerialNumbers?: boolean;
   reorderPoint?: number | null;
   businessType?: string;
   expiryDate?: string | null;
@@ -95,6 +97,7 @@ type ProductListRow = {
   sellPrice: string;
   stockQty: string;
   trackStock: boolean;
+  trackSerialNumbers: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -769,6 +772,10 @@ export async function createProduct(input: CreateProductInput) {
   });
   const trackStock =
     input.trackStock === undefined ? false : Boolean(input.trackStock);
+  const trackSerialNumbers =
+    input.trackSerialNumbers === undefined
+      ? false
+      : Boolean(input.trackSerialNumbers) && trackStock;
   const stockQty = trackStock ? normalizedStock : "0";
   const sku = normalizeProductCodeInput(input.sku);
   const barcode = normalizeProductCodeInput(input.barcode);
@@ -803,6 +810,7 @@ export async function createProduct(input: CreateProductInput) {
     stockQty,
     isActive: input.isActive,
     trackStock,
+    trackSerialNumbers,
     reorderPoint: trackStock && input.reorderPoint != null ? input.reorderPoint : null,
   };
 
@@ -1000,6 +1008,7 @@ export async function getProductsByShop(shopId: string) {
       stockQty: true,
       isActive: true,
       trackStock: true,
+      trackSerialNumbers: true,
       createdAt: true,
       updatedAt: true,
       variants: {
@@ -1086,6 +1095,7 @@ export async function getProductsByShopPaginated({
       sellPrice: true,
       stockQty: true,
       trackStock: true,
+      trackSerialNumbers: true,
       isActive: true,
       createdAt: true,
       updatedAt: true,
@@ -1109,6 +1119,7 @@ export async function getProductsByShopPaginated({
     sellPrice: product.sellPrice.toString(),
     stockQty: product.stockQty.toString(),
     trackStock: Boolean(product.trackStock),
+    trackSerialNumbers: Boolean(product.trackSerialNumbers),
     isActive: product.isActive,
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
@@ -1213,6 +1224,7 @@ export async function getProductsByShopCursorPaginated({
         sellPrice: true,
         stockQty: true,
         trackStock: true,
+      trackSerialNumbers: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -1256,6 +1268,7 @@ export async function getProductsByShopCursorPaginated({
     sellPrice: p.sellPrice?.toString?.() ?? (p as any).sellPrice ?? "0",
     stockQty: p.stockQty?.toString?.() ?? (p as any).stockQty ?? "0",
     trackStock: Boolean(p.trackStock),
+    trackSerialNumbers: Boolean(p.trackSerialNumbers),
     isActive: p.isActive,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -1566,6 +1579,9 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   if (size !== undefined) payload.size = size;
   if (data.isActive !== undefined) payload.isActive = data.isActive;
   if (data.trackStock !== undefined) payload.trackStock = data.trackStock;
+  if (data.trackSerialNumbers !== undefined)
+    payload.trackSerialNumbers =
+      Boolean(data.trackSerialNumbers) && Boolean(trackStockFlag);
   if (buyPrice !== undefined) payload.buyPrice = buyPrice;
   if (sellPrice !== undefined) payload.sellPrice = sellPrice;
   if (resolvedStockQty !== undefined) payload.stockQty = resolvedStockQty;
@@ -1681,6 +1697,7 @@ export async function getActiveProductsByShop(shopId: string) {
       sellPrice: true,
       stockQty: true,
       trackStock: true,
+      trackSerialNumbers: true,
       variants: {
         where: { isActive: true },
         orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
@@ -1712,6 +1729,7 @@ export async function getActiveProductsByShop(shopId: string) {
     sellPrice: p.sellPrice.toString(),
     stockQty: p.stockQty?.toString() ?? "0",
     trackStock: p.trackStock,
+    trackSerialNumbers: Boolean(p.trackSerialNumbers),
     variants: (p.variants || []).map((variant) => ({
       id: variant.id,
       label: variant.label,

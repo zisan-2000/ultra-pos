@@ -252,6 +252,7 @@ model Shop {
   featureAccessRequests FeatureAccessRequest[]
   smsSummaryDispatches SmsSummaryDispatch[]
   supportTickets       SupportTicket[]
+  serialNumbers        SerialNumber[]
 
   @@index([ownerId], map: "idx_shops_owner_id")
   @@map("shops")
@@ -331,6 +332,13 @@ enum ProductSourceType {
   template
   catalog
   barcode
+}
+
+enum SerialStatus {
+  IN_STOCK
+  SOLD
+  RETURNED
+  DAMAGED
 }
 
 enum CopilotConversationMessageRole {
@@ -752,9 +760,10 @@ model Product {
   buyPrice   Decimal? @map("buy_price") @db.Decimal(12, 2)
   sellPrice  Decimal  @map("sell_price") @db.Decimal(12, 2)
   stockQty      Decimal  @default("0") @map("stock_qty") @db.Decimal(12, 2)
-  trackStock    Boolean  @default(false) @map("track_stock")
-  reorderPoint  Int?     @map("reorder_point")
-  isActive      Boolean  @default(true) @map("is_active")
+  trackStock          Boolean  @default(false) @map("track_stock")
+  trackSerialNumbers  Boolean  @default(false) @map("track_serial_numbers")
+  reorderPoint        Int?     @map("reorder_point")
+  isActive            Boolean  @default(true) @map("is_active")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -766,6 +775,7 @@ model Product {
   queueTokenItems QueueTokenItem[]
   returnItems     SaleReturnItem[]
   returnExchangeItems SaleReturnExchangeItem[]
+  serialNumbers   SerialNumber[]
 
   @@index([shopId], map: "idx_products_shop")
   @@index([catalogProductId], map: "idx_products_catalog_product_id")
@@ -798,6 +808,7 @@ model ProductVariant {
   product       Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
   saleItems     SaleItem[]
   purchaseItems PurchaseItem[]
+  serialNumbers SerialNumber[]
 
   @@index([shopId, productId], map: "idx_product_variants_shop_product")
   @@index([productId, isActive, sortOrder], map: "idx_product_variants_product_active_order")
@@ -929,9 +940,10 @@ model PurchaseItem {
   lineTotal  Decimal  @map("line_total") @db.Decimal(12, 2)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  purchase Purchase        @relation(fields: [purchaseId], references: [id])
-  product  Product         @relation(fields: [productId], references: [id])
-  variant  ProductVariant? @relation(fields: [variantId], references: [id])
+  purchase      Purchase        @relation(fields: [purchaseId], references: [id])
+  product       Product         @relation(fields: [productId], references: [id])
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+  serialNumbers SerialNumber[]
 
   @@index([purchaseId], map: "idx_purchase_items_purchase")
   @@index([productId], map: "idx_purchase_items_product")
@@ -1062,10 +1074,11 @@ model SaleItem {
   // FIXED: Removed dbgenerated default (Neon/Postgres does not allow column refs in DEFAULT)
   lineTotal           Decimal  @map("line_total") @db.Decimal(12, 2)
 
-  sale        Sale            @relation(fields: [saleId], references: [id])
-  product     Product         @relation(fields: [productId], references: [id])
-  variant     ProductVariant? @relation(fields: [variantId], references: [id])
-  returnItems SaleReturnItem[]
+  sale          Sale            @relation(fields: [saleId], references: [id])
+  product       Product         @relation(fields: [productId], references: [id])
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+  returnItems   SaleReturnItem[]
+  serialNumbers SerialNumber[]
 
   @@index([saleId], map: "idx_sale_items_sale")
   @@index([productId], map: "idx_sale_items_product")
@@ -1353,4 +1366,34 @@ model SupportTicketReply {
 
   @@index([ticketId], map: "idx_support_ticket_replies_ticket_id")
   @@map("support_ticket_replies")
+}
+
+// ======================
+// SERIAL NUMBER TRACKING
+// ======================
+
+model SerialNumber {
+  id             String       @id @default(uuid()) @db.Uuid
+  shopId         String       @map("shop_id") @db.Uuid
+  productId      String       @map("product_id") @db.Uuid
+  variantId      String?      @map("variant_id") @db.Uuid
+  serialNo       String       @map("serial_no") @db.VarChar(120)
+  status         SerialStatus @default(IN_STOCK)
+  purchaseItemId String?      @map("purchase_item_id") @db.Uuid
+  saleItemId     String?      @map("sale_item_id") @db.Uuid
+  note           String?
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  shop         Shop            @relation(fields: [shopId], references: [id])
+  product      Product         @relation(fields: [productId], references: [id])
+  variant      ProductVariant? @relation(fields: [variantId], references: [id])
+  purchaseItem PurchaseItem?   @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
+  saleItem     SaleItem?       @relation(fields: [saleItemId], references: [id], onDelete: SetNull)
+
+  @@unique([shopId, productId, serialNo], map: "uq_serial_numbers_shop_product_serial")
+  @@index([shopId, productId, status], map: "idx_serial_numbers_shop_product_status")
+  @@index([saleItemId], map: "idx_serial_numbers_sale_item")
+  @@index([purchaseItemId], map: "idx_serial_numbers_purchase_item")
+  @@map("serial_numbers")
 }

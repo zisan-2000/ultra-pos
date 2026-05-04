@@ -28,6 +28,13 @@ type PosProductSearchProps = {
   shopId: string;
   canUseBarcodeScan: boolean;
   topProductIds?: string[];
+  onSerialRequired?: (
+    itemKey: string,
+    productId: string,
+    productName: string,
+    variantId: string | null,
+    qty: number
+  ) => void;
   products: {
     id: string;
     name: string;
@@ -37,6 +44,7 @@ type PosProductSearchProps = {
     stockQty?: string | number;
     category?: string | null;
     trackStock?: boolean | null;
+    trackSerialNumbers?: boolean | null;
     baseUnit?: string | null;
     variants?: Array<{
       id: string;
@@ -610,6 +618,7 @@ export const PosProductSearch = memo(function PosProductSearch({
   shopId,
   canUseBarcodeScan,
   topProductIds,
+  onSerialRequired,
 }: PosProductSearchProps) {
   const [query, setQuery] = useState("");
   const [scanCode, setScanCode] = useState("");
@@ -1297,6 +1306,17 @@ export const PosProductSearch = memo(function PosProductSearch({
         qty: safeQuantity,
       });
 
+      // If product requires serial numbers, notify parent to open serial picker
+      if (product.trackSerialNumbers && onSerialRequired) {
+        onSerialRequired(
+          itemKey,
+          product.id,
+          buildCartItemName(product, variant),
+          variant?.id ?? null,
+          safeQuantity
+        );
+      }
+
       // UI feedback
       setCooldownProductId(itemKey);
       bumpUsage(product.id);
@@ -1316,7 +1336,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         220
       );
     },
-    [add, bumpUsage, setCooldownProductId, setRecentlyAdded, shopId]
+    [add, bumpUsage, setCooldownProductId, setRecentlyAdded, shopId, onSerialRequired]
   );
 
   const handleAddToCart = useCallback(
