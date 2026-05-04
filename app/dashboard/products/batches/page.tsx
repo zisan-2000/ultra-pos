@@ -65,6 +65,29 @@ export default async function BatchLookupPage({ searchParams }: Props) {
           purchase: { select: { purchaseDate: true } },
         },
       },
+      allocations: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          quantityAllocated: true,
+          quantityReturned: true,
+          createdAt: true,
+          saleItem: {
+            select: {
+              id: true,
+              sale: {
+                select: {
+                  id: true,
+                  invoiceNo: true,
+                  saleDate: true,
+                  status: true,
+                  customer: { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -81,6 +104,17 @@ export default async function BatchLookupPage({ searchParams }: Props) {
       ? new Date(b.purchaseItem.purchase.purchaseDate).toISOString().slice(0, 10)
       : null,
     createdAt: b.createdAt.toISOString(),
+    allocations: b.allocations.map((allocation) => ({
+      id: allocation.id,
+      invoiceNo: allocation.saleItem.sale.invoiceNo ?? null,
+      saleId: allocation.saleItem.sale.id,
+      customerName: allocation.saleItem.sale.customer?.name ?? null,
+      saleDate: allocation.saleItem.sale.saleDate.toISOString().slice(0, 10),
+      saleStatus: allocation.saleItem.sale.status ?? null,
+      quantityAllocated: allocation.quantityAllocated.toString(),
+      quantityReturned: allocation.quantityReturned.toString(),
+      createdAt: allocation.createdAt.toISOString(),
+    })),
   }));
 
   return (

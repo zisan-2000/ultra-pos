@@ -254,6 +254,7 @@ model Shop {
   supportTickets       SupportTicket[]
   serialNumbers        SerialNumber[]
   batches              Batch[]
+  batchAllocations     BatchAllocation[]
   stockAdjustments     StockAdjustment[]
 
   @@index([ownerId], map: "idx_shops_owner_id")
@@ -1087,6 +1088,7 @@ model SaleItem {
   variant       ProductVariant? @relation(fields: [variantId], references: [id])
   returnItems   SaleReturnItem[]
   serialNumbers SerialNumber[]
+  batchAllocations BatchAllocation[]
 
   @@index([saleId], map: "idx_sale_items_sale")
   @@index([productId], map: "idx_sale_items_product")
@@ -1427,11 +1429,32 @@ model Batch {
   product      Product         @relation(fields: [productId], references: [id])
   variant      ProductVariant? @relation(fields: [variantId], references: [id])
   purchaseItem PurchaseItem?   @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
+  allocations  BatchAllocation[]
 
   @@unique([shopId, productId, batchNo], map: "uq_batches_shop_product_batchno")
   @@index([shopId, productId, remainingQty], map: "idx_batches_shop_product_remaining")
   @@index([purchaseItemId], map: "idx_batches_purchase_item")
   @@map("batches")
+}
+
+model BatchAllocation {
+  id                String   @id @default(uuid()) @db.Uuid
+  shopId            String   @map("shop_id") @db.Uuid
+  batchId           String   @map("batch_id") @db.Uuid
+  saleItemId        String   @map("sale_item_id") @db.Uuid
+  quantityAllocated Decimal  @map("quantity_allocated") @db.Decimal(12, 2)
+  quantityReturned  Decimal  @default("0") @map("quantity_returned") @db.Decimal(12, 2)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  shop     Shop     @relation(fields: [shopId], references: [id])
+  batch    Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  saleItem SaleItem @relation(fields: [saleItemId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, batchId], map: "idx_batch_allocations_shop_batch")
+  @@index([saleItemId], map: "idx_batch_allocations_sale_item")
+  @@index([batchId, createdAt], map: "idx_batch_allocations_batch_created")
+  @@map("batch_allocations")
 }
 
 // ======================

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 
 type BatchRow = {
   id: string;
@@ -13,11 +13,23 @@ type BatchRow = {
   variantLabel?: string | null;
   purchaseDate?: string | null;
   createdAt: string;
+  allocations: Array<{
+    id: string;
+    invoiceNo: string | null;
+    saleId: string;
+    customerName: string | null;
+    saleDate: string;
+    saleStatus: string | null;
+    quantityAllocated: string;
+    quantityReturned: string;
+    createdAt: string;
+  }>;
 };
 
 export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "depleted">("all");
+  const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -89,8 +101,11 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
                   <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">পণ্য</th>
                   <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">মোট পরিমাণ</th>
                   <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">অবশিষ্ট</th>
+                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">কাস্টমারের কাছে</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">ইনভয়েস</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">ক্রয় তারিখ</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">অবস্থা</th>
+                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">ট্রেস</th>
                 </tr>
               </thead>
               <tbody>
@@ -98,31 +113,128 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
                   const pct = Number(r.totalQty) > 0
                     ? Math.round((Number(r.remainingQty) / Number(r.totalQty)) * 100)
                     : 0;
+                  const netOutQty = r.allocations.reduce((sum, allocation) => {
+                    const allocated = Number(allocation.quantityAllocated || 0);
+                    const returned = Number(allocation.quantityReturned || 0);
+                    return sum + Math.max(0, allocated - returned);
+                  }, 0);
+                  const liveAllocations = r.allocations.filter((allocation) => {
+                    const allocated = Number(allocation.quantityAllocated || 0);
+                    const returned = Number(allocation.quantityReturned || 0);
+                    return Math.max(0, allocated - returned) > 0.000001;
+                  });
+                  const invoicePreview = liveAllocations
+                    .slice(0, 2)
+                    .map((allocation) => allocation.invoiceNo || `Sale ${allocation.saleId.slice(0, 6)}`)
+                    .join(", ");
+                  const isExpanded = expandedBatchId === r.id;
                   return (
-                    <tr key={r.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3 font-mono font-semibold text-foreground">{r.batchNo}</td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-foreground">{r.productName}</span>
-                        {r.variantLabel && (
-                          <span className="ml-1 text-xs text-muted-foreground">({r.variantLabel})</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right text-muted-foreground">{Number(r.totalQty).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-foreground">
-                        {Number(r.remainingQty).toFixed(2)}
-                        <span className="ml-1 text-xs text-muted-foreground">({pct}%)</span>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{r.purchaseDate ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                          r.isActive
-                            ? "bg-green-50 text-green-700 border-green-200"
-                            : "bg-muted text-muted-foreground border-border"
-                        }`}>
-                          {r.isActive ? "চালু" : "শেষ"}
-                        </span>
-                      </td>
-                    </tr>
+                    <Fragment key={r.id}>
+                      <tr className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-3 font-mono font-semibold text-foreground">{r.batchNo}</td>
+                        <td className="px-4 py-3">
+                          <span className="font-medium text-foreground">{r.productName}</span>
+                          {r.variantLabel && (
+                            <span className="ml-1 text-xs text-muted-foreground">({r.variantLabel})</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right text-muted-foreground">{Number(r.totalQty).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-foreground">
+                          {Number(r.remainingQty).toFixed(2)}
+                          <span className="ml-1 text-xs text-muted-foreground">({pct}%)</span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-foreground">
+                          {netOutQty.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {invoicePreview || "—"}
+                          {liveAllocations.length > 2 ? ` +${liveAllocations.length - 2}` : ""}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{r.purchaseDate ?? "—"}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                            r.isActive
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-muted text-muted-foreground border-border"
+                          }`}>
+                            {r.isActive ? "চালু" : "শেষ"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedBatchId((current) => current === r.id ? null : r.id)}
+                            className="inline-flex h-8 items-center rounded-full border border-border bg-card px-3 text-[11px] font-semibold text-foreground hover:bg-muted"
+                          >
+                            {isExpanded ? "লুকান" : "ট্রেস"}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr className="border-b border-border/50 bg-muted/10">
+                          <td colSpan={9} className="px-4 py-4">
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap gap-2 text-[11px] font-medium text-muted-foreground">
+                                <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
+                                  মোট trace {r.allocations.length}টি
+                                </span>
+                                <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
+                                  কাস্টমারের কাছে {netOutQty.toFixed(2)}
+                                </span>
+                              </div>
+                              {r.allocations.length === 0 ? (
+                                <div className="rounded-xl border border-dashed border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+                                  এই batch এখনো কোনো sale-এ যায়নি।
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {r.allocations.map((allocation) => {
+                                    const allocated = Number(allocation.quantityAllocated || 0);
+                                    const returned = Number(allocation.quantityReturned || 0);
+                                    const netQty = Math.max(0, allocated - returned);
+                                    return (
+                                      <div
+                                        key={allocation.id}
+                                        className="rounded-xl border border-border bg-card px-4 py-3"
+                                      >
+                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                          <div>
+                                            <p className="text-sm font-semibold text-foreground">
+                                              {allocation.invoiceNo || `Sale ${allocation.saleId.slice(0, 8)}`}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                              {allocation.customerName || "Walk-in customer"} · {allocation.saleDate}
+                                            </p>
+                                          </div>
+                                          <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
+                                            <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                                              গেছে {allocated.toFixed(2)}
+                                            </span>
+                                            <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                                              ফিরেছে {returned.toFixed(2)}
+                                            </span>
+                                            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 ${
+                                              netQty > 0.000001
+                                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                                : "border-green-200 bg-green-50 text-green-700"
+                                            }`}>
+                                              বাইরে আছে {netQty.toFixed(2)}
+                                            </span>
+                                            <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-muted-foreground">
+                                              {(allocation.saleStatus || "COMPLETED").toUpperCase()}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -135,6 +247,12 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
               const pct = Number(r.totalQty) > 0
                 ? Math.round((Number(r.remainingQty) / Number(r.totalQty)) * 100)
                 : 0;
+              const netOutQty = r.allocations.reduce((sum, allocation) => {
+                const allocated = Number(allocation.quantityAllocated || 0);
+                const returned = Number(allocation.quantityReturned || 0);
+                return sum + Math.max(0, allocated - returned);
+              }, 0);
+              const isExpanded = expandedBatchId === r.id;
               return (
                 <div key={r.id} className="p-4 space-y-1.5">
                   <div className="flex items-start justify-between gap-2">
@@ -155,9 +273,59 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
                     অবশিষ্ট: <span className="font-semibold text-foreground">{Number(r.remainingQty).toFixed(2)}</span>
                     {" "} / {Number(r.totalQty).toFixed(2)} ({pct}%)
                   </p>
+                  <p className="text-xs text-muted-foreground">
+                    কাস্টমারের কাছে: <span className="font-semibold text-foreground">{netOutQty.toFixed(2)}</span>
+                  </p>
                   {r.purchaseDate && (
                     <p className="text-xs text-muted-foreground">ক্রয়: {r.purchaseDate}</p>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedBatchId((current) => current === r.id ? null : r.id)}
+                    className="mt-2 inline-flex h-8 items-center rounded-full border border-border bg-card px-3 text-[11px] font-semibold text-foreground hover:bg-muted"
+                  >
+                    {isExpanded ? "ট্রেস লুকান" : "কোথায় গেছে দেখুন"}
+                  </button>
+                  {isExpanded ? (
+                    <div className="mt-2 space-y-2 rounded-xl border border-border bg-muted/20 p-3">
+                      {r.allocations.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          এই batch এখনো কোনো sale-এ যায়নি।
+                        </p>
+                      ) : (
+                        r.allocations.map((allocation) => {
+                          const allocated = Number(allocation.quantityAllocated || 0);
+                          const returned = Number(allocation.quantityReturned || 0);
+                          const netQty = Math.max(0, allocated - returned);
+                          return (
+                            <div key={allocation.id} className="rounded-lg border border-border bg-card p-3">
+                              <p className="text-sm font-semibold text-foreground">
+                                {allocation.invoiceNo || `Sale ${allocation.saleId.slice(0, 8)}`}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {allocation.customerName || "Walk-in customer"} · {allocation.saleDate}
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
+                                <span className="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-foreground">
+                                  গেছে {allocated.toFixed(2)}
+                                </span>
+                                <span className="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-foreground">
+                                  ফিরেছে {returned.toFixed(2)}
+                                </span>
+                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 ${
+                                  netQty > 0.000001
+                                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                                    : "border-green-200 bg-green-50 text-green-700"
+                                }`}>
+                                  বাইরে আছে {netQty.toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}

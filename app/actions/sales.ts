@@ -285,6 +285,88 @@ function roundMoney(value: number) {
   return Number(toMoney(value));
 }
 
+async function restoreBatchAllocationsForSaleItem(
+  tx: Prisma.TransactionClient,
+  saleItemId: string,
+  qtyToRestore: number
+) {
+  let remaining = new Prisma.Decimal(toMoney(qtyToRestore));
+  if (remaining.lte(0)) return;
+
+  const allocations = await tx.batchAllocation.findMany({
+    where: { saleItemId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: {
+      id: true,
+      batchId: true,
+      quantityAllocated: true,
+      quantityReturned: true,
+    },
+  });
+
+  for (const allocation of allocations) {
+    if (remaining.lte(0)) break;
+    const outstanding = allocation.quantityAllocated.sub(allocation.quantityReturned);
+    if (outstanding.lte(0)) continue;
+
+    const restoreQty = Prisma.Decimal.min(outstanding, remaining);
+    await tx.batchAllocation.update({
+      where: { id: allocation.id },
+      data: {
+        quantityReturned: allocation.quantityReturned.add(restoreQty),
+      },
+    });
+    await tx.batch.update({
+      where: { id: allocation.batchId },
+      data: {
+        remainingQty: { increment: restoreQty },
+        isActive: true,
+      },
+    });
+    remaining = remaining.sub(restoreQty);
+  }
+
+  if (remaining.gt(0)) {
+    throw new Error("Batch allocation restore অসম্পূর্ণ হয়েছে");
+  }
+}
+
+async function restoreOutstandingBatchAllocationsForSale(
+  tx: Prisma.TransactionClient,
+  saleItemIds: string[]
+) {
+  if (saleItemIds.length === 0) return;
+
+  const allocations = await tx.batchAllocation.findMany({
+    where: { saleItemId: { in: saleItemIds } },
+    select: {
+      id: true,
+      batchId: true,
+      quantityAllocated: true,
+      quantityReturned: true,
+    },
+  });
+
+  for (const allocation of allocations) {
+    const outstanding = allocation.quantityAllocated.sub(allocation.quantityReturned);
+    if (outstanding.lte(0)) continue;
+
+    await tx.batch.update({
+      where: { id: allocation.batchId },
+      data: {
+        remainingQty: { increment: outstanding },
+        isActive: true,
+      },
+    });
+    await tx.batchAllocation.update({
+      where: { id: allocation.id },
+      data: {
+        quantityReturned: allocation.quantityAllocated,
+      },
+    });
+  }
+}
+
 function assertSaleReturnPermission(user: Awaited<ReturnType<typeof requireUser>>) {
   if (!canManageSaleReturn(user)) {
     throw new Error("Forbidden: missing permission create_sale_return");
@@ -1323,6 +1405,11 @@ export async function createSale(input: CreateSaleInput) {
         select: { id: true, remainingQty: true },
       });
 
+      const saleItemId = createdSaleItemIds[index]?.id;
+      if (!saleItemId) {
+        throw new Error("Batch allocation could not resolve sale item");
+      }
+
       for (const batch of batchRows) {
         if (toDeduct.lte(0)) break;
         const deduct = Prisma.Decimal.min(batch.remainingQty, toDeduct);
@@ -1334,7 +1421,19 @@ export async function createSale(input: CreateSaleInput) {
             isActive: newRemaining.lte(0) ? false : true,
           },
         });
+        await tx.batchAllocation.create({
+          data: {
+            shopId: input.shopId,
+            batchId: batch.id,
+            saleItemId,
+            quantityAllocated: deduct,
+          },
+        });
         toDeduct = toDeduct.sub(deduct);
+      }
+
+      if (toDeduct.gt(0)) {
+        throw new Error("Batch stock allocation সম্পূর্ণ করা যায়নি");
       }
     }
 
@@ -1637,6 +1736,7 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
           select: {
             id: true,
             productId: true,
+            variantId: true,
             productNameSnapshot: true,
             quantity: true,
             unitPrice: true,
@@ -1648,6 +1748,7 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
                 buyPrice: true,
                 stockQty: true,
                 trackStock: true,
+                trackBatch: true,
                 isActive: true,
               },
             },
@@ -1677,6 +1778,7 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
     const returnRows: Array<{
       saleItemId: string;
       productId: string;
+      variantId: string | null;
       productNameSnapshot: string | null;
       quantity: string;
       unitPrice: string;
@@ -1685,6 +1787,7 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
     }> = [];
 
     const returnStockByProduct = new Map<string, number>();
+    const returnStockByVariant = new Map<string, number>();
     let returnedSubtotal = 0;
 
     for (const [saleItemId, qty] of returnRequestMap.entries()) {
@@ -1712,6 +1815,7 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
       returnRows.push({
         saleItemId,
         productId: saleItem.productId,
+        variantId: saleItem.variantId ?? null,
         productNameSnapshot:
           saleItem.productNameSnapshot || saleItem.product?.name || null,
         quantity: toMoney(qty),
@@ -1724,10 +1828,17 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
       });
 
       if (saleItem.product?.trackStock) {
-        returnStockByProduct.set(
-          saleItem.productId,
-          (returnStockByProduct.get(saleItem.productId) ?? 0) + qty
-        );
+        if (saleItem.variantId) {
+          returnStockByVariant.set(
+            saleItem.variantId,
+            (returnStockByVariant.get(saleItem.variantId) ?? 0) + qty
+          );
+        } else {
+          returnStockByProduct.set(
+            saleItem.productId,
+            (returnStockByProduct.get(saleItem.productId) ?? 0) + qty
+          );
+        }
       }
     }
 
@@ -1897,6 +2008,13 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
       })),
     });
 
+    for (const row of returnRows) {
+      if (!Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0) continue;
+      const saleItem = saleItemsById.get(row.saleItemId);
+      if (!saleItem?.product?.trackBatch) continue;
+      await restoreBatchAllocationsForSaleItem(tx, row.saleItemId, Number(row.quantity));
+    }
+
     if (exchangeRows.length > 0) {
       await tx.saleReturnExchangeItem.createMany({
         data: exchangeRows.map((row) => ({
@@ -1908,6 +2026,15 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
           lineTotal: row.lineTotal,
           costAtReturn: row.costAtReturn,
         })),
+      });
+    }
+
+    for (const [variantId, qty] of returnStockByVariant.entries()) {
+      await tx.productVariant.updateMany({
+        where: { id: variantId },
+        data: {
+          stockQty: { increment: new Prisma.Decimal(toMoney(qty)) },
+        },
       });
     }
 
@@ -2522,6 +2649,7 @@ export async function voidSale(saleId: string, reason?: string | null) {
       },
     });
     affectedProductIds = saleItems.map((it: any) => it.productId);
+    const saleItemIds = saleItems.map((it: any) => it.id);
 
     for (const it of saleItems as any[]) {
       const p = it.product;
@@ -2531,13 +2659,24 @@ export async function voidSale(saleId: string, reason?: string | null) {
       if (!Number.isFinite(qty) || qty === 0) continue;
       const qtyDecimal = new Prisma.Decimal(qty.toFixed(2));
 
-      await tx.product.update({
-        where: { id: p.id },
-        data: {
-          stockQty: { increment: qtyDecimal },
-        },
-      });
+      if (it.variantId) {
+        await tx.productVariant.update({
+          where: { id: it.variantId },
+          data: {
+            stockQty: { increment: qtyDecimal },
+          },
+        });
+      } else {
+        await tx.product.update({
+          where: { id: p.id },
+          data: {
+            stockQty: { increment: qtyDecimal },
+          },
+        });
+      }
     }
+
+    await restoreOutstandingBatchAllocationsForSale(tx, saleItemIds);
 
     if (isCashSale) {
       cashOutAmount = roundMoney(Number(sale.totalAmount ?? 0));
