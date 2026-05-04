@@ -15,6 +15,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -37,6 +38,7 @@ import {
   type ProductCardMetrics,
   type ProductReturnInsight,
 } from "@/app/actions/products";
+import { createStockAdjustment } from "@/app/actions/stock-adjustments";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { subscribeProductEvent } from "@/lib/products/product-events";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
@@ -674,6 +676,20 @@ export default function ProductsListClient({
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [addingCatalog, setAddingCatalog] = useState(false);
+
+  type AdjustTarget = {
+    productId: string;
+    variantId?: string | null;
+    productName: string;
+    variantLabel?: string | null;
+    currentQty: string;
+  };
+  const [adjusting, setAdjusting] = useState<AdjustTarget | null>(null);
+  const [adjustNewQty, setAdjustNewQty] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
+  const [adjustNote, setAdjustNote] = useState("");
+  const [adjustSubmitting, setAdjustSubmitting] = useState(false);
+  const [adjustError, setAdjustError] = useState<string | null>(null);
 
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
@@ -3286,46 +3302,70 @@ export default function ProductsListClient({
 
                 {/* Action Buttons */}
                 {canUpdateProducts || canDeleteProducts ? (
-                  <div
-                    className={`grid gap-2 ${
-                      canUpdateProducts && canDeleteProducts
-                        ? "grid-cols-2"
-                        : "grid-cols-1"
-                    } mt-auto`}
-                  >
-                    {canUpdateProducts ? (
-                      <Link
-                        href={`/dashboard/products/${product.id}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          triggerHaptic("medium");
-                        }}
-                        className="flex items-center justify-center gap-2 h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 font-semibold text-sm shadow-sm hover:bg-primary/15 hover:border-primary/40 active:scale-95 transition"
-                      >
-                        <span>✏️</span>
-                        <span>এডিট</span>
-                      </Link>
-                    ) : null}
-                    {canDeleteProducts ? (
+                  <div className="mt-auto space-y-2">
+                    {canUpdateProducts && product.trackStock ? (
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setConfirmDelete({ id: product.id, name: product.name });
+                          setAdjusting({
+                            productId: product.id,
+                            variantId: null,
+                            productName: product.name,
+                            currentQty: product.stockQty,
+                          });
+                          setAdjustNewQty(product.stockQty);
+                          setAdjustReason("");
+                          setAdjustNote("");
+                          setAdjustError(null);
                         }}
-                        disabled={deletingId === product.id}
-                        className={`flex items-center justify-center gap-2 h-10 rounded-xl border font-semibold text-sm shadow-sm transition ${
-                          deletingId === product.id
-                            ? "bg-danger-soft border-danger/30 text-danger/60 cursor-not-allowed"
-                            : "bg-danger-soft border-danger/30 text-danger hover:bg-danger-soft/80 active:scale-95"
-                        }`}
+                        className="flex items-center justify-center gap-2 w-full h-10 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 font-semibold text-sm shadow-sm hover:bg-amber-100 dark:hover:bg-amber-900/40 active:scale-95 transition"
                       >
-                        <span>{deletingId === product.id ? "⏳" : "🗑️"}</span>
-                        <span>
-                          {deletingId === product.id ? "মুছছে..." : "ডিলিট"}
-                        </span>
+                        <span>⚖️</span>
+                        <span>স্টক ঠিক করুন</span>
                       </button>
                     ) : null}
+                    <div
+                      className={`grid gap-2 ${
+                        canUpdateProducts && canDeleteProducts
+                          ? "grid-cols-2"
+                          : "grid-cols-1"
+                      }`}
+                    >
+                      {canUpdateProducts ? (
+                        <Link
+                          href={`/dashboard/products/${product.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic("medium");
+                          }}
+                          className="flex items-center justify-center gap-2 h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 font-semibold text-sm shadow-sm hover:bg-primary/15 hover:border-primary/40 active:scale-95 transition"
+                        >
+                          <span>✏️</span>
+                          <span>এডিট</span>
+                        </Link>
+                      ) : null}
+                      {canDeleteProducts ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDelete({ id: product.id, name: product.name });
+                          }}
+                          disabled={deletingId === product.id}
+                          className={`flex items-center justify-center gap-2 h-10 rounded-xl border font-semibold text-sm shadow-sm transition ${
+                            deletingId === product.id
+                              ? "bg-danger-soft border-danger/30 text-danger/60 cursor-not-allowed"
+                              : "bg-danger-soft border-danger/30 text-danger hover:bg-danger-soft/80 active:scale-95"
+                          }`}
+                        >
+                          <span>{deletingId === product.id ? "⏳" : "🗑️"}</span>
+                          <span>
+                            {deletingId === product.id ? "মুছছে..." : "ডিলিট"}
+                          </span>
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 ) : (
                   <p className="mt-auto text-xs text-muted-foreground">
@@ -3858,6 +3898,134 @@ export default function ProductsListClient({
               মুছুন
             </button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock Adjustment Dialog */}
+      <Dialog
+        open={Boolean(adjusting)}
+        onOpenChange={(open) => {
+          if (!open) setAdjusting(null);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>স্টক সমন্বয়</DialogTitle>
+            <DialogDescription>
+              {adjusting?.productName}
+              {adjusting?.variantLabel ? ` · ${adjusting.variantLabel}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {adjusting ? (() => {
+            const currentQty = parseFloat(adjusting.currentQty) || 0;
+            const newQtyNum = parseFloat(adjustNewQty);
+            const delta = Number.isFinite(newQtyNum) ? newQtyNum - currentQty : null;
+            const unchanged = Number.isFinite(newQtyNum) && newQtyNum === currentQty;
+            const canSubmit = !adjustSubmitting && !unchanged && adjustReason && Number.isFinite(newQtyNum) && newQtyNum >= 0;
+
+            return (
+              <div className="space-y-4 pt-1">
+                <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
+                  <span className="text-muted-foreground">বর্তমান স্টক: </span>
+                  <span className="font-semibold text-foreground">{adjusting.currentQty}</span>
+                </div>
+
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-semibold text-foreground">নতুন পরিমাণ</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={adjustNewQty}
+                      onChange={(e) => setAdjustNewQty(e.target.value)}
+                      className="h-10 flex-1 rounded-xl border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder="যেমন: ১৫"
+                      autoFocus
+                    />
+                    {delta !== null && !unchanged && (
+                      <span className={`text-sm font-semibold min-w-[3rem] text-right ${
+                        delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-danger"
+                      }`}>
+                        {delta > 0 ? `+${delta.toFixed(2).replace(/\.?0+$/, "")}` : delta.toFixed(2).replace(/\.?0+$/, "")}
+                      </span>
+                    )}
+                  </div>
+                </label>
+
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-semibold text-foreground">কারণ</span>
+                  <select
+                    value={adjustReason}
+                    onChange={(e) => setAdjustReason(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="">— কারণ বেছে নিন —</option>
+                    <option value="DAMAGE">ক্ষতি / নষ্ট</option>
+                    <option value="SHRINKAGE">কমতি / মিলছে না</option>
+                    <option value="RECOUNT">গণনা সংশোধন</option>
+                    <option value="RETURN_TO_SUPPLIER">সরবরাহকারীকে ফেরত</option>
+                    <option value="FOUND">অতিরিক্ত পাওয়া গেছে</option>
+                    <option value="OTHER">অন্যান্য</option>
+                  </select>
+                </label>
+
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-semibold text-foreground">
+                    নোট <span className="font-normal text-muted-foreground">(ঐচ্ছিক)</span>
+                  </span>
+                  <textarea
+                    rows={2}
+                    value={adjustNote}
+                    onChange={(e) => setAdjustNote(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                    placeholder="যেমন: গুদামে পানি ঢুকেছিল"
+                  />
+                </label>
+
+                {adjustError ? (
+                  <p className="text-sm text-danger">{adjustError}</p>
+                ) : null}
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setAdjusting(null)}
+                    className="flex-1 h-10 rounded-xl border border-border bg-card text-foreground text-sm font-semibold hover:bg-muted transition"
+                  >
+                    বাতিল
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canSubmit}
+                    onClick={async () => {
+                      if (!adjusting || !canSubmit) return;
+                      setAdjustSubmitting(true);
+                      setAdjustError(null);
+                      try {
+                        await createStockAdjustment({
+                          shopId: activeShopId,
+                          productId: adjusting.productId,
+                          variantId: adjusting.variantId ?? null,
+                          newQty: newQtyNum,
+                          reason: adjustReason,
+                          note: adjustNote || null,
+                        });
+                        setAdjusting(null);
+                      } catch (err) {
+                        setAdjustError(err instanceof Error ? err.message : "কিছু একটা সমস্যা হয়েছে");
+                      } finally {
+                        setAdjustSubmitting(false);
+                      }
+                    }}
+                    className="flex-1 h-10 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    {adjustSubmitting ? "সংরক্ষণ হচ্ছে..." : "সমন্বয় করুন"}
+                  </button>
+                </div>
+              </div>
+            );
+          })() : null}
         </DialogContent>
       </Dialog>
     </div>
