@@ -253,6 +253,7 @@ model Shop {
   smsSummaryDispatches SmsSummaryDispatch[]
   supportTickets       SupportTicket[]
   serialNumbers        SerialNumber[]
+  batches              Batch[]
 
   @@index([ownerId], map: "idx_shops_owner_id")
   @@map("shops")
@@ -762,6 +763,7 @@ model Product {
   stockQty      Decimal  @default("0") @map("stock_qty") @db.Decimal(12, 2)
   trackStock          Boolean  @default(false) @map("track_stock")
   trackSerialNumbers  Boolean  @default(false) @map("track_serial_numbers")
+  trackBatch          Boolean  @default(false) @map("track_batch")
   reorderPoint        Int?     @map("reorder_point")
   isActive            Boolean  @default(true) @map("is_active")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -776,6 +778,7 @@ model Product {
   returnItems     SaleReturnItem[]
   returnExchangeItems SaleReturnExchangeItem[]
   serialNumbers   SerialNumber[]
+  batches         Batch[]
 
   @@index([shopId], map: "idx_products_shop")
   @@index([catalogProductId], map: "idx_products_catalog_product_id")
@@ -809,6 +812,7 @@ model ProductVariant {
   saleItems     SaleItem[]
   purchaseItems PurchaseItem[]
   serialNumbers SerialNumber[]
+  batches       Batch[]
 
   @@index([shopId, productId], map: "idx_product_variants_shop_product")
   @@index([productId, isActive, sortOrder], map: "idx_product_variants_product_active_order")
@@ -944,6 +948,7 @@ model PurchaseItem {
   product       Product         @relation(fields: [productId], references: [id])
   variant       ProductVariant? @relation(fields: [variantId], references: [id])
   serialNumbers SerialNumber[]
+  batches       Batch[]
 
   @@index([purchaseId], map: "idx_purchase_items_purchase")
   @@index([productId], map: "idx_purchase_items_product")
@@ -1396,4 +1401,32 @@ model SerialNumber {
   @@index([saleItemId], map: "idx_serial_numbers_sale_item")
   @@index([purchaseItemId], map: "idx_serial_numbers_purchase_item")
   @@map("serial_numbers")
+}
+
+// ======================
+// BATCH / LOT TRACKING
+// ======================
+
+model Batch {
+  id             String   @id @default(uuid()) @db.Uuid
+  shopId         String   @map("shop_id") @db.Uuid
+  productId      String   @map("product_id") @db.Uuid
+  variantId      String?  @map("variant_id") @db.Uuid
+  batchNo        String   @map("batch_no") @db.VarChar(120)
+  purchaseItemId String?  @map("purchase_item_id") @db.Uuid
+  totalQty       Decimal  @map("total_qty") @db.Decimal(12, 2)
+  remainingQty   Decimal  @map("remaining_qty") @db.Decimal(12, 2)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  shop         Shop            @relation(fields: [shopId], references: [id])
+  product      Product         @relation(fields: [productId], references: [id])
+  variant      ProductVariant? @relation(fields: [variantId], references: [id])
+  purchaseItem PurchaseItem?   @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
+
+  @@unique([shopId, productId, batchNo], map: "uq_batches_shop_product_batchno")
+  @@index([shopId, productId, remainingQty], map: "idx_batches_shop_product_remaining")
+  @@index([purchaseItemId], map: "idx_batches_purchase_item")
+  @@map("batches")
 }

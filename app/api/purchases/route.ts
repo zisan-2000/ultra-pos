@@ -9,6 +9,7 @@ const itemSchema = z.object({
   qty: z.union([z.string(), z.number()]),
   unitCost: z.union([z.string(), z.number()]),
   serialNumbers: z.array(z.string().min(1).max(120)).optional().nullable(),
+  batchNo: z.string().max(120).optional().nullable(),
 });
 
 const bodySchema = z.object({

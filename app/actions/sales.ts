@@ -1302,6 +1302,42 @@ export async function createSale(input: CreateSaleInput) {
       });
     }
 
+    // FIFO batch deduction
+    for (const { index } of createdSaleItemIds) {
+      const item = input.items[index];
+      const product = productMap.get(item.productId);
+      if (!product || !(product as any).trackBatch) continue;
+      if (item.qty <= 0) continue;
+
+      const variantId = item.variantId ?? null;
+      let toDeduct = new Prisma.Decimal(item.qty.toFixed(2));
+
+      const batchRows = await tx.batch.findMany({
+        where: {
+          shopId: input.shopId,
+          productId: item.productId,
+          variantId,
+          remainingQty: { gt: 0 },
+        },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, remainingQty: true },
+      });
+
+      for (const batch of batchRows) {
+        if (toDeduct.lte(0)) break;
+        const deduct = Prisma.Decimal.min(batch.remainingQty, toDeduct);
+        const newRemaining = batch.remainingQty.sub(deduct);
+        await tx.batch.update({
+          where: { id: batch.id },
+          data: {
+            remainingQty: newRemaining,
+            isActive: newRemaining.lte(0) ? false : true,
+          },
+        });
+        toDeduct = toDeduct.sub(deduct);
+      }
+    }
+
     // Create cash entry if needed
     if (cashCollected) {
       await tx.cashEntry.create({

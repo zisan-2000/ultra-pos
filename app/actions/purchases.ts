@@ -21,6 +21,7 @@ type PurchaseItemInput = {
   qty: number | string;
   unitCost: number | string;
   serialNumbers?: string[] | null;
+  batchNo?: string | null;
 };
 
 type CreatePurchaseInput = {
@@ -86,6 +87,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
       stockQty: true,
       trackStock: true,
       trackSerialNumbers: true,
+      trackBatch: true,
     },
   });
 
@@ -272,6 +274,36 @@ export async function createPurchase(input: CreatePurchaseInput) {
             purchaseItemId,
           })),
         });
+      }
+
+      // Create or upsert batch record for batch-tracked products
+      if (product.trackBatch) {
+        const batchNo = (inputItem.batchNo ?? "").trim();
+        if (batchNo) {
+          await tx.batch.upsert({
+            where: {
+              shopId_productId_batchNo: {
+                shopId: input.shopId,
+                productId: product.id,
+                batchNo,
+              },
+            },
+            create: {
+              shopId: input.shopId,
+              productId: product.id,
+              variantId: row.variantId ?? null,
+              batchNo,
+              purchaseItemId,
+              totalQty: row.qty,
+              remainingQty: row.qty,
+            },
+            update: {
+              totalQty: { increment: row.qty },
+              remainingQty: { increment: row.qty },
+              isActive: true,
+            },
+          });
+        }
       }
     }
 

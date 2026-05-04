@@ -17,6 +17,7 @@ type ProductOption = {
   stockQty?: string | null;
   trackStock?: boolean | null;
   trackSerialNumbers?: boolean | null;
+  trackBatch?: boolean | null;
   variants?: ProductVariantOption[];
 };
 
@@ -29,6 +30,7 @@ type PurchaseItemDraft = {
   serialNumbers: string[];
   serialInput: string;
   serialTab: "bulk" | "one";
+  batchNo: string;
 };
 
 type Props = {
@@ -78,6 +80,7 @@ const blankItem = (): PurchaseItemDraft => ({
   serialNumbers: [],
   serialInput: "",
   serialTab: "bulk",
+  batchNo: "",
 });
 
 function formatMoney(value: number) {
@@ -324,6 +327,7 @@ export default function PurchaseFormClient({
               qty: item.qty,
               unitCost: item.unitCost,
               serialNumbers: item.serialNumbers.length > 0 ? item.serialNumbers : null,
+              batchNo: item.batchNo.trim() || null,
             })),
             supplierId: supplierId || null,
             supplierName: supplierId ? null : supplierName || null,
@@ -703,6 +707,33 @@ export default function PurchaseFormClient({
                         </div>
                       );
                     })() : null}
+
+                    {/* Batch number input — shown when product has trackBatch */}
+                    {productMap.get(item.productId)?.trackBatch && (
+                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+                        <span className="text-[11px] font-semibold text-amber-700">
+                          Batch / Lot নম্বর
+                        </span>
+                        <input
+                          type="text"
+                          value={item.batchNo}
+                          onChange={(e) =>
+                            setItems((prev) =>
+                              prev.map((i) =>
+                                i.id === item.id
+                                  ? { ...i, batchNo: e.target.value }
+                                  : i
+                              )
+                            )
+                          }
+                          placeholder="যেমন: LOT-2026-A, BATCH-001"
+                          className="w-full h-9 rounded-lg border border-amber-200 bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-amber-300"
+                        />
+                        <p className="text-[10px] text-amber-600">
+                          ফাঁকা রাখলে batch রেকর্ড হবে না
+                        </p>
+                      </div>
+                    )}
 
                     {/* Serial number input — shown when product has trackSerialNumbers */}
                     {productMap.get(item.productId)?.trackSerialNumbers && (

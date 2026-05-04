@@ -469,6 +469,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   const [selectedUnit, setSelectedUnit] = useState(configDefaultUnit || configUnits[0] || "pcs");
   const [stockEnabled, setStockEnabled] = useState(stock.enabledByDefault);
   const [serialEnabled, setSerialEnabled] = useState(false);
+  const [batchEnabled, setBatchEnabled] = useState(false);
 
   const ensuredShopId = shop.id;
   const advancedFieldRenderers: Partial<Record<Field, () => ReactElement>> = {
@@ -1573,6 +1574,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       isActive: form.get("isActive") === "on",
       trackStock: stockEnabled,
       trackSerialNumbers: serialEnabled && stockEnabled,
+      trackBatch: batchEnabled && stockEnabled,
       reorderPoint,
       businessType,
       expiryDate,
@@ -2583,6 +2585,37 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
                   }`}
                 >
                   {serialEnabled ? "চালু" : "বন্ধ"}
+                </span>
+              </label>
+            </div>
+          )}
+
+          {/* Batch / Lot tracking toggle */}
+          {stockEnabled && (
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={batchEnabled}
+                  onChange={(e) => setBatchEnabled(e.target.checked)}
+                  className="h-5 w-5 border border-border rounded cursor-pointer"
+                />
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-semibold text-foreground">
+                    Batch / Lot Tracking
+                  </span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    প্রতিটা stock-in এ batch নম্বর রেকর্ড হবে, বিক্রয়ে FIFO ক্রমে কাটবে
+                  </p>
+                </div>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    batchEnabled
+                      ? "bg-amber-50 text-amber-700 border border-amber-200"
+                      : "bg-muted text-muted-foreground border border-border/50"
+                  }`}
+                >
+                  {batchEnabled ? "চালু" : "বন্ধ"}
                 </span>
               </label>
             </div>

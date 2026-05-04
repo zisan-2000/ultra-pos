@@ -8,6 +8,8 @@ export const productSchema = z.object({
   sellPrice: z.string().regex(/^\d+(\.\d+)?$/, "Invalid price format"),
   stockQty: z.string().regex(/^\d+(\.\d+)?$/, "Invalid stock quantity"),
   isActive: z.boolean(),
+  trackSerialNumbers: z.boolean().optional(),
+  trackBatch: z.boolean().optional(),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;

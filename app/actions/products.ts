@@ -38,6 +38,7 @@ type CreateProductInput = {
   isActive: boolean;
   trackStock?: boolean;
   trackSerialNumbers?: boolean;
+  trackBatch?: boolean;
   reorderPoint?: number | null;
   businessType?: string;
   expiryDate?: string | null;
@@ -65,6 +66,7 @@ type UpdateProductInput = {
   isActive?: boolean;
   trackStock?: boolean;
   trackSerialNumbers?: boolean;
+  trackBatch?: boolean;
   reorderPoint?: number | null;
   businessType?: string;
   expiryDate?: string | null;
@@ -98,6 +100,7 @@ type ProductListRow = {
   stockQty: string;
   trackStock: boolean;
   trackSerialNumbers: boolean;
+  trackBatch: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -776,6 +779,10 @@ export async function createProduct(input: CreateProductInput) {
     input.trackSerialNumbers === undefined
       ? false
       : Boolean(input.trackSerialNumbers) && trackStock;
+  const trackBatch =
+    input.trackBatch === undefined
+      ? false
+      : Boolean(input.trackBatch) && trackStock;
   const stockQty = trackStock ? normalizedStock : "0";
   const sku = normalizeProductCodeInput(input.sku);
   const barcode = normalizeProductCodeInput(input.barcode);
@@ -811,6 +818,7 @@ export async function createProduct(input: CreateProductInput) {
     isActive: input.isActive,
     trackStock,
     trackSerialNumbers,
+    trackBatch,
     reorderPoint: trackStock && input.reorderPoint != null ? input.reorderPoint : null,
   };
 
@@ -1009,6 +1017,7 @@ export async function getProductsByShop(shopId: string) {
       isActive: true,
       trackStock: true,
       trackSerialNumbers: true,
+      trackBatch: true,
       createdAt: true,
       updatedAt: true,
       variants: {
@@ -1120,6 +1129,7 @@ export async function getProductsByShopPaginated({
     stockQty: product.stockQty.toString(),
     trackStock: Boolean(product.trackStock),
     trackSerialNumbers: Boolean(product.trackSerialNumbers),
+    trackBatch: Boolean((product as any).trackBatch),
     isActive: product.isActive,
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
@@ -1269,6 +1279,7 @@ export async function getProductsByShopCursorPaginated({
     stockQty: p.stockQty?.toString?.() ?? (p as any).stockQty ?? "0",
     trackStock: Boolean(p.trackStock),
     trackSerialNumbers: Boolean(p.trackSerialNumbers),
+    trackBatch: Boolean((p as any).trackBatch),
     isActive: p.isActive,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -1582,6 +1593,9 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   if (data.trackSerialNumbers !== undefined)
     payload.trackSerialNumbers =
       Boolean(data.trackSerialNumbers) && Boolean(trackStockFlag);
+  if (data.trackBatch !== undefined)
+    payload.trackBatch =
+      Boolean(data.trackBatch) && Boolean(trackStockFlag);
   if (buyPrice !== undefined) payload.buyPrice = buyPrice;
   if (sellPrice !== undefined) payload.sellPrice = sellPrice;
   if (resolvedStockQty !== undefined) payload.stockQty = resolvedStockQty;
@@ -1730,6 +1744,7 @@ export async function getActiveProductsByShop(shopId: string) {
     stockQty: p.stockQty?.toString() ?? "0",
     trackStock: p.trackStock,
     trackSerialNumbers: Boolean(p.trackSerialNumbers),
+    trackBatch: Boolean((p as any).trackBatch),
     variants: (p.variants || []).map((variant) => ({
       id: variant.id,
       label: variant.label,
