@@ -72,18 +72,23 @@ export async function getSuppliersByShop(shopId: string) {
 
   const totals = new Map<
     string,
-    { purchase: number; payment: number }
+    { purchase: number; payment: number; purchaseReturn: number }
   >();
   ledger.forEach((row) => {
-    const current = totals.get(row.supplierId) || { purchase: 0, payment: 0 };
+    const current = totals.get(row.supplierId) || {
+      purchase: 0,
+      payment: 0,
+      purchaseReturn: 0,
+    };
     const amount = Number(row._sum.amount ?? 0);
     if (row.entryType === "PURCHASE") current.purchase += amount;
     if (row.entryType === "PAYMENT") current.payment += amount;
+    if (row.entryType === "PURCHASE_RETURN") current.purchaseReturn += amount;
     totals.set(row.supplierId, current);
   });
 
   return suppliers.map((s) => {
-    const t = totals.get(s.id) || { purchase: 0, payment: 0 };
+    const t = totals.get(s.id) || { purchase: 0, payment: 0, purchaseReturn: 0 };
     return {
       id: s.id,
       name: s.name,
@@ -92,7 +97,8 @@ export async function getSuppliersByShop(shopId: string) {
       createdAt: s.createdAt?.toISOString?.() ?? s.createdAt,
       purchaseTotal: Number(t.purchase.toFixed(2)),
       paymentTotal: Number(t.payment.toFixed(2)),
-      balance: Number((t.purchase - t.payment).toFixed(2)),
+      purchaseReturnTotal: Number(t.purchaseReturn.toFixed(2)),
+      balance: Number((t.purchase - t.payment - t.purchaseReturn).toFixed(2)),
     };
   });
 }
@@ -190,10 +196,12 @@ export async function getSupplierStatement(input: {
 
   let purchaseTotal = 0;
   let paymentTotal = 0;
+  let purchaseReturnTotal = 0;
   totals.forEach((row) => {
     const amount = Number(row._sum.amount ?? 0);
     if (row.entryType === "PURCHASE") purchaseTotal += amount;
     if (row.entryType === "PAYMENT") paymentTotal += amount;
+    if (row.entryType === "PURCHASE_RETURN") purchaseReturnTotal += amount;
   });
 
   const ageingPercent = (bucket: number, total: number) =>
@@ -220,7 +228,8 @@ export async function getSupplierStatement(input: {
     totals: {
       purchaseTotal,
       paymentTotal,
-      balance: Number((purchaseTotal - paymentTotal).toFixed(2)),
+      purchaseReturnTotal,
+      balance: Number((purchaseTotal - paymentTotal - purchaseReturnTotal).toFixed(2)),
     },
     ageing: ageingWithPercent,
     ledger: ledgerRows.map((row) => ({

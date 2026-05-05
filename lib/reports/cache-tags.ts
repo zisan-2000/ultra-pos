@@ -8,6 +8,7 @@ export const REPORTS_CACHE_TAGS = {
   profitTrend: "reports:profit-trend",
   topProducts: "reports:top-products",
   lowStock: "reports:low-stock",
+  stockValuation: "reports:stock-valuation",
   todaySummary: "reports:today-summary",
 } as const;
 
@@ -40,5 +41,6 @@ export const REPORTS_TAG_GROUPS = {
   products: [
     REPORTS_CACHE_TAGS.lowStock,
     REPORTS_CACHE_TAGS.topProducts,
+    REPORTS_CACHE_TAGS.stockValuation,
   ],
 } as const;

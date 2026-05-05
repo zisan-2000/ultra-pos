@@ -131,6 +131,7 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
   ]);
 
   const totalAmount = Number(summary.totalAmount ?? 0);
+  const purchaseReturnTotal = Number(summary.purchaseReturnTotal ?? 0);
   const formattedTotal = Number.isFinite(totalAmount)
     ? totalAmount.toFixed(2)
     : "0.00";
@@ -242,7 +243,10 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
               মোট {summary.count ?? 0} টি
             </span>
             <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">
-              ৳ {formattedTotal}
+              নেট ৳ {formattedTotal}
+            </span>
+            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-warning border border-warning/20">
+              রিটার্ন ৳ {purchaseReturnTotal.toFixed(2)}
             </span>
             <span className="inline-flex h-7 max-w-[200px] items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border truncate">
               সময়: {from === to ? from : `${from} → ${to}`}

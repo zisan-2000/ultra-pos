@@ -224,6 +224,9 @@ const TopProductsReport = dynamic(() => import("./TopProductsReport"), {
 const LowStockReport = dynamic(() => import("./LowStockReport"), {
   loading: () => <ReportSkeleton />,
 });
+const StockValuationReport = dynamic(() => import("./StockValuationReport"), {
+  loading: () => <ReportSkeleton />,
+});
 
 type ReportKey = (typeof NAV)[number]["key"];
 
@@ -243,6 +246,8 @@ const prefetchReportModule = (key: ReportKey) => {
       return import("./TopProductsReport");
     case "stock":
       return import("./LowStockReport");
+    case "valuation":
+      return import("./StockValuationReport");
     default:
       return Promise.resolve();
   }
@@ -256,7 +261,8 @@ const PREFETCH_REPORTS_BY_TAB: Record<ReportKey, ReportKey[]> = {
   payment: ["profit"],
   profit: ["payment", "products"],
   products: ["stock"],
-  stock: [],
+  stock: ["valuation"],
+  valuation: [],
 };
 
 const PREFETCH_REPORT_DATA_BY_TAB: Record<ReportKey, ReportKey[]> = {
@@ -268,6 +274,7 @@ const PREFETCH_REPORT_DATA_BY_TAB: Record<ReportKey, ReportKey[]> = {
   profit: [],
   products: [],
   stock: [],
+  valuation: [],
 };
 
 const NAV = [
@@ -279,6 +286,7 @@ const NAV = [
   { key: "profit", label: "লাভ" },
   { key: "products", label: "পণ্য" },
   { key: "stock", label: "লো স্টক" },
+  { key: "valuation", label: "স্টক মূল্য" },
 ] as const;
 
 const MOBILE_PRIMARY_REPORT_KEYS = [
@@ -287,6 +295,7 @@ const MOBILE_PRIMARY_REPORT_KEYS = [
   "expenses",
   "cash",
   "profit",
+  "valuation",
 ] as const satisfies ReportKey[];
 
 const MOBILE_SECONDARY_REPORT_KEYS = NAV.map((item) => item.key).filter(
@@ -326,7 +335,8 @@ type ExportTarget =
   | "payment"
   | "profit"
   | "products"
-  | "stock";
+  | "stock"
+  | "valuation";
 
 type ExportKey = ExportTarget | "active" | "all";
 
@@ -672,6 +682,12 @@ export default function ReportsClient({
     });
   }, [queryClient, shopId]);
 
+  const invalidateValuation = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: ["reports", "stock-valuation", shopId, REPORT_ROW_LIMIT],
+    });
+  }, [queryClient, shopId]);
+
   const invalidateActiveReport = useCallback(() => {
     switch (active) {
       case "sales":
@@ -695,6 +711,9 @@ export default function ReportsClient({
       case "stock":
         invalidateLowStock();
         break;
+      case "valuation":
+        invalidateValuation();
+        break;
       default:
         break;
     }
@@ -707,6 +726,7 @@ export default function ReportsClient({
     invalidateProfit,
     invalidateTopProducts,
     invalidateLowStock,
+    invalidateValuation,
   ]);
 
   const handleSmartRefresh = useCallback(
@@ -755,6 +775,7 @@ export default function ReportsClient({
     invalidateProfit();
     invalidateTopProducts();
     invalidateLowStock();
+    invalidateValuation();
 
     try {
       safeLocalStorageSet(refreshKey, String(Date.now()));
@@ -771,6 +792,7 @@ export default function ReportsClient({
     invalidateProfit,
     invalidateTopProducts,
     invalidateLowStock,
+    invalidateValuation,
   ]);
 
   // Real-time event listeners
@@ -797,6 +819,7 @@ export default function ReportsClient({
         invalidateProfit();
         invalidatePayment();
         invalidateTopProducts();
+        invalidateValuation();
       },
       { shopId, priority: 10 }
     );
@@ -846,6 +869,7 @@ export default function ReportsClient({
     invalidateProfit,
     invalidatePayment,
     invalidateTopProducts,
+    invalidateValuation,
     triggerRefresh,
   ]);
 
@@ -1224,7 +1248,7 @@ export default function ReportsClient({
       const text = await res.text();
       if (!text) return [];
       const json = JSON.parse(text);
-      return Array.isArray(json?.data) ? json.data : json;
+      return json?.data ?? json;
     },
     []
   );
@@ -1393,6 +1417,32 @@ export default function ReportsClient({
           downloadFile("low-stock-all.csv", csv);
           return;
         }
+        case "valuation": {
+          const params = new URLSearchParams({
+            shopId,
+            limit: String(REPORT_ROW_LIMIT),
+          });
+          const payload = await fetchReportData("/api/reports/stock-valuation", params);
+          const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+          const csv = generateCSV(
+            [
+              "id",
+              "productId",
+              "kind",
+              "name",
+              "category",
+              "unit",
+              "qty",
+              "buyPrice",
+              "sellPrice",
+              "costValue",
+              "retailValue",
+            ],
+            rows
+          );
+          downloadFile(`stock-valuation-${exportSuffix}.csv`, csv);
+          return;
+        }
         default:
           return;
       }
@@ -1430,6 +1480,7 @@ export default function ReportsClient({
             "profit",
             "products",
             "stock",
+            "valuation",
           ];
           for (const target of targets) {
             await exportSingle(target);
@@ -1498,6 +1549,8 @@ export default function ReportsClient({
             onThresholdChange={setLowStockThreshold}
           />
         );
+      case "valuation":
+        return <StockValuationReport shopId={shopId} />;
       default:
         return null;
     }

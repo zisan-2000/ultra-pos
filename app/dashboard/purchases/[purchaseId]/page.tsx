@@ -28,6 +28,7 @@ export default async function PurchaseDetailPage({
   ]);
   const canViewPurchases = hasPermission(user, "view_purchases");
   const canCreatePurchasePayment = hasPermission(user, "create_purchase_payment");
+  const canCreatePurchase = hasPermission(user, "create_purchase");
 
   if (!canViewPurchases) {
     return (
@@ -103,16 +104,26 @@ export default async function PurchaseDetailPage({
         >
           ← ক্রয় তালিকায় ফিরুন
         </Link>
-        {dueAmount > 0 && canCreatePurchasePayment ? (
-          <Link
-            href={`/dashboard/purchases/pay?shopId=${shopId}&purchaseId=${purchaseId}${
-              purchase.supplierId ? `&supplierId=${purchase.supplierId}` : ""
-            }`}
-            className="inline-flex mt-2 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 py-2 text-xs font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
-          >
-            বাকি পরিশোধ করুন
-          </Link>
-        ) : null}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {dueAmount > 0 && canCreatePurchasePayment ? (
+            <Link
+              href={`/dashboard/purchases/pay?shopId=${shopId}&purchaseId=${purchaseId}${
+                purchase.supplierId ? `&supplierId=${purchase.supplierId}` : ""
+              }`}
+              className="inline-flex items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 py-2 text-xs font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
+            >
+              বাকি পরিশোধ করুন
+            </Link>
+          ) : null}
+          {purchase.supplierId && canCreatePurchase ? (
+            <Link
+              href={`/dashboard/purchases/${purchaseId}/return?shopId=${shopId}`}
+              className="inline-flex items-center gap-2 rounded-full border border-warning/30 bg-warning-soft px-4 py-2 text-xs font-semibold text-warning hover:border-warning/40"
+            >
+              সাপ্লায়ার রিটার্ন
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] space-y-3">
@@ -206,6 +217,63 @@ export default async function PurchaseDetailPage({
             </Link>
           </div>
         ) : null}
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <h2 className="text-base font-semibold text-foreground">সাপ্লায়ার রিটার্ন ইতিহাস</h2>
+        {purchase.returns.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">এখনও কোনো supplier return নেই।</p>
+        ) : (
+          <div className="mt-3 space-y-3">
+            {purchase.returns.map((purchaseReturn) => (
+              <div
+                key={purchaseReturn.id}
+                className="rounded-2xl border border-border bg-card px-3 py-3 text-xs"
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="font-semibold text-foreground">
+                      {new Date(purchaseReturn.returnDate).toLocaleDateString("bn-BD")}
+                    </p>
+                    <p className="text-muted-foreground">
+                      রিটার্ন: ৳ {Number(purchaseReturn.totalAmount).toFixed(2)}
+                      {" · "}
+                      ক্রেডিট: ৳ {Number(purchaseReturn.supplierCredit).toFixed(2)}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {purchaseReturn.note || "নোট নেই"}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-warning/25 bg-warning-soft px-3 py-1 font-semibold text-warning">
+                    #{purchaseReturn.id.slice(0, 8)}
+                  </span>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {purchaseReturn.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between rounded-xl border border-border px-3 py-2"
+                    >
+                      <div>
+                        <p className="font-semibold text-foreground">
+                          {item.name}
+                          {item.variantLabel ? ` (${item.variantLabel})` : ""}
+                        </p>
+                        <p className="text-muted-foreground">
+                          {Number(item.quantity).toFixed(2)} × ৳ {Number(item.unitCost).toFixed(2)}
+                        </p>
+                      </div>
+                      <p className="font-semibold text-foreground">
+                        ৳ {Number(item.lineTotal).toFixed(2)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

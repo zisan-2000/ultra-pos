@@ -2,6 +2,7 @@
 
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
@@ -35,6 +36,20 @@ type CreatePurchaseInput = {
   note?: string | null;
 };
 
+type PurchaseReturnItemInput = {
+  purchaseItemId: string;
+  qty: number | string;
+  serialNumbers?: string[] | null;
+};
+
+type CreatePurchaseReturnInput = {
+  shopId: string;
+  purchaseId: string;
+  items: PurchaseReturnItemInput[];
+  returnDate?: string;
+  note?: string | null;
+};
+
 function toMoney(value: number | string, field: string) {
   const num = Number(value);
   if (!Number.isFinite(num) || num < 0) {
@@ -48,6 +63,111 @@ function normalizePurchaseDate(raw?: string | null) {
   const day = trimmed || getDhakaDateString();
   const { start } = parseDhakaDateOnlyRange(day, day, true);
   return start ?? new Date(`${day}T00:00:00.000Z`);
+}
+
+async function getReturnedQtyByPurchaseItemId(
+  purchaseId: string,
+  tx: Prisma.TransactionClient | typeof prisma = prisma
+) {
+  const rows = await tx.purchaseReturnItem.groupBy({
+    by: ["purchaseItemId"],
+    where: {
+      purchaseReturn: {
+        purchaseId,
+      },
+    },
+    _sum: {
+      quantity: true,
+    },
+  });
+
+  const returnedByItem = new Map<string, number>();
+  for (const row of rows) {
+    returnedByItem.set(
+      row.purchaseItemId,
+      Number(row._sum.quantity ?? 0)
+    );
+  }
+  return returnedByItem;
+}
+
+async function reduceCutLengthForPurchaseReturn(
+  tx: Prisma.TransactionClient,
+  params: {
+    shopId: string;
+    productId: string;
+    variantId: string | null;
+    purchaseReturnItemId: string;
+    qty: number;
+  }
+) {
+  let remaining = new Prisma.Decimal(params.qty.toFixed(2));
+  if (remaining.lte(0)) return;
+
+  const remnantRows = await tx.remnantPiece.findMany({
+    where: {
+      shopId: params.shopId,
+      productId: params.productId,
+      variantId: params.variantId,
+      status: "ACTIVE",
+      remainingLength: { gt: 0 },
+    },
+    orderBy: [{ remainingLength: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      remainingLength: true,
+    },
+  });
+
+  for (const piece of remnantRows) {
+    if (remaining.lte(0)) break;
+    const consume = Prisma.Decimal.min(piece.remainingLength, remaining);
+    if (consume.lte(0)) continue;
+    const nextRemaining = piece.remainingLength.sub(consume);
+
+    await tx.remnantPiece.update({
+      where: { id: piece.id },
+      data: {
+        remainingLength: nextRemaining,
+        status: nextRemaining.lte(0) ? "CONSUMED" : "ACTIVE",
+        note: nextRemaining.lte(0)
+          ? "Returned to supplier from remnant stock"
+          : undefined,
+      },
+    });
+
+    await tx.remnantPiece.create({
+      data: {
+        shopId: params.shopId,
+        productId: params.productId,
+        variantId: params.variantId,
+        originalLength: consume,
+        remainingLength: new Prisma.Decimal("0.00"),
+        source: "PURCHASE_RETURN",
+        sourceRef: params.purchaseReturnItemId,
+        status: "CONSUMED",
+        note: "Returned to supplier",
+      },
+    });
+
+    remaining = remaining.sub(consume);
+  }
+
+  if (remaining.gt(0)) {
+    await tx.remnantPiece.create({
+      data: {
+        shopId: params.shopId,
+        productId: params.productId,
+        variantId: params.variantId,
+        originalLength: remaining,
+        remainingLength: new Prisma.Decimal("0.00"),
+        source: "PURCHASE_RETURN",
+        sourceRef: params.purchaseReturnItemId,
+        status: "CONSUMED",
+        note: "Returned to supplier from non-remnant stock",
+      },
+    });
+  }
 }
 
 async function assertInventoryModuleEnabled(shopId: string) {
@@ -416,6 +536,304 @@ export async function createPurchase(input: CreatePurchaseInput) {
   return { success: true, purchaseId: createdPurchaseId };
 }
 
+export async function createPurchaseReturn(input: CreatePurchaseReturnInput) {
+  const user = await requireUser();
+  requirePermission(user, "create_purchase");
+  await assertShopAccess(input.shopId, user);
+  await assertInventoryModuleEnabled(input.shopId);
+
+  if (!Array.isArray(input.items) || input.items.length === 0) {
+    throw new Error("At least one return item is required");
+  }
+
+  const purchase = await prisma.purchase.findUnique({
+    where: { id: input.purchaseId },
+    include: {
+      items: {
+        include: {
+          product: {
+            select: {
+              id: true,
+              name: true,
+              stockQty: true,
+              trackStock: true,
+              trackSerialNumbers: true,
+              trackBatch: true,
+              trackCutLength: true,
+            },
+          },
+          variant: {
+            select: {
+              id: true,
+              stockQty: true,
+            },
+          },
+          serialNumbers: {
+            select: {
+              id: true,
+              serialNo: true,
+              status: true,
+            },
+          },
+          batches: {
+            select: {
+              id: true,
+              batchNo: true,
+              totalQty: true,
+              remainingQty: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!purchase || purchase.shopId !== input.shopId) {
+    throw new Error("Purchase not found for this shop");
+  }
+  if (!purchase.supplierId) {
+    throw new Error("Supplier-linked purchase required for supplier credit return");
+  }
+
+  const returnedMap = await getReturnedQtyByPurchaseItemId(purchase.id);
+  const purchaseItemMap = new Map(purchase.items.map((item) => [item.id, item]));
+  const returnDate = normalizePurchaseDate(input.returnDate);
+  const preparedRows: Array<{
+    purchaseItemId: string;
+    productId: string;
+    variantId: string | null;
+    qty: number;
+    unitCost: number;
+    lineTotal: number;
+    serialNumbers: string[];
+  }> = [];
+
+  let totalAmount = 0;
+
+  for (const rawItem of input.items) {
+    const purchaseItem = purchaseItemMap.get(rawItem.purchaseItemId);
+    if (!purchaseItem) {
+      throw new Error("Invalid purchase item in return request");
+    }
+    const qty = toMoney(rawItem.qty, "Return quantity");
+    if (qty <= 0) continue;
+
+    const purchasedQty = Number(purchaseItem.quantity ?? 0);
+    const alreadyReturned = returnedMap.get(purchaseItem.id) ?? 0;
+    const returnableQty = Math.max(0, purchasedQty - alreadyReturned);
+    if (qty > returnableQty + 0.000001) {
+      throw new Error(`"${purchaseItem.product.name}" এর জন্য returnable quantity অতিক্রম করেছে`);
+    }
+
+    const product = purchaseItem.product;
+    if (product.trackStock) {
+      if (purchaseItem.variantId) {
+        const variantStock = Number(purchaseItem.variant?.stockQty ?? 0);
+        if (!Number.isFinite(variantStock) || variantStock + 0.000001 < qty) {
+          throw new Error(`"${product.name}" variant-এর পর্যাপ্ত স্টক নেই return করার জন্য`);
+        }
+      } else {
+        const currentStock = Number(product.stockQty ?? 0);
+        if (!Number.isFinite(currentStock) || currentStock + 0.000001 < qty) {
+          throw new Error(`"${product.name}" এর পর্যাপ্ত স্টক নেই return করার জন্য`);
+        }
+      }
+    }
+
+    const serials = (rawItem.serialNumbers ?? [])
+      .map((value) => value.trim().toUpperCase())
+      .filter(Boolean);
+    if (product.trackSerialNumbers) {
+      const expectedQty = Math.round(qty);
+      if (serials.length !== expectedQty) {
+        throw new Error(`"${product.name}" এর জন্য ${expectedQty}টি serial number দিন`);
+      }
+      const availableSerials = purchaseItem.serialNumbers.filter(
+        (serial) => serial.status === "IN_STOCK"
+      );
+      const availableSet = new Set(availableSerials.map((serial) => serial.serialNo));
+      for (const serial of serials) {
+        if (!availableSet.has(serial)) {
+          throw new Error(`Serial "${serial}" available নেই বা ইতিমধ্যে বিক্রি/ফেরত হয়েছে`);
+        }
+      }
+    }
+
+    if (product.trackBatch && purchaseItem.batches.length > 0) {
+      const batch = purchaseItem.batches[0];
+      const remainingQty = Number(batch.remainingQty ?? 0);
+      if (!Number.isFinite(remainingQty) || remainingQty + 0.000001 < qty) {
+        throw new Error(`Batch "${batch.batchNo}" এ পর্যাপ্ত অবশিষ্ট নেই supplier return করার জন্য`);
+      }
+    }
+
+    const unitCost = Number(purchaseItem.unitCost ?? 0);
+    const lineTotal = Number((qty * unitCost).toFixed(2));
+    totalAmount += lineTotal;
+    preparedRows.push({
+      purchaseItemId: purchaseItem.id,
+      productId: purchaseItem.productId,
+      variantId: purchaseItem.variantId ?? null,
+      qty,
+      unitCost,
+      lineTotal,
+      serialNumbers: serials,
+    });
+  }
+
+  if (preparedRows.length === 0) {
+    throw new Error("No valid return rows found");
+  }
+
+  let createdPurchaseReturnId: string | null = null;
+  let supplierCreditAmount = 0;
+
+  await prisma.$transaction(async (tx) => {
+    const createdReturn = await tx.purchaseReturn.create({
+      data: {
+        shopId: input.shopId,
+        purchaseId: purchase.id,
+        supplierId: purchase.supplierId,
+        returnDate,
+        totalAmount: totalAmount.toFixed(2),
+        supplierCredit: "0.00",
+        note: input.note?.trim() || null,
+        createdByUserId: user.id,
+      },
+      select: { id: true },
+    });
+    createdPurchaseReturnId = createdReturn.id;
+
+    for (const row of preparedRows) {
+      const purchaseItem = purchaseItemMap.get(row.purchaseItemId)!;
+      const product = purchaseItem.product;
+
+      const createdReturnItem = await tx.purchaseReturnItem.create({
+        data: {
+          purchaseReturnId: createdReturn.id,
+          purchaseItemId: row.purchaseItemId,
+          productId: row.productId,
+          variantId: row.variantId,
+          quantity: row.qty.toFixed(2),
+          unitCost: row.unitCost.toFixed(2),
+          lineTotal: row.lineTotal.toFixed(2),
+          note: input.note?.trim() || null,
+        },
+        select: { id: true },
+      });
+
+      if (product.trackSerialNumbers && row.serialNumbers.length > 0) {
+        const updated = await tx.serialNumber.updateMany({
+          where: {
+            purchaseItemId: row.purchaseItemId,
+            serialNo: { in: row.serialNumbers },
+            status: "IN_STOCK",
+          },
+          data: {
+            status: "RETURNED",
+            note: `Supplier return ${createdReturn.id}`,
+          },
+        });
+        if (updated.count !== row.serialNumbers.length) {
+          throw new Error(`Serial return update অসম্পূর্ণ হয়েছে for "${product.name}"`);
+        }
+      }
+
+      if (product.trackBatch && purchaseItem.batches.length > 0) {
+        const batch = purchaseItem.batches[0];
+        const nextTotal = new Prisma.Decimal(batch.totalQty).sub(
+          new Prisma.Decimal(row.qty.toFixed(2))
+        );
+        const nextRemaining = new Prisma.Decimal(batch.remainingQty).sub(
+          new Prisma.Decimal(row.qty.toFixed(2))
+        );
+        await tx.batch.update({
+          where: { id: batch.id },
+          data: {
+            totalQty: nextTotal,
+            remainingQty: nextRemaining,
+            isActive: nextRemaining.gt(0),
+          },
+        });
+      }
+
+      if (product.trackCutLength) {
+        await reduceCutLengthForPurchaseReturn(tx, {
+          shopId: input.shopId,
+          productId: row.productId,
+          variantId: row.variantId,
+          purchaseReturnItemId: createdReturnItem.id,
+          qty: row.qty,
+        });
+      }
+
+      if (product.trackStock) {
+        const qtyDecimal = new Prisma.Decimal(row.qty.toFixed(2));
+        if (row.variantId) {
+          const updated = await tx.productVariant.updateMany({
+            where: { id: row.variantId, stockQty: { gte: qtyDecimal } },
+            data: { stockQty: { decrement: qtyDecimal } },
+          });
+          if (updated.count !== 1) {
+            throw new Error(`"${product.name}" variant stock return failed`);
+          }
+        } else {
+          const updated = await tx.product.updateMany({
+            where: { id: row.productId, trackStock: true, stockQty: { gte: qtyDecimal } },
+            data: { stockQty: { decrement: qtyDecimal } },
+          });
+          if (updated.count !== 1) {
+            throw new Error(`"${product.name}" stock return failed`);
+          }
+        }
+      }
+    }
+
+    const dueBefore = Number(purchase.dueAmount ?? 0);
+    const newDue = Math.max(0, Number((dueBefore - totalAmount).toFixed(2)));
+    supplierCreditAmount = Number(Math.max(0, totalAmount - dueBefore).toFixed(2));
+
+    await tx.purchase.update({
+      where: { id: purchase.id },
+      data: {
+        dueAmount: newDue.toFixed(2),
+      },
+    });
+
+    await tx.purchaseReturn.update({
+      where: { id: createdReturn.id },
+      data: {
+        supplierCredit: supplierCreditAmount.toFixed(2),
+      },
+    });
+
+    await tx.supplierLedger.create({
+      data: {
+        shopId: input.shopId,
+        supplierId: purchase.supplierId!,
+        entryType: "PURCHASE_RETURN",
+        amount: totalAmount.toFixed(2),
+        note: `Purchase return #${createdReturn.id} for purchase #${purchase.id}`,
+        entryDate: returnDate,
+        businessDate: toDhakaBusinessDate(returnDate),
+      },
+    });
+  });
+
+  revalidatePath("/dashboard/purchases");
+  revalidatePath(`/dashboard/purchases/${purchase.id}`);
+  revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/suppliers");
+  revalidatePath("/dashboard/reports");
+  revalidateReportsForProduct();
+
+  return {
+    success: true,
+    purchaseReturnId: createdPurchaseReturnId,
+    supplierCreditAmount,
+  };
+}
+
 export async function recordPurchasePayment(input: {
   shopId: string;
   purchaseId: string;
@@ -606,18 +1024,38 @@ export async function getPurchaseSummaryByRange(
   const start = from ? normalizePurchaseDate(from) : undefined;
   const end = to ? normalizePurchaseDate(to) : undefined;
 
-  const agg = await prisma.purchase.aggregate({
-    where: {
-      shopId,
-      purchaseDate: from || to ? { gte: start, lte: end } : undefined,
-    },
-    _sum: { totalAmount: true },
-    _count: { _all: true },
-  });
+  const purchaseWhere = {
+    shopId,
+    purchaseDate: from || to ? { gte: start, lte: end } : undefined,
+  };
+
+  const purchaseReturnWhere = {
+    shopId,
+    returnDate: from || to ? { gte: start, lte: end } : undefined,
+  };
+
+  const [agg, returnAgg] = await Promise.all([
+    prisma.purchase.aggregate({
+      where: purchaseWhere,
+      _sum: { totalAmount: true },
+      _count: { _all: true },
+    }),
+    prisma.purchaseReturn.aggregate({
+      where: purchaseReturnWhere,
+      _sum: { totalAmount: true },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const purchaseTotal = Number(agg._sum.totalAmount ?? 0);
+  const returnTotal = Number(returnAgg._sum.totalAmount ?? 0);
 
   return {
-    totalAmount: agg._sum.totalAmount?.toString?.() ?? "0",
+    totalAmount: Number((purchaseTotal - returnTotal).toFixed(2)).toString(),
     count: agg._count._all ?? 0,
+    returnCount: returnAgg._count._all ?? 0,
+    purchaseTotal: purchaseTotal.toFixed(2),
+    purchaseReturnTotal: returnTotal.toFixed(2),
   };
 }
 
@@ -657,6 +1095,26 @@ export async function getPurchaseWithPayments(
           note: true,
         },
       },
+      returns: {
+        orderBy: [{ returnDate: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          returnDate: true,
+          totalAmount: true,
+          supplierCredit: true,
+          note: true,
+          items: {
+            select: {
+              id: true,
+              quantity: true,
+              unitCost: true,
+              lineTotal: true,
+              product: { select: { name: true } },
+              variant: { select: { label: true } },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -693,11 +1151,152 @@ export async function getPurchaseWithPayments(
       paidAt: p.paidAt?.toISOString?.() ?? p.paidAt,
       note: p.note,
     })),
+    returns: purchase.returns.map((row) => ({
+      id: row.id,
+      returnDate: row.returnDate?.toISOString?.() ?? row.returnDate,
+      totalAmount: row.totalAmount?.toString?.() ?? "0",
+      supplierCredit: row.supplierCredit?.toString?.() ?? "0",
+      note: row.note,
+      items: row.items.map((item) => ({
+        id: item.id,
+        name: item.product?.name || "Unknown",
+        variantLabel: item.variant?.label ?? null,
+        quantity: item.quantity?.toString?.() ?? "0",
+        unitCost: item.unitCost?.toString?.() ?? "0",
+        lineTotal: item.lineTotal?.toString?.() ?? "0",
+      })),
+    })),
     paymentMeta: {
       page,
       pageSize,
       total: totalPayments,
       totalPages: Math.max(1, Math.ceil(totalPayments / pageSize)),
+    },
+  };
+}
+
+export async function getPurchaseReturnContext(purchaseId: string) {
+  const user = await requireUser();
+  requirePermission(user, "create_purchase");
+
+  const purchase = await prisma.purchase.findUnique({
+    where: { id: purchaseId },
+    include: {
+      supplier: { select: { id: true, name: true } },
+      items: {
+        include: {
+          product: {
+            select: {
+              id: true,
+              name: true,
+              trackStock: true,
+              trackSerialNumbers: true,
+              trackBatch: true,
+              trackCutLength: true,
+            },
+          },
+          variant: { select: { id: true, label: true } },
+          serialNumbers: {
+            select: {
+              id: true,
+              serialNo: true,
+              status: true,
+            },
+            orderBy: [{ serialNo: "asc" }],
+          },
+          batches: {
+            select: {
+              id: true,
+              batchNo: true,
+              remainingQty: true,
+            },
+            orderBy: [{ createdAt: "asc" }],
+          },
+        },
+      },
+      returns: {
+        select: {
+          id: true,
+          totalAmount: true,
+          supplierCredit: true,
+          items: {
+            select: {
+              purchaseItemId: true,
+              quantity: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!purchase) throw new Error("Purchase not found");
+  await assertShopAccess(purchase.shopId, user);
+  await assertInventoryModuleEnabled(purchase.shopId);
+
+  if (!purchase.supplierId || !purchase.supplier) {
+    throw new Error("Supplier-linked purchase required for supplier return");
+  }
+
+  const returnedByItem = new Map<string, number>();
+  let totalReturnAmount = 0;
+  let totalSupplierCredit = 0;
+  for (const purchaseReturn of purchase.returns) {
+    totalReturnAmount += Number(purchaseReturn.totalAmount ?? 0);
+    totalSupplierCredit += Number(purchaseReturn.supplierCredit ?? 0);
+    for (const item of purchaseReturn.items) {
+      returnedByItem.set(
+        item.purchaseItemId,
+        (returnedByItem.get(item.purchaseItemId) ?? 0) + Number(item.quantity ?? 0)
+      );
+    }
+  }
+
+  const items = purchase.items.map((item) => {
+    const purchasedQty = Number(item.quantity ?? 0);
+    const alreadyReturnedQty = returnedByItem.get(item.id) ?? 0;
+    const returnableQty = Math.max(0, Number((purchasedQty - alreadyReturnedQty).toFixed(2)));
+    const availableSerials = item.serialNumbers
+      .filter((serial) => serial.status === "IN_STOCK")
+      .map((serial) => serial.serialNo);
+
+    return {
+      id: item.id,
+      productId: item.productId,
+      productName: item.product.name,
+      variantId: item.variantId ?? null,
+      variantLabel: item.variant?.label ?? null,
+      purchasedQty: purchasedQty.toFixed(2),
+      alreadyReturnedQty: alreadyReturnedQty.toFixed(2),
+      returnableQty: returnableQty.toFixed(2),
+      unitCost: Number(item.unitCost ?? 0).toFixed(2),
+      lineTotal: Number(item.lineTotal ?? 0).toFixed(2),
+      trackStock: item.product.trackStock,
+      trackSerialNumbers: item.product.trackSerialNumbers,
+      trackBatch: item.product.trackBatch,
+      trackCutLength: item.product.trackCutLength,
+      batchNo: item.batches[0]?.batchNo ?? null,
+      batchRemainingQty: item.batches[0]?.remainingQty?.toString?.() ?? null,
+      availableSerials,
+    };
+  }).filter((item) => Number(item.returnableQty) > 0);
+
+  return {
+    purchase: {
+      id: purchase.id,
+      shopId: purchase.shopId,
+      supplierId: purchase.supplierId,
+      supplierName: purchase.supplier.name,
+      purchaseDate: purchase.purchaseDate?.toISOString?.() ?? purchase.purchaseDate,
+      totalAmount: purchase.totalAmount?.toString?.() ?? "0",
+      paidAmount: purchase.paidAmount?.toString?.() ?? "0",
+      dueAmount: purchase.dueAmount?.toString?.() ?? "0",
+      note: purchase.note,
+    },
+    items,
+    returnSummary: {
+      totalReturnAmount: totalReturnAmount.toFixed(2),
+      totalSupplierCredit: totalSupplierCredit.toFixed(2),
     },
   };
 }

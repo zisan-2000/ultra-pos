@@ -1218,6 +1218,146 @@ export async function getTopProductsReport(
 }
 
 /* --------------------------------------------------
+   STOCK VALUATION REPORT
+-------------------------------------------------- */
+async function computeStockValuationReport(shopId: string, limit: number) {
+  const [simpleProducts, variants] = await Promise.all([
+    prisma.product.findMany({
+      where: {
+        shopId,
+        isActive: true,
+        trackStock: true,
+        stockQty: { gt: 0 },
+        variants: {
+          none: {
+            isActive: true,
+          },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        baseUnit: true,
+        stockQty: true,
+        buyPrice: true,
+        sellPrice: true,
+      },
+    }),
+    prisma.productVariant.findMany({
+      where: {
+        shopId,
+        isActive: true,
+        stockQty: { gt: 0 },
+        product: {
+          shopId,
+          isActive: true,
+          trackStock: true,
+        },
+      },
+      select: {
+        id: true,
+        label: true,
+        stockQty: true,
+        buyPrice: true,
+        sellPrice: true,
+        product: {
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            baseUnit: true,
+            buyPrice: true,
+            sellPrice: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const rows = [
+    ...simpleProducts.map((product) => {
+      const qty = Number(product.stockQty ?? 0);
+      const buyPrice = Number(product.buyPrice ?? 0);
+      const sellPrice = Number(product.sellPrice ?? 0);
+      return {
+        id: product.id,
+        productId: product.id,
+        kind: "product" as const,
+        name: product.name,
+        category: product.category || "Uncategorized",
+        unit: product.baseUnit || "pcs",
+        qty,
+        buyPrice,
+        sellPrice,
+        costValue: Number((qty * buyPrice).toFixed(2)),
+        retailValue: Number((qty * sellPrice).toFixed(2)),
+      };
+    }),
+    ...variants.map((variant) => {
+      const qty = Number(variant.stockQty ?? 0);
+      const buyPrice = Number(variant.buyPrice ?? variant.product.buyPrice ?? 0);
+      const sellPrice = Number(variant.sellPrice ?? variant.product.sellPrice ?? 0);
+      return {
+        id: variant.id,
+        productId: variant.product.id,
+        kind: "variant" as const,
+        name: `${variant.product.name} (${variant.label})`,
+        category: variant.product.category || "Uncategorized",
+        unit: variant.product.baseUnit || "pcs",
+        qty,
+        buyPrice,
+        sellPrice,
+        costValue: Number((qty * buyPrice).toFixed(2)),
+        retailValue: Number((qty * sellPrice).toFixed(2)),
+      };
+    }),
+  ]
+    .filter((row) => row.qty > 0)
+    .sort((a, b) => b.costValue - a.costValue || b.qty - a.qty)
+    .slice(0, limit);
+
+  const summary = rows.reduce(
+    (acc, row) => {
+      acc.costValue += row.costValue;
+      acc.retailValue += row.retailValue;
+      acc.totalQty += row.qty;
+      return acc;
+    },
+    { costValue: 0, retailValue: 0, totalQty: 0 }
+  );
+
+  return {
+    summary: {
+      trackedItems: rows.length,
+      totalQty: Number(summary.totalQty.toFixed(2)),
+      costValue: Number(summary.costValue.toFixed(2)),
+      retailValue: Number(summary.retailValue.toFixed(2)),
+      estimatedGrossValue: Number((summary.retailValue - summary.costValue).toFixed(2)),
+    },
+    rows,
+  };
+}
+
+const getStockValuationCached = unstable_cache(
+  async (shopId: string, limit: number) =>
+    computeStockValuationReport(shopId, limit),
+  ["reports-stock-valuation"],
+  { revalidate: 60, tags: [REPORTS_CACHE_TAGS.stockValuation] }
+);
+
+export async function getStockValuationReport(
+  shopId: string,
+  limit?: number | null
+) {
+  const user = await requireUser();
+  ensureReportPermission(user, "view_profit_report");
+  await assertShopAccess(shopId, user);
+  const safeLimit = clampReportLimit(limit);
+  return getStockValuationCached(shopId, safeLimit);
+}
+
+/* --------------------------------------------------
    LOW STOCK REPORT
 -------------------------------------------------- */
 async function computeLowStockReport(shopId: string, limit: number) {
