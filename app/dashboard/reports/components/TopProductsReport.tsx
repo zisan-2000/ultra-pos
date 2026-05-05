@@ -13,7 +13,7 @@ type TopProduct = { name: string; qty: number; revenue: number };
 type Props = { shopId: string; from?: string; to?: string };
 
 function formatMoney(value: number) {
-  return `${value.toFixed(2)} ৳`;
+  return `৳ ${value.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function TopProductsReport({ shopId, from, to }: Props) {
@@ -219,8 +219,8 @@ export default function TopProductsReport({ shopId, from, to }: Props) {
                   </td>
                   <td className="p-3 text-foreground">{item.name}</td>
                   <td className="p-3 text-right text-foreground">{item.qty}</td>
-                  <td className="p-3 text-right text-foreground">
-                    {Number(item.revenue || 0).toFixed(2)}
+                  <td className="p-3 text-right text-foreground tabular-nums">
+                    {formatMoney(Number(item.revenue || 0))}
                   </td>
                 </tr>
               ))
@@ -262,8 +262,8 @@ export default function TopProductsReport({ shopId, from, to }: Props) {
               </div>
               <div className="relative mt-3 flex items-center justify-between text-sm text-muted-foreground">
                 <span>আয়</span>
-                <span className="font-semibold text-foreground">
-                  {Number(item.revenue || 0).toFixed(2)} ৳
+                <span className="font-semibold text-foreground tabular-nums">
+                  {formatMoney(Number(item.revenue || 0))}
                 </span>
               </div>
             </div>

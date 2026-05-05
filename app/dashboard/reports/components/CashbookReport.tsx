@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
-import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Props = { shopId: string; from?: string; to?: string };
@@ -23,140 +22,78 @@ type CashRow = {
 type ReportCursor = { at: string; id: string };
 
 function scheduleStateUpdate(fn: () => void) {
-  if (typeof queueMicrotask === "function") {
-    queueMicrotask(fn);
-    return;
-  }
+  if (typeof queueMicrotask === "function") { queueMicrotask(fn); return; }
   Promise.resolve().then(fn);
+}
+
+function formatMoney(value: number) {
+  return `৳ ${Math.abs(value).toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatDateTime(iso: string) {
+  return new Date(iso).toLocaleString("bn-BD", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+  });
 }
 
 export default function CashbookReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
   const [page, setPage] = useState(1);
   const [cursorList, setCursorList] = useState<ReportCursor[]>([]);
-
   const currentCursor = page > 1 ? cursorList[page - 2] ?? null : null;
 
   const buildCacheKey = useCallback(
-    (rangeFrom?: string, rangeTo?: string) =>
-      `reports:cash:${shopId}:${rangeFrom || "all"}:${rangeTo || "all"}:${REPORT_ROW_LIMIT}`,
+    (f?: string, t?: string) => `reports:cash:${shopId}:${f || "all"}:${t || "all"}:${REPORT_ROW_LIMIT}`,
     [shopId]
   );
 
   useEffect(() => {
     let cancelled = false;
-    scheduleStateUpdate(() => {
-      if (cancelled) return;
-      setPage(1);
-      setCursorList([]);
-    });
-    return () => {
-      cancelled = true;
-    };
+    scheduleStateUpdate(() => { if (cancelled) return; setPage(1); setCursorList([]); });
+    return () => { cancelled = true; };
   }, [shopId, from, to]);
 
-  const readCached = useCallback(
-    (rangeFrom?: string, rangeTo?: string) => {
-      if (typeof window === "undefined") return null;
-      try {
-        const raw = safeLocalStorageGet(buildCacheKey(rangeFrom, rangeTo));
-        if (!raw) {
-          return null;
-        }
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? (parsed as CashRow[]) : null;
-      } catch (err) {
-        handlePermissionError(err);
-        console.warn("Cash report cache read failed", err);
-        return null;
-      }
-    },
-    [buildCacheKey]
-  );
+  const readCached = useCallback((f?: string, t?: string) => {
+    try {
+      const raw = safeLocalStorageGet(buildCacheKey(f, t));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as CashRow[]) : null;
+    } catch { return null; }
+  }, [buildCacheKey]);
 
-  const fetchCash = useCallback(
-    async (
-      rangeFrom?: string,
-      rangeTo?: string,
-      cursor?: ReportCursor | null,
-      shouldCache = false
-    ) => {
-      const params = new URLSearchParams({
-        shopId,
-        limit: `${REPORT_ROW_LIMIT}`,
-      });
-      if (rangeFrom) params.append("from", rangeFrom);
-      if (rangeTo) params.append("to", rangeTo);
-      if (cursor) {
-        params.append("cursorAt", cursor.at);
-        params.append("cursorId", cursor.id);
-      }
-
-      const res = await fetch(`/api/reports/cash?${params.toString()}`, {
-        cache: "no-store",
-      });
-      if (res.status === 304) {
-        const cached = readCached(rangeFrom, rangeTo);
-        if (cached && !cursor) {
-          return { rows: cached, hasMore: false, nextCursor: null };
-        }
-        throw new Error("Cash report not modified");
-      }
-      if (!res.ok) {
-        const cached = readCached(rangeFrom, rangeTo);
-        if (cached && !cursor) {
-          return { rows: cached, hasMore: false, nextCursor: null };
-        }
-        throw new Error("Cash report fetch failed");
-      }
-      const data = await res.json();
-      const rows = data.rows || [];
-      if (shouldCache && !cursor && typeof window !== "undefined") {
-        try {
-          safeLocalStorageSet(
-            buildCacheKey(rangeFrom, rangeTo),
-            JSON.stringify(rows)
-          );
-        } catch (err) {
-          handlePermissionError(err);
-          console.warn("Cash report cache write failed", err);
-        }
-      }
-      return {
-        rows,
-        hasMore: Boolean(data.hasMore),
-        nextCursor: data.nextCursor ?? null,
-      };
-    },
-    [shopId, buildCacheKey, readCached]
-  );
-
-  const cashQueryKey = useMemo(
-    () => [
-      "reports",
-      "cash",
-      shopId,
-      from ?? "all",
-      to ?? "all",
-      page,
-      currentCursor?.at ?? "start",
-      currentCursor?.id ?? "start",
-    ],
-    [shopId, from, to, page, currentCursor?.at, currentCursor?.id]
-  );
+  const fetchCash = useCallback(async (f?: string, t?: string, cursor?: ReportCursor | null, shouldCache = false) => {
+    const params = new URLSearchParams({ shopId, limit: `${REPORT_ROW_LIMIT}` });
+    if (f) params.append("from", f);
+    if (t) params.append("to", t);
+    if (cursor) { params.append("cursorAt", cursor.at); params.append("cursorId", cursor.id); }
+    const res = await fetch(`/api/reports/cash?${params}`, { cache: "no-store" });
+    if (res.status === 304) {
+      const cached = readCached(f, t);
+      if (cached && !cursor) return { rows: cached, hasMore: false, nextCursor: null };
+      throw new Error("not modified");
+    }
+    if (!res.ok) {
+      const cached = readCached(f, t);
+      if (cached && !cursor) return { rows: cached, hasMore: false, nextCursor: null };
+      throw new Error("fetch failed");
+    }
+    const data = await res.json();
+    const rows: CashRow[] = data.rows || [];
+    if (shouldCache && !cursor) {
+      try { safeLocalStorageSet(buildCacheKey(f, t), JSON.stringify(rows)); } catch { /* ignore */ }
+    }
+    return { rows, hasMore: Boolean(data.hasMore), nextCursor: data.nextCursor ?? null };
+  }, [shopId, buildCacheKey, readCached]);
 
   const initialCashData = useMemo(() => {
-    if (online || page !== 1) {
-      return { rows: [], hasMore: false, nextCursor: null };
-    }
+    if (online || page !== 1) return { rows: [], hasMore: false, nextCursor: null };
     const cached = readCached(from, to);
-    return cached
-      ? { rows: cached, hasMore: false, nextCursor: null }
-      : { rows: [], hasMore: false, nextCursor: null };
+    return cached ? { rows: cached, hasMore: false, nextCursor: null } : { rows: [], hasMore: false, nextCursor: null };
   }, [online, page, readCached, from, to]);
 
   const cashQuery = useQuery({
-    queryKey: cashQueryKey,
+    queryKey: ["reports", "cash", shopId, from ?? "all", to ?? "all", page, currentCursor?.at ?? "start", currentCursor?.id ?? "start"],
     queryFn: () => fetchCash(from, to, currentCursor, page === 1),
     enabled: online,
     initialData: initialCashData,
@@ -166,194 +103,245 @@ export default function CashbookReport({ shopId, from, to }: Props) {
     refetchOnMount: "always",
   });
 
-  const rawRows: CashRow[] = useMemo(
-    () => cashQuery.data?.rows ?? initialCashData.rows ?? [],
-    [cashQuery.data?.rows, initialCashData.rows]
-  );
-  const rows: CashRow[] = rawRows;
-  const hasMore = cashQuery.data?.hasMore ?? initialCashData.hasMore ?? false;
-  const nextCursor =
-    cashQuery.data?.nextCursor ?? initialCashData.nextCursor ?? null;
+  const rows: CashRow[] = cashQuery.data?.rows ?? initialCashData.rows ?? [];
+  const hasMore = cashQuery.data?.hasMore ?? false;
+  const nextCursor = cashQuery.data?.nextCursor ?? null;
   const loading = cashQuery.isFetching && online;
-  const hasFetched = cashQuery.isFetchedAfterMount;
-  const showEmpty = rows.length === 0 && (!online || hasFetched) && !loading;
+  const showEmpty = rows.length === 0 && (!online || cashQuery.isFetchedAfterMount) && !loading;
 
   useEffect(() => {
     if (online || page <= 1) return;
     let cancelled = false;
-    scheduleStateUpdate(() => {
-      if (cancelled) return;
-      setPage(1);
-      setCursorList([]);
-    });
-    return () => {
-      cancelled = true;
-    };
+    scheduleStateUpdate(() => { if (cancelled) return; setPage(1); setCursorList([]); });
+    return () => { cancelled = true; };
   }, [online, page]);
 
   useEffect(() => {
     if (page <= 1 || currentCursor) return;
     let cancelled = false;
-    scheduleStateUpdate(() => {
-      if (cancelled) return;
-      setPage(1);
-    });
-    return () => {
-      cancelled = true;
-    };
+    scheduleStateUpdate(() => { if (cancelled) return; setPage(1); });
+    return () => { cancelled = true; };
   }, [page, currentCursor]);
 
   const totals = useMemo(() => {
-    const inbound = rows
-      .filter((r) => (r.entryType || "").toUpperCase() === "IN")
-      .reduce((sum, r) => sum + Number(r.amount || 0), 0);
-    const outbound = rows
-      .filter((r) => (r.entryType || "").toUpperCase() === "OUT")
-      .reduce((sum, r) => sum + Number(r.amount || 0), 0);
-    return { inbound, outbound, balance: inbound - outbound };
+    const inbound  = rows.filter((r) => (r.entryType || "").toUpperCase() === "IN").reduce((s, r) => s + Number(r.amount || 0), 0);
+    const outbound = rows.filter((r) => (r.entryType || "").toUpperCase() === "OUT").reduce((s, r) => s + Number(r.amount || 0), 0);
+    return { inbound, outbound, net: inbound - outbound };
   }, [rows]);
 
-  const handlePrev = () => {
-    setPage((prev) => Math.max(1, prev - 1));
-  };
-
+  const handlePrev = () => setPage((p) => Math.max(1, p - 1));
   const handleNext = () => {
-    const cursorToUse = cursorList[page - 1] ?? nextCursor;
-    if (!cursorToUse) return;
-    setCursorList((prev) => {
-      const next = [...prev];
-      next[page - 1] = cursorToUse;
-      return next;
-    });
-    setPage((prev) => prev + 1);
+    const c = cursorList[page - 1] ?? nextCursor;
+    if (!c) return;
+    setCursorList((prev) => { const n = [...prev]; n[page - 1] = c; return n; });
+    setPage((p) => p + 1);
   };
 
   const buildHref = () => {
     const params = new URLSearchParams({ shopId });
     if (from) params.set("from", from);
     if (to) params.set("to", to);
-    return `/dashboard/cash?${params.toString()}`;
+    return `/dashboard/cash?${params}`;
   };
 
   return (
     <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
-        <div className="relative space-y-3 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-warning/15 text-warning text-lg">
-                💵
-              </span>
-              <div>
-                <h2 className="text-lg font-bold text-foreground">ক্যাশ রিপোর্ট</h2>
-                <p className="text-xs text-muted-foreground">
-                  সর্বশেষ 20টি ক্যাশ এন্ট্রি
+
+      {/* ── KPI Row ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {/* Hero: net balance */}
+        <div className={`col-span-2 sm:col-span-1 rounded-2xl border p-4 ${
+          totals.net >= 0
+            ? "border-emerald-200/60 dark:border-emerald-800/40 bg-emerald-50/60 dark:bg-emerald-950/20"
+            : "border-rose-200/60 dark:border-rose-800/40 bg-rose-50/60 dark:bg-rose-950/20"
+        }`}>
+          <p className={`text-xs font-medium ${totals.net >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
+            নিট ব্যালান্স
+          </p>
+          <p className={`mt-1 text-2xl font-bold tabular-nums ${totals.net >= 0 ? "text-emerald-800 dark:text-emerald-300" : "text-rose-800 dark:text-rose-300"}`}>
+            {rows.length === 0 && loading
+              ? <span className="text-muted-foreground text-lg">লোড হচ্ছে...</span>
+              : <>{totals.net >= 0 ? "+" : "-"}{formatMoney(totals.net)}</>
+            }
+          </p>
+          <p className={`mt-1 text-xs ${totals.net >= 0 ? "text-emerald-600/80 dark:text-emerald-500" : "text-rose-600/80 dark:text-rose-500"}`}>
+            {rows.length} টি এন্ট্রি এই পাতায়
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">মোট আয়</p>
+          <p className="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+            {rows.length === 0 && loading ? "—" : formatMoney(totals.inbound)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {rows.filter((r) => (r.entryType || "").toUpperCase() === "IN").length} টি আয়ের এন্ট্রি
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">মোট ব্যয়</p>
+          <p className="mt-1 text-xl font-bold text-rose-600 dark:text-rose-400 tabular-nums">
+            {rows.length === 0 && loading ? "—" : formatMoney(totals.outbound)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {rows.filter((r) => (r.entryType || "").toUpperCase() === "OUT").length} টি ব্যয়ের এন্ট্রি
+          </p>
+        </div>
+      </div>
+
+      {/* ── Cash Entry List ──────────────────────────────────── */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
+          <div>
+            <p className="text-sm font-semibold text-foreground">ক্যাশ এন্ট্রি</p>
+            <p className="text-xs text-muted-foreground">সর্বশেষ {REPORT_ROW_LIMIT} টি এন্ট্রি</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {loading && (
+              <span className="text-xs text-muted-foreground animate-pulse">আপডেট হচ্ছে...</span>
+            )}
+            <Link
+              href={buildHref()}
+              className="inline-flex h-7 items-center rounded-full border border-primary/25 bg-primary-soft px-3 text-xs font-semibold text-primary hover:bg-primary/15 transition"
+            >
+              সব দেখুন →
+            </Link>
+          </div>
+        </div>
+
+        {showEmpty ? (
+          <div className="px-4 py-12 text-center">
+            <p className="text-sm text-muted-foreground">এই সময়ে কোনো ক্যাশ এন্ট্রি নেই</p>
+          </div>
+        ) : rows.length === 0 && loading ? (
+          <div className="divide-y divide-border">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
+                <div className="h-4 w-28 rounded bg-muted" />
+                <div className="flex-1 h-4 rounded bg-muted" />
+                <div className="h-6 w-12 rounded-full bg-muted" />
+                <div className="h-4 w-20 rounded bg-muted ml-auto" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/20">
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">তারিখ · সময়</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">কারণ</th>
+                    <th className="px-4 py-2.5 text-center text-xs font-semibold text-muted-foreground">ধরন</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">পরিমাণ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {rows.map((r) => {
+                    const isIn = (r.entryType || "").toUpperCase() === "IN";
+                    return (
+                      <tr key={r.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="text-sm text-foreground tabular-nums">{formatDateTime(r.createdAt)}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-sm text-foreground">{r.reason || "ক্যাশ এন্ট্রি"}</p>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {isIn ? (
+                            <span className="inline-flex rounded-full border border-emerald-300/60 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                              আয়
+                            </span>
+                          ) : (
+                            <span className="inline-flex rounded-full border border-rose-300/60 bg-rose-500/10 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:text-rose-400">
+                              ব্যয়
+                            </span>
+                          )}
+                        </td>
+                        <td className={`px-4 py-3 text-right font-semibold tabular-nums whitespace-nowrap ${isIn ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                          {isIn ? "+" : "-"}{formatMoney(Number(r.amount || 0))}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-border bg-muted/20">
+                    <td colSpan={3} className="px-4 py-2.5 text-xs font-semibold text-muted-foreground">
+                      এই পাতার নিট ({rows.length} টি এন্ট্রি)
+                    </td>
+                    <td className={`px-4 py-2.5 text-right font-bold tabular-nums ${totals.net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                      {totals.net >= 0 ? "+" : "-"}{formatMoney(totals.net)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Mobile list */}
+            <div className="md:hidden divide-y divide-border">
+              {rows.map((r) => {
+                const isIn = (r.entryType || "").toUpperCase() === "IN";
+                return (
+                  <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{r.reason || "ক্যাশ এন্ট্রি"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(r.createdAt)}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <p className={`text-sm font-bold tabular-nums ${isIn ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                        {isIn ? "+" : "-"}{formatMoney(Number(r.amount || 0))}
+                      </p>
+                      {isIn ? (
+                        <span className="inline-flex rounded-full border border-emerald-300/60 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                          আয়
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full border border-rose-300/60 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:text-rose-400">
+                          ব্যয়
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Mobile footer */}
+              <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
+                <p className="text-xs text-muted-foreground">{rows.length} এন্ট্রি · এই পাতার নিট</p>
+                <p className={`text-sm font-bold tabular-nums ${totals.net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                  {totals.net >= 0 ? "+" : "-"}{formatMoney(totals.net)}
                 </p>
               </div>
             </div>
-            <Link
-              href={buildHref()}
-              className="inline-flex h-7 items-center rounded-full border border-primary/20 bg-primary-soft px-3 text-xs font-semibold text-primary hover:bg-primary/20"
-            >
-              পূর্ণ রিপোর্ট দেখুন
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 text-xs font-semibold">
-            <div className="rounded-xl bg-success-soft text-success border border-success/30 px-3 py-2">
-              ইন: {totals.inbound.toFixed(2)} ৳
-            </div>
-            <div className="rounded-xl bg-danger-soft text-danger border border-danger/30 px-3 py-2 text-right">
-              আউট: {totals.outbound.toFixed(2)} ৳
-            </div>
-            <div className="rounded-xl bg-muted text-foreground border border-border px-3 py-2 text-right">
-              ব্যালান্স: {totals.balance.toFixed(2)} ৳
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-border/70 bg-card/80 p-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
-        {rows.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {showEmpty ? "কোনো ক্যাশ এন্ট্রি নেই" : "লোড হচ্ছে..."}
-          </p>
-        ) : (
-          <>
-            {rows.map((r) => {
-              const isIn = (r.entryType || "").toUpperCase() === "IN";
-              const accent = isIn
-                ? "border-success/25 from-success-soft/40"
-                : "border-danger/25 from-danger-soft/40";
-              const iconTone = isIn
-                ? "bg-success/15 text-success"
-                : "bg-danger/15 text-danger";
-              return (
-                <div
-                  key={r.id}
-                  className={`relative overflow-hidden rounded-2xl border bg-card p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 ${accent}`}
-                >
-                  <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${accent}`} />
-                  <div className="relative flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl text-lg ${iconTone}`}
-                      >
-                        {isIn ? "⬆️" : "⬇️"}
-                      </span>
-                      <div>
-                        <p
-                          className={`text-sm font-semibold ${
-                            isIn ? "text-success" : "text-danger"
-                          }`}
-                        >
-                          {isIn ? "+" : "-"} {Number(r.amount || 0).toFixed(2)} ৳
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {r.reason || "ক্যাশ এন্ট্রি"}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(r.createdAt).toLocaleDateString("bn-BD")}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-            {loading && (
-              <p className="text-xs text-muted-foreground text-center pt-1">
-                আপডেট হচ্ছে...
-              </p>
-            )}
           </>
         )}
-      </div>
 
-      {(page > 1 || hasMore) && (
-        <div className="flex items-center justify-between gap-2 pt-2">
-          <button
-            type="button"
-            onClick={handlePrev}
-            disabled={page <= 1 || loading || !online}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Prev
-          </button>
-          <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground">
-            Page {page}
-          </span>
-          <button
-            type="button"
-            onClick={handleNext}
-            disabled={!hasMore || !nextCursor || loading || !online}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Next
-          </button>
-        </div>
-      )}
+        {/* Pagination */}
+        {(page > 1 || hasMore) && (
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border bg-muted/10">
+            <button
+              type="button"
+              onClick={handlePrev}
+              disabled={page <= 1 || loading || !online}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              ← আগের পাতা
+            </button>
+            <span className="text-xs font-semibold text-muted-foreground">পাতা {page}</span>
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={!hasMore || !nextCursor || loading || !online}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              পরের পাতা →
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

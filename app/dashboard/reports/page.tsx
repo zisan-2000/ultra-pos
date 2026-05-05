@@ -15,7 +15,9 @@ import { hasPermission } from "@/lib/rbac";
 import ReportsClient from "./components/ReportsClient";
 
 type ReportsPageProps = {
-  searchParams?: Promise<{ shopId?: string; from?: string; to?: string } | undefined>;
+  searchParams?: Promise<
+    { shopId?: string; from?: string; to?: string } | undefined
+  >;
 };
 
 const SUMMARY_REPORT_PERMISSIONS = [
@@ -34,7 +36,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const canViewReportsSummary =
     hasPermission(user, "view_reports") ||
     SUMMARY_REPORT_PERMISSIONS.every((permission) =>
-      hasPermission(user, permission)
+      hasPermission(user, permission),
     );
 
   if (!canViewReportsSummary) {
@@ -43,7 +45,8 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         <h1 className="text-2xl font-bold mb-4 text-foreground">রিপোর্ট</h1>
         <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
         <p className="mb-6 text-muted-foreground">
-          রিপোর্ট দেখার জন্য <code>view_reports</code> অথবা summary report permissions লাগবে।
+          রিপোর্ট দেখার জন্য <code>view_reports</code> অথবা summary report
+          permissions লাগবে।
         </p>
         <Link
           href="/dashboard"
@@ -58,7 +61,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   if (!shops || shops.length === 0) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-foreground">কোন দোকান নেই</h1>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">
+          কোন দোকান নেই
+        </h1>
         <p className="text-muted-foreground">রিপোর্ট দেখতে দোকান যুক্ত করুন</p>
       </div>
     );
@@ -73,10 +78,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       : null;
 
   const selectedShopId =
-    resolvedSearch?.shopId &&
-    shops.some((s) => s.id === resolvedSearch.shopId)
+    resolvedSearch?.shopId && shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
-      : cookieSelectedShopId ?? shops[0].id;
+      : (cookieSelectedShopId ?? shops[0].id);
 
   const selectedShop = shops.find((s) => s.id === selectedShopId)!;
 
@@ -89,10 +93,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const useDefaultRange = !resolvedSearch?.from && !resolvedSearch?.to;
   const rangeFrom = useDefaultRange
     ? dhakaDate
-    : resolvedSearch?.from ?? dhakaDate;
+    : (resolvedSearch?.from ?? dhakaDate);
   const rangeTo = useDefaultRange
     ? dhakaDate
-    : resolvedSearch?.to ?? dhakaDate;
+    : (resolvedSearch?.to ?? dhakaDate);
 
   const [salesSummary, expenseSummary, cashSummary, profitSummary, needsCogs] =
     await Promise.all([

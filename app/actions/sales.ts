@@ -1267,7 +1267,13 @@ export async function createSale(input: CreateSaleInput) {
     .filter((value): value is string => Boolean(value));
   const variantMap = new Map<
     string,
-    { id: string; productId: string; buyPrice: Prisma.Decimal | null }
+    {
+      id: string;
+      productId: string;
+      label: string;
+      buyPrice: Prisma.Decimal | null;
+      stockQty: Prisma.Decimal;
+    }
   >();
   if (variantIds.length > 0) {
     const variantRows = await prisma.productVariant.findMany({
@@ -1275,7 +1281,9 @@ export async function createSale(input: CreateSaleInput) {
       select: {
         id: true,
         productId: true,
+        label: true,
         buyPrice: true,
+        stockQty: true,
       },
     });
     for (const row of variantRows) {
@@ -1288,8 +1296,15 @@ export async function createSale(input: CreateSaleInput) {
 
   for (const item of input.items) {
     const p = productMap.get(item.productId);
+    const variant = item.variantId ? variantMap.get(item.variantId) : null;
 
     if (!p) throw new Error("Product not found");
+    if (item.variantId && !variant) {
+      throw new Error("Selected variant not found");
+    }
+    if (variant && variant.productId !== item.productId) {
+      throw new Error("Selected variant does not belong to this product");
+    }
 
     if (p.shopId !== input.shopId) {
       throw new Error("Product does not belong to this shop");
@@ -1300,6 +1315,54 @@ export async function createSale(input: CreateSaleInput) {
     }
 
     computedTotal += item.unitPrice * item.qty;
+  }
+
+  const productDemandMap = new Map<string, number>();
+  const variantDemandMap = new Map<string, number>();
+  for (const item of input.items) {
+    if (item.variantId) {
+      variantDemandMap.set(
+        item.variantId,
+        (variantDemandMap.get(item.variantId) ?? 0) + item.qty
+      );
+    } else {
+      productDemandMap.set(
+        item.productId,
+        (productDemandMap.get(item.productId) ?? 0) + item.qty
+      );
+    }
+  }
+
+  for (const [variantId, requestedQty] of variantDemandMap.entries()) {
+    const variant = variantMap.get(variantId);
+    if (!variant) throw new Error("Selected variant not found");
+    const product = productMap.get(variant.productId);
+    if (!product) throw new Error("Product not found");
+    if (product.trackStock === false) continue;
+
+    const availableQty = Number(variant.stockQty ?? 0);
+    if (!Number.isFinite(availableQty) || availableQty + 0.000001 < requestedQty) {
+      throw new Error(
+        `"${product.name} (${variant.label})" এর স্টক ${availableQty.toFixed(
+          2
+        )}, কিন্তু চাওয়া হয়েছে ${requestedQty.toFixed(2)}`
+      );
+    }
+  }
+
+  for (const [productId, requestedQty] of productDemandMap.entries()) {
+    const product = productMap.get(productId);
+    if (!product) throw new Error("Product not found");
+    if (product.trackStock === false) continue;
+
+    const availableQty = Number(product.stockQty ?? 0);
+    if (!Number.isFinite(availableQty) || availableQty + 0.000001 < requestedQty) {
+      throw new Error(
+        `"${product.name}" এর স্টক ${availableQty.toFixed(
+          2
+        )}, কিন্তু চাওয়া হয়েছে ${requestedQty.toFixed(2)}`
+      );
+    }
   }
 
   if (needsCogs) {
@@ -1616,16 +1679,19 @@ export async function createSale(input: CreateSaleInput) {
     // Variant-level stock deduction
     for (const [variantId, soldQty] of variantStockMap.entries()) {
       if (soldQty <= 0) continue;
+      const variant = variantMap.get(variantId);
+      const product = variant ? productMap.get(variant.productId) : null;
+      if (!variant || !product) {
+        throw new Error("Selected variant not found");
+      }
+      if (product.trackStock === false) continue;
       const soldQtyDecimal = new Prisma.Decimal(soldQty.toFixed(2));
       const updated = await tx.productVariant.updateMany({
-        where: {
-          id: variantId,
-          stockQty: { gte: soldQtyDecimal },
-        },
+        where: { id: variantId },
         data: { stockQty: { decrement: soldQtyDecimal } },
       });
       if (updated.count !== 1) {
-        throw new Error(`Insufficient stock for variant`);
+        throw new Error(`"${product.name} (${variant.label})" ভ্যারিয়েন্ট পাওয়া যায়নি।`);
       }
       stockUpdateCount++;
     }
@@ -1641,14 +1707,13 @@ export async function createSale(input: CreateSaleInput) {
           where: {
             id: p.id,
             trackStock: true,
-            stockQty: { gte: soldQtyDecimal },
           },
           data: {
             stockQty: { decrement: soldQtyDecimal },
           },
         });
         if (updated.count !== 1) {
-          throw new Error(`Insufficient stock for product "${p.name}"`);
+          throw new Error(`"${p.name}" পণ্য পাওয়া যায়নি।`);
         }
         const singleUpdateEnd = Date.now();
 
@@ -2227,7 +2292,6 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
         where: {
           id: productId,
           trackStock: true,
-          stockQty: { gte: new Prisma.Decimal(toMoney(qty)) },
         },
         data: {
           stockQty: { decrement: new Prisma.Decimal(toMoney(qty)) },
@@ -2235,7 +2299,7 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
       });
       if (updated.count !== 1) {
         const productName = exchangeProductById.get(productId)?.name || productId;
-        throw new Error(`Insufficient stock for exchange product "${productName}"`);
+        throw new Error(`"${productName}" পণ্য পাওয়া যায়নি।`);
       }
     }
 

@@ -1734,7 +1734,7 @@ export default function ReportsClient({
 
       {/* Mobile controls */}
       <div className="md:hidden space-y-3">
-        <div className="sticky top-0 z-10 border-b border-border/70 bg-card/95 pt-3 pb-3 backdrop-blur">
+        <div className="border-b border-border/70 pt-3 pb-3">
           <div className="px-3 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -1991,26 +1991,28 @@ export default function ReportsClient({
           )}
         </div>
       </div>
-      {/* Desktop: summary + active report */}
-      <div className="hidden md:block space-y-6">
-        <div className="bg-card border border-border rounded-2xl p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-          {hasSummary ? (
-            <SummaryCards
-              summary={liveSummary!}
-              needsCogs={needsCogs}
-              className="grid grid-cols-1 md:grid-cols-2 gap-3"
-            />
-          ) : (
-            <SummaryCardsSkeleton
-              needsCogs={needsCogs}
-              className="grid grid-cols-1 md:grid-cols-2 gap-3"
-            />
-          )}
-        </div>
-
-        <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-          {renderActiveDesktopReport()}
-        </div>
+      {/* Desktop: summary OR active report — never both */}
+      <div className="hidden md:block">
+        {active === "summary" ? (
+          <div className="bg-card border border-border rounded-2xl p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            {hasSummary ? (
+              <SummaryCards
+                summary={liveSummary!}
+                needsCogs={needsCogs}
+                className="grid grid-cols-1 md:grid-cols-2 gap-3"
+              />
+            ) : (
+              <SummaryCardsSkeleton
+                needsCogs={needsCogs}
+                className="grid grid-cols-1 md:grid-cols-2 gap-3"
+              />
+            )}
+          </div>
+        ) : (
+          <div className="border border-border rounded-2xl p-6 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            {renderReport()}
+          </div>
+        )}
       </div>
 
       {/* Mobile single report view */}

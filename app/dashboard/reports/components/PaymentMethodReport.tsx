@@ -140,7 +140,7 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
 
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
             <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
-              মোট: {showTotalPlaceholder ? "লোড হচ্ছে..." : `${totalAmount.toFixed(2)} ৳`}
+              মোট: {showTotalPlaceholder ? "লোড হচ্ছে..." : `৳ ${totalAmount.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </span>
           </div>
         </div>
@@ -182,8 +182,8 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-foreground">
-                        {Number(item.value || 0)} ৳
+                      <p className="font-semibold text-foreground tabular-nums">
+                        ৳ {Number(item.value || 0).toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {percent}% শেয়ার

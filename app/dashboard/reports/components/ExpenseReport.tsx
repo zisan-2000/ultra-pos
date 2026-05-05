@@ -7,18 +7,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
-import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 
 type Props = { shopId: string; from?: string; to?: string };
-
 type ReportCursor = { at: string; id: string };
+
 type SummaryPayload = {
-  expense: {
-    totalAmount: number;
-    count?: number;
-  };
+  expense: { totalAmount: number; count?: number };
 };
+
 type ExpenseRow = {
   id: string;
   amount: number | string;
@@ -28,152 +25,96 @@ type ExpenseRow = {
   createdAt?: string;
 };
 
+// Rotating palette for category bars
+const CATEGORY_COLORS = [
+  "bg-rose-500",
+  "bg-orange-500",
+  "bg-amber-500",
+  "bg-violet-500",
+  "bg-sky-500",
+  "bg-teal-500",
+];
+
 function scheduleStateUpdate(fn: () => void) {
-  if (typeof queueMicrotask === "function") {
-    queueMicrotask(fn);
-    return;
-  }
+  if (typeof queueMicrotask === "function") { queueMicrotask(fn); return; }
   Promise.resolve().then(fn);
 }
 
 function formatMoney(value: number) {
-  return `${value.toFixed(2)} ৳`;
+  return `৳ ${value.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function shortenText(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength - 1)}...`;
+function formatDate(item: ExpenseRow) {
+  const d = new Date(item.expenseDate);
+  const t = item.createdAt ? new Date(item.createdAt) : null;
+  const date = d.toLocaleDateString("bn-BD", { day: "2-digit", month: "short" });
+  if (!t || Number.isNaN(t.getTime())) return date;
+  const time = t.toLocaleTimeString("bn-BD", { hour: "numeric", minute: "2-digit" });
+  return `${date} · ${time}`;
 }
 
-function formatExpenseDateTime(item: ExpenseRow) {
-  const businessDate = new Date(item.expenseDate);
-  const entryTime = item.createdAt ? new Date(item.createdAt) : null;
-  const dateLabel = businessDate.toLocaleDateString("bn-BD");
-
-  if (!entryTime || Number.isNaN(entryTime.getTime())) {
-    return dateLabel;
-  }
-
-  const timeLabel = entryTime.toLocaleTimeString("bn-BD", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-  return `${dateLabel} • ${timeLabel}`;
+function categoryLabel(raw?: string | null) {
+  return raw?.trim() || "অনির্ধারিত";
 }
 
 export default function ExpenseReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
   const [page, setPage] = useState(1);
   const [cursorList, setCursorList] = useState<ReportCursor[]>([]);
-
   const currentCursor = page > 1 ? cursorList[page - 2] ?? null : null;
 
   const buildCacheKey = useCallback(
-    (rangeFrom?: string, rangeTo?: string) =>
-      `reports:expenses:${shopId}:${rangeFrom || "all"}:${rangeTo || "all"}:${REPORT_ROW_LIMIT}`,
+    (f?: string, t?: string) => `reports:expenses:${shopId}:${f || "all"}:${t || "all"}:${REPORT_ROW_LIMIT}`,
     [shopId]
   );
 
   useEffect(() => {
     let cancelled = false;
-    scheduleStateUpdate(() => {
-      if (cancelled) return;
-      setPage(1);
-      setCursorList([]);
-    });
-    return () => {
-      cancelled = true;
-    };
+    scheduleStateUpdate(() => { if (cancelled) return; setPage(1); setCursorList([]); });
+    return () => { cancelled = true; };
   }, [shopId, from, to]);
 
-  const readCached = useCallback(
-    (rangeFrom?: string, rangeTo?: string) => {
-      if (typeof window === "undefined") return null;
-      try {
-        const raw = safeLocalStorageGet(buildCacheKey(rangeFrom, rangeTo));
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? (parsed as ExpenseRow[]) : null;
-      } catch (err) {
-        handlePermissionError(err);
-        console.warn("Expense report cache read failed", err);
-        return null;
-      }
-    },
-    [buildCacheKey]
-  );
+  const readCached = useCallback((f?: string, t?: string) => {
+    try {
+      const raw = safeLocalStorageGet(buildCacheKey(f, t));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as ExpenseRow[]) : null;
+    } catch { return null; }
+  }, [buildCacheKey]);
 
-  const fetchExpenses = useCallback(
-    async (
-      rangeFrom?: string,
-      rangeTo?: string,
-      cursor?: ReportCursor | null,
-      shouldCache = false
-    ) => {
-      const params = new URLSearchParams({
-        shopId,
-        limit: `${REPORT_ROW_LIMIT}`,
-      });
-      if (rangeFrom) params.append("from", rangeFrom);
-      if (rangeTo) params.append("to", rangeTo);
-      if (cursor) {
-        params.append("cursorAt", cursor.at);
-        params.append("cursorId", cursor.id);
-      } else {
-        params.append("fresh", "1");
-      }
-
-      const res = await fetch(`/api/reports/expenses?${params.toString()}`, {
-        cache: "no-store",
-      });
-      if (res.status === 304) {
-        const cached = readCached(rangeFrom, rangeTo);
-        if (cached && !cursor) {
-          return { rows: cached, hasMore: false, nextCursor: null };
-        }
-        throw new Error("Expense report not modified");
-      }
-      if (!res.ok) {
-        const cached = readCached(rangeFrom, rangeTo);
-        if (cached && !cursor) {
-          return { rows: cached, hasMore: false, nextCursor: null };
-        }
-        throw new Error("Expense report fetch failed");
-      }
-      const data = await res.json();
-      const rows = data.rows || [];
-      if (shouldCache && !cursor && typeof window !== "undefined") {
-        try {
-          safeLocalStorageSet(
-            buildCacheKey(rangeFrom, rangeTo),
-            JSON.stringify(rows)
-          );
-        } catch (err) {
-          handlePermissionError(err);
-          console.warn("Expense report cache write failed", err);
-        }
-      }
-      return {
-        rows,
-        hasMore: Boolean(data.hasMore),
-        nextCursor: data.nextCursor ?? null,
-      };
-    },
-    [shopId, buildCacheKey, readCached]
-  );
+  const fetchExpenses = useCallback(async (f?: string, t?: string, cursor?: ReportCursor | null, shouldCache = false) => {
+    const params = new URLSearchParams({ shopId, limit: `${REPORT_ROW_LIMIT}` });
+    if (f) params.append("from", f);
+    if (t) params.append("to", t);
+    if (cursor) { params.append("cursorAt", cursor.at); params.append("cursorId", cursor.id); }
+    else params.append("fresh", "1");
+    const res = await fetch(`/api/reports/expenses?${params}`, { cache: "no-store" });
+    if (res.status === 304) {
+      const cached = readCached(f, t);
+      if (cached && !cursor) return { rows: cached, hasMore: false, nextCursor: null };
+      throw new Error("not modified");
+    }
+    if (!res.ok) {
+      const cached = readCached(f, t);
+      if (cached && !cursor) return { rows: cached, hasMore: false, nextCursor: null };
+      throw new Error("fetch failed");
+    }
+    const data = await res.json();
+    const rows: ExpenseRow[] = data.rows || [];
+    if (shouldCache && !cursor) {
+      try { safeLocalStorageSet(buildCacheKey(f, t), JSON.stringify(rows)); } catch { /* ignore */ }
+    }
+    return { rows, hasMore: Boolean(data.hasMore), nextCursor: data.nextCursor ?? null };
+  }, [shopId, buildCacheKey, readCached]);
 
   const fetchSummary = useCallback(async () => {
     const params = new URLSearchParams({ shopId });
     if (from) params.append("from", from);
     if (to) params.append("to", to);
     params.append("fresh", "1");
-    const res = await fetch(`/api/reports/summary?${params.toString()}`, {
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      throw new Error("Expense summary fetch failed");
-    }
+    const res = await fetch(`/api/reports/summary?${params}`, { cache: "no-store" });
+    if (!res.ok) throw new Error("summary fetch failed");
     return (await res.json()) as SummaryPayload;
   }, [shopId, from, to]);
 
@@ -186,338 +127,264 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
     staleTime: 15_000,
   });
 
-  const expenseQueryKey = useMemo(
-    () => [
-      "reports",
-      "expenses",
-      shopId,
-      from ?? "all",
-      to ?? "all",
-      page,
-      currentCursor?.at ?? "start",
-      currentCursor?.id ?? "start",
-    ],
-    [shopId, from, to, page, currentCursor?.at, currentCursor?.id]
-  );
-
-  const initialExpenseData = useMemo(() => {
-    if (online || page !== 1) {
-      return { rows: [], hasMore: false, nextCursor: null };
-    }
+  const initialData = useMemo(() => {
+    if (online || page !== 1) return { rows: [], hasMore: false, nextCursor: null };
     const cached = readCached(from, to);
-    return cached
-      ? { rows: cached, hasMore: false, nextCursor: null }
-      : { rows: [], hasMore: false, nextCursor: null };
+    return cached ? { rows: cached, hasMore: false, nextCursor: null } : { rows: [], hasMore: false, nextCursor: null };
   }, [online, page, readCached, from, to]);
 
   const expenseQuery = useQuery({
-    queryKey: expenseQueryKey,
+    queryKey: ["reports", "expenses", shopId, from ?? "all", to ?? "all", page, currentCursor?.at ?? "start", currentCursor?.id ?? "start"],
     queryFn: () => fetchExpenses(from, to, currentCursor, page === 1),
     enabled: online,
-    initialData: initialExpenseData,
+    initialData,
     staleTime: 0,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     refetchOnMount: "always",
   });
 
-  const rawItems: ExpenseRow[] = useMemo(
-    () => expenseQuery.data?.rows ?? initialExpenseData.rows ?? [],
-    [expenseQuery.data?.rows, initialExpenseData.rows]
-  );
-  const items: ExpenseRow[] = rawItems;
-  const hasMore =
-    expenseQuery.data?.hasMore ?? initialExpenseData.hasMore ?? false;
-  const nextCursor =
-    expenseQuery.data?.nextCursor ?? initialExpenseData.nextCursor ?? null;
+  const items: ExpenseRow[] = expenseQuery.data?.rows ?? initialData.rows ?? [];
+  const hasMore = expenseQuery.data?.hasMore ?? false;
+  const nextCursor = expenseQuery.data?.nextCursor ?? null;
   const loading = expenseQuery.isFetching && online;
-  const hasFetched = expenseQuery.isFetchedAfterMount;
-  const showEmpty = items.length === 0 && (!online || hasFetched) && !loading;
+  const showEmpty = items.length === 0 && (!online || expenseQuery.isFetchedAfterMount) && !loading;
 
   useEffect(() => {
     if (online || page <= 1) return;
     let cancelled = false;
-    scheduleStateUpdate(() => {
-      if (cancelled) return;
-      setPage(1);
-      setCursorList([]);
-    });
-    return () => {
-      cancelled = true;
-    };
+    scheduleStateUpdate(() => { if (cancelled) return; setPage(1); setCursorList([]); });
+    return () => { cancelled = true; };
   }, [online, page]);
 
-  useEffect(() => {
-    if (page <= 1 || currentCursor) return;
-    let cancelled = false;
-    scheduleStateUpdate(() => {
-      if (cancelled) return;
-      setPage(1);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [page, currentCursor]);
-
   const summaryData = summaryQuery.data;
-  const listTotal = useMemo(
-    () => items.reduce((sum, item) => sum + Number(item.amount || 0), 0),
-    [items]
-  );
+  const listTotal = useMemo(() => items.reduce((s, r) => s + Number(r.amount || 0), 0), [items]);
   const totalExpense = summaryData?.expense.totalAmount ?? listTotal;
   const entryCount = summaryData?.expense.count ?? items.length;
-  const averageExpense = entryCount > 0 ? totalExpense / entryCount : 0;
+  const avgExpense = entryCount > 0 ? totalExpense / entryCount : 0;
 
+  // Category breakdown with color index
   const categoryBreakdown = useMemo(() => {
-    const totals = new Map<string, number>();
+    const map = new Map<string, number>();
     for (const item of items) {
-      const label = item.category?.trim() || "অনির্ধারিত খরচ";
-      totals.set(label, (totals.get(label) ?? 0) + Number(item.amount || 0));
+      const label = categoryLabel(item.category);
+      map.set(label, (map.get(label) ?? 0) + Number(item.amount || 0));
     }
-    return Array.from(totals.entries())
-      .map(([label, amount]) => ({ label, amount }))
+    return Array.from(map.entries())
+      .map(([label, amount], i) => ({ label, amount, color: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }))
       .sort((a, b) => b.amount - a.amount);
   }, [items]);
 
-  const topCategory = categoryBreakdown[0] ?? null;
-  const showSummaryPlaceholder = !summaryData && summaryQuery.isFetching;
-
-  const handlePrev = () => {
-    setPage((prev) => Math.max(1, prev - 1));
-  };
-
+  const handlePrev = () => setPage((p) => Math.max(1, p - 1));
   const handleNext = () => {
-    const cursorToUse = cursorList[page - 1] ?? nextCursor;
-    if (!cursorToUse) return;
-    setCursorList((prev) => {
-      const next = [...prev];
-      next[page - 1] = cursorToUse;
-      return next;
-    });
-    setPage((prev) => prev + 1);
+    const c = cursorList[page - 1] ?? nextCursor;
+    if (!c) return;
+    setCursorList((prev) => { const n = [...prev]; n[page - 1] = c; return n; });
+    setPage((p) => p + 1);
   };
 
   const buildHref = () => {
     const params = new URLSearchParams({ shopId });
     if (from) params.set("from", from);
     if (to) params.set("to", to);
-    return `/dashboard/expenses?${params.toString()}`;
+    return `/dashboard/expenses?${params}`;
   };
 
   return (
     <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-danger-soft/45 via-card to-card" />
-        <div className="relative space-y-4 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-danger/15 text-danger text-lg">
-                💸
-              </span>
-              <div>
-                <h2 className="text-lg font-bold text-foreground">সহজ খরচ রিপোর্ট</h2>
-                <p className="text-xs text-muted-foreground">
-                  কোন খাতে কত খরচ হয়েছে, সেটা এক নজরে বোঝার জন্য এই রিপোর্ট
-                </p>
-              </div>
-            </div>
-            <Link
-              href={buildHref()}
-              className="inline-flex h-7 items-center rounded-full border border-primary/20 bg-primary-soft px-3 text-xs font-semibold text-primary hover:bg-primary/20"
-            >
-              পূর্ণ রিপোর্ট দেখুন
-            </Link>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div className="rounded-2xl border border-border bg-card/90 p-3">
-              <p className="text-xs text-muted-foreground">মোট খরচ</p>
-              <p className="mt-1 text-lg font-bold text-foreground">
-                {showSummaryPlaceholder ? "..." : formatMoney(totalExpense)}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                নির্বাচিত সময়ের মোট খরচ
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border bg-card/90 p-3">
-              <p className="text-xs text-muted-foreground">মোট এন্ট্রি</p>
-              <p className="mt-1 text-lg font-bold text-foreground">
-                {showSummaryPlaceholder ? "..." : entryCount}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                সব খরচের রেকর্ড মিলিয়ে
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border bg-card/90 p-3">
-              <p className="text-xs text-muted-foreground">গড় খরচ</p>
-              <p className="mt-1 text-lg font-bold text-foreground">
-                {showSummaryPlaceholder ? "..." : formatMoney(averageExpense)}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                প্রতি এন্ট্রিতে গড় খরচ
-              </p>
-            </div>
-            <div className="col-span-2 rounded-2xl border border-border bg-card/90 p-3 lg:col-span-1">
-              <p className="text-xs text-muted-foreground">সবচেয়ে বেশি খাত</p>
-              <p className="mt-1 text-sm font-bold text-foreground">
-                {topCategory?.label ||
-                  (loading && items.length === 0 ? "লোড হচ্ছে..." : "তথ্য নেই")}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {topCategory
-                  ? `${formatMoney(topCategory.amount)} এই তালিকায়`
-                  : "visible list অনুযায়ী দেখানো হচ্ছে"}
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-            <p>
-              সহজভাবে: <span className="font-semibold text-foreground">কোথায় টাকা যাচ্ছে</span>{" "}
-              সেটা আগে বুঝুন। তারপর নিচের তালিকা দেখে দেখুন কোন খাতে খরচ বেশি
-              হয়েছে, আর কোন খরচগুলো বারবার হচ্ছে।
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
-              এই তালিকায় দেখা যাচ্ছে: {formatMoney(listTotal)}
-            </span>
-            {categoryBreakdown.slice(0, 3).map((item) => (
-              <span
-                key={item.label}
-                className="inline-flex h-7 items-center rounded-full border border-danger/20 bg-danger-soft/40 px-3 text-danger"
-              >
-                {shortenText(item.label, 18)} • {formatMoney(item.amount)}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-border/70 bg-card/80 p-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)]">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-bold text-foreground">খরচের বিস্তারিত তালিকা</h3>
-            <p className="text-xs text-muted-foreground">
-              category, note, date আর amount একসাথে দেখে দ্রুত মিলিয়ে নিন
-            </p>
-          </div>
-          <span className="hidden rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground md:inline-flex">
-            Page {page}
-          </span>
-        </div>
-
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full text-sm">
-            <thead className="bg-muted">
-              <tr>
-                <th className="p-3 text-left text-foreground">খাত</th>
-                <th className="p-3 text-left text-foreground">বিস্তারিত</th>
-                <th className="p-3 text-left text-foreground">তারিখ</th>
-                <th className="p-3 text-right text-foreground">টাকা</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.length === 0 ? (
-                <tr>
-                  <td className="p-4 text-center text-muted-foreground" colSpan={4}>
-                    {showEmpty ? "কোনো খরচ পাওয়া যায়নি" : "লোড হচ্ছে..."}
-                  </td>
-                </tr>
-              ) : (
-                items.map((item) => (
-                  <tr key={item.id} className="border-t border-border/70">
-                    <td className="p-3 align-top">
-                      <div className="font-semibold text-foreground">
-                        {item.category?.trim() || "অনির্ধারিত খরচ"}
-                      </div>
-                    </td>
-                    <td className="p-3 align-top text-muted-foreground">
-                      {item.note?.trim()
-                        ? shortenText(item.note.trim(), 70)
-                        : "কোনো নোট দেওয়া হয়নি"}
-                    </td>
-                    <td className="p-3 align-top text-muted-foreground">
-                      {formatExpenseDateTime(item)}
-                    </td>
-                    <td className="p-3 align-top text-right font-semibold text-danger">
-                      {formatMoney(Number(item.amount || 0))}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="space-y-3 md:hidden">
-          {items.length === 0 ? (
-            <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-              {showEmpty ? "কোনো খরচ পাওয়া যায়নি" : "লোড হচ্ছে..."}
-            </p>
-          ) : (
-            items.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-2xl border border-danger/20 bg-card p-3 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-bold text-foreground">
-                      {item.category?.trim() || "অনির্ধারিত খরচ"}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {item.note?.trim()
-                        ? shortenText(item.note.trim(), 60)
-                        : "কোনো নোট দেওয়া হয়নি"}
-                    </p>
-                  </div>
-                  <span className="rounded-full border border-danger/20 bg-danger-soft/40 px-2.5 py-1 text-xs font-semibold text-danger">
-                    {formatMoney(Number(item.amount || 0))}
-                  </span>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>তারিখ</span>
-                  <span>
-                    {formatExpenseDateTime(item)}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {loading && (
-          <p className="pt-3 text-center text-xs text-muted-foreground">
-            আপডেট হচ্ছে...
+      {/* ── KPI Row ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {/* Hero */}
+        <div className="col-span-2 sm:col-span-1 rounded-2xl border border-rose-200/60 dark:border-rose-800/40 bg-rose-50/60 dark:bg-rose-950/20 p-4">
+          <p className="text-xs font-medium text-rose-700 dark:text-rose-400">মোট খরচ</p>
+          <p className="mt-1 text-2xl font-bold text-rose-800 dark:text-rose-300 tabular-nums">
+            {summaryData ? formatMoney(totalExpense) : <span className="text-muted-foreground text-lg">লোড হচ্ছে...</span>}
           </p>
-        )}
+          <p className="mt-1 text-xs text-rose-600/80 dark:text-rose-500">
+            {entryCount} টি এন্ট্রি
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">গড় খরচ</p>
+          <p className="mt-1 text-xl font-bold text-foreground tabular-nums">
+            {summaryData ? formatMoney(avgExpense) : "—"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">প্রতি এন্ট্রিতে গড়ে</p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">সর্বোচ্চ খাত</p>
+          <p className="mt-1 text-base font-bold text-foreground truncate">
+            {categoryBreakdown[0]?.label ?? (loading ? "..." : "—")}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {categoryBreakdown[0] ? formatMoney(categoryBreakdown[0].amount) : "এই তালিকা থেকে"}
+          </p>
+        </div>
       </div>
 
-      {(page > 1 || hasMore) && (
-        <div className="flex items-center justify-between gap-2 pt-2">
-          <button
-            type="button"
-            onClick={handlePrev}
-            disabled={page <= 1 || loading || !online}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Prev
-          </button>
-          <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground">
-            Page {page}
-          </span>
-          <button
-            type="button"
-            onClick={handleNext}
-            disabled={!hasMore || !nextCursor || loading || !online}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Next
-          </button>
+      {/* ── Category Breakdown ───────────────────────────────── */}
+      {categoryBreakdown.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-foreground">খাতভিত্তিক খরচ</p>
+            <p className="text-xs text-muted-foreground">এই তালিকার {items.length} এন্ট্রি থেকে</p>
+          </div>
+          <div className="space-y-2">
+            {categoryBreakdown.map((cat) => {
+              const pct = listTotal > 0 ? (cat.amount / listTotal) * 100 : 0;
+              return (
+                <div key={cat.label} className="flex items-center gap-3">
+                  <span className="w-32 shrink-0 text-xs font-semibold text-foreground truncate">
+                    {cat.label}
+                  </span>
+                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                    <div className={`h-full rounded-full ${cat.color}`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="w-24 shrink-0 text-right text-xs font-semibold text-foreground tabular-nums">
+                    {formatMoney(cat.amount)}
+                  </span>
+                  <span className="w-10 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+                    {pct.toFixed(0)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
+
+      {/* ── Expense List ─────────────────────────────────────── */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
+          <div>
+            <p className="text-sm font-semibold text-foreground">খরচের তালিকা</p>
+            <p className="text-xs text-muted-foreground">সর্বশেষ {REPORT_ROW_LIMIT} টি এন্ট্রি</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {loading && (
+              <span className="text-xs text-muted-foreground animate-pulse">আপডেট হচ্ছে...</span>
+            )}
+            <Link
+              href={buildHref()}
+              className="inline-flex h-7 items-center rounded-full border border-primary/25 bg-primary-soft px-3 text-xs font-semibold text-primary hover:bg-primary/15 transition"
+            >
+              সব দেখুন →
+            </Link>
+          </div>
+        </div>
+
+        {showEmpty ? (
+          <div className="px-4 py-12 text-center">
+            <p className="text-sm text-muted-foreground">এই সময়ে কোনো খরচ নেই</p>
+          </div>
+        ) : items.length === 0 && loading ? (
+          <div className="divide-y divide-border">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
+                <div className="h-4 w-20 rounded bg-muted" />
+                <div className="flex-1 h-4 rounded bg-muted" />
+                <div className="h-4 w-16 rounded bg-muted" />
+                <div className="h-4 w-20 rounded bg-muted ml-auto" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/20">
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">খাত · তারিখ</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">নোট</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">টাকা</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {items.map((item) => (
+                    <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-foreground">{categoryLabel(item.category)}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{formatDate(item)}</p>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {item.note?.trim() ? (
+                          <span className="truncate max-w-xs block">{item.note.trim()}</span>
+                        ) : (
+                          <span>—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-rose-600 dark:text-rose-400 tabular-nums whitespace-nowrap">
+                        {formatMoney(Number(item.amount || 0))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-border bg-muted/20">
+                    <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-muted-foreground">
+                      এই পাতার মোট ({items.length} টি এন্ট্রি)
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-bold text-rose-600 dark:text-rose-400 tabular-nums">
+                      {formatMoney(listTotal)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Mobile list */}
+            <div className="md:hidden divide-y divide-border">
+              {items.map((item) => (
+                <div key={item.id} className="flex items-start gap-3 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{categoryLabel(item.category)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatDate(item)}
+                      {item.note?.trim() ? ` · ${item.note.trim()}` : ""}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-sm font-bold text-rose-600 dark:text-rose-400 tabular-nums">
+                    {formatMoney(Number(item.amount || 0))}
+                  </p>
+                </div>
+              ))}
+              {/* Mobile footer */}
+              <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
+                <p className="text-xs text-muted-foreground">{items.length} এন্ট্রি · এই পাতার মোট</p>
+                <p className="text-sm font-bold text-rose-600 dark:text-rose-400 tabular-nums">{formatMoney(listTotal)}</p>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Pagination */}
+        {(page > 1 || hasMore) && (
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border bg-muted/10">
+            <button
+              type="button"
+              onClick={handlePrev}
+              disabled={page <= 1 || loading || !online}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              ← আগের পাতা
+            </button>
+            <span className="text-xs font-semibold text-muted-foreground">পাতা {page}</span>
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={!hasMore || !nextCursor || loading || !online}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              পরের পাতা →
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

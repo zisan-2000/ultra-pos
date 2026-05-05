@@ -505,6 +505,31 @@ function buildVariantStockLabel(stock: number, unit: string, tracksStock: boolea
   return `✓ ${stock.toFixed(0)}${suffix}`;
 }
 
+function getCartQtyForSelection(
+  cartItems: Array<{ productId: string; variantId?: string | null; qty: number }>,
+  productId: string,
+  variantId?: string | null
+) {
+  return cartItems
+    .filter((item) =>
+      variantId
+        ? item.productId === productId && item.variantId === variantId
+        : item.productId === productId && !item.variantId
+    )
+    .reduce((sum, item) => sum + Number(item.qty || 0), 0);
+}
+
+function getAvailableStockForSelection(
+  product: EnrichedProduct,
+  cartItems: Array<{ productId: string; variantId?: string | null; qty: number }>,
+  variant?: ProductVariantOption
+) {
+  if (product.trackStock !== true) return Number.POSITIVE_INFINITY;
+  const stock = variant ? toNumber(variant.stockQty) : toNumber(product.stockQty);
+  const inCart = getCartQtyForSelection(cartItems, product.id, variant?.id ?? null);
+  return Math.max(0, stock - inCart);
+}
+
 function buildQuickSlots(
   products: EnrichedProduct[],
   usageSeed: Record<string, UsageEntry>,
@@ -669,12 +694,14 @@ export const PosProductSearch = memo(function PosProductSearch({
     variant?: ProductVariantOption;
     quantity: number;
     message: string;
+    allowOverride?: boolean;
   } | null>(null);
   const [variantPicker, setVariantPicker] = useState<VariantPickerState | null>(
     null
   );
 
   const add = useCart((s: any) => s.add);
+  const cartItems = useCart((s: any) => s.items);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const voiceCancelRequestedRef = useRef(false);
@@ -728,6 +755,54 @@ export const PosProductSearch = memo(function PosProductSearch({
   );
   const [inputMode, setInputMode] = useState<PosInputMode>("search");
   const scannerAssistEnabled = canUseBarcodeScan && inputMode === "scanner";
+
+  const variantPickerMaxAvailable = useMemo(() => {
+    if (!variantPicker) return Number.POSITIVE_INFINITY;
+    if (variantPicker.product.trackStock !== true) return Number.POSITIVE_INFINITY;
+    const variants = getActiveVariants(variantPicker.product);
+    if (variants.length === 0) return 0;
+    return variants.reduce((max, variant) => {
+      const available = getAvailableStockForSelection(
+        variantPicker.product,
+        cartItems,
+        variant
+      );
+      return Math.max(max, available);
+    }, 0);
+  }, [variantPicker, cartItems]);
+
+  const variantPickerHasAnyAvailable = useMemo(
+    () => variantPickerMaxAvailable > 0 || !Number.isFinite(variantPickerMaxAvailable),
+    [variantPickerMaxAvailable]
+  );
+
+  const variantPickerQuantityWarning = useMemo(() => {
+    if (!variantPicker || variantPicker.product.trackStock !== true) return null;
+    if (!Number.isFinite(variantPickerMaxAvailable)) return null;
+    if (variantPickerMaxAvailable <= 0) {
+      return "এই product-এর কোনো variant-এ এখন আর available stock নেই।";
+    }
+    if (variantPicker.quantity > variantPickerMaxAvailable + 0.000001) {
+      return `এই quantity-তে stock পাওয়া যাচ্ছে না। সর্বোচ্চ ${variantPickerMaxAvailable.toFixed(
+        2
+      )} ${variantPicker.product.baseUnit || "টি"} পর্যন্ত যোগ করা যাবে।`;
+    }
+    return null;
+  }, [variantPicker, variantPickerMaxAvailable]);
+
+  useEffect(() => {
+    if (!variantPicker) return;
+    if (variantPicker.product.trackStock !== true) return;
+    if (!Number.isFinite(variantPickerMaxAvailable)) return;
+    const clampedQty =
+      variantPickerMaxAvailable <= 0
+        ? 0.01
+        : Math.min(Math.max(0.01, variantPicker.quantity), variantPickerMaxAvailable);
+    if (Math.abs(clampedQty - variantPicker.quantity) < 0.000001) return;
+    setVariantPicker((current) =>
+      current ? { ...current, quantity: Number(clampedQty.toFixed(2)) } : current
+    );
+  }, [variantPicker, variantPickerMaxAvailable]);
 
   // Persist usage separately to avoid doing localStorage writes in setState updaters
   useEffect(() => {
@@ -1349,34 +1424,23 @@ export const PosProductSearch = memo(function PosProductSearch({
       quantity = 1
     ) => {
       const safeQuantity = Math.max(0.01, Number(quantity) || 1);
-      const stock = variant
-        ? toNumber(variant.stockQty)
-        : toNumber(product.stockQty);
-      const cartItems = useCart.getState().items;
-      const inCart = cartItems
-        .filter((i: any) =>
-          variant
-            ? i.productId === product.id && i.variantId === variant.id
-            : i.productId === product.id && !i.variantId
-        )
-        .reduce((sum: number, item: any) => sum + Number(item.qty || 0), 0);
+      const remaining = getAvailableStockForSelection(product, cartItems, variant);
       const tracksStock = product.trackStock === true;
 
-      if (tracksStock && stock < inCart + safeQuantity) {
-        const remaining = Math.max(0, stock - inCart);
+      if (tracksStock && remaining + 0.000001 < safeQuantity) {
         const message =
-          stock <= 0
-            ? `${product.name} এর স্টক নেই। তবুও যোগ করবেন?`
-            : `${buildCartItemName(product, variant)} এর মাত্র ${remaining} ${
+          remaining <= 0
+            ? `${buildCartItemName(product, variant)} এর available stock নেই।`
+            : `${buildCartItemName(product, variant)} এর মাত্র ${remaining.toFixed(2)} ${
                 product.baseUnit || "টি"
-              } বাকি। তবুও ${safeQuantity} যোগ করবেন?`;
+              } available আছে। ${safeQuantity.toFixed(2)} যোগ করা যাবে না।`;
         setStockConfirm({ product, variant, quantity: safeQuantity, message });
         return;
       }
 
       addToCart(product, variant, safeQuantity);
     },
-    [addToCart]
+    [addToCart, cartItems]
   );
 
   const handleProductTap = useCallback(
@@ -2365,18 +2429,20 @@ export const PosProductSearch = memo(function PosProductSearch({
       </div>
       <ConfirmDialog
         open={Boolean(stockConfirm)}
-        title="স্টক নিশ্চিত করুন"
+        title="স্টক সতর্কতা"
         description={stockConfirm?.message}
-        confirmLabel="যোগ করুন"
-        cancelLabel="বাতিল"
+        confirmLabel={stockConfirm?.allowOverride ? "যোগ করুন" : "ঠিক আছে"}
+        cancelLabel={stockConfirm?.allowOverride ? "বাতিল" : "বন্ধ"}
         onOpenChange={(open) => {
           if (!open) setStockConfirm(null);
         }}
         onConfirm={() => {
           if (!stockConfirm) return;
-          const { product, variant, quantity } = stockConfirm;
+          const { product, variant, quantity, allowOverride } = stockConfirm;
           setStockConfirm(null);
-          addToCart(product, variant, quantity);
+          if (allowOverride) {
+            addToCart(product, variant, quantity);
+          }
         }}
       />
       {variantPicker ? (
@@ -2410,6 +2476,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    disabled={variantPicker.quantity <= 0.01}
                     onClick={() =>
                       setVariantPicker((current) =>
                         current
@@ -2417,7 +2484,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                           : current
                       )
                     }
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-sm font-bold text-foreground hover:bg-muted"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-sm font-bold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="পরিমাণ কমান"
                   >
                     −
@@ -2427,12 +2494,29 @@ export const PosProductSearch = memo(function PosProductSearch({
                     inputMode="decimal"
                     step="0.01"
                     min="0.01"
+                    max={
+                      Number.isFinite(variantPickerMaxAvailable)
+                        ? Math.max(0.01, Number(variantPickerMaxAvailable.toFixed(2)))
+                        : undefined
+                    }
                     value={variantPicker.quantity}
                     onChange={(e) => {
                       const val = parseFloat(e.target.value);
                       setVariantPicker((current) =>
                         current
-                          ? { ...current, quantity: Number.isFinite(val) && val > 0 ? val : 0.01 }
+                          ? {
+                              ...current,
+                              quantity: Number.isFinite(val) && val > 0
+                                ? Number(
+                                    (
+                                      current.product.trackStock === true &&
+                                      Number.isFinite(variantPickerMaxAvailable)
+                                        ? Math.min(val, Math.max(0.01, variantPickerMaxAvailable))
+                                        : val
+                                    ).toFixed(2)
+                                  )
+                                : 0.01,
+                            }
                           : current
                       );
                     }}
@@ -2440,32 +2524,74 @@ export const PosProductSearch = memo(function PosProductSearch({
                   />
                   <button
                     type="button"
+                    disabled={
+                      variantPicker.product.trackStock === true &&
+                      Number.isFinite(variantPickerMaxAvailable) &&
+                      variantPicker.quantity >= variantPickerMaxAvailable
+                    }
                     onClick={() =>
                       setVariantPicker((current) =>
                         current
-                          ? { ...current, quantity: Math.min(999, current.quantity + 1) }
+                          ? {
+                              ...current,
+                              quantity: Math.min(
+                                current.product.trackStock === true &&
+                                  Number.isFinite(variantPickerMaxAvailable)
+                                  ? Math.max(0.01, variantPickerMaxAvailable)
+                                  : 999,
+                                current.quantity + 1
+                              ),
+                            }
                           : current
                       )
                     }
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-sm font-bold text-foreground hover:bg-muted"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-sm font-bold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="পরিমাণ বাড়ান"
                   >
                     +
                   </button>
                 </div>
               </div>
+              {variantPicker.product.trackStock === true ? (
+                <div className="mb-3 rounded-xl border border-border/70 bg-card px-3 py-2 text-[11px]">
+                  {variantPickerQuantityWarning ? (
+                    <p className="font-semibold text-danger">{variantPickerQuantityWarning}</p>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      {variantPickerHasAnyAvailable
+                        ? `এই quantity-তে যেসব variant-এর enough stock আছে, শুধু সেগুলোই বাছাই করা যাবে। সর্বোচ্চ ${
+                            Number.isFinite(variantPickerMaxAvailable)
+                              ? variantPickerMaxAvailable.toFixed(2)
+                              : "∞"
+                          } ${variantPicker.product.baseUnit || "টি"} পর্যন্ত যোগ করা যাবে।`
+                        : "সব variant-এর available stock শেষ।"}
+                    </p>
+                  )}
+                </div>
+              ) : null}
               <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
                 {getActiveVariants(variantPicker.product).map((variant) => {
                   const tracksStock = variantPicker.product.trackStock === true;
                   const unit = variantPicker.product.baseUnit || "";
                   const vStock = Number(variant.stockQty ?? 0);
-                  const outOfStock = tracksStock && vStock <= 0;
-                  const toneClasses = tracksStock ? getStockToneClasses(vStock) : null;
+                  const availableStock = getAvailableStockForSelection(
+                    variantPicker.product,
+                    cartItems,
+                    variant
+                  );
+                  const outOfStock = tracksStock && availableStock <= 0;
+                  const insufficientForSelectedQty =
+                    tracksStock &&
+                    availableStock > 0 &&
+                    variantPicker.quantity > availableStock + 0.000001;
+                  const toneClasses = tracksStock
+                    ? getStockToneClasses(availableStock)
+                    : null;
                   const stockBadgeClass = toneClasses
                     ? toneClasses.badge
                     : "bg-muted text-muted-foreground border border-border/60";
                   const stockLabel = buildVariantStockLabel(
-                    vStock,
+                    availableStock,
                     unit,
                     tracksStock
                   );
@@ -2473,7 +2599,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                     <button
                       key={variant.id}
                       type="button"
-                      disabled={outOfStock}
+                      disabled={outOfStock || insufficientForSelectedQty}
                       onClick={() => {
                         handleAddToCart(
                           variantPicker.product,
@@ -2483,22 +2609,27 @@ export const PosProductSearch = memo(function PosProductSearch({
                         setVariantPicker(null);
                       }}
                       className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
-                        outOfStock
+                        outOfStock || insufficientForSelectedQty
                           ? "border-border/50 bg-muted/40 cursor-not-allowed"
                           : "border-border bg-card hover:border-primary/35 hover:bg-primary-soft/15"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className={`truncate text-sm font-semibold ${outOfStock ? "text-muted-foreground" : "text-foreground"}`}>
+                        <span className={`truncate text-sm font-semibold ${outOfStock || insufficientForSelectedQty ? "text-muted-foreground" : "text-foreground"}`}>
                           {variant.label}
                         </span>
                         <div className="flex items-center gap-2 shrink-0">
+                          {tracksStock && insufficientForSelectedQty ? (
+                            <span className="inline-flex items-center rounded-full border border-warning/25 bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning">
+                              সর্বোচ্চ {availableStock.toFixed(2)}
+                            </span>
+                          ) : null}
                           {tracksStock && (
                             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${stockBadgeClass}`}>
                               {stockLabel}
                             </span>
                           )}
-                          {!outOfStock && (
+                          {!outOfStock && !insufficientForSelectedQty && (
                             <span className="text-sm font-bold text-foreground">
                               <span className="text-muted-foreground">৳</span>{" "}
                               {variant.sellPrice}

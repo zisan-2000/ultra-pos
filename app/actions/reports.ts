@@ -268,6 +268,9 @@ export async function getSalesWithFilterPaginated({
       invoiceNo: true,
       saleDate: true,
       totalAmount: true,
+      paidAmount: true,
+      discountAmount: true,
+      status: true,
       paymentMethod: true,
       note: true,
       customer: {
