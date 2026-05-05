@@ -39,6 +39,8 @@ type CreateProductInput = {
   trackStock?: boolean;
   trackSerialNumbers?: boolean;
   trackBatch?: boolean;
+  trackCutLength?: boolean;
+  defaultCutLength?: string | number | null;
   reorderPoint?: number | null;
   businessType?: string;
   expiryDate?: string | null;
@@ -67,6 +69,8 @@ type UpdateProductInput = {
   trackStock?: boolean;
   trackSerialNumbers?: boolean;
   trackBatch?: boolean;
+  trackCutLength?: boolean;
+  defaultCutLength?: string | number | null;
   reorderPoint?: number | null;
   businessType?: string;
   expiryDate?: string | null;
@@ -101,6 +105,8 @@ type ProductListRow = {
   trackStock: boolean;
   trackSerialNumbers: boolean;
   trackBatch: boolean;
+  trackCutLength: boolean;
+  defaultCutLength: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -204,6 +210,23 @@ function normalizeNumberInput(
     throw new Error(`${options?.field ?? "Value"} must be a valid number`);
   }
 
+  return parsed.toString();
+}
+
+function normalizeOptionalNumberInput(
+  value: string | number | null | undefined,
+  options?: { field?: string }
+) {
+  if (value === undefined) return undefined;
+  const str = value === null ? "" : value.toString().trim();
+  if (!str) return null;
+  const parsed = Number(str);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${options?.field ?? "Value"} must be a valid number`);
+  }
+  if (parsed <= 0) {
+    throw new Error(`${options?.field ?? "Value"} must be greater than 0`);
+  }
   return parsed.toString();
 }
 
@@ -783,6 +806,18 @@ export async function createProduct(input: CreateProductInput) {
     input.trackBatch === undefined
       ? false
       : Boolean(input.trackBatch) && trackStock;
+  const trackCutLength =
+    input.trackCutLength === undefined
+      ? false
+      : Boolean(input.trackCutLength) && trackStock;
+  if (trackCutLength && (trackSerialNumbers || trackBatch)) {
+    throw new Error("Cut-length tracking serial অথবা batch tracking-এর সাথে একসাথে চালু করা যাবে না");
+  }
+  const defaultCutLength = trackCutLength
+    ? normalizeOptionalNumberInput(input.defaultCutLength, {
+        field: "Default cut length",
+      })
+    : null;
   const stockQty = trackStock ? normalizedStock : "0";
   const sku = normalizeProductCodeInput(input.sku);
   const barcode = normalizeProductCodeInput(input.barcode);
@@ -819,6 +854,8 @@ export async function createProduct(input: CreateProductInput) {
     trackStock,
     trackSerialNumbers,
     trackBatch,
+    trackCutLength,
+    defaultCutLength,
     reorderPoint: trackStock && input.reorderPoint != null ? input.reorderPoint : null,
   };
 
@@ -1018,6 +1055,8 @@ export async function getProductsByShop(shopId: string) {
       trackStock: true,
       trackSerialNumbers: true,
       trackBatch: true,
+      trackCutLength: true,
+      defaultCutLength: true,
       createdAt: true,
       updatedAt: true,
       variants: {
@@ -1105,6 +1144,9 @@ export async function getProductsByShopPaginated({
       stockQty: true,
       trackStock: true,
       trackSerialNumbers: true,
+      trackBatch: true,
+      trackCutLength: true,
+      defaultCutLength: true,
       isActive: true,
       createdAt: true,
       updatedAt: true,
@@ -1130,6 +1172,11 @@ export async function getProductsByShopPaginated({
     trackStock: Boolean(product.trackStock),
     trackSerialNumbers: Boolean(product.trackSerialNumbers),
     trackBatch: Boolean((product as any).trackBatch),
+    trackCutLength: Boolean((product as any).trackCutLength),
+    defaultCutLength:
+      (product as any).defaultCutLength === null || (product as any).defaultCutLength === undefined
+        ? null
+        : (product as any).defaultCutLength.toString?.() ?? String((product as any).defaultCutLength),
     isActive: product.isActive,
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
@@ -1234,7 +1281,10 @@ export async function getProductsByShopCursorPaginated({
         sellPrice: true,
         stockQty: true,
         trackStock: true,
-      trackSerialNumbers: true,
+        trackSerialNumbers: true,
+        trackBatch: true,
+        trackCutLength: true,
+        defaultCutLength: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -1280,6 +1330,11 @@ export async function getProductsByShopCursorPaginated({
     trackStock: Boolean(p.trackStock),
     trackSerialNumbers: Boolean(p.trackSerialNumbers),
     trackBatch: Boolean((p as any).trackBatch),
+    trackCutLength: Boolean((p as any).trackCutLength),
+    defaultCutLength:
+      (p as any).defaultCutLength === null || (p as any).defaultCutLength === undefined
+        ? null
+        : (p as any).defaultCutLength.toString?.() ?? String((p as any).defaultCutLength),
     isActive: p.isActive,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -1508,6 +1563,21 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
     data.trackStock !== undefined
       ? data.trackStock
       : product.trackStock ?? false;
+  const nextTrackSerialNumbers =
+    data.trackSerialNumbers !== undefined
+      ? Boolean(data.trackSerialNumbers) && Boolean(trackStockFlag)
+      : Boolean((product as any).trackSerialNumbers) && Boolean(trackStockFlag);
+  const nextTrackBatch =
+    data.trackBatch !== undefined
+      ? Boolean(data.trackBatch) && Boolean(trackStockFlag)
+      : Boolean((product as any).trackBatch) && Boolean(trackStockFlag);
+  const nextTrackCutLength =
+    data.trackCutLength !== undefined
+      ? Boolean(data.trackCutLength) && Boolean(trackStockFlag)
+      : Boolean((product as any).trackCutLength) && Boolean(trackStockFlag);
+  if (nextTrackCutLength && (nextTrackSerialNumbers || nextTrackBatch)) {
+    throw new Error("Cut-length tracking serial অথবা batch tracking-এর সাথে একসাথে চালু করা যাবে না");
+  }
   const sku = normalizeProductCodeInput(data.sku);
   const barcode = normalizeProductCodeInput(data.barcode);
   const baseUnit =
@@ -1528,6 +1598,18 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
       : undefined;
   const size =
     data.size !== undefined ? normalizeNullableTextInput(data.size, 80) : undefined;
+  const defaultCutLength =
+    data.defaultCutLength !== undefined
+      ? nextTrackCutLength
+        ? normalizeOptionalNumberInput(data.defaultCutLength, {
+            field: "Default cut length",
+          })
+        : null
+      : nextTrackCutLength
+      ? normalizeOptionalNumberInput((product as any).defaultCutLength?.toString?.() ?? (product as any).defaultCutLength ?? null, {
+          field: "Default cut length",
+        })
+      : null;
   const variants = normalizeVariantInputs(data.variants, {
     fieldPrefix: "Variants",
   });
@@ -1591,14 +1673,16 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   if (data.isActive !== undefined) payload.isActive = data.isActive;
   if (data.trackStock !== undefined) payload.trackStock = data.trackStock;
   if (data.trackSerialNumbers !== undefined)
-    payload.trackSerialNumbers =
-      Boolean(data.trackSerialNumbers) && Boolean(trackStockFlag);
+    payload.trackSerialNumbers = nextTrackSerialNumbers;
   if (data.trackBatch !== undefined)
-    payload.trackBatch =
-      Boolean(data.trackBatch) && Boolean(trackStockFlag);
+    payload.trackBatch = nextTrackBatch;
+  if (data.trackCutLength !== undefined) payload.trackCutLength = nextTrackCutLength;
   if (buyPrice !== undefined) payload.buyPrice = buyPrice;
   if (sellPrice !== undefined) payload.sellPrice = sellPrice;
   if (resolvedStockQty !== undefined) payload.stockQty = resolvedStockQty;
+  if (data.defaultCutLength !== undefined || nextTrackCutLength !== Boolean((product as any).trackCutLength)) {
+    payload.defaultCutLength = nextTrackCutLength ? defaultCutLength : null;
+  }
   if (data.reorderPoint !== undefined) payload.reorderPoint = data.reorderPoint ?? null;
 
   await assertNoCodeCollisionsInShop({
@@ -1712,6 +1796,9 @@ export async function getActiveProductsByShop(shopId: string) {
       stockQty: true,
       trackStock: true,
       trackSerialNumbers: true,
+      trackBatch: true,
+      trackCutLength: true,
+      defaultCutLength: true,
       variants: {
         where: { isActive: true },
         orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
@@ -1745,6 +1832,11 @@ export async function getActiveProductsByShop(shopId: string) {
     trackStock: p.trackStock,
     trackSerialNumbers: Boolean(p.trackSerialNumbers),
     trackBatch: Boolean((p as any).trackBatch),
+    trackCutLength: Boolean((p as any).trackCutLength),
+    defaultCutLength:
+      (p as any).defaultCutLength === null || (p as any).defaultCutLength === undefined
+        ? null
+        : (p as any).defaultCutLength.toString?.() ?? String((p as any).defaultCutLength),
     variants: (p.variants || []).map((variant) => ({
       id: variant.id,
       label: variant.label,

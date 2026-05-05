@@ -535,14 +535,24 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   const [selectedUnit, setSelectedUnit] = useState(
     product.baseUnit || configDefaultUnit || configUnits[0] || "pcs"
   );
+  const productTrackSerialNumbers = Boolean((product as any).trackSerialNumbers);
+  const productTrackBatch = Boolean((product as any).trackBatch);
+  const productTrackCutLength = Boolean((product as any).trackCutLength);
+  const productDefaultCutLength = ((product as any).defaultCutLength ?? "").toString();
   const [stockEnabled, setStockEnabled] = useState(
     product.trackStock ?? stock.enabledByDefault
   );
   const [serialEnabled, setSerialEnabled] = useState(
-    Boolean((product as any).trackSerialNumbers)
+    productTrackSerialNumbers
   );
   const [batchEnabled, setBatchEnabled] = useState(
-    Boolean((product as any).trackBatch)
+    productTrackBatch
+  );
+  const [cutLengthEnabled, setCutLengthEnabled] = useState(
+    productTrackCutLength
+  );
+  const [defaultCutLengthValue, setDefaultCutLengthValue] = useState(
+    productDefaultCutLength
   );
 
   const stopCamera = useCallback(() => {
@@ -594,6 +604,14 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       // ignore local preference read errors
     }
   }, [scannerModeStorageKey]);
+
+  useEffect(() => {
+    if (stockEnabled) return;
+    setSerialEnabled(false);
+    setBatchEnabled(false);
+    setCutLengthEnabled(false);
+    setDefaultCutLengthValue("");
+  }, [stockEnabled]);
 
   useEffect(() => {
     try {
@@ -756,11 +774,23 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     scheduleStateUpdate(() => {
       if (cancelled) return;
       setStockEnabled(product.trackStock ?? stock.enabledByDefault);
+      setSerialEnabled(productTrackSerialNumbers);
+      setBatchEnabled(productTrackBatch);
+      setCutLengthEnabled(productTrackCutLength);
+      setDefaultCutLengthValue(productDefaultCutLength);
     });
     return () => {
       cancelled = true;
     };
-  }, [product.trackStock, stock.enabledByDefault, businessType]);
+  }, [
+    product.trackStock,
+    productTrackSerialNumbers,
+    productTrackBatch,
+    productTrackCutLength,
+    productDefaultCutLength,
+    stock.enabledByDefault,
+    businessType,
+  ]);
 
   useEffect(() => { setIsMounted(true); }, []);
 
@@ -1476,6 +1506,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       : null;
 
     const requestedSellPrice = (form.get("sellPrice") as string) || sellPrice;
+    const defaultCutLengthRaw = cutLengthEnabled
+      ? ((form.get("defaultCutLength") as string) || defaultCutLengthValue || "").trim()
+      : "";
     const resolvedSku = normalizeCodeInput((form.get("sku") as string) || sku);
     const resolvedBarcode = normalizeCodeInput(
       (form.get("barcode") as string) || barcode
@@ -1514,6 +1547,10 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       toast.error("বিক্রয় মূল্য দিন।");
       return;
     }
+    if (cutLengthEnabled && !defaultCutLengthRaw) {
+      toast.error("কাট-লেন্থ ট্র্যাকিং চালু থাকলে ডিফল্ট ফুল লেন্থ দিন।");
+      return;
+    }
 
     const payload: LocalProduct = {
       ...product,
@@ -1538,6 +1575,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       trackStock: stockEnabled,
       trackSerialNumbers: serialEnabled && stockEnabled,
       trackBatch: batchEnabled && stockEnabled,
+      trackCutLength: cutLengthEnabled && stockEnabled,
+      defaultCutLength:
+        cutLengthEnabled && stockEnabled ? defaultCutLengthRaw : null,
       reorderPoint,
       businessType,
       expiryDate,
@@ -2432,10 +2472,17 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         {stockEnabled && (
           <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
             <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={serialEnabled}
-                onChange={(e) => setSerialEnabled(e.target.checked)}
+                <input
+                  type="checkbox"
+                  checked={serialEnabled}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setSerialEnabled(checked);
+                    if (checked) {
+                      setCutLengthEnabled(false);
+                      setDefaultCutLengthValue("");
+                    }
+                  }}
                 className="h-5 w-5 border border-border rounded cursor-pointer"
               />
               <div className="flex-1 min-w-0">
@@ -2463,10 +2510,17 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         {stockEnabled && (
           <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
             <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={batchEnabled}
-                onChange={(e) => setBatchEnabled(e.target.checked)}
+                <input
+                  type="checkbox"
+                  checked={batchEnabled}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setBatchEnabled(checked);
+                    if (checked) {
+                      setCutLengthEnabled(false);
+                      setDefaultCutLengthValue("");
+                    }
+                  }}
                 className="h-5 w-5 border border-border rounded cursor-pointer"
               />
               <div className="flex-1 min-w-0">
@@ -2487,6 +2541,65 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                 {batchEnabled ? "চালু" : "বন্ধ"}
               </span>
             </label>
+          </div>
+        )}
+
+        {stockEnabled && (
+          <div className="rounded-xl border border-border/70 bg-muted/30 p-3 space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={cutLengthEnabled}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setCutLengthEnabled(checked);
+                  if (checked) {
+                    setSerialEnabled(false);
+                    setBatchEnabled(false);
+                  } else {
+                    setDefaultCutLengthValue("");
+                  }
+                }}
+                className="h-5 w-5 border border-border rounded cursor-pointer"
+              />
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-semibold text-foreground">
+                  Cut-Length / Remnant Tracking
+                </span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  পাইপ, রড, তার কেটে বিক্রি করলে বাকি অংশ remnant হিসেবে রাখা হবে
+                </p>
+              </div>
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  cutLengthEnabled
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    : "bg-muted text-muted-foreground border border-border/50"
+                }`}
+              >
+                {cutLengthEnabled ? "চালু" : "বন্ধ"}
+              </span>
+            </label>
+            {cutLengthEnabled ? (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-foreground">
+                  ডিফল্ট ফুল লেন্থ
+                </label>
+                <input
+                  name="defaultCutLength"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={defaultCutLengthValue}
+                  onChange={(e) => setDefaultCutLengthValue(e.target.value)}
+                  className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="যেমন: 20"
+                />
+                <p className="text-xs text-muted-foreground">
+                  প্রতিটি full piece-এর standard length দিন। serial/batch tracking একসাথে চালু হবে না।
+                </p>
+              </div>
+            ) : null}
           </div>
         )}
 

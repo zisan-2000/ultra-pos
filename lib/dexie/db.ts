@@ -23,6 +23,8 @@ export type LocalProduct = {
   trackStock?: boolean;
   trackSerialNumbers?: boolean;
   trackBatch?: boolean;
+  trackCutLength?: boolean;
+  defaultCutLength?: string | null;
   reorderPoint?: number | null;
   businessType?: string;
   expiryDate?: string | null;

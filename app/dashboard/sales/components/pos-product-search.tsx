@@ -45,7 +45,10 @@ type PosProductSearchProps = {
     category?: string | null;
     trackStock?: boolean | null;
     trackSerialNumbers?: boolean | null;
+    trackBatch?: boolean | null;
+    trackCutLength?: boolean | null;
     baseUnit?: string | null;
+    defaultCutLength?: string | null;
     variants?: Array<{
       id: string;
       label: string;

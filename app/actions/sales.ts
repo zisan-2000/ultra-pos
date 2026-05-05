@@ -367,6 +367,145 @@ async function restoreOutstandingBatchAllocationsForSale(
   }
 }
 
+async function consumeCutLengthInventoryForSaleItem(
+  tx: Prisma.TransactionClient,
+  params: {
+    shopId: string;
+    productId: string;
+    variantId: string | null;
+    referenceId: string;
+    consumedSaleItemId?: string | null;
+    requestedQty: number;
+    defaultCutLength: Prisma.Decimal | string | number | null | undefined;
+  }
+) {
+  let remaining = new Prisma.Decimal(toMoney(params.requestedQty));
+  if (remaining.lte(0)) return;
+
+  const defaultLength = new Prisma.Decimal(
+    toMoney(Number(params.defaultCutLength ?? 0))
+  );
+  if (defaultLength.lte(0)) {
+    throw new Error("Cut-length product requires a default full length");
+  }
+
+  const remnantRows = await tx.remnantPiece.findMany({
+    where: {
+      shopId: params.shopId,
+      productId: params.productId,
+      variantId: params.variantId,
+      status: "ACTIVE",
+      remainingLength: { gt: 0 },
+    },
+    orderBy: [{ remainingLength: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      originalLength: true,
+      remainingLength: true,
+      source: true,
+      sourceRef: true,
+      note: true,
+    },
+  });
+
+  for (const piece of remnantRows) {
+    if (remaining.lte(0)) break;
+
+    const consumed = Prisma.Decimal.min(piece.remainingLength, remaining);
+    if (consumed.lte(0)) continue;
+    const nextRemaining = piece.remainingLength.sub(consumed);
+
+    if (nextRemaining.lte(0)) {
+      await tx.remnantPiece.update({
+        where: { id: piece.id },
+        data: {
+          remainingLength: new Prisma.Decimal("0.00"),
+          status: "CONSUMED",
+          consumedSaleItemId: params.consumedSaleItemId ?? null,
+          note: piece.note ?? "Consumed fully in cut sale",
+        },
+      });
+    } else {
+      await tx.remnantPiece.update({
+        where: { id: piece.id },
+        data: {
+          remainingLength: nextRemaining,
+          status: "ACTIVE",
+        },
+      });
+      await tx.remnantPiece.create({
+        data: {
+          shopId: params.shopId,
+          productId: params.productId,
+          variantId: params.variantId,
+          originalLength: consumed,
+          remainingLength: new Prisma.Decimal("0.00"),
+          source: "REMNANT_SALE",
+          sourceRef: piece.id,
+          status: "CONSUMED",
+          consumedSaleItemId: params.consumedSaleItemId ?? null,
+          note: "Partial remnant consumption",
+        },
+      });
+    }
+
+    remaining = remaining.sub(consumed);
+  }
+
+  while (remaining.gt(0)) {
+    if (remaining.gte(defaultLength)) {
+      remaining = remaining.sub(defaultLength);
+      continue;
+    }
+
+    const leftover = defaultLength.sub(remaining);
+    await tx.remnantPiece.create({
+      data: {
+        shopId: params.shopId,
+        productId: params.productId,
+        variantId: params.variantId,
+        originalLength: defaultLength,
+        remainingLength: leftover,
+        source: "CUT_SALE",
+        sourceRef: params.referenceId,
+        status: "ACTIVE",
+        note: "Leftover created from cut-length sale",
+      },
+    });
+    remaining = new Prisma.Decimal("0.00");
+  }
+}
+
+async function restoreCutLengthRemnantForSaleItem(
+  tx: Prisma.TransactionClient,
+  params: {
+    shopId: string;
+    productId: string;
+    variantId: string | null;
+    saleItemId: string;
+    qty: number;
+    source: "SALE_RETURN" | "SALE_VOID";
+    note: string;
+  }
+) {
+  const qtyDecimal = new Prisma.Decimal(toMoney(params.qty));
+  if (qtyDecimal.lte(0)) return;
+
+  await tx.remnantPiece.create({
+    data: {
+      shopId: params.shopId,
+      productId: params.productId,
+      variantId: params.variantId,
+      originalLength: qtyDecimal,
+      remainingLength: qtyDecimal,
+      source: params.source,
+      sourceRef: params.saleItemId,
+      status: "ACTIVE",
+      note: params.note,
+    },
+  });
+}
+
 function assertSaleReturnPermission(user: Awaited<ReturnType<typeof requireUser>>) {
   if (!canManageSaleReturn(user)) {
     throw new Error("Forbidden: missing permission create_sale_return");
@@ -1437,6 +1576,23 @@ export async function createSale(input: CreateSaleInput) {
       }
     }
 
+    for (const { id: saleItemId, index } of createdSaleItemIds) {
+      const item = input.items[index];
+      const product = productMap.get(item.productId);
+      if (!product || !(product as any).trackCutLength) continue;
+      if (item.qty <= 0) continue;
+
+      await consumeCutLengthInventoryForSaleItem(tx, {
+        shopId: input.shopId,
+        productId: item.productId,
+        variantId: item.variantId ?? null,
+        referenceId: saleItemId,
+        consumedSaleItemId: saleItemId,
+        requestedQty: item.qty,
+        defaultCutLength: (product as any).defaultCutLength,
+      });
+    }
+
     // Create cash entry if needed
     if (cashCollected) {
       await tx.cashEntry.create({
@@ -1749,6 +1905,7 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
                 stockQty: true,
                 trackStock: true,
                 trackBatch: true,
+                trackCutLength: true,
                 isActive: true,
               },
             },
@@ -1857,6 +2014,8 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
             buyPrice: true,
             stockQty: true,
             trackStock: true,
+            trackCutLength: true,
+            defaultCutLength: true,
             isActive: true,
           },
         })
@@ -2015,6 +2174,22 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
       await restoreBatchAllocationsForSaleItem(tx, row.saleItemId, Number(row.quantity));
     }
 
+    for (const row of returnRows) {
+      const saleItem = saleItemsById.get(row.saleItemId);
+      if (!saleItem?.product?.trackCutLength) continue;
+      const qty = Number(row.quantity);
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      await restoreCutLengthRemnantForSaleItem(tx, {
+        shopId: sale.shopId,
+        productId: row.productId,
+        variantId: row.variantId,
+        saleItemId: row.saleItemId,
+        qty,
+        source: "SALE_RETURN",
+        note: `Returned cut-length stock from ${createdReturn.returnNo}`,
+      });
+    }
+
     if (exchangeRows.length > 0) {
       await tx.saleReturnExchangeItem.createMany({
         data: exchangeRows.map((row) => ({
@@ -2062,6 +2237,20 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
         const productName = exchangeProductById.get(productId)?.name || productId;
         throw new Error(`Insufficient stock for exchange product "${productName}"`);
       }
+    }
+
+    for (const [productId, qty] of exchangeStockByProduct.entries()) {
+      const product = exchangeProductById.get(productId);
+      if (!product?.trackCutLength) continue;
+      await consumeCutLengthInventoryForSaleItem(tx, {
+        shopId: sale.shopId,
+        productId,
+        variantId: null,
+        referenceId: `${createdReturn.id}:${productId}:exchange`,
+        consumedSaleItemId: null,
+        requestedQty: qty,
+        defaultCutLength: (product as any).defaultCutLength,
+      });
     }
 
     if (refundAmount > 0) {
@@ -2672,6 +2861,18 @@ export async function voidSale(saleId: string, reason?: string | null) {
           data: {
             stockQty: { increment: qtyDecimal },
           },
+        });
+      }
+
+      if ((p as any).trackCutLength) {
+        await restoreCutLengthRemnantForSaleItem(tx, {
+          shopId: sale.shopId,
+          productId: it.productId,
+          variantId: it.variantId ?? null,
+          saleItemId: it.id,
+          qty,
+          source: "SALE_VOID",
+          note: `Restored from void sale ${sale.id}`,
         });
       }
     }

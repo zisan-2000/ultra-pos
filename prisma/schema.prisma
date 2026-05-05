@@ -255,6 +255,7 @@ model Shop {
   serialNumbers        SerialNumber[]
   batches              Batch[]
   batchAllocations     BatchAllocation[]
+  remnantPieces        RemnantPiece[]
   stockAdjustments     StockAdjustment[]
 
   @@index([ownerId], map: "idx_shops_owner_id")
@@ -766,6 +767,8 @@ model Product {
   trackStock          Boolean  @default(false) @map("track_stock")
   trackSerialNumbers  Boolean  @default(false) @map("track_serial_numbers")
   trackBatch          Boolean  @default(false) @map("track_batch")
+  trackCutLength      Boolean  @default(false) @map("track_cut_length")
+  defaultCutLength    Decimal? @map("default_cut_length") @db.Decimal(12, 2)
   reorderPoint        Int?     @map("reorder_point")
   isActive            Boolean  @default(true) @map("is_active")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -781,6 +784,7 @@ model Product {
   returnExchangeItems SaleReturnExchangeItem[]
   serialNumbers   SerialNumber[]
   batches         Batch[]
+  remnants        RemnantPiece[]
   stockAdjustments StockAdjustment[]
 
   @@index([shopId], map: "idx_products_shop")
@@ -816,6 +820,7 @@ model ProductVariant {
   purchaseItems    PurchaseItem[]
   serialNumbers    SerialNumber[]
   batches          Batch[]
+  remnants         RemnantPiece[]
   stockAdjustments StockAdjustment[]
 
   @@index([shopId, productId], map: "idx_product_variants_shop_product")
@@ -1089,6 +1094,7 @@ model SaleItem {
   returnItems   SaleReturnItem[]
   serialNumbers SerialNumber[]
   batchAllocations BatchAllocation[]
+  consumedRemnants RemnantPiece[]
 
   @@index([saleId], map: "idx_sale_items_sale")
   @@index([productId], map: "idx_sale_items_product")
@@ -1455,6 +1461,32 @@ model BatchAllocation {
   @@index([saleItemId], map: "idx_batch_allocations_sale_item")
   @@index([batchId, createdAt], map: "idx_batch_allocations_batch_created")
   @@map("batch_allocations")
+}
+
+model RemnantPiece {
+  id                 String    @id @default(uuid()) @db.Uuid
+  shopId             String    @map("shop_id") @db.Uuid
+  productId          String    @map("product_id") @db.Uuid
+  variantId          String?   @map("variant_id") @db.Uuid
+  originalLength     Decimal   @map("original_length") @db.Decimal(12, 2)
+  remainingLength    Decimal   @map("remaining_length") @db.Decimal(12, 2)
+  source             String    @db.VarChar(40)
+  sourceRef          String?   @map("source_ref") @db.VarChar(120)
+  status             String    @default("ACTIVE") @db.VarChar(20)
+  consumedSaleItemId String?   @map("consumed_sale_item_id") @db.Uuid
+  note               String?
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  shop             Shop            @relation(fields: [shopId], references: [id])
+  product          Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant          ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  consumedSaleItem SaleItem?       @relation(fields: [consumedSaleItemId], references: [id], onDelete: SetNull)
+
+  @@index([shopId, productId, status], map: "idx_remnant_pieces_shop_product_status")
+  @@index([shopId, variantId, status], map: "idx_remnant_pieces_shop_variant_status")
+  @@index([consumedSaleItemId], map: "idx_remnant_pieces_consumed_sale_item")
+  @@map("remnant_pieces")
 }
 
 // ======================

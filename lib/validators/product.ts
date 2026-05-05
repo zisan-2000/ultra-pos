@@ -10,6 +10,8 @@ export const productSchema = z.object({
   isActive: z.boolean(),
   trackSerialNumbers: z.boolean().optional(),
   trackBatch: z.boolean().optional(),
+  trackCutLength: z.boolean().optional(),
+  defaultCutLength: z.string().optional().nullable(),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;

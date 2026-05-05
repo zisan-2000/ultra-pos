@@ -64,7 +64,11 @@ type ProductOption = {
   stockQty?: string | number;
   category?: string | null;
   trackStock?: boolean | null;
+  trackSerialNumbers?: boolean | null;
+  trackBatch?: boolean | null;
+  trackCutLength?: boolean | null;
   baseUnit?: string | null;
+  defaultCutLength?: string | null;
   variants?: Array<{
     id: string;
     label: string;
@@ -86,7 +90,11 @@ type PosPageClientProps = {
     stockQty?: string | number;
     category?: string | null;
     trackStock?: boolean | null;
+    trackSerialNumbers?: boolean | null;
+    trackBatch?: boolean | null;
+    trackCutLength?: boolean | null;
     baseUnit?: string | null;
+    defaultCutLength?: string | null;
     variants?: Array<{
       id: string;
       label: string;
@@ -457,6 +465,10 @@ export function PosPageClient({
         stockQty: p.stockQty?.toString(),
         category: p.category,
         trackStock: p.trackStock,
+        trackSerialNumbers: (p as any).trackSerialNumbers ?? null,
+        trackBatch: (p as any).trackBatch ?? null,
+        trackCutLength: (p as any).trackCutLength ?? null,
+        defaultCutLength: (p as any).defaultCutLength ?? null,
         variants: Array.isArray((p as any).variants)
           ? (p as any).variants
               .filter((variant: any) => variant?.isActive !== false)
@@ -615,6 +627,10 @@ export function PosPageClient({
           ...p,
           sku: p.sku ?? null,
           barcode: p.barcode ?? null,
+          trackSerialNumbers: (p as any).trackSerialNumbers ?? null,
+          trackBatch: (p as any).trackBatch ?? null,
+          trackCutLength: (p as any).trackCutLength ?? null,
+          defaultCutLength: (p as any).defaultCutLength ?? null,
           sellPrice: p.sellPrice.toString(),
           variants: Array.isArray(p.variants)
             ? p.variants.map((variant) => ({
@@ -638,6 +654,13 @@ export function PosPageClient({
         stockQty: (p.stockQty ?? "0").toString(),
         isActive: true,
         trackStock: Boolean(p.trackStock),
+        trackSerialNumbers: Boolean((p as any).trackSerialNumbers),
+        trackBatch: Boolean((p as any).trackBatch),
+        trackCutLength: Boolean((p as any).trackCutLength),
+        defaultCutLength:
+          (p as any).defaultCutLength === null || (p as any).defaultCutLength === undefined
+            ? null
+            : String((p as any).defaultCutLength),
         variants: Array.isArray(p.variants)
           ? p.variants.map((variant) => ({
               id: variant.id,
@@ -1188,12 +1211,12 @@ export function PosPageClient({
     });
   };
 
-  const handleClearFromBar = () => {
+  const handleClearFromBar = useCallback(() => {
     clear();
     setPaidNow("");
     setDiscountType("amount");
     setDiscountValue("");
-  };
+  }, [clear]);
 
   const handleSwipeStart = useCallback((e: React.TouchEvent) => {
     if (barExpanded) return;

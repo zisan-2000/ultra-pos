@@ -44,6 +44,10 @@ const productCreateSchema = z.object({
   sellPrice: z.union([z.string(), z.number()]).optional(),
   stockQty: z.union([z.string(), z.number()]).optional(),
   trackStock: z.boolean().optional(),
+  trackSerialNumbers: z.boolean().optional(),
+  trackBatch: z.boolean().optional(),
+  trackCutLength: z.boolean().optional(),
+  defaultCutLength: z.union([z.string(), z.number()]).optional().nullable(),
   isActive: z.boolean().optional(),
   updatedAt: z.union([z.string(), z.number(), z.date()]).optional(),
 });
@@ -118,6 +122,16 @@ function normalizeNullableText(value: unknown, maxLength = 80) {
   if (value === null) return null;
   const normalized = String(value).trim();
   return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+function normalizeOptionalPositiveDecimal(value: unknown, field: string) {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) {
+    throw new Error(`${field} must be a valid positive number`);
+  }
+  return num.toFixed(2);
 }
 
 function normalizeDateOnly(value: unknown) {
@@ -222,6 +236,16 @@ function sanitizeCreate(item: IncomingProduct) {
   const expiryDate = normalizeDateOnly(item.expiryDate);
   const size = normalizeNullableText(item.size, 80);
   const variants = sanitizeVariants(item.variants);
+  const trackStock = Boolean(item.trackStock);
+  const trackSerialNumbers = Boolean(item.trackSerialNumbers) && trackStock;
+  const trackBatch = Boolean(item.trackBatch) && trackStock;
+  const trackCutLength = Boolean(item.trackCutLength) && trackStock;
+  if (trackCutLength && (trackSerialNumbers || trackBatch)) {
+    throw new Error("Cut-length tracking cannot be combined with serial or batch tracking");
+  }
+  const defaultCutLength = trackCutLength
+    ? normalizeOptionalPositiveDecimal(item.defaultCutLength, "defaultCutLength")
+    : null;
 
   return {
     id: item.id, // keep client-generated id when present
@@ -244,7 +268,11 @@ function sanitizeCreate(item: IncomingProduct) {
     buyPrice: buyPrice === undefined ? undefined : buyPrice, // undefined omits field, null sets null
     sellPrice,
     stockQty,
-    trackStock: Boolean(item.trackStock),
+    trackStock,
+    trackSerialNumbers,
+    trackBatch,
+    trackCutLength,
+    defaultCutLength,
     isActive: item.isActive !== false,
     variants,
   };
@@ -271,6 +299,21 @@ function sanitizeUpdate(item: IncomingProduct) {
   if (item.size !== undefined) payload.size = normalizeNullableText(item.size, 80);
   if (item.isActive !== undefined) payload.isActive = Boolean(item.isActive);
   if (item.trackStock !== undefined) payload.trackStock = Boolean(item.trackStock);
+  if (item.trackSerialNumbers !== undefined) {
+    payload.trackSerialNumbers = Boolean(item.trackSerialNumbers);
+  }
+  if (item.trackBatch !== undefined) {
+    payload.trackBatch = Boolean(item.trackBatch);
+  }
+  if (item.trackCutLength !== undefined) {
+    payload.trackCutLength = Boolean(item.trackCutLength);
+  }
+  if (item.defaultCutLength !== undefined) {
+    payload.defaultCutLength = normalizeOptionalPositiveDecimal(
+      item.defaultCutLength,
+      "defaultCutLength"
+    );
+  }
 
   if (item.buyPrice !== undefined) {
     payload.buyPrice = toMoneyString(item.buyPrice, "buyPrice", { allowNull: true });
@@ -280,6 +323,30 @@ function sanitizeUpdate(item: IncomingProduct) {
   }
   if (item.stockQty !== undefined) {
     payload.stockQty = toMoneyString(item.stockQty, "stockQty", { defaultValue: "0.00" });
+  }
+
+  const nextTrackStock =
+    payload.trackStock !== undefined ? Boolean(payload.trackStock) : undefined;
+  const nextTrackSerialNumbers =
+    payload.trackSerialNumbers !== undefined
+      ? Boolean(payload.trackSerialNumbers)
+      : undefined;
+  const nextTrackBatch =
+    payload.trackBatch !== undefined ? Boolean(payload.trackBatch) : undefined;
+  const nextTrackCutLength =
+    payload.trackCutLength !== undefined
+      ? Boolean(payload.trackCutLength)
+      : undefined;
+  if (nextTrackCutLength && (nextTrackSerialNumbers || nextTrackBatch)) {
+    throw new Error("Cut-length tracking cannot be combined with serial or batch tracking");
+  }
+  if (nextTrackStock === false) {
+    payload.trackSerialNumbers = false;
+    payload.trackBatch = false;
+    payload.trackCutLength = false;
+    payload.defaultCutLength = null;
+  } else if (nextTrackCutLength === false && item.defaultCutLength !== undefined) {
+    payload.defaultCutLength = null;
   }
 
   return { id, data: payload, variants: sanitizeVariants(item.variants) };
