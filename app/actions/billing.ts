@@ -45,19 +45,35 @@ export async function submitPaymentRequest(formData: FormData) {
     throw new Error("Invoice not found");
   }
 
-  if (invoice.status !== "open") {
-    throw new Error("Invoice is not open");
+  const effectiveInvoice =
+    invoice.status === "open"
+      ? invoice
+      : await prisma.invoice.findFirst({
+          where: {
+            shopId,
+            ownerId: user.id,
+            status: "open",
+          },
+          select: { id: true, status: true, shopId: true, ownerId: true },
+          orderBy: [{ dueDate: "desc" }, { periodEnd: "desc" }],
+        });
+
+  if (!effectiveInvoice) {
+    revalidatePath("/dashboard");
+    revalidatePath("/owner/dashboard");
+    revalidatePath("/dashboard/admin/billing");
+    return;
   }
 
   const pending = await prisma.billingPaymentRequest.findFirst({
-    where: { invoiceId, ownerId: user.id, status: "pending" },
+    where: { invoiceId: effectiveInvoice.id, ownerId: user.id, status: "pending" },
     select: { id: true },
   });
 
   if (!pending) {
     await prisma.billingPaymentRequest.create({
       data: {
-        invoiceId,
+        invoiceId: effectiveInvoice.id,
         ownerId: user.id,
         shopId,
         method,

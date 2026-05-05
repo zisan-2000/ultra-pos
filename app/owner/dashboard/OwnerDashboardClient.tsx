@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -364,11 +365,10 @@ export default function OwnerDashboardClient({
                   <DialogContent className="max-w-md">
                     <DialogHeader>
                       <DialogTitle>Payment confirmation</DialogTitle>
+                      <DialogDescription>
+                        This sends a payment claim to the admin. The invoice stays open until it is verified.
+                      </DialogDescription>
                     </DialogHeader>
-                    <p className="text-sm text-muted-foreground">
-                      This sends a payment claim to the admin. The invoice stays
-                      open until it is verified.
-                    </p>
                     <form
                       action={onPaymentRequest}
                       className="space-y-4"

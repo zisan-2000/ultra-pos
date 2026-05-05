@@ -56,7 +56,7 @@ export default async function OwnerDashboardPage({
     // If permission missing, silently skip payables
   }
 
-  const [summary, supportContact, subscription, invoice, needsCogs] =
+  const [summary, supportContact, subscription, latestInvoice, actionableInvoice, needsCogs] =
     await Promise.all([
       getTodaySummaryForShop(selectedShopId, user),
       getSupportContact(),
@@ -93,10 +93,36 @@ export default async function OwnerDashboardPage({
             orderBy: { periodEnd: "desc" },
           })
         : Promise.resolve(null),
+      canViewBilling
+        ? prisma.invoice.findFirst({
+            where: {
+              shopId: selectedShopId,
+              ownerId: user.id,
+              status: "open",
+            },
+            select: {
+              id: true,
+              status: true,
+              dueDate: true,
+              periodEnd: true,
+              paidAt: true,
+              amount: true,
+              paymentRequests: {
+                where: {
+                  ownerId: user.id,
+                  status: "pending",
+                },
+                select: { id: true },
+                take: 1,
+              },
+            },
+            orderBy: [{ dueDate: "desc" }, { periodEnd: "desc" }],
+          })
+        : Promise.resolve(null),
       shopNeedsCogs(selectedShopId),
     ]);
 
-  const paymentRequest = invoice?.paymentRequests?.[0] ?? null;
+  const paymentRequest = actionableInvoice?.paymentRequests?.[0] ?? null;
 
   const billingStatus = canViewBilling
     ? resolveBillingStatus(
@@ -108,12 +134,12 @@ export default async function OwnerDashboardPage({
               graceEndsAt: subscription.graceEndsAt,
             }
           : null,
-        invoice
+        latestInvoice
           ? {
-              status: invoice.status,
-              dueDate: invoice.dueDate,
-              periodEnd: invoice.periodEnd,
-              paidAt: invoice.paidAt,
+              status: latestInvoice.status,
+              dueDate: latestInvoice.dueDate,
+              periodEnd: latestInvoice.periodEnd,
+              paidAt: latestInvoice.paidAt,
             }
           : null,
       )
@@ -132,10 +158,19 @@ export default async function OwnerDashboardPage({
           ? {
               billing: {
                 status: billingStatus,
-                invoiceId: invoice?.id ?? null,
-                amount: invoice?.amount?.toString() ?? null,
-                dueDate: invoice?.dueDate?.toISOString() ?? null,
-                periodEnd: invoice?.periodEnd?.toISOString() ?? null,
+                invoiceId: actionableInvoice?.id ?? null,
+                amount:
+                  actionableInvoice?.amount?.toString() ??
+                  latestInvoice?.amount?.toString() ??
+                  null,
+                dueDate:
+                  actionableInvoice?.dueDate?.toISOString() ??
+                  latestInvoice?.dueDate?.toISOString() ??
+                  null,
+                periodEnd:
+                  actionableInvoice?.periodEnd?.toISOString() ??
+                  latestInvoice?.periodEnd?.toISOString() ??
+                  null,
                 paymentRequestStatus: paymentRequest ? "pending" : "none",
               },
             }
