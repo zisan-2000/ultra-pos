@@ -3,16 +3,7 @@
 import { useEffect } from "react";
 
 const OFFLINE_WARM_ROUTES = [
-  "/dashboard",
-  "/dashboard/sales",
-  "/dashboard/sales/new",
-  "/dashboard/products",
-  "/dashboard/products/new",
-  "/dashboard/expenses",
-  "/dashboard/expenses/new",
-  "/dashboard/cash",
-  "/dashboard/cash/new",
-  "/dashboard/due",
+  "/login",
   "/offline",
   "/offline/conflicts",
 ];

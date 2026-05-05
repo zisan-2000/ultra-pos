@@ -37,48 +37,28 @@ const STATIC_EXTENSIONS = [
   ".webmanifest",
 ];
 
-const NAVIGATION_CACHE_EXACT = ["/", "/offline", "/login", "/dashboard"];
-const NAVIGATION_CACHE_PREFIXES = [
+const NAVIGATION_CACHE_EXACT = ["/", "/offline", "/login"];
+const NAVIGATION_CACHE_PREFIXES = ["/about", "/offline/conflicts"];
+const NAVIGATION_WARM_ROUTES = ["/offline", "/offline/conflicts", "/login"];
+const PROTECTED_NAVIGATION_PREFIXES = [
+  "/dashboard",
   "/sales",
-  "/dashboard/sales",
-  "/dashboard/products",
-  "/dashboard/expenses",
-  "/dashboard/cash",
-  "/dashboard/due",
   "/owner/dashboard",
   "/admin/dashboard",
   "/agent/dashboard",
   "/super-admin/dashboard",
 ];
-const NAVIGATION_WARM_ROUTES = [
-  "/dashboard",
-  "/dashboard/sales",
-  "/dashboard/sales/new",
-  "/dashboard/products",
-  "/dashboard/products/new",
-  "/dashboard/expenses",
-  "/dashboard/expenses/new",
-  "/dashboard/cash",
-  "/dashboard/cash/new",
-  "/dashboard/due",
-  "/offline/conflicts",
-];
-const NAVIGATION_FALLBACKS = {
-  "/dashboard": [
-    "/dashboard/sales",
-    "/dashboard/products",
-    "/dashboard/expenses",
-    "/dashboard/cash",
-    "/dashboard/due",
-  ],
-  "/sales/new": ["/dashboard/sales/new", "/dashboard/sales", "/dashboard"],
-  "/dashboard/sales/new": ["/dashboard/sales", "/dashboard"],
-};
 
 function shouldCacheNavigation(url) {
   const path = normalizePathname(url.pathname);
   if (NAVIGATION_CACHE_EXACT.includes(path)) return true;
   return NAVIGATION_CACHE_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`)
+  );
+}
+
+function isProtectedNavigationPath(path) {
+  return PROTECTED_NAVIGATION_PREFIXES.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`)
   );
 }
@@ -90,27 +70,6 @@ function normalizePathname(pathname) {
 
 function getNavigationCacheKey(url) {
   return new Request(url.origin + normalizePathname(url.pathname));
-}
-
-function getNavigationFallbackPaths(path) {
-  const unique = new Set(NAVIGATION_FALLBACKS[path] || []);
-
-  if (path.startsWith("/sales/new")) {
-    unique.add("/dashboard/sales/new");
-    unique.add("/dashboard/sales");
-    unique.add("/dashboard");
-  }
-
-  if (path.startsWith("/dashboard/sales/new")) {
-    unique.add("/dashboard/sales");
-    unique.add("/dashboard");
-  }
-
-  if (path.startsWith("/dashboard/")) {
-    unique.add("/dashboard");
-  }
-
-  return Array.from(unique);
 }
 
 self.addEventListener("install", (event) => {
@@ -227,24 +186,28 @@ async function handleNavigation(request, url) {
 
   try {
     const networkResponse = await fetch(request);
-    if (networkResponse && networkResponse.ok && shouldCacheNavigation(url)) {
+    const responsePath = normalizePathname(new URL(networkResponse.url).pathname);
+    if (
+      networkResponse &&
+      networkResponse.ok &&
+      responsePath !== "/login" &&
+      shouldCacheNavigation(url)
+    ) {
       const navCacheKey = getNavigationCacheKey(url);
       cache.put(navCacheKey, networkResponse.clone());
       cache.put(request, networkResponse.clone());
     }
     return networkResponse;
   } catch (error) {
+    if (isProtectedNavigationPath(path)) {
+      const login = await cache.match("/login");
+      if (login) return login;
+    }
+
     const cached =
       (await cache.match(request)) ||
       (await cache.match(getNavigationCacheKey(url)));
     if (cached) return cached;
-
-    const fallbackPaths = getNavigationFallbackPaths(path);
-    for (const fallbackPath of fallbackPaths) {
-      const fallbackUrl = new URL(fallbackPath, self.location.origin);
-      const fallbackResponse = await cache.match(getNavigationCacheKey(fallbackUrl));
-      if (fallbackResponse) return fallbackResponse;
-    }
 
     const offline = await cache.match("/offline");
     if (offline) return offline;

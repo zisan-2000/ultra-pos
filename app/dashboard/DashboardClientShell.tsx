@@ -32,6 +32,52 @@ export default function DashboardClientShell({
   const { shopId } = useCurrentShop();
 
   useEffect(() => {
+    let cancelled = false;
+
+    const validateSession = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch("/api/auth/session-rbac", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          window.location.replace("/login");
+          return;
+        }
+        const data = (await res.json()) as { session?: { userId?: string | null } | null };
+        if (!data?.session?.userId) {
+          window.location.replace("/login");
+        }
+      } catch {
+        // If offline, let offline-capable flows continue using local state.
+      }
+    };
+
+    const handlePageShow = () => {
+      if (navigator.onLine) {
+        void validateSession();
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        void validateSession();
+      }
+    };
+
+    void validateSession();
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
     const handleRejection = (event: PromiseRejectionEvent) => {
       if (handlePermissionError(event.reason)) {
         event.preventDefault();

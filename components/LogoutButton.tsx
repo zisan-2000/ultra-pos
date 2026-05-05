@@ -48,7 +48,7 @@ export default function LogoutButton({
       try {
         await clearOfflineData();
         const result = await completeLogout({});
-        window.location.assign(result?.redirectTo || "/login");
+        window.location.replace(result?.redirectTo || "/login");
       } catch (err) {
         setError("লগ আউট হয়নি, আবার চেষ্টা করুন");
         await clearOfflineData();
