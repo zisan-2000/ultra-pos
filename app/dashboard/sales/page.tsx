@@ -213,7 +213,6 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     resolvedSearch?.shopId && shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
       : cookieSelectedShopId ?? shops[0].id;
-  const selectedShop = shops.find((s) => s.id === selectedShopId)!;
 
   const todayStr = getDhakaDateString();
   const rawFrom = normalizeDateInput(resolvedSearch?.from);
@@ -366,77 +365,67 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
 
   const summaryTotalDisplay = formatCurrency(summary.totalAmount);
   const rangeLabel = fromStr === toStr
-    ? fromStr
-    : `${fromStr} – ${toStr}`;
+    ? (fromStr === todayStr ? 'আজ' : fromStr)
+    : `${fromStr} → ${toStr}`;
 
   return (
     <div className="space-y-4 sm:space-y-5 section-gap pb-[128px] sm:pb-[110px]">
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-card to-card" />
-        <div className="pointer-events-none absolute -top-20 right-0 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
-        <div className="relative space-y-3 p-3 sm:space-y-4 sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-                বিক্রির সারসংক্ষেপ
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="pointer-events-none absolute -top-12 right-0 h-32 w-32 rounded-full bg-primary/20 blur-3xl" />
+        <div className="relative space-y-3 p-4">
+
+          {/* Title row */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                বিক্রি
               </p>
-              <p className="text-3xl font-bold text-foreground leading-tight tracking-tight sm:text-4xl">
+              <p className="text-3xl font-bold tabular-nums leading-tight text-foreground sm:text-4xl">
                 ৳ {summaryTotalDisplay}
               </p>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
-                দোকান:
-                <span className="truncate font-semibold text-foreground">
-                  {selectedShop.name}
-                </span>
-              </p>
             </div>
-            <div className="w-full sm:w-auto">
-              <DateFilterClient
-                shopId={selectedShopId}
-                from={fromStr}
-                to={toStr}
-              />
-            </div>
+            {canCreateSale ? (
+              <Link
+                href={`/dashboard/sales/new?shopId=${selectedShopId}`}
+                className="inline-flex h-9 shrink-0 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+              >
+                + নতুন বিক্রি
+              </Link>
+            ) : null}
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-border/70 pt-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-                {summary.count} বিল
+          {/* Date filter */}
+          <DateFilterClient shopId={selectedShopId} from={fromStr} to={toStr} />
+
+          {/* Shop selector */}
+          <ShopSelectorClient
+            shops={shops}
+            selectedShopId={selectedShopId}
+            from={fromStr}
+            to={toStr}
+          />
+
+          {/* Stats chips */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3 text-xs">
+            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 font-semibold text-muted-foreground">
+              {summary.count} বিল
+            </span>
+            {Number((summary as any).discountAmount ?? 0) > 0 ? (
+              <span className="inline-flex h-7 items-center rounded-full border border-success/30 bg-success-soft px-3 font-semibold text-success">
+                ছাড় {formatCurrency((summary as any).discountAmount)}
               </span>
-              {Number((summary as any).discountAmount ?? 0) > 0 ? (
-                <span className="inline-flex h-7 items-center gap-1 rounded-full bg-success-soft px-3 font-semibold text-success border border-success/30">
-                  ছাড় {formatCurrency((summary as any).discountAmount)}
-                </span>
-              ) : null}
-              {Number((summary as any).taxAmount ?? 0) > 0 ? (
-                <span className="inline-flex h-7 items-center gap-1 rounded-full bg-primary-soft px-3 font-semibold text-primary border border-primary/30">
-                  VAT/Tax {formatCurrency((summary as any).taxAmount)}
-                </span>
-              ) : null}
-              <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">
-                {rangeLabel}
+            ) : null}
+            {Number((summary as any).taxAmount ?? 0) > 0 ? (
+              <span className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-3 font-semibold text-primary">
+                VAT/Tax {formatCurrency((summary as any).taxAmount)}
               </span>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-              <div className="w-full sm:w-[200px]">
-                <ShopSelectorClient
-                  shops={shops}
-                  selectedShopId={selectedShopId}
-                  from={fromStr}
-                  to={toStr}
-                />
-              </div>
-              {canCreateSale ? (
-                <Link
-                  href={`/dashboard/sales/new?shopId=${selectedShopId}`}
-                  className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-3 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
-                >
-                  ➕ নতুন বিক্রি
-                </Link>
-              ) : null}
-            </div>
+            ) : null}
+            <span className="inline-flex h-7 max-w-[180px] items-center truncate rounded-full border border-border bg-card/80 px-3 font-semibold text-muted-foreground">
+              {rangeLabel}
+            </span>
           </div>
+
         </div>
       </div>
 

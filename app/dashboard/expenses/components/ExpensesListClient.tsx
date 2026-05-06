@@ -138,13 +138,13 @@ function CustomRangeInputs({
     <div className={`grid gap-2 ${cols === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
       <input
         type="date"
-        className="h-11 border border-border rounded-2xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
         value={customFrom ?? ""}
         onChange={(e) => setCustomFrom(e.target.value)}
       />
       <input
         type="date"
-        className="h-11 border border-border rounded-2xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        className="h-11 border border-border rounded-xl px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
         value={customTo ?? ""}
         onChange={(e) => setCustomTo(e.target.value)}
       />
@@ -156,7 +156,7 @@ function CustomRangeInputs({
             if (!canApplyCustom || !customFrom || !customTo) return;
             applyRangeToUrl(customFrom, customTo);
           }}
-          className={`${spanClass} w-full h-11 rounded-2xl bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60 transition-colors`}
+          className={`${spanClass} w-full h-11 rounded-xl bg-primary-soft text-primary border border-primary/30 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60 transition-colors`}
         >
           রেঞ্জ প্রয়োগ করুন
         </button>
@@ -400,6 +400,26 @@ export function ExpensesListClient({
     return "কাস্টম";
   }, [online, from, to, range.from, range.to]);
 
+  const grouped = useMemo(() => {
+    const groups: Record<string, typeof filteredItems> = {};
+    filteredItems
+      .slice()
+      .sort((a, b) => {
+        const da = formatExpenseDate(a.expenseDate) ?? "";
+        const db = formatExpenseDate(b.expenseDate) ?? "";
+        if (db !== da) return db > da ? 1 : -1;
+        const ta = a.createdAt ? new Date(a.createdAt as any).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt as any).getTime() : 0;
+        return tb - ta;
+      })
+      .forEach((e) => {
+        const key = formatExpenseDate(e.expenseDate) ?? getDhakaDateString();
+        groups[key] = groups[key] || [];
+        groups[key].push(e);
+      });
+    return groups;
+  }, [filteredItems]);
+
   return (
     <div className="space-y-4 pb-16">
 
@@ -429,7 +449,7 @@ export function ExpensesListClient({
               ) : null}
             </div>
           </div>
-          <div className="rounded-2xl border border-border/70 bg-background/80 p-3 space-y-2">
+          <div className="rounded-xl border border-border/70 bg-background/80 p-3 space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-muted-foreground">সময়</p>
               <span className="max-w-35 truncate text-xs text-muted-foreground">{rangeLabel}</span>
@@ -497,75 +517,95 @@ export function ExpensesListClient({
 
       {/* Expense list */}
       {hasItems ? (
-        <div className="space-y-2">
-          {filteredItems.map((e) => {
-            const amountNum = Number(e.amount ?? 0);
-            const amtFormatted = Number.isFinite(amountNum) ? formatMoney(amountNum) : (e.amount as any)?.toString?.() ?? "0.00";
-            const expenseDateStr = formatExpenseDate(e.expenseDate) ?? "-";
-            const timeStr = formatTime(e.createdAt) || (typeof e.expenseDate === "string" && e.expenseDate.includes("T") ? formatTime(e.expenseDate) : "");
-
-            return (
-              <div
-                key={e.id}
-                className="overflow-hidden rounded-2xl border border-l-[3px] border-l-danger border-danger/15 bg-card shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
-              >
-                {/* Row 1: icon · category · amount */}
-                <div className="flex items-center gap-3 px-3.5 pt-3 pb-2.5">
-                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-danger/12 text-danger text-sm font-bold">
-                    ↓
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">{e.category}</p>
-                    {e.note ? (
-                      <p className="truncate text-[11px] text-muted-foreground mt-0.5">{e.note}</p>
-                    ) : null}
-                  </div>
-                  <p className="shrink-0 text-base font-bold tabular-nums text-danger">
-                    ৳ {amtFormatted}
-                  </p>
-                </div>
-
-                {/* Row 2: date/time | actions */}
-                <div className="flex items-center justify-between gap-2 border-t border-border/40 px-3.5 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex h-5 items-center rounded-full border border-danger/25 bg-danger/10 px-2 text-[10px] font-semibold text-danger">
-                      খরচ
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {expenseDateStr}{timeStr ? ` · ${timeStr}` : ""}
+        <div className="space-y-4">
+          {Object.keys(grouped)
+            .sort((a, b) => (a > b ? -1 : 1))
+            .map((dateKey) => {
+              const friendly = new Date(dateKey).toLocaleDateString("bn-BD");
+              const entries = grouped[dateKey];
+              return (
+                <div key={dateKey} className="space-y-2">
+                  <div className="flex items-center gap-3 px-1">
+                    <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground">
+                      {friendly}
+                    </p>
+                    <div className="flex-1 h-px bg-border/60" />
+                    <span className="inline-flex h-6 items-center rounded-full border border-border/70 bg-card px-2.5 text-[10px] font-semibold text-muted-foreground">
+                      {entries.length}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    {online && canUpdateExpense ? (
-                      <Link
-                        href={`/dashboard/expenses/${e.id}`}
-                        className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-xs font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/15"
-                      >
-                        দেখুন
-                      </Link>
-                    ) : !online ? (
-                      <span className="text-[11px] font-semibold text-warning">অফলাইন</span>
-                    ) : null}
-                    {canDeleteExpense ? (
-                      <ExpensesDeleteButton
-                        id={e.id}
-                        shopId={shopId}
-                        amount={amountNum}
-                        syncStatus={e.syncStatus}
-                        onDeleted={handleOptimisticDelete}
-                        className="h-7 rounded-full px-3 text-xs"
-                      />
-                    ) : null}
+                  <div className="space-y-2">
+                    {entries.map((e) => {
+                      const amountNum = Number(e.amount ?? 0);
+                      const amtFormatted = Number.isFinite(amountNum) ? formatMoney(amountNum) : (e.amount as any)?.toString?.() ?? "0.00";
+                      const timeStr = formatTime(e.createdAt) || (typeof e.expenseDate === "string" && e.expenseDate.includes("T") ? formatTime(e.expenseDate) : "");
+
+                      return (
+                        <div
+                          key={e.id}
+                          className="overflow-hidden rounded-2xl border border-l-[3px] border-l-danger border-danger/15 bg-card shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
+                        >
+                          {/* Row 1: icon · category · amount */}
+                          <div className="flex items-center gap-3 px-3.5 pt-3 pb-2.5">
+                            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-danger/12 text-danger text-sm font-bold">
+                              ↓
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-foreground">{e.category}</p>
+                              {e.note ? (
+                                <p className="truncate text-[11px] text-muted-foreground mt-0.5">{e.note}</p>
+                              ) : null}
+                            </div>
+                            <p className="shrink-0 text-base font-bold tabular-nums text-danger">
+                              ৳ {amtFormatted}
+                            </p>
+                          </div>
+
+                          {/* Row 2: time | actions */}
+                          <div className="flex items-center justify-between gap-2 border-t border-border/40 px-3.5 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-5 items-center rounded-full border border-danger/25 bg-danger/10 px-2 text-[10px] font-semibold text-danger">
+                                খরচ
+                              </span>
+                              {timeStr ? (
+                                <span className="text-[11px] text-muted-foreground">{timeStr}</span>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {online && canUpdateExpense ? (
+                                <Link
+                                  href={`/dashboard/expenses/${e.id}`}
+                                  className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-xs font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/15"
+                                >
+                                  এডিট
+                                </Link>
+                              ) : !online ? (
+                                <span className="text-[11px] font-semibold text-warning">অফলাইন</span>
+                              ) : null}
+                              {canDeleteExpense ? (
+                                <ExpensesDeleteButton
+                                  id={e.id}
+                                  shopId={shopId}
+                                  amount={amountNum}
+                                  syncStatus={e.syncStatus}
+                                  onDeleted={handleOptimisticDelete}
+                                  className="h-7 rounded-full px-3 text-xs"
+                                />
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-border/70 bg-card/60 px-6 py-10 text-center space-y-3">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-danger/15 bg-danger/10 text-2xl text-danger font-bold">
-            ↓
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-danger/15 bg-danger-soft/60 text-3xl">
+            💸
           </div>
           <p className="text-base font-semibold text-foreground">কোনো খরচ নেই</p>
           <p className="mx-auto max-w-xs text-sm text-muted-foreground">

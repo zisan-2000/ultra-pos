@@ -106,6 +106,18 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
     }
   };
 
+  const activePreset = useMemo(() => {
+    const today = getDhakaDateString();
+    const yesterday = addDays(today, -1);
+    const sevenDayStart = addDays(today, -6);
+    const monthStart = getMonthStart(today);
+    if (from === today && to === today) return "today";
+    if (from === yesterday && to === yesterday) return "yesterday";
+    if (from === sevenDayStart && to === today) return "7d";
+    if (from === monthStart && to === today) return "month";
+    return "custom";
+  }, [from, to]);
+
   const customRangeValidation = useMemo(() => {
     if (!customFrom || !customTo) {
       return {
@@ -184,59 +196,49 @@ export default function DateFilterClient({ shopId, from, to }: Props) {
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
-                <button
-                  type="button"
-                  onClick={() => setPreset("today")}
-                  className="rounded-lg border border-border px-3 py-2 font-semibold text-foreground hover:bg-muted"
-                >
-                  আজ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreset("yesterday")}
-                  className="rounded-lg border border-border px-3 py-2 font-semibold text-foreground hover:bg-muted"
-                >
-                  গতকাল
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreset("7d")}
-                  className="rounded-lg border border-border px-3 py-2 font-semibold text-foreground hover:bg-muted"
-                >
-                  ৭ দিন
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreset("month")}
-                  className="rounded-lg border border-border px-3 py-2 font-semibold text-foreground hover:bg-muted"
-                >
-                  এই মাস
-                </button>
+                {(["today", "yesterday", "7d", "month"] as const).map((key) => {
+                  const label = { today: "আজ", yesterday: "গতকাল", "7d": "৭ দিন", month: "এই মাস" }[key];
+                  const isActive = activePreset === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setPreset(key)}
+                      className={`rounded-full border px-3 py-2 font-semibold transition ${
+                        isActive
+                          ? "bg-primary-soft text-primary border-primary/30 shadow-sm"
+                          : "border-border text-foreground hover:border-primary/30 hover:bg-primary-soft/40"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-foreground">
-                  Custom range
+                  কাস্টম রেঞ্জ
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="date"
                     value={customFrom}
                     onChange={(e) => setCustomFrom(e.target.value)}
-                    className="h-11 w-full rounded-lg border border-border px-3 text-sm"
+                    className="h-11 w-full rounded-xl border border-border px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                   <input
                     type="date"
                     value={customTo}
                     onChange={(e) => setCustomTo(e.target.value)}
-                    className="h-11 w-full rounded-lg border border-border px-3 text-sm"
+                    className="h-11 w-full rounded-xl border border-border px-3 text-sm bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                 </div>
                 <button
                   type="button"
                   disabled={!canApplyCustom}
                   onClick={() => applyRange(customFrom, customTo)}
-                  className="w-full rounded-lg bg-primary-soft text-primary border border-primary/30 py-2.5 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
+                  className="w-full rounded-xl bg-primary-soft text-primary border border-primary/30 py-2.5 text-sm font-semibold hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60"
                 >
                   রেঞ্জ প্রয়োগ করুন
                 </button>

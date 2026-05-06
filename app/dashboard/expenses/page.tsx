@@ -13,6 +13,7 @@ import { hasPermission } from "@/lib/rbac";
 
 import ShopSelectorClient from "./ShopSelectorClient";
 import { ExpensesListClient } from "./components/ExpensesListClient";
+import QuickExpenseSheet from "./components/QuickExpenseSheet";
 
 import {
   buildCursorPageLink,
@@ -203,12 +204,12 @@ export default async function ExpensesPage({
               </h1>
             </div>
             {canCreateExpense ? (
-              <Link
-                href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
-                className="inline-flex h-9 shrink-0 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-              >
-                + নতুন খরচ
-              </Link>
+              <QuickExpenseSheet
+                shopId={selectedShopId}
+                fullFormHref={`/dashboard/expenses/new?shopId=${selectedShopId}`}
+                triggerLabel="+ নতুন খরচ"
+                triggerClassName="inline-flex h-9 shrink-0 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+              />
             ) : null}
           </div>
 

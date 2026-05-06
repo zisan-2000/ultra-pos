@@ -15,6 +15,7 @@ import { reportEvents, type ReportEventData } from "@/lib/events/reportEvents";
 import { useSmartPolling } from "@/lib/polling/use-smart-polling";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import { getDhakaDateString } from "@/lib/reporting-range";
 
 type SaleSummary = {
   id: string;
@@ -67,15 +68,6 @@ const paymentLabels: Record<string, string> = {
   bank_transfer: "🏦 ব্যাংক",
   due: "🧾 বাকিতে",
 };
-
-function formatDate(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleDateString("bn-BD", {
-    month: "short",
-    day: "numeric",
-  });
-}
 
 function formatTime(iso: string) {
   const date = new Date(iso);
@@ -336,6 +328,19 @@ export default function SalesListClient({
 
   const renderedItems = useMemo(() => items, [items]);
 
+  const grouped = useMemo(() => {
+    const groups: Record<string, SaleSummary[]> = {};
+    renderedItems
+      .slice()
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .forEach((s) => {
+        const key = getDhakaDateString(new Date(s.createdAt));
+        groups[key] = groups[key] || [];
+        groups[key].push(s);
+      });
+    return groups;
+  }, [renderedItems]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -366,7 +371,7 @@ export default function SalesListClient({
       </div>
 
       {renderedItems.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-border bg-card/70 px-6 py-12 text-center shadow-sm">
+        <div className="rounded-2xl border border-dashed border-border/70 bg-card/60 px-6 py-12 text-center shadow-sm">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-primary/15 bg-primary-soft/60 text-3xl shadow-[0_1px_0_rgba(0,0,0,0.03)]">
             🧾
           </div>
@@ -380,7 +385,24 @@ export default function SalesListClient({
           </p>
         </div>
       ) : (
-        renderedItems.map((s) => {
+        Object.keys(grouped)
+          .sort((a, b) => (a > b ? -1 : 1))
+          .map((dateKey) => {
+            const friendly = new Date(dateKey).toLocaleDateString("bn-BD");
+            const entries = grouped[dateKey];
+            return (
+              <div key={dateKey} className="space-y-3">
+                <div className="flex items-center gap-3 px-1">
+                  <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground">
+                    {friendly}
+                  </p>
+                  <div className="flex-1 h-px bg-border/60" />
+                  <span className="inline-flex h-6 items-center rounded-full border border-border/70 bg-card px-2.5 text-[10px] font-semibold text-muted-foreground">
+                    {entries.length}
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {entries.map((s) => {
           const isVoided = (s.status || "").toUpperCase() === "VOIDED";
           const voidReason = s.voidReason || "";
           const paymentKey = s.paymentMethod?.toLowerCase?.() || "cash";
@@ -406,7 +428,6 @@ export default function SalesListClient({
               ? `${s.itemCount} আইটেম`
               : "কোন আইটেম সংযুক্ত নেই");
           const timeStr = formatTime(s.createdAt);
-          const dateStr = formatDate(s.createdAt);
           const formId = `void-sale-${s.id}`;
           const returnCount = Number(s.returnCount ?? 0);
           const refundCount = Number(s.refundCount ?? 0);
@@ -507,13 +528,11 @@ export default function SalesListClient({
                       {statusText}
                     </span>
                   </div>
-                  <div className="text-left text-[11px] text-muted-foreground sm:text-xs sm:text-right">
-                    <p className="flex items-center gap-1 whitespace-nowrap font-semibold justify-start sm:justify-end">
-                      <span>⏱ {timeStr}</span>
-                      <span className="opacity-60">•</span>
-                      <span>{dateStr}</span>
-                    </p>
-                  </div>
+                  {timeStr ? (
+                    <span className="text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
+                      ⏱ {timeStr}
+                    </span>
+                  ) : null}
                 </div>
 
                 <p className="text-[12px] text-muted-foreground flex flex-wrap items-center gap-2 sm:text-sm">
@@ -680,8 +699,12 @@ export default function SalesListClient({
                 ) : null}
               </div>
             </div>
-          );
-        })
+            );
+          })}
+                </div>
+              </div>
+            );
+          })
       )}
 
       {hasMore && (
