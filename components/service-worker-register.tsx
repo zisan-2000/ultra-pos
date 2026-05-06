@@ -6,6 +6,15 @@ const OFFLINE_WARM_ROUTES = [
   "/login",
   "/offline",
   "/offline/conflicts",
+  "/dashboard/sales",
+  "/dashboard/sales/new",
+  "/dashboard/products",
+  "/dashboard/products/new",
+  "/dashboard/expenses",
+  "/dashboard/expenses/new",
+  "/dashboard/cash",
+  "/dashboard/cash/new",
+  "/dashboard/due",
 ];
 
 // Registers the service worker from the client to avoid making the layout a client component.

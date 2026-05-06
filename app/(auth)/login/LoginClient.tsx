@@ -98,7 +98,7 @@ export default function LoginPage() {
     setError(null);
     try {
       setOfflineLoading(true);
-      router.push("/dashboard");
+      router.push("/offline");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Offline continue failed");
     } finally {
@@ -110,7 +110,7 @@ export default function LoginPage() {
   const canUseOfflineContinue = !online && offlineProfile;
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-linear-to-br from-primary-soft/40 via-background to-warning-soft/30 px-4">
+    <main className="relative min-h-dvh overflow-y-auto overflow-x-hidden bg-linear-to-br from-primary-soft/40 via-background to-warning-soft/30 px-4">
       <div aria-hidden className="pointer-events-none absolute inset-0">
         <div className="absolute -top-32 right-[-10%] h-[420px] w-[420px] rounded-full bg-primary/15 blur-[120px]" />
         <div className="absolute bottom-[-20%] left-[-10%] h-[420px] w-[420px] rounded-full bg-warning/15 blur-[120px]" />
@@ -120,7 +120,7 @@ export default function LoginPage() {
         <ThemeToggle />
       </div>
 
-      <section className="relative mx-auto flex min-h-screen max-w-md items-center">
+      <section className="relative mx-auto flex min-h-dvh max-w-md items-center py-6">
         <div className="w-full space-y-4">
           <form
             onSubmit={handleSubmit}

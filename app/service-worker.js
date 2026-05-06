@@ -6,8 +6,8 @@
 
 const CACHE_PREFIX = "pos-cache-";
 // Bump this when deploying so clients drop old Next.js bundles & action IDs.
-const CACHE_NAME = `${CACHE_PREFIX}v14`;
-const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v14`;
+const CACHE_NAME = `${CACHE_PREFIX}v15`;
+const STATIC_CACHE_NAME = `${CACHE_PREFIX}static-v15`;
 
 const PRECACHE_URLS = [
   "/offline",
@@ -37,9 +37,37 @@ const STATIC_EXTENSIONS = [
   ".webmanifest",
 ];
 
-const NAVIGATION_CACHE_EXACT = ["/", "/offline", "/login"];
-const NAVIGATION_CACHE_PREFIXES = ["/about", "/offline/conflicts"];
-const NAVIGATION_WARM_ROUTES = ["/offline", "/offline/conflicts", "/login"];
+const NAVIGATION_CACHE_EXACT = [
+  "/",
+  "/about",
+  "/offline",
+  "/offline/conflicts",
+  "/login",
+  "/dashboard/sales",
+  "/dashboard/sales/new",
+  "/dashboard/products",
+  "/dashboard/products/new",
+  "/dashboard/expenses",
+  "/dashboard/expenses/new",
+  "/dashboard/cash",
+  "/dashboard/cash/new",
+  "/dashboard/due",
+];
+const NAVIGATION_CACHE_PREFIXES = [];
+const NAVIGATION_WARM_ROUTES = [
+  "/login",
+  "/offline",
+  "/offline/conflicts",
+  "/dashboard/sales",
+  "/dashboard/sales/new",
+  "/dashboard/products",
+  "/dashboard/products/new",
+  "/dashboard/expenses",
+  "/dashboard/expenses/new",
+  "/dashboard/cash",
+  "/dashboard/cash/new",
+  "/dashboard/due",
+];
 const PROTECTED_NAVIGATION_PREFIXES = [
   "/dashboard",
   "/sales",
@@ -47,6 +75,13 @@ const PROTECTED_NAVIGATION_PREFIXES = [
   "/admin/dashboard",
   "/agent/dashboard",
   "/super-admin/dashboard",
+];
+const OFFLINE_CAPABLE_PROTECTED_PREFIXES = [
+  "/dashboard/sales",
+  "/dashboard/products",
+  "/dashboard/expenses",
+  "/dashboard/cash",
+  "/dashboard/due",
 ];
 
 function shouldCacheNavigation(url) {
@@ -59,6 +94,12 @@ function shouldCacheNavigation(url) {
 
 function isProtectedNavigationPath(path) {
   return PROTECTED_NAVIGATION_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`)
+  );
+}
+
+function isOfflineCapableProtectedPath(path) {
+  return OFFLINE_CAPABLE_PROTECTED_PREFIXES.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`)
   );
 }
@@ -199,15 +240,20 @@ async function handleNavigation(request, url) {
     }
     return networkResponse;
   } catch (error) {
-    if (isProtectedNavigationPath(path)) {
-      const login = await cache.match("/login");
-      if (login) return login;
-    }
-
     const cached =
       (await cache.match(request)) ||
       (await cache.match(getNavigationCacheKey(url)));
     if (cached) return cached;
+
+    if (isProtectedNavigationPath(path)) {
+      const offline = await cache.match("/offline");
+      if (offline) return offline;
+
+      if (!isOfflineCapableProtectedPath(path)) {
+        const login = await cache.match("/login");
+        if (login) return login;
+      }
+    }
 
     const offline = await cache.match("/offline");
     if (offline) return offline;

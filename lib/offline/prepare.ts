@@ -6,10 +6,20 @@ import { runSyncEngine } from "@/lib/sync/sync-engine";
 const LAST_PREPARED_PREFIX = "offline:prepared";
 
 function buildRoutes(shopId?: string | null) {
+  const suffix = shopId ? `?shopId=${shopId}` : "";
   return [
     "/login",
     "/offline",
     "/offline/conflicts",
+    `/dashboard/sales${suffix}`,
+    `/dashboard/sales/new${suffix}`,
+    `/dashboard/products${suffix}`,
+    `/dashboard/products/new${suffix}`,
+    `/dashboard/expenses${suffix}`,
+    `/dashboard/expenses/new${suffix}`,
+    `/dashboard/cash${suffix}`,
+    `/dashboard/cash/new${suffix}`,
+    `/dashboard/due${suffix}`,
   ];
 }
 
