@@ -161,7 +161,7 @@ export default function StockValuationReport({ shopId }: Props) {
         <div className="relative space-y-4 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-success/15 text-success text-lg">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-success/15 text-success text-lg">
                 🧮
               </span>
               <div>
@@ -278,7 +278,7 @@ export default function StockValuationReport({ shopId }: Props) {
               </tr>
             ) : (
               data.rows.map((row) => (
-                <tr key={row.id} className="border-t hover:bg-muted/60">
+                <tr key={row.id} className="border-t hover:bg-muted/30 transition-colors">
                   <td className="p-3 text-foreground">
                     <div className="flex flex-col gap-1">
                       <span className="font-semibold">{row.name}</span>

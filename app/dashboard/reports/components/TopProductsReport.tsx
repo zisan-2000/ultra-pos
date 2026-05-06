@@ -128,7 +128,7 @@ export default function TopProductsReport({ shopId, from, to }: Props) {
         <div className="relative space-y-4 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/15 text-primary text-lg">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary text-lg">
                 🏆
               </span>
               <div>
@@ -243,7 +243,7 @@ export default function TopProductsReport({ shopId, from, to }: Props) {
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/35 via-transparent to-transparent" />
               <div className="relative flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/15 text-primary text-lg">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary text-lg">
                     🏆
                   </span>
                   <div>

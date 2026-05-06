@@ -74,7 +74,7 @@ export function StatCard({
       <div className="relative flex items-start gap-3">
         {icon ? (
           <span
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl text-lg ${styles.iconBg}`}
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-xl text-lg ${styles.iconBg}`}
           >
             {icon}
           </span>

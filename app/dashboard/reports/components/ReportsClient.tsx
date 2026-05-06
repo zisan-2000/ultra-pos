@@ -602,7 +602,7 @@ export default function ReportsClient({
   const hasSummary = Boolean(liveSummary);
   const summaryLoading = summaryQuery.isFetching && online && hasSummary;
   const summarySnapshot = hasSummary
-    ? `${liveSummary!.sales.totalAmount.toFixed(1)} ৳ বিক্রি | লাভ ${liveSummary!.profit.profit.toFixed(1)} ৳`
+    ? `৳ ${Math.round(liveSummary!.sales.totalAmount).toLocaleString("bn-BD")} বিক্রি · লাভ ৳ ${Math.round(liveSummary!.profit.profit).toLocaleString("bn-BD")}`
     : "রিপোর্ট লোড হচ্ছে...";
 
   const refreshSummaryFresh = useCallback(async (force = false) => {
@@ -1556,18 +1556,6 @@ export default function ReportsClient({
     }
   };
 
-  const renderActiveDesktopReport = () => {
-    if (active === "summary") {
-      return (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
-          সারাংশ উপরে দেখানো হচ্ছে। বিস্তারিত রিপোর্ট দেখতে অন্য ট্যাব নির্বাচন
-          করুন।
-        </div>
-      );
-    }
-    return renderReport();
-  };
-
   return (
     <div className="space-y-6 pb-24">
       {!online && (
@@ -1578,127 +1566,110 @@ export default function ReportsClient({
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
         <div className="pointer-events-none absolute -bottom-16 right-0 h-32 w-32 rounded-full bg-primary/20 blur-3xl" />
-        <div className="relative space-y-4 p-4 sm:p-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="relative space-y-3 p-4">
+          {/* Title row */}
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
-            <h1 className="text-3xl font-bold text-foreground leading-tight">
-              রিপোর্ট ও বিশ্লেষণ
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              দোকান: <span className="font-semibold">{shopName}</span>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              বিক্রি, খরচ, ক্যাশ, লাভ এক জায়গায়
-            </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                রিপোর্ট ও বিশ্লেষণ
+              </p>
+              <p className="text-3xl font-bold tabular-nums leading-tight text-foreground sm:text-4xl">
+                ৳ {hasSummary ? Math.round(liveSummary!.sales.totalAmount).toLocaleString("bn-BD") : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {shopName}
+              </p>
             </div>
-
-            <div className="w-full md:w-auto">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <ShopSelectorClient shops={shops} selectedShopId={shopId} />
-                <Dialog
-                  open={exportOpen}
-                  onOpenChange={(open) => {
-                    setExportOpen(open);
-                    if (!open) setExportError(null);
-                  }}
+            <Dialog
+              open={exportOpen}
+              onOpenChange={(open) => {
+                setExportOpen(open);
+                if (!open) setExportError(null);
+              }}
+            >
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  disabled={!online || exportingKey !== null}
+                  className="inline-flex h-9 shrink-0 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <div className="inline-flex items-center gap-2">
-                    <DialogTrigger asChild>
-                      <button
-                        type="button"
-                        disabled={!online || exportingKey !== null}
-                        className="inline-flex h-10 items-center justify-center rounded-xl border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary shadow-sm transition hover:bg-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        {exportingKey ? "এক্সপোর্ট হচ্ছে..." : "CSV এক্সপোর্ট"}
-                      </button>
-                    </DialogTrigger>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        toast.message("সব রিপোর্ট মানে একাধিক CSV ফাইল ডাউনলোড হবে")
-                      }
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-xs text-muted-foreground hover:bg-muted transition"
-                      title="সব রিপোর্ট মানে একাধিক CSV ফাইল ডাউনলোড হবে"
-                      aria-label="এক্সপোর্ট তথ্য"
-                    >
-                      ℹ️
-                    </button>
+                  {exportingKey ? "এক্সপোর্ট হচ্ছে..." : "↓ CSV"}
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-md overflow-y-auto border-border/70 p-0 sm:w-[calc(100vw-2rem)]">
+                <DialogHeader className="px-6 pt-6">
+                  <DialogTitle>CSV এক্সপোর্ট</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 px-6 pb-6">
+                  <div className="rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-xs text-muted-foreground space-y-1">
+                    <p>রেঞ্জ: {rangeLabel ?? "সব সময়"}</p>
+                    <p>
+                      বর্তমান ট্যাব:{" "}
+                      {NAV.find((item) => item.key === active)?.label ??
+                        "সারাংশ"}
+                    </p>
+                    <p>টপ পণ্য ও লো স্টক সবসময় সামগ্রিক ডেটা দেখায়।</p>
+                    <p>বড় রিপোর্টে কিছু সময় লাগতে পারে।</p>
                   </div>
-                  <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-md overflow-y-auto border-border/70 p-0 sm:w-[calc(100vw-2rem)]">
-                    <DialogHeader className="px-6 pt-6">
-                      <DialogTitle>CSV এক্সপোর্ট</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 px-6 pb-6">
-                      <div className="rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-xs text-muted-foreground space-y-1">
-                        <p>রেঞ্জ: {rangeLabel ?? "সব সময়"}</p>
-                        <p>
-                          বর্তমান ট্যাব:{" "}
-                          {NAV.find((item) => item.key === active)?.label ??
-                            "সারাংশ"}
-                        </p>
-                        <p>টপ পণ্য ও লো স্টক সবসময় সামগ্রিক ডেটা দেখায়।</p>
-                        <p>বড় রিপোর্টে কিছু সময় লাগতে পারে।</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        {[
-                          { key: "active", label: "বর্তমান ট্যাব" },
-                          { key: "summary", label: "সারাংশ" },
-                          { key: "sales", label: "বিক্রি" },
-                          { key: "expenses", label: "খরচ" },
-                          { key: "cash", label: "ক্যাশ" },
-                          { key: "payment", label: "পেমেন্ট" },
-                          { key: "profit", label: "লাভ" },
-                          { key: "products", label: "টপ পণ্য" },
-                          { key: "stock", label: "লো স্টক" },
-                          { key: "all", label: "সব রিপোর্ট" },
-                        ].map((option) => (
-                          <button
-                            key={option.key}
-                            type="button"
-                            onClick={() => handleExport(option.key as ExportKey)}
-                            disabled={exportingKey !== null}
-                            className="w-full flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted transition disabled:opacity-60 disabled:cursor-not-allowed"
-                          >
-                            <span>{option.label}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {exportingKey === option.key
-                                ? "ডাউনলোড হচ্ছে..."
-                                : "ডাউনলোড"}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-
-                      {exportError ? (
-                        <div className="rounded-lg border border-danger/40 bg-danger-soft/60 px-3 py-2 text-xs text-danger">
-                          {exportError}
-                        </div>
-                      ) : null}
-
-                      {!online ? (
-                        <div className="rounded-lg border border-warning/40 bg-warning-soft/60 px-3 py-2 text-xs text-warning">
-                          অফলাইনে CSV এক্সপোর্ট করা যাবে না।
-                        </div>
-                      ) : null}
+                  <div className="space-y-2">
+                    {[
+                      { key: "active", label: "বর্তমান ট্যাব" },
+                      { key: "summary", label: "সারাংশ" },
+                      { key: "sales", label: "বিক্রি" },
+                      { key: "expenses", label: "খরচ" },
+                      { key: "cash", label: "ক্যাশ" },
+                      { key: "payment", label: "পেমেন্ট" },
+                      { key: "profit", label: "লাভ" },
+                      { key: "products", label: "টপ পণ্য" },
+                      { key: "stock", label: "লো স্টক" },
+                      { key: "all", label: "সব রিপোর্ট" },
+                    ].map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => handleExport(option.key as ExportKey)}
+                        disabled={exportingKey !== null}
+                        className="w-full flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted transition disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        <span>{option.label}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {exportingKey === option.key
+                            ? "ডাউনলোড হচ্ছে..."
+                            : "ডাউনলোড"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  {exportError ? (
+                    <div className="rounded-lg border border-danger/40 bg-danger-soft/60 px-3 py-2 text-xs text-danger">
+                      {exportError}
                     </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
+                  ) : null}
+                  {!online ? (
+                    <div className="rounded-lg border border-warning/40 bg-warning-soft/60 px-3 py-2 text-xs text-warning">
+                      অফলাইনে CSV এক্সপোর্ট করা যাবে না।
+                    </div>
+                  ) : null}
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-            <span className="inline-flex h-7 items-center rounded-full border px-3">
+          {/* Shop selector */}
+          <ShopSelectorClient shops={shops} selectedShopId={shopId} />
+
+          {/* Chips */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3 text-xs font-semibold">
+            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
               {presetLabel}
             </span>
-            {rangeLabel ? (
-              <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
+            {rangeLabel && (preset === "7d" || preset === "month" || preset === "custom") ? (
+              <span className="inline-flex h-7 max-w-[180px] items-center truncate rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
                 {rangeLabel}
               </span>
             ) : null}
             <span
-              className={`inline-flex h-7 items-center rounded-full border px-3 transition-all duration-300 ${
+              className={`inline-flex h-7 max-w-[240px] items-center truncate rounded-full border px-3 transition-all duration-300 ${
                 summaryLoading
                   ? "bg-yellow-soft text-yellow border-yellow/30 animate-pulse"
                   : realTimeIndicator
@@ -1706,12 +1677,10 @@ export default function ReportsClient({
                   : "bg-primary-soft text-primary border-primary/30"
               }`}
             >
-              <>
-                {summarySnapshot}
-                {realTimeIndicator && (
-                  <span className="ml-1 text-xs">🔄 LIVE</span>
-                )}
-              </>
+              {summarySnapshot}
+              {realTimeIndicator && (
+                <span className="ml-1 text-xs shrink-0">🔄</span>
+              )}
             </span>
             {summaryLoading ? (
               <span
@@ -1745,9 +1714,6 @@ export default function ReportsClient({
                   যে রিপোর্ট দেখতে চান, নিচে ট্যাপ করুন
                 </p>
               </div>
-              <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-[11px] font-semibold text-primary">
-                এখন: {activeReportLabel}
-              </span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -1755,7 +1721,7 @@ export default function ReportsClient({
                 <button
                   key={item.key}
                   onClick={() => setActive(item.key)}
-                  className={`min-h-[44px] rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                  className={`min-h-[44px] rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${
                     active === item.key
                       ? "border-primary/30 bg-primary-soft text-primary shadow-sm"
                       : "border-border/70 bg-background text-foreground/85"
@@ -1768,7 +1734,7 @@ export default function ReportsClient({
               <button
                 type="button"
                 onClick={() => setMobileReportPickerOpen(true)}
-                className={`min-h-[44px] rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                className={`min-h-[44px] rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${
                   !MOBILE_PRIMARY_REPORT_KEYS.includes(active as (typeof MOBILE_PRIMARY_REPORT_KEYS)[number])
                     ? "border-primary/30 bg-primary-soft text-primary shadow-sm"
                     : "border-dashed border-border/70 bg-background text-foreground/85"
@@ -1841,7 +1807,7 @@ export default function ReportsClient({
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-[11px] font-semibold text-muted-foreground">
-                সারাংশ সিঙ্ক
+                লাইভ ডেটা
               </span>
               <RefreshIconButton
                 onClick={handleManualRefresh}
@@ -1874,7 +1840,7 @@ export default function ReportsClient({
                     setActive(item.key);
                     setMobileReportPickerOpen(false);
                   }}
-                  className={`min-h-[48px] rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                  className={`min-h-[48px] rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${
                     active === item.key
                       ? "border-primary/30 bg-primary-soft text-primary shadow-sm"
                       : "border-border/70 bg-background text-foreground/85"
@@ -1901,16 +1867,13 @@ export default function ReportsClient({
                   যে রিপোর্ট দেখতে চান, নিচে থেকে বেছে নিন
                 </p>
               </div>
-              <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-[11px] font-semibold text-primary">
-                এখন: {activeReportLabel}
-              </span>
             </div>
             <div className="grid grid-cols-4 gap-2">
               {NAV.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => setActive(item.key)}
-                  className={`min-h-[44px] rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                  className={`min-h-[44px] rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${
                     active === item.key
                       ? "border-primary/30 bg-primary-soft text-primary shadow-sm"
                       : "border-border/70 bg-background text-foreground/85"
@@ -1960,13 +1923,13 @@ export default function ReportsClient({
             <div className="flex items-center gap-2 flex-wrap">
               <input
                 type="date"
-                className="h-9 rounded-lg border border-border bg-card px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="h-9 rounded-xl border border-border bg-card px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 value={customFrom ?? ""}
                 onChange={(e) => setCustomFrom(e.target.value)}
               />
               <input
                 type="date"
-                className="h-9 rounded-lg border border-border bg-card px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="h-9 rounded-xl border border-border bg-card px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 value={customTo ?? ""}
                 onChange={(e) => setCustomTo(e.target.value)}
               />

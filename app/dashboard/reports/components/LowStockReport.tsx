@@ -148,7 +148,7 @@ export default function LowStockReport({
         <div className="relative space-y-4 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-warning/15 text-warning text-lg">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-warning/15 text-warning text-lg">
                 📦
               </span>
               <div>
@@ -252,7 +252,7 @@ export default function LowStockReport({
                 const qty = Number(p.stockQty || 0);
                 const stockClasses = getLowStockToneClasses(qty);
                 return (
-                  <tr key={p.id ?? p.name ?? i} className="border-t hover:bg-muted">
+                  <tr key={p.id ? `${p.id}-${i}` : (p.name ?? i)} className="border-t hover:bg-muted/30 transition-colors">
                     <td className="p-3 text-foreground">
                       <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-warning/10 px-2 text-xs font-semibold text-warning">
                         #{i + 1}
@@ -283,13 +283,13 @@ export default function LowStockReport({
               const stockClasses = getStockToneClasses(qty);
               return (
                 <div
-                  key={p.id ?? p.name ?? i}
+                  key={p.id ? `${p.id}-${i}` : (p.name ?? i)}
                   className="relative overflow-hidden bg-card border border-border/70 rounded-2xl p-4 shadow-[0_10px_20px_rgba(15,23,42,0.06)]"
                 >
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-warning-soft/35 via-transparent to-transparent" />
                   <div className="relative flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-warning/15 text-warning text-lg">
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-warning/15 text-warning text-lg">
                         📦
                       </span>
                       <div>
