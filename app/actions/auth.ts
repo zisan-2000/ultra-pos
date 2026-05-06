@@ -12,6 +12,35 @@ import {
 
 type LogoutState = { error?: string; redirectTo?: string };
 
+async function resolveCurrentSession(cookieHeader: string) {
+  const session = await getCurrentSessionRecordFromCookieHeader(cookieHeader);
+  if (session) return session;
+
+  try {
+    const result: any = await (auth as any).api?.getSession?.({
+      headers: { cookie: cookieHeader },
+    });
+    const sessionToken =
+      result?.data?.session?.token ?? result?.session?.token ?? null;
+    if (!sessionToken) return null;
+
+    const row = await prisma.session.findUnique({
+      where: { token: sessionToken },
+      select: {
+        id: true,
+        token: true,
+        userId: true,
+        expiresAt: true,
+        impersonatedBy: true,
+      },
+    });
+    if (!row || row.expiresAt.getTime() <= Date.now()) return null;
+    return row;
+  } catch {
+    return null;
+  }
+}
+
 export async function logout(_: LogoutState): Promise<LogoutState> {
   const ctx = await auth.$context;
   const cookieStore = await cookies();
@@ -23,7 +52,7 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
     (ctx.baseURL?.startsWith("https://") ? "https" : "http");
 
   try {
-    const currentSession = await getCurrentSessionRecordFromCookieHeader(cookieHeader);
+    const currentSession = await resolveCurrentSession(cookieHeader);
     if (currentSession?.impersonatedBy) {
       await prisma.impersonationAudit.updateMany({
         where: {
@@ -35,6 +64,12 @@ export async function logout(_: LogoutState): Promise<LogoutState> {
           endedByUserId: currentSession.impersonatedBy,
           status: "logged_out",
         },
+      });
+    }
+
+    if (currentSession?.id) {
+      await prisma.session.deleteMany({
+        where: { id: currentSession.id },
       });
     }
 
