@@ -58,7 +58,7 @@ export default async function ExpensesPage({
   if (!canViewExpenses) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-foreground">খরচের তালিকা</h1>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">খরচ তালিকা</h1>
         <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
         <p className="mb-6 text-muted-foreground">
           এই পেজ ব্যবহারের জন্য <code>view_expenses</code> permission লাগবে।
@@ -76,7 +76,7 @@ export default async function ExpensesPage({
   if (!shops || shops.length === 0) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-foreground">খরচের তালিকা</h1>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">খরচ তালিকা</h1>
         <p className="mb-6 text-muted-foreground">এখনও কোনো দোকান নেই।</p>
         <Link
           href="/dashboard/shops/new"
@@ -132,8 +132,8 @@ export default async function ExpensesPage({
       }),
       getExpenseSummaryByRange(selectedShopId, from, to),
     ]);
+
   const totalAmount = Number(summary.totalAmount ?? 0);
-  const formattedTotal = Number.isFinite(totalAmount) ? totalAmount.toFixed(2) : "0.00";
   const rangeLabel =
     from === to ? (from === today ? "আজ" : from) : `${from} → ${to}`;
 
@@ -187,61 +187,51 @@ export default async function ExpensesPage({
 
   return (
     <div className="space-y-4 sm:space-y-5 section-gap">
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-warning-soft/60 via-card to-card" />
-        <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-warning/20 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-warning-soft/50 via-card to-card" />
+        <div className="pointer-events-none absolute -top-12 right-0 h-32 w-32 rounded-full bg-warning/20 blur-3xl" />
         <div className="relative space-y-3 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0 space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+
+          {/* Title row */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-0.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 খরচ
               </p>
-              <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
+              <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-3xl">
                 খরচ তালিকা
               </h1>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
-                দোকান:
-                <span className="truncate font-semibold text-foreground">
-                  {selectedShop.name}
-                </span>
-              </p>
-            </div>
-
-            {canCreateExpense ? (
-              <Link
-                href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
-                className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-              >
-                ➕ নতুন খরচ
-              </Link>
-            ) : null}
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="w-full sm:w-auto">
-              <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
             </div>
             {canCreateExpense ? (
               <Link
                 href={`/dashboard/expenses/new?shopId=${selectedShopId}`}
-                className="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+                className="inline-flex h-9 shrink-0 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
               >
-                ➕ নতুন খরচ যোগ করুন
+                + নতুন খরচ
               </Link>
             ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3 text-xs">
-            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-              মোট {summary.count ?? 0} টি
+          {/* Shop selector */}
+          <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
+
+          {/* Stats chips */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3 text-xs">
+            <span className="inline-flex h-7 items-center rounded-full border border-danger/30 bg-danger-soft px-3 font-semibold text-danger">
+              ৳{" "}
+              {totalAmount.toLocaleString("bn-BD", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </span>
-            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">
-              ৳ {formattedTotal}
+            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 font-semibold text-muted-foreground">
+              {summary.count ?? 0} এন্ট্রি
             </span>
-            <span className="inline-flex h-7 max-w-[200px] items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border truncate">
-              সময়: {rangeLabel}
+            <span className="inline-flex h-7 max-w-45 items-center truncate rounded-full border border-border bg-card/80 px-3 font-semibold text-muted-foreground">
+              {rangeLabel}
             </span>
           </div>
+
         </div>
       </div>
 
@@ -263,5 +253,3 @@ export default async function ExpensesPage({
     </div>
   );
 }
-
-

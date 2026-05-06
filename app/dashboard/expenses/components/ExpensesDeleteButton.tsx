@@ -115,10 +115,10 @@ export function ExpensesDeleteButton({
       return;
     }
 
-    toast.warning(
+    toast.success(
       online
-        ? "খরচটি মুছে ফেলা হয়েছে"
-        : "অফলাইন: খরচটি মুছে ফেলা হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।"
+        ? "খরচটি মুছে ফেলা হয়েছে।"
+        : "অফলাইন: অনলাইনে গেলে সিঙ্ক হবে।"
     );
   };
 
@@ -127,9 +127,9 @@ export function ExpensesDeleteButton({
       <button
         type="button"
         onClick={() => setConfirmOpen(true)}
-        className={`inline-flex items-center justify-center gap-2 w-full px-4 py-2 bg-danger-soft border border-danger/30 text-danger rounded-lg font-semibold hover:border-danger/50 hover:bg-danger-soft/70 transition-colors ${className || ""}`}
+        className={`inline-flex items-center justify-center font-semibold bg-danger-soft border border-danger/30 text-danger hover:border-danger/50 hover:bg-danger-soft/70 transition-colors ${className || "h-9 rounded-full px-3 text-xs"}`}
       >
-        🗑️ মুছুন
+        মুছুন
       </button>
       <ConfirmDialog
         open={confirmOpen}
