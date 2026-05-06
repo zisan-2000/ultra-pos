@@ -7,6 +7,7 @@ import { handlePermissionError } from "@/lib/permission-toast";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import ConfirmDialog from "@/components/confirm-dialog";
+import { toast } from "sonner";
 
 type Props = {
   id: string;
@@ -40,10 +41,10 @@ export function CashDeleteButton({ id, onDeleted, className }: Props) {
       console.error("Cash delete failed", err);
     }
 
-    alert(
+    toast.success(
       online
-        ? "ক্যাশ এন্ট্রি মুছে ফেলা হয়েছে, সিঙ্ক হবে।"
-        : "অফলাইন: ক্যাশ এন্ট্রি মুছে ফেলা হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।"
+        ? "ক্যাশ এন্ট্রি মুছে ফেলা হয়েছে।"
+        : "অফলাইন: অনলাইনে গেলে সিঙ্ক হবে।"
     );
   };
 

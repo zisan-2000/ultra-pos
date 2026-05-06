@@ -128,7 +128,6 @@ export default async function CashPage({ searchParams }: CashPageProps) {
       getCashSummaryByRange(selectedShopId, from, to),
     ]);
   const balance = Number(summary.balance ?? 0);
-  const formattedBalance = Number.isFinite(balance) ? balance.toFixed(2) : "0.00";
   const rangeLabel =
     from === to ? (from === today ? "আজ" : from) : `${from} → ${to}`;
 
@@ -182,73 +181,62 @@ export default async function CashPage({ searchParams }: CashPageProps) {
 
   return (
     <div className="space-y-4 sm:space-y-5 section-gap">
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/60 via-card to-card" />
-        <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-success/20 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="pointer-events-none absolute -top-12 right-0 h-32 w-32 rounded-full bg-success/20 blur-3xl" />
         <div className="relative space-y-3 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0 space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+
+          {/* Title row */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-0.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 ক্যাশ
               </p>
-              <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
+              <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-3xl">
                 ক্যাশ খাতা
               </h1>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
-                দোকান:
-                <span className="truncate font-semibold text-foreground">
-                  {selectedShop.name}
-                </span>
-              </p>
             </div>
             {canCreateCashEntry ? (
               <QuickCashEntrySheet
                 shopId={selectedShopId}
                 fullFormHref={`/dashboard/cash/new?shopId=${selectedShopId}`}
-                triggerLabel="নতুন এন্ট্রি"
-                triggerClassName="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+                triggerLabel="+ নতুন এন্ট্রি"
+                triggerClassName="inline-flex h-9 shrink-0 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
               />
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="w-full sm:w-auto">
-              <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
-            </div>
-            {canCreateCashEntry ? (
-              <QuickCashEntrySheet
-                shopId={selectedShopId}
-                fullFormHref={`/dashboard/cash/new?shopId=${selectedShopId}`}
-                triggerLabel="নতুন এন্ট্রি"
-                triggerClassName="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-              />
-            ) : null}
-          </div>
+          {/* Shop selector */}
+          <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3 text-xs">
-            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-              মোট {summary.count ?? 0} টি
-            </span>
+          {/* Stats chips */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3 text-xs">
             <span
-              className={`inline-flex h-7 items-center gap-1 rounded-full px-3 font-semibold border ${
+              className={`inline-flex h-7 items-center rounded-full border px-3 font-semibold ${
                 balance >= 0
-                  ? "bg-success-soft text-success border-success/30"
-                  : "bg-danger-soft text-danger border-danger/30"
+                  ? "border-success/30 bg-success-soft text-success"
+                  : "border-danger/30 bg-danger-soft text-danger"
               }`}
             >
-              নেট: {balance >= 0 ? "+" : ""}
-              {formattedBalance} ৳
+              নেট: {balance >= 0 ? "+" : "−"}৳{" "}
+              {Math.abs(balance).toLocaleString("bn-BD", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </span>
-            <span className="inline-flex h-7 max-w-[200px] items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border truncate">
-              সময়: {rangeLabel}
+            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 font-semibold text-muted-foreground">
+              {summary.count ?? 0} এন্ট্রি
+            </span>
+            <span className="inline-flex h-7 max-w-45 items-center truncate rounded-full border border-border bg-card/80 px-3 font-semibold text-muted-foreground">
+              {rangeLabel}
             </span>
           </div>
+
         </div>
       </div>
 
       <CashListClient
         shopId={selectedShopId}
-        shopName={selectedShop.name}
         rows={serializableRows}
         from={from}
         to={to}
