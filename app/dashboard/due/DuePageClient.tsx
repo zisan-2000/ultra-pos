@@ -140,6 +140,13 @@ function toNumber(value: string | number | null | undefined) {
   return Number.isFinite(num) ? num : 0;
 }
 
+function formatBn(value: number, decimals = 2) {
+  return value.toLocaleString("bn-BD", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
 function normalizeEntryDate(value: string | number | Date | undefined) {
   if (!value) return new Date().toISOString();
   const parsed = new Date(value);
@@ -1200,20 +1207,20 @@ export default function DuePageClient({
         <div className="relative space-y-3 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                 বাকি সারসংক্ষেপ
               </p>
               <p className="text-3xl font-bold text-foreground tracking-tight sm:text-4xl">
-                {summary.totalDue.toFixed(2)} ৳
+                ৳ {formatBn(summary.totalDue)}
               </p>
               <p className="text-xs text-muted-foreground">
                 দোকান:{" "}
                 <span className="font-semibold text-foreground">{shopName}</span>{" "}
-                • {customers.length} গ্রাহক
+                • {customers.length.toLocaleString("bn-BD")} গ্রাহক
                 {topDueName ? (
                   <span>
                     {" "}
-                    • সর্বোচ্চ বাকি: {topDueName} ({topDueAmount.toFixed(2)} ৳)
+                    • সর্বোচ্চ বাকি: {topDueName} ({formatBn(topDueAmount)} ৳)
                   </span>
                 ) : (
                   <span> • কোনো বাকি নেই</span>
@@ -1225,7 +1232,7 @@ export default function DuePageClient({
                 onClick={handleManualRefresh}
                 loading={manualRefreshing}
                 label="রিফ্রেশ"
-                className="h-11 w-11 shrink-0 justify-center rounded-2xl border-border/80 bg-card px-0"
+                className="h-11 w-11 shrink-0 justify-center rounded-full border-border/80 bg-card px-0"
               />
               {canTakeDuePayment ? (
                 <QuickDuePaymentSheet
@@ -1234,7 +1241,7 @@ export default function DuePageClient({
                   onSuccess={handleQuickPaymentSuccess}
                   onOpenFullForm={() => openPaymentTab()}
                   triggerLabel="পেমেন্ট"
-                  triggerClassName="inline-flex h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-2xl border border-success/35 bg-success-soft/70 px-3 text-sm font-semibold leading-none text-success shadow-sm transition-colors hover:border-success/50"
+                  triggerClassName="inline-flex h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-full border border-success/35 bg-success-soft/70 px-3 text-sm font-semibold leading-none text-success shadow-sm transition-colors hover:border-success/50"
                 />
               ) : null}
               {canCreateCustomer ? (
@@ -1243,7 +1250,7 @@ export default function DuePageClient({
                   onCreated={handleQuickCustomerCreated}
                   onOpenFullForm={openAddTab}
                   triggerLabel="নতুন গ্রাহক"
-                  triggerClassName="inline-flex h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-2xl border border-primary/35 bg-primary-soft/75 px-3 text-sm font-semibold leading-none text-primary shadow-sm transition-colors hover:border-primary/50"
+                  triggerClassName="inline-flex h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-full border border-primary/35 bg-primary-soft/75 px-3 text-sm font-semibold leading-none text-primary shadow-sm transition-colors hover:border-primary/50"
                 />
               ) : null}
             </div>
@@ -1290,7 +1297,7 @@ export default function DuePageClient({
             ) : null}
             {pendingCount > 0 ? (
               <span className="inline-flex h-7 items-center gap-1 rounded-full bg-warning-soft text-warning border border-warning/30 px-3 font-semibold">
-                পেন্ডিং {pendingCount} টি
+                পেন্ডিং {pendingCount.toLocaleString("bn-BD")} টি
               </span>
             ) : null}
             {latestPaymentLabel ? (
@@ -1367,7 +1374,7 @@ export default function DuePageClient({
                 <div className="grid gap-3 sm:grid-cols-2">
                   {customers.map((c) => {
                     const dueValue = Number(c.totalDue || 0);
-                    const dueAmount = dueValue.toFixed(2);
+                    const dueAmount = formatBn(dueValue);
                     const hasDue = dueValue > 0;
                     const initial = c.name?.trim()?.charAt(0) || "•";
                     return (
@@ -1409,7 +1416,7 @@ export default function DuePageClient({
                                     : "text-muted-foreground"
                                 }`}
                               >
-                                সীমা: {Number((c as any).creditLimit).toFixed(0)} ৳
+                                সীমা: {Number((c as any).creditLimit).toLocaleString("bn-BD", { maximumFractionDigits: 0 })} ৳
                               </p>
                             )}
                             {c.lastPaymentAt && (
@@ -1705,7 +1712,7 @@ export default function DuePageClient({
                       {customers.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.name} — বাকি:{" "}
-                          {Number(c.totalDue || 0).toFixed(2)} ৳
+                          {formatBn(Number(c.totalDue || 0))} ৳
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1726,7 +1733,7 @@ export default function DuePageClient({
                     <option value="">-- গ্রাহক বাছাই করুন --</option>
                     {customers.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} — বাকি: {Number(c.totalDue || 0).toFixed(2)} ৳
+                        {c.name} — বাকি: {formatBn(Number(c.totalDue || 0))} ৳
                       </option>
                     ))}
                   </select>
@@ -1971,7 +1978,7 @@ export default function DuePageClient({
                           }`}
                         >
                           {Number(statementCustomer.totalDue || 0) > 0
-                            ? `বাকি ${Number(statementCustomer.totalDue || 0).toFixed(2)} ৳`
+                            ? `বাকি ${formatBn(Number(statementCustomer.totalDue || 0))} ৳`
                             : "পরিশোধিত"}
                         </span>
                       </div>
@@ -2043,16 +2050,16 @@ export default function DuePageClient({
                               </td>
                               <td className="p-3 text-right">
                                 {row.entryType === "SALE"
-                                  ? Number(row.amount || 0).toFixed(2)
+                                  ? formatBn(Number(row.amount || 0))
                                   : ""}
                               </td>
                               <td className="p-3 text-right">
                                 {row.entryType === "PAYMENT"
-                                  ? Number(row.amount || 0).toFixed(2)
+                                  ? formatBn(Number(row.amount || 0))
                                   : ""}
                               </td>
                               <td className="p-3 text-right font-semibold">
-                                {Number((row as any).running || 0).toFixed(2)} ৳
+                                {formatBn(Number((row as any).running || 0))} ৳
                               </td>
                             </tr>
                             );
@@ -2075,8 +2082,8 @@ export default function DuePageClient({
                       statementWithBalance.map((row) => {
                         const sale = row.entryType === "SALE";
                         const amountValue = Number(row.amount || 0);
-                        const amount = amountValue.toFixed(2);
-                        const running = Number((row as any).running || 0).toFixed(2);
+                        const amount = formatBn(amountValue);
+                        const running = formatBn(Number((row as any).running || 0));
                         const title = row.description || (sale ? "বিক্রি" : "পেমেন্ট");
                         const sign = sale ? "+" : "-";
                         const dueDateStr = (row as any).dueDate as string | null | undefined;
@@ -2205,14 +2212,14 @@ export default function DuePageClient({
                         <div key={label} className="flex items-center justify-between px-4 py-2.5">
                           <span className="text-sm text-foreground">{label}</span>
                           <span className={`text-sm font-semibold ${parseFloat(value) > 0 ? color : "text-muted-foreground"}`}>
-                            {parseFloat(value) > 0 ? `${parseFloat(value).toFixed(2)} ৳` : "—"}
+                            {parseFloat(value) > 0 ? `${formatBn(parseFloat(value))} ৳` : "—"}
                           </span>
                         </div>
                       ))}
                       <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30">
                         <span className="text-sm font-bold text-foreground">মোট বকেয়া</span>
                         <span className="text-sm font-bold text-foreground">
-                          {parseFloat(agingReport.totals.total).toFixed(2)} ৳
+                          {formatBn(parseFloat(agingReport.totals.total))} ৳
                         </span>
                       </div>
                     </div>
@@ -2276,22 +2283,22 @@ export default function DuePageClient({
                                     )}
                                   </td>
                                   <td className="p-3 text-right text-success">
-                                    {parseFloat(row.current) > 0 ? `${parseFloat(row.current).toFixed(2)}` : "—"}
+                                    {parseFloat(row.current) > 0 ? formatBn(parseFloat(row.current)) : "—"}
                                   </td>
                                   <td className="p-3 text-right text-warning">
-                                    {parseFloat(row.b1_30) > 0 ? `${parseFloat(row.b1_30).toFixed(2)}` : "—"}
+                                    {parseFloat(row.b1_30) > 0 ? formatBn(parseFloat(row.b1_30)) : "—"}
                                   </td>
                                   <td className="p-3 text-right text-warning">
-                                    {parseFloat(row.b31_60) > 0 ? `${parseFloat(row.b31_60).toFixed(2)}` : "—"}
+                                    {parseFloat(row.b31_60) > 0 ? formatBn(parseFloat(row.b31_60)) : "—"}
                                   </td>
                                   <td className="p-3 text-right text-danger">
-                                    {parseFloat(row.b61_90) > 0 ? `${parseFloat(row.b61_90).toFixed(2)}` : "—"}
+                                    {parseFloat(row.b61_90) > 0 ? formatBn(parseFloat(row.b61_90)) : "—"}
                                   </td>
                                   <td className="p-3 text-right text-danger font-semibold">
-                                    {parseFloat(row.b90plus) > 0 ? `${parseFloat(row.b90plus).toFixed(2)}` : "—"}
+                                    {parseFloat(row.b90plus) > 0 ? formatBn(parseFloat(row.b90plus)) : "—"}
                                   </td>
                                   <td className="p-3 text-right font-bold">
-                                    {parseFloat(row.totalDue).toFixed(2)} ৳
+                                    {formatBn(parseFloat(row.totalDue))} ৳
                                   </td>
                                 </tr>
                               );
@@ -2326,21 +2333,21 @@ export default function DuePageClient({
                                   {row.customerName}
                                 </button>
                                 <span className="text-sm font-bold">
-                                  {parseFloat(row.totalDue).toFixed(2)} ৳
+                                  {formatBn(parseFloat(row.totalDue))} ৳
                                 </span>
                               </div>
                               <div className="grid grid-cols-3 gap-1 text-xs">
                                 {parseFloat(row.b1_30) > 0 && (
-                                  <span className="text-warning">১–৩০: {parseFloat(row.b1_30).toFixed(0)}</span>
+                                  <span className="text-warning">১–৩০: {parseFloat(row.b1_30).toLocaleString("bn-BD", { maximumFractionDigits: 0 })}</span>
                                 )}
                                 {parseFloat(row.b31_60) > 0 && (
-                                  <span className="text-warning">৩১–৬০: {parseFloat(row.b31_60).toFixed(0)}</span>
+                                  <span className="text-warning">৩১–৬০: {parseFloat(row.b31_60).toLocaleString("bn-BD", { maximumFractionDigits: 0 })}</span>
                                 )}
                                 {parseFloat(row.b61_90) > 0 && (
-                                  <span className="text-danger font-semibold">৬১–৯০: {parseFloat(row.b61_90).toFixed(0)}</span>
+                                  <span className="text-danger font-semibold">৬১–৯০: {parseFloat(row.b61_90).toLocaleString("bn-BD", { maximumFractionDigits: 0 })}</span>
                                 )}
                                 {parseFloat(row.b90plus) > 0 && (
-                                  <span className="text-danger font-bold">৯০+: {parseFloat(row.b90plus).toFixed(0)}</span>
+                                  <span className="text-danger font-bold">৯০+: {parseFloat(row.b90plus).toLocaleString("bn-BD", { maximumFractionDigits: 0 })}</span>
                                 )}
                               </div>
                             </div>

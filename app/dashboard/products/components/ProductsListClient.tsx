@@ -2055,52 +2055,38 @@ export default function ProductsListClient({
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-card to-card" />
         <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
         <div className="relative space-y-3 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {/* Title row */}
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
-              <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 পণ্য
               </p>
-              <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
-                পণ্য তালিকা
-              </h1>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
-                দোকান:
-                <span className="truncate font-semibold text-foreground">
-                  {activeShopName}
-                </span>
+              <p className="text-3xl font-bold tabular-nums leading-tight text-foreground sm:text-4xl">
+                {Number(effectiveTotalCount).toLocaleString("bn-BD")}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {activeShopName}
               </p>
             </div>
             <Link
               href={`/dashboard/products/new?shopId=${activeShopId}`}
               onClick={() => triggerHaptic("medium")}
-              className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
+              className="inline-flex h-9 shrink-0 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
             >
-              ➕ নতুন পণ্য
+              + নতুন পণ্য
             </Link>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="w-full sm:w-auto">
-              <ShopSwitcherClient
-                shops={shops}
-                activeShopId={activeShopId}
-                query={query}
-                status={status}
-              />
-            </div>
-            <Link
-              href={`/dashboard/products/new?shopId=${activeShopId}`}
-              onClick={() => triggerHaptic("medium")}
-              className="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
-            >
-              ➕ নতুন পণ্য যোগ করুন
-            </Link>
-          </div>
+          {/* Shop selector */}
+          <ShopSwitcherClient
+            shops={shops}
+            activeShopId={activeShopId}
+            query={query}
+            status={status}
+          />
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3 text-xs">
-            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-              মোট {effectiveTotalCount} টি
-            </span>
+          {/* Chips */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3 text-xs">
             <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">
               {statusLabel}
             </span>
@@ -2124,9 +2110,7 @@ export default function ProductsListClient({
         </div>
       </div>
 
-      <div>
-        <div className="rounded-2xl border border-border bg-background/95 backdrop-blur-sm shadow-sm">
-          <div className="space-y-3 p-3">
+      <div className="space-y-3">
             <div className="relative">
               <input
                 type="text"
@@ -2247,12 +2231,10 @@ export default function ProductsListClient({
               </div>
               <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background to-transparent" />
             </div>
-          </div>
-        </div>
       </div>
 
       {hardwareStarterPacks.length > 0 && (
-        <div className="relative overflow-hidden rounded-3xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
+        <div className="relative overflow-hidden rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.09),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.08),transparent_28%)]" />
           <div className="relative space-y-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -3104,7 +3086,7 @@ export default function ProductsListClient({
         }
       >
         {visibleProducts.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-border bg-card/70 px-6 py-14 text-center shadow-sm">
+          <div className="rounded-2xl border border-dashed border-border bg-card/70 px-6 py-14 text-center shadow-sm">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-primary/15 bg-primary-soft/60 text-4xl shadow-[0_1px_0_rgba(0,0,0,0.03)]">
               📦
             </div>
@@ -3272,25 +3254,25 @@ export default function ProductsListClient({
                   </button>
                   {isKpiExpanded && (
                     <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border/70 pt-2 animate-fade-in">
-                      <div className="rounded-lg border border-border bg-card px-2.5 py-2.5">
+                      <div className="rounded-xl border border-border bg-card px-2.5 py-2.5">
                         <p className="text-[10px] text-muted-foreground">আজ বিক্রি</p>
                         <p className="text-sm font-semibold text-foreground">
                           {formatQty(metrics.soldQtyToday)}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-danger/20 bg-danger-soft/50 px-2.5 py-2.5">
+                      <div className="rounded-xl border border-danger/20 bg-danger-soft/50 px-2.5 py-2.5">
                         <p className="text-[10px] text-danger/80">আজ রিটার্ন</p>
                         <p className="text-sm font-semibold text-danger">
                           {formatQty(metrics.returnedQtyToday)}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-success/20 bg-success-soft/60 px-2.5 py-2.5">
+                      <div className="rounded-xl border border-success/20 bg-success-soft/60 px-2.5 py-2.5">
                         <p className="text-[10px] text-success/80">নেট বিক্রি</p>
                         <p className="text-sm font-semibold text-success">
                           {formatQty(metrics.netQtyToday)}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-warning/25 bg-warning-soft/40 px-2.5 py-2.5">
+                      <div className="rounded-xl border border-warning/25 bg-warning-soft/40 px-2.5 py-2.5">
                         <p className="text-[10px] text-warning">রিটার্ন রেট · ৩০ দিন</p>
                         <p className="text-sm font-semibold text-warning">
                           {formatPercent(metrics.returnRate30d)}%
@@ -3319,7 +3301,7 @@ export default function ProductsListClient({
                           setAdjustNote("");
                           setAdjustError(null);
                         }}
-                        className="flex items-center justify-center gap-2 w-full h-10 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 font-semibold text-sm shadow-sm hover:bg-amber-100 dark:hover:bg-amber-900/40 active:scale-95 transition"
+                        className="flex items-center justify-center gap-2 w-full h-10 rounded-xl bg-warning-soft text-warning border border-warning/30 font-semibold text-sm shadow-sm hover:bg-warning/15 hover:border-warning/40 active:scale-95 transition"
                       >
                         <span>⚖️</span>
                         <span>স্টক ঠিক করুন</span>
@@ -3383,10 +3365,10 @@ export default function ProductsListClient({
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm text-muted-foreground">
-              পৃষ্ঠা {effectivePage} / {effectiveTotalPages}
+              পৃষ্ঠা {Number(effectivePage).toLocaleString("bn-BD")} / {Number(effectiveTotalPages).toLocaleString("bn-BD")}
             </span>
             <span className="text-sm text-muted-foreground">
-              মোট {effectiveTotalCount} টি
+              মোট {Number(effectiveTotalCount).toLocaleString("bn-BD")} টি
             </span>
           </div>
 
@@ -3395,7 +3377,7 @@ export default function ProductsListClient({
               type="button"
               onClick={() => handleNavigate(effectivePage - 1)}
               disabled={effectivePage <= 1}
-              className="flex items-center justify-center w-10 h-10 rounded-xl border border-border text-muted-foreground font-medium shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition"
+              className="flex items-center justify-center w-10 h-10 rounded-full border border-border text-muted-foreground font-medium shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition"
             >
               {"<"}
             </button>
@@ -3406,7 +3388,7 @@ export default function ProductsListClient({
                   key={pageNumber}
                   type="button"
                   onClick={() => handleNavigate(pageNumber)}
-                  className={`flex-shrink-0 w-10 h-10 rounded-xl font-semibold text-sm transition active:scale-95 ${
+                  className={`flex-shrink-0 w-10 h-10 rounded-full font-semibold text-sm transition active:scale-95 ${
                     pageNumber === effectivePage
                       ? "bg-primary-soft text-primary border border-primary/40 shadow-sm"
                       : "border border-border text-muted-foreground"
@@ -3421,7 +3403,7 @@ export default function ProductsListClient({
               type="button"
               onClick={() => handleNavigate(effectivePage + 1)}
               disabled={effectivePage >= effectiveTotalPages}
-              className="flex items-center justify-center w-10 h-10 rounded-xl border border-border text-muted-foreground font-medium shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition"
+              className="flex items-center justify-center w-10 h-10 rounded-full border border-border text-muted-foreground font-medium shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition"
             >
               {">"}
             </button>
@@ -3519,25 +3501,25 @@ export default function ProductsListClient({
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-border bg-card px-2.5 py-2.5">
+                  <div className="rounded-xl border border-border bg-card px-2.5 py-2.5">
                     <p className="text-[10px] text-muted-foreground">আজ বিক্রি</p>
                     <p className="text-sm font-semibold text-foreground">
                       {formatQty(selectedMetrics.soldQtyToday)}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-danger/20 bg-danger-soft/50 px-2.5 py-2.5">
+                  <div className="rounded-xl border border-danger/20 bg-danger-soft/50 px-2.5 py-2.5">
                     <p className="text-[10px] text-danger/80">আজ রিটার্ন</p>
                     <p className="text-sm font-semibold text-danger">
                       {formatQty(selectedMetrics.returnedQtyToday)}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-success/20 bg-success-soft/60 px-2.5 py-2.5">
+                  <div className="rounded-xl border border-success/20 bg-success-soft/60 px-2.5 py-2.5">
                     <p className="text-[10px] text-success/80">আজ নেট বিক্রি</p>
                     <p className="text-sm font-semibold text-success">
                       {formatQty(selectedMetrics.netQtyToday)}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-warning/25 bg-warning-soft/40 px-2.5 py-2.5">
+                  <div className="rounded-xl border border-warning/25 bg-warning-soft/40 px-2.5 py-2.5">
                     <p className="text-[10px] text-warning">রিটার্ন রেট · ৩০ দিন</p>
                     <p className="text-sm font-semibold text-warning">
                       {formatPercent(selectedMetrics.returnRate30d)}%
@@ -3653,8 +3635,8 @@ export default function ProductsListClient({
                       disabled={deletingId === selectedProduct.id}
                       className={`flex items-center justify-center gap-2 h-12 rounded-xl font-semibold transition-all ${
                         deletingId === selectedProduct.id
-                          ? "bg-danger-soft text-danger/60 cursor-not-allowed"
-                          : "bg-danger text-primary-foreground hover:bg-danger/90 active:scale-95"
+                          ? "bg-danger-soft text-danger/60 border border-danger/20 cursor-not-allowed"
+                          : "bg-danger-soft text-danger border border-danger/30 hover:bg-danger/15 hover:border-danger/40 active:scale-95"
                       }`}
                     >
                       <span>🗑️</span>
@@ -3893,7 +3875,7 @@ export default function ProductsListClient({
                 setConfirmDelete(null);
                 handleDelete(id);
               }}
-              className="h-10 px-4 rounded-xl bg-danger text-primary-foreground text-sm font-semibold hover:bg-danger/90 disabled:opacity-60"
+              className="h-10 px-4 rounded-xl bg-danger-soft text-danger border border-danger/30 text-sm font-semibold hover:bg-danger/15 hover:border-danger/40 disabled:opacity-60"
             >
               মুছুন
             </button>
