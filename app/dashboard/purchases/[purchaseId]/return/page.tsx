@@ -12,9 +12,8 @@ type PurchaseReturnPageProps = {
 
 function isInventoryModuleDisabledError(error: unknown) {
   if (!error || typeof error !== "object") return false;
-  const maybe = error as { message?: unknown };
-  const message = typeof maybe.message === "string" ? maybe.message : "";
-  return message.includes("Purchases/Suppliers module is disabled");
+  const msg = (error as { message?: unknown }).message;
+  return typeof msg === "string" && msg.includes("Purchases/Suppliers module is disabled");
 }
 
 export default async function PurchaseReturnPage({
@@ -31,16 +30,13 @@ export default async function PurchaseReturnPage({
   if (!canCreatePurchase) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-foreground">পারচেজ রিটার্ন</h1>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">সাপ্লায়ার রিটার্ন</h1>
         <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
         <p className="mb-6 text-muted-foreground">
           এই ফিচার ব্যবহার করতে <code>create_purchase</code> permission লাগবে।
         </p>
-        <Link
-          href="/dashboard/purchases"
-          className="inline-block px-6 py-3 rounded-lg border border-primary/30 bg-primary-soft text-primary font-medium"
-        >
-          ক্রয় তালিকায় ফিরুন
+        <Link href="/dashboard/purchases" className="inline-block px-6 py-3 rounded-lg border border-primary/30 bg-primary-soft text-primary font-medium hover:bg-primary/15 transition-colors">
+          ক্রয় তালিকায় ফিরুন
         </Link>
       </div>
     );
@@ -54,15 +50,12 @@ export default async function PurchaseReturnPage({
     if (isInventoryModuleDisabledError(error)) {
       return (
         <div className="text-center py-12">
-          <h1 className="text-2xl font-bold mb-4 text-foreground">পারচেজ রিটার্ন</h1>
+          <h1 className="text-2xl font-bold mb-4 text-foreground">সাপ্লায়ার রিটার্ন</h1>
           <p className="mb-2 text-warning font-semibold">মডিউল বন্ধ আছে</p>
           <p className="mb-6 text-muted-foreground">
-            এই দোকানে <code>Purchases/Suppliers</code> module চালু না থাকায় supplier return করা যাবে না।
+            এই দোকানে <code>Purchases/Suppliers</code> module চালু না থাকায় supplier return করা যাবে না।
           </p>
-          <Link
-            href={shopId ? `/dashboard/shops/${shopId}` : "/dashboard/shops"}
-            className="inline-block px-6 py-3 rounded-lg border border-primary/30 bg-primary-soft text-primary font-medium"
-          >
+          <Link href={shopId ? `/dashboard/shops/${shopId}` : "/dashboard/shops"} className="inline-block px-6 py-3 rounded-lg border border-primary/30 bg-primary-soft text-primary font-medium hover:bg-primary/15 transition-colors">
             দোকানের সেটিংসে যান
           </Link>
         </div>
@@ -72,20 +65,24 @@ export default async function PurchaseReturnPage({
   }
 
   const effectiveShopId = shopId || context.purchase.shopId;
+  const supplierInitial = context.purchase.supplierName?.trim().charAt(0).toUpperCase() ?? "?";
 
   if (context.items.length === 0) {
     return (
       <div className="space-y-4">
-        <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-[0_12px_26px_rgba(15,23,42,0.08)]">
-          <h1 className="text-2xl font-bold text-foreground">পারচেজ রিটার্ন</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            এই ক্রয়ের সব আইটেম আগেই পুরো ফেরত গেছে বা ফেরতযোগ্য কিছু বাকি নেই।
+        <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-success-soft text-success text-xl font-bold">
+            ✓
+          </div>
+          <h1 className="text-lg font-bold text-foreground">রিটার্নযোগ্য কিছু নেই</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            এই ক্রয়ের সব আইটেম আগেই পুরো ফেরত গেছে।
           </p>
           <Link
             href={`/dashboard/purchases/${purchaseId}?shopId=${effectiveShopId}`}
-            className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
+            className="mt-4 inline-flex h-10 items-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
           >
-            ক্রয় বিস্তারিততে ফিরুন
+            ← ক্রয় বিস্তারিত
           </Link>
         </div>
       </div>
@@ -93,23 +90,37 @@ export default async function PurchaseReturnPage({
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-              Supplier Credit
-            </p>
-            <h1 className="text-2xl font-bold text-foreground">পারচেজ রিটার্ন তৈরি করুন</h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              এই রিটার্ন supplier payable কমাবে। বাকি ছাড়ালে অতিরিক্ত অংশ supplier credit হিসেবে থাকবে।
-            </p>
+    <div className="space-y-4 sm:space-y-5">
+
+      {/* ── Hero card ── */}
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-linear-to-br from-warning-soft/50 via-card to-card" />
+        <div className="pointer-events-none absolute -top-12 right-0 h-32 w-32 rounded-full bg-warning/15 blur-3xl" />
+        <div className="relative flex items-start justify-between gap-3 p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning border border-warning/20 text-base font-bold shadow-sm">
+              {supplierInitial}
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                সাপ্লায়ার রিটার্ন
+              </p>
+              <h1 className="text-xl font-bold leading-tight text-foreground sm:text-2xl">
+                {context.purchase.supplierName || "সরবরাহকারী নেই"}
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                বর্তমান বাকি:{" "}
+                <span className="font-semibold text-warning">
+                  ৳ {Number(context.purchase.dueAmount || 0).toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </p>
+            </div>
           </div>
           <Link
             href={`/dashboard/purchases/${purchaseId}?shopId=${effectiveShopId}`}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
+            className="inline-flex h-9 shrink-0 items-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground shadow-sm hover:bg-muted transition-colors"
           >
-            ← ক্রয় বিস্তারিত
+            ← ফিরুন
           </Link>
         </div>
       </div>
@@ -122,6 +133,7 @@ export default async function PurchaseReturnPage({
         defaultReturnDate={getDhakaDateString()}
         items={context.items}
       />
+
     </div>
   );
 }

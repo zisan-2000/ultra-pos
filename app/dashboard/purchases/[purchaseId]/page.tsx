@@ -12,9 +12,18 @@ type PurchaseDetailPageProps = {
 
 function isInventoryModuleDisabledError(error: unknown) {
   if (!error || typeof error !== "object") return false;
-  const maybe = error as { message?: unknown };
-  const message = typeof maybe.message === "string" ? maybe.message : "";
-  return message.includes("Purchases/Suppliers module is disabled");
+  const msg = (error as { message?: unknown }).message;
+  return typeof msg === "string" && msg.includes("Purchases/Suppliers module is disabled");
+}
+
+const METHOD_ICONS: Record<string, string> = {
+  cash: "💵",
+  bkash: "📱",
+  bank: "🏦",
+};
+
+function fmt(n: number) {
+  return n.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default async function PurchaseDetailPage({
@@ -33,16 +42,13 @@ export default async function PurchaseDetailPage({
   if (!canViewPurchases) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4 text-foreground">ক্রয় বিস্তারিত</h1>
+        <h1 className="text-2xl font-bold mb-4 text-foreground">ক্রয় বিস্তারিত</h1>
         <p className="mb-2 text-danger font-semibold">অ্যাকসেস সীমাবদ্ধ</p>
         <p className="mb-6 text-muted-foreground">
           এই পেজ ব্যবহারের জন্য <code>view_purchases</code> permission লাগবে।
         </p>
-        <Link
-          href="/dashboard/purchases"
-          className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
-        >
-          ক্রয় তালিকায় ফিরুন
+        <Link href="/dashboard/purchases" className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors">
+          ক্রয় তালিকায় ফিরুন
         </Link>
       </div>
     );
@@ -50,6 +56,7 @@ export default async function PurchaseDetailPage({
 
   const shopId = resolvedSearch?.shopId ?? "";
   const page = Number(resolvedSearch?.page ?? 1);
+
   let purchase: Awaited<ReturnType<typeof getPurchaseWithPayments>>;
   try {
     purchase = await getPurchaseWithPayments(purchaseId, {
@@ -60,15 +67,12 @@ export default async function PurchaseDetailPage({
     if (isInventoryModuleDisabledError(error)) {
       return (
         <div className="text-center py-12">
-          <h1 className="text-2xl font-bold mb-4 text-foreground">ক্রয় বিস্তারিত</h1>
+          <h1 className="text-2xl font-bold mb-4 text-foreground">ক্রয় বিস্তারিত</h1>
           <p className="mb-2 text-warning font-semibold">মডিউল বন্ধ আছে</p>
           <p className="mb-6 text-muted-foreground">
-            এই দোকানে <code>Purchases/Suppliers</code> module চালু না থাকায় ক্রয় history দেখা যাবে না।
+            এই দোকানে <code>Purchases/Suppliers</code> module চালু না থাকায় ক্রয় history দেখা যাবে না।
           </p>
-          <Link
-            href={shopId ? `/dashboard/shops/${shopId}` : "/dashboard/shops"}
-            className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors"
-          >
+          <Link href={shopId ? `/dashboard/shops/${shopId}` : "/dashboard/shops"} className="inline-block px-6 py-3 bg-primary-soft text-primary border border-primary/30 rounded-lg font-medium hover:bg-primary/15 hover:border-primary/40 transition-colors">
             দোকানের সেটিংসে যান
           </Link>
         </div>
@@ -76,7 +80,12 @@ export default async function PurchaseDetailPage({
     }
     throw error;
   }
+
   const dueAmount = Number(purchase.dueAmount ?? 0);
+  const paidAmount = Number(purchase.paidAmount ?? 0);
+  const totalAmount = Number(purchase.totalAmount ?? 0);
+  const supplierInitial = purchase.supplierName?.trim().charAt(0).toUpperCase() ?? "?";
+  const isFullyPaid = dueAmount <= 0;
 
   const totalPages = purchase.paymentMeta?.totalPages ?? 1;
   const currentPage = purchase.paymentMeta?.page ?? 1;
@@ -84,197 +93,257 @@ export default async function PurchaseDetailPage({
     `/dashboard/purchases/${purchaseId}?shopId=${shopId}&page=${targetPage}`;
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
-        <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-          ক্রয় বিস্তারিত
-        </p>
-        <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
-          পেমেন্ট ইতিহাস
-        </h1>
-        <p className="text-xs text-muted-foreground mt-1">
-          সরবরাহকারী:{" "}
-          <span className="font-semibold text-foreground">
-            {purchase.supplierName || "N/A"}
-          </span>
-        </p>
-        <Link
-          href={`/dashboard/purchases?shopId=${shopId}`}
-          className="inline-flex mt-3 items-center gap-2 text-xs font-semibold text-primary hover:text-primary-hover"
-        >
-          ← ক্রয় তালিকায় ফিরুন
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {dueAmount > 0 && canCreatePurchasePayment ? (
-            <Link
-              href={`/dashboard/purchases/pay?shopId=${shopId}&purchaseId=${purchaseId}${
-                purchase.supplierId ? `&supplierId=${purchase.supplierId}` : ""
-              }`}
-              className="inline-flex items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 py-2 text-xs font-semibold hover:bg-primary/15 hover:border-primary/40 transition-colors"
-            >
-              বাকি পরিশোধ করুন
-            </Link>
-          ) : null}
-          {purchase.supplierId && canCreatePurchase ? (
-            <Link
-              href={`/dashboard/purchases/${purchaseId}/return?shopId=${shopId}`}
-              className="inline-flex items-center gap-2 rounded-full border border-warning/30 bg-warning-soft px-4 py-2 text-xs font-semibold text-warning hover:border-warning/40"
-            >
-              সাপ্লায়ার রিটার্ন
-            </Link>
-          ) : null}
-        </div>
-      </div>
+    <div className="space-y-4 sm:space-y-5">
 
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs text-muted-foreground">ক্রয় তারিখ</p>
-            <p className="text-base font-semibold text-foreground">
-              {new Date(purchase.purchaseDate).toLocaleDateString("bn-BD")}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">মোট</p>
-            <p className="text-base font-bold text-foreground">
-              ৳ {Number(purchase.totalAmount).toFixed(2)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              পরিশোধ: ৳ {Number(purchase.paidAmount).toFixed(2)} · বাকি: ৳{" "}
-              {Number(purchase.dueAmount).toFixed(2)}
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* ── Hero card ── */}
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-linear-to-br from-primary-soft/40 via-card to-card" />
+        <div className="pointer-events-none absolute -top-12 right-0 h-32 w-32 rounded-full bg-primary/15 blur-3xl" />
+        <div className="relative p-4 space-y-3">
 
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-        <h2 className="text-base font-semibold text-foreground">আইটেম তালিকা</h2>
-        <div className="mt-3 space-y-2 text-xs">
-          {purchase.items.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2"
-            >
-              <span className="font-semibold text-foreground">{item.name}</span>
-              <span className="text-muted-foreground">
-                {Number(item.quantity).toFixed(2)} × ৳{" "}
-                {Number(item.unitCost).toFixed(2)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-        <h2 className="text-base font-semibold text-foreground">পেমেন্ট ইতিহাস</h2>
-        {purchase.payments.length === 0 ? (
-          <p className="text-sm text-muted-foreground mt-3">কোনো পেমেন্ট নেই।</p>
-        ) : (
-          <div className="mt-3 space-y-2 text-xs">
-            {purchase.payments.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2"
-              >
-                <div>
-                  <p className="font-semibold text-foreground">৳ {Number(p.amount).toFixed(2)}</p>
-                  <p className="text-muted-foreground">{p.note || "নোট নেই"}</p>
-                </div>
-                <div className="text-right text-muted-foreground">
-                  <p>{new Date(p.paidAt).toLocaleDateString("bn-BD")}</p>
-                  <p className="text-[11px]">{p.method}</p>
-                </div>
+          {/* Top row: info + back */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-bold shadow-sm ${
+                purchase.supplierName
+                  ? "bg-primary-soft text-primary border border-primary/20"
+                  : "bg-muted text-muted-foreground border border-border"
+              }`}>
+                {supplierInitial}
               </div>
-            ))}
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  ক্রয় বিস্তারিত
+                </p>
+                <h1 className="text-xl font-bold leading-tight text-foreground sm:text-2xl">
+                  {purchase.supplierName || "সরবরাহকারী নেই"}
+                </h1>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(purchase.purchaseDate).toLocaleDateString("bn-BD", {
+                    year: "numeric", month: "long", day: "numeric",
+                  })}
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/dashboard/purchases?shopId=${shopId}`}
+              className="inline-flex h-9 shrink-0 items-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground shadow-sm hover:bg-muted transition-colors"
+            >
+              ← ফিরুন
+            </Link>
+          </div>
+
+          {/* Financial chips */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl border border-border bg-card/60 px-3 py-2 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">মোট ক্রয়</p>
+              <p className="mt-0.5 text-sm font-extrabold tabular-nums text-foreground">৳ {fmt(totalAmount)}</p>
+            </div>
+            <div className="rounded-xl border border-success/30 bg-success-soft/60 px-3 py-2 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-success/80">পরিশোধ</p>
+              <p className="mt-0.5 text-sm font-extrabold tabular-nums text-success">৳ {fmt(paidAmount)}</p>
+            </div>
+            <div className={`rounded-xl border px-3 py-2 text-center ${isFullyPaid ? "border-success/20 bg-success-soft/40" : "border-warning/30 bg-warning-soft/60"}`}>
+              <p className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${isFullyPaid ? "text-success/70" : "text-warning/80"}`}>বাকি</p>
+              <p className={`mt-0.5 text-sm font-extrabold tabular-nums ${isFullyPaid ? "text-success" : "text-warning"}`}>
+                {isFullyPaid ? "✓ শূন্য" : `৳ ${fmt(dueAmount)}`}
+              </p>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-wrap gap-2 border-t border-border/40 pt-3">
+            {dueAmount > 0 && canCreatePurchasePayment ? (
+              <Link
+                href={`/dashboard/purchases/pay?shopId=${shopId}&purchaseId=${purchaseId}${purchase.supplierId ? `&supplierId=${purchase.supplierId}` : ""}`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-warning-soft text-warning border border-warning/30 px-4 text-sm font-semibold hover:bg-warning/15 transition-colors"
+              >
+                বাকি পরিশোধ করুন
+              </Link>
+            ) : null}
+            {purchase.supplierId && canCreatePurchase ? (
+              <Link
+                href={`/dashboard/purchases/${purchaseId}/return?shopId=${shopId}`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
+              >
+                সাপ্লায়ার রিটার্ন
+              </Link>
+            ) : null}
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── Items ── */}
+      {purchase.items.length > 0 ? (
+        <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
+            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+              পণ্য তালিকা
+            </p>
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              {purchase.items.length.toLocaleString("bn-BD")}টি পণ্য
+            </span>
+          </div>
+          <div className="divide-y divide-border/40">
+            {purchase.items.map((item) => {
+              const lineTotal = Number(item.quantity) * Number(item.unitCost);
+              return (
+                <div key={item.id} className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{item.name}</p>
+                    <p className="text-[11px] text-muted-foreground tabular-nums">
+                      {Number(item.quantity).toLocaleString("bn-BD", { maximumFractionDigits: 2 })} ×
+                      ৳ {fmt(Number(item.unitCost))}
+                    </p>
+                  </div>
+                  <p className="text-sm font-bold tabular-nums text-foreground">
+                    ৳ {fmt(lineTotal)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-between border-t border-border/60 bg-muted/30 px-4 py-3">
+            <p className="text-xs font-semibold text-muted-foreground">মোট</p>
+            <p className="text-sm font-extrabold tabular-nums text-foreground">৳ {fmt(totalAmount)}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Payment history ── */}
+      <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+            পেমেন্ট ইতিহাস
+          </p>
+          <span className="text-[11px] font-semibold text-muted-foreground">
+            {purchase.payments.length.toLocaleString("bn-BD")}টি পেমেন্ট
+          </span>
+        </div>
+
+        {purchase.payments.length === 0 ? (
+          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+            এখনও কোনো পেমেন্ট রেকর্ড হয়নি।
+          </div>
+        ) : (
+          <div className="divide-y divide-border/40">
+            {purchase.payments.map((p) => {
+              const icon = METHOD_ICONS[p.method] ?? "💳";
+              return (
+                <div key={p.id} className="flex items-start gap-3 px-4 py-3">
+                  <span className="mt-0.5 text-base">{icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold tabular-nums text-foreground">
+                      ৳ {fmt(Number(p.amount))}
+                    </p>
+                    {p.note ? (
+                      <p className="text-[11px] text-muted-foreground truncate">{p.note}</p>
+                    ) : null}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-semibold text-foreground">
+                      {new Date(p.paidAt).toLocaleDateString("bn-BD")}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground capitalize">{p.method}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
+
         {totalPages > 1 ? (
-          <div className="mt-3 flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between border-t border-border/60 bg-muted/30 px-4 py-3">
             <Link
               href={buildHref(Math.max(1, currentPage - 1))}
               aria-disabled={currentPage <= 1}
-              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 font-semibold ${
+              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${
                 currentPage <= 1
                   ? "border-border/50 text-muted-foreground pointer-events-none"
                   : "border-border text-foreground hover:bg-muted"
               }`}
             >
-              Prev
+              ◀ আগের
             </Link>
-            <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground">
-              Page {currentPage} / {totalPages}
+            <span className="text-xs font-semibold text-muted-foreground">
+              পৃষ্ঠা {currentPage.toLocaleString("bn-BD")} / {totalPages.toLocaleString("bn-BD")}
             </span>
             <Link
               href={buildHref(Math.min(totalPages, currentPage + 1))}
               aria-disabled={currentPage >= totalPages}
-              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 font-semibold ${
+              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${
                 currentPage >= totalPages
                   ? "border-border/50 text-muted-foreground pointer-events-none"
                   : "border-border text-foreground hover:bg-muted"
               }`}
             >
-              Next
+              পরের ▶
             </Link>
           </div>
         ) : null}
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-        <h2 className="text-base font-semibold text-foreground">সাপ্লায়ার রিটার্ন ইতিহাস</h2>
-        {purchase.returns.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">এখনও কোনো supplier return নেই।</p>
-        ) : (
-          <div className="mt-3 space-y-3">
-            {purchase.returns.map((purchaseReturn) => (
-              <div
-                key={purchaseReturn.id}
-                className="rounded-2xl border border-border bg-card px-3 py-3 text-xs"
-              >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-1">
-                    <p className="font-semibold text-foreground">
-                      {new Date(purchaseReturn.returnDate).toLocaleDateString("bn-BD")}
+      {/* ── Return history ── */}
+      {purchase.returns.length > 0 ? (
+        <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
+            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+              সাপ্লায়ার রিটার্ন
+            </p>
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              {purchase.returns.length.toLocaleString("bn-BD")}টি রিটার্ন
+            </span>
+          </div>
+          <div className="divide-y divide-border/40">
+            {purchase.returns.map((ret) => (
+              <div key={ret.id} className="p-4 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-foreground">
+                      ৳ {fmt(Number(ret.totalAmount))}
                     </p>
-                    <p className="text-muted-foreground">
-                      রিটার্ন: ৳ {Number(purchaseReturn.totalAmount).toFixed(2)}
-                      {" · "}
-                      ক্রেডিট: ৳ {Number(purchaseReturn.supplierCredit).toFixed(2)}
+                    <p className="text-[11px] text-muted-foreground">
+                      {new Date(ret.returnDate).toLocaleDateString("bn-BD")}
                     </p>
-                    <p className="text-muted-foreground">
-                      {purchaseReturn.note || "নোট নেই"}
+                    {ret.note ? (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{ret.note}</p>
+                    ) : null}
+                  </div>
+                  <div className="text-right shrink-0 space-y-1">
+                    <span className="inline-flex items-center rounded-full border border-warning/30 bg-warning-soft px-2.5 py-0.5 text-[11px] font-semibold text-warning">
+                      ক্রেডিট ৳ {fmt(Number(ret.supplierCredit))}
+                    </span>
+                    <p className="text-[10px] text-muted-foreground">
+                      #{ret.id.slice(0, 8)}
                     </p>
                   </div>
-                  <span className="rounded-full border border-warning/25 bg-warning-soft px-3 py-1 font-semibold text-warning">
-                    #{purchaseReturn.id.slice(0, 8)}
-                  </span>
                 </div>
-
-                <div className="mt-3 space-y-2">
-                  {purchaseReturn.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between rounded-xl border border-border px-3 py-2"
-                    >
-                      <div>
-                        <p className="font-semibold text-foreground">
-                          {item.name}
-                          {item.variantLabel ? ` (${item.variantLabel})` : ""}
-                        </p>
-                        <p className="text-muted-foreground">
-                          {Number(item.quantity).toFixed(2)} × ৳ {Number(item.unitCost).toFixed(2)}
+                {ret.items.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {ret.items.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between rounded-xl border border-border/50 bg-muted/30 px-3 py-2 text-xs">
+                        <div>
+                          <p className="font-semibold text-foreground">
+                            {item.name}{item.variantLabel ? ` (${item.variantLabel})` : ""}
+                          </p>
+                          <p className="text-muted-foreground tabular-nums">
+                            {Number(item.quantity).toLocaleString("bn-BD", { maximumFractionDigits: 2 })} × ৳ {fmt(Number(item.unitCost))}
+                          </p>
+                        </div>
+                        <p className="font-bold tabular-nums text-foreground">
+                          ৳ {fmt(Number(item.lineTotal))}
                         </p>
                       </div>
-                      <p className="font-semibold text-foreground">
-                        ৳ {Number(item.lineTotal).toFixed(2)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      ) : null}
+
     </div>
   );
 }

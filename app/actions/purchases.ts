@@ -31,6 +31,8 @@ type CreatePurchaseInput = {
   purchaseDate?: string;
   supplierId?: string | null;
   supplierName?: string | null;
+  supplierPhone?: string | null;
+  supplierAddress?: string | null;
   paymentMethod?: "cash" | "bkash" | "bank" | "due";
   paidNow?: number | string | null;
   note?: string | null;
@@ -219,6 +221,8 @@ export async function createPurchase(input: CreatePurchaseInput) {
 
   let supplierId = input.supplierId ?? null;
   const supplierName = input.supplierName?.trim() || null;
+  const supplierPhone = input.supplierPhone?.trim() || null;
+  const supplierAddress = input.supplierAddress?.trim() || null;
 
   if (!supplierId && supplierName) {
     const existing = await prisma.supplier.findFirst({
@@ -232,6 +236,8 @@ export async function createPurchase(input: CreatePurchaseInput) {
         data: {
           shopId: input.shopId,
           name: supplierName,
+          phone: supplierPhone,
+          address: supplierAddress,
         },
         select: { id: true },
       });

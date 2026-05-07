@@ -18,6 +18,8 @@ const bodySchema = z.object({
   purchaseDate: z.string().optional(),
   supplierId: z.string().optional().nullable(),
   supplierName: z.string().optional().nullable(),
+  supplierPhone: z.string().optional().nullable(),
+  supplierAddress: z.string().optional().nullable(),
   paymentMethod: z.enum(["cash", "bkash", "bank", "due"]).optional(),
   paidNow: z.union([z.string(), z.number()]).optional().nullable(),
   note: z.string().optional().nullable(),

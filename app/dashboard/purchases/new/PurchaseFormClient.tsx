@@ -101,6 +101,8 @@ export default function PurchaseFormClient({
   const [items, setItems] = useState<PurchaseItemDraft[]>([blankItem()]);
   const [supplierId, setSupplierId] = useState("");
   const [supplierName, setSupplierName] = useState("");
+  const [supplierPhone, setSupplierPhone] = useState("");
+  const [supplierAddress, setSupplierAddress] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(() => {
     const d = new Date();
     const y = d.getFullYear();
@@ -332,6 +334,8 @@ export default function PurchaseFormClient({
             })),
             supplierId: supplierId || null,
             supplierName: supplierId ? null : supplierName || null,
+            supplierPhone: supplierId ? null : supplierPhone || null,
+            supplierAddress: supplierId ? null : supplierAddress || null,
             purchaseDate,
             paymentMethod: purchaseMethod,
             paidNow: purchaseMethod === "due" ? paidNow || "0" : "0",
@@ -502,19 +506,35 @@ export default function PurchaseFormClient({
             </div>
 
             {!supplierId ? (
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">
-                  নতুন সরবরাহকারীর নাম
-                </label>
+              <div className="rounded-xl border border-primary/20 bg-primary-soft/20 p-3 space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-primary/70">
+                  নতুন সরবরাহকারীর তথ্য
+                </p>
                 <input
                   type="text"
                   value={supplierName}
                   onChange={(e) => setSupplierName(e.target.value)}
-                  placeholder="যেমন: মেসার্স রহমান ট্রেডার্স"
+                  placeholder="সরবরাহকারীর নাম *  (যেমন: মেসার্স রহমান ট্রেডার্স)"
                   className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
-                <p className="text-xs text-muted-foreground">
-                  পরে বাকি থাকলে এই নাম supplier হিসাবেই সংরক্ষণ হবে।
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={supplierPhone}
+                    onChange={(e) => setSupplierPhone(e.target.value)}
+                    placeholder="ফোন (ঐচ্ছিক)"
+                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <input
+                    type="text"
+                    value={supplierAddress}
+                    onChange={(e) => setSupplierAddress(e.target.value)}
+                    placeholder="ঠিকানা (ঐচ্ছিক)"
+                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  ক্রয় সংরক্ষণের সময় এই তথ্য দিয়ে নতুন সরবরাহকারী তৈরি হবে।
                 </p>
               </div>
             ) : (

@@ -40,8 +40,12 @@ type DraftRow = {
 function parseSerials(raw: string) {
   return raw
     .split(/[\s,]+/)
-    .map((value) => value.trim().toUpperCase())
+    .map((v) => v.trim().toUpperCase())
     .filter(Boolean);
+}
+
+function fmt(n: number) {
+  return n.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function PurchaseReturnClient({
@@ -79,17 +83,11 @@ export default function PurchaseReturnClient({
   }, [drafts, dueAmount, items]);
 
   function updateDraft(itemId: string, patch: Partial<DraftRow>) {
-    setDrafts((current) => ({
-      ...current,
-      [itemId]: {
-        ...current[itemId],
-        ...patch,
-      },
-    }));
+    setDrafts((prev) => ({ ...prev, [itemId]: { ...prev[itemId], ...patch } }));
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     setError(null);
 
     const payloadItems = items
@@ -97,12 +95,7 @@ export default function PurchaseReturnClient({
         const draft = drafts[item.id];
         const qty = Number(draft?.qty || 0);
         const serialNumbers = parseSerials(draft?.serialInput || "");
-        return {
-          purchaseItemId: item.id,
-          qty,
-          serialNumbers: serialNumbers.length > 0 ? serialNumbers : null,
-          item,
-        };
+        return { purchaseItemId: item.id, qty, serialNumbers: serialNumbers.length > 0 ? serialNumbers : null, item };
       })
       .filter((row) => row.qty > 0);
 
@@ -144,128 +137,138 @@ export default function PurchaseReturnClient({
           })),
         }),
       });
-
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data?.success) {
-        throw new Error(data?.error || "Supplier return সংরক্ষণ করা যায়নি");
+        throw new Error(data?.error || "Supplier return সংরক্ষণ করা যায়নি");
       }
-
       router.push(`/dashboard/purchases/${purchaseId}?shopId=${shopId}`);
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Supplier return করা যায়নি");
+      setError(caught instanceof Error ? caught.message : "Supplier return করা যায়নি");
     } finally {
       setSaving(false);
     }
   }
 
+  const supplierDue = Number(dueAmount || 0);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_26px_rgba(15,23,42,0.08)]">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-              Supplier Credit
-            </p>
-            <h1 className="text-2xl font-bold text-foreground">পারচেজ রিটার্ন</h1>
-            <p className="text-xs text-muted-foreground">
-              সরবরাহকারী: <span className="font-semibold text-foreground">{supplierName}</span>
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-xs sm:w-[280px]">
-            <div className="rounded-xl border border-border bg-card px-3 py-2">
-              <p className="text-muted-foreground">বর্তমান বাকি</p>
-              <p className="font-bold text-foreground">৳ {Number(dueAmount || 0).toFixed(2)}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card px-3 py-2">
-              <p className="text-muted-foreground">রিটার্ন টোটাল</p>
-              <p className="font-bold text-foreground">৳ {totals.returnTotal.toFixed(2)}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card px-3 py-2">
-              <p className="text-muted-foreground">বাকি কমবে</p>
-              <p className="font-semibold text-success">৳ {totals.dueReduction.toFixed(2)}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card px-3 py-2">
-              <p className="text-muted-foreground">সাপ্লায়ার ক্রেডিট</p>
-              <p className="font-semibold text-primary">৳ {totals.supplierCredit.toFixed(2)}</p>
-            </div>
-          </div>
+
+      {/* ── Live summary strip ── */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="rounded-2xl border border-border bg-card px-3 py-3 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">রিটার্ন টোটাল</p>
+          <p className="mt-1 text-base font-extrabold tabular-nums text-foreground">
+            ৳ {fmt(totals.returnTotal)}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-warning/30 bg-warning-soft/40 px-3 py-3 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-warning/70">বর্তমান বাকি</p>
+          <p className="mt-1 text-base font-extrabold tabular-nums text-warning">
+            ৳ {fmt(supplierDue)}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-success/30 bg-success-soft/40 px-3 py-3 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-success/70">বাকি কমবে</p>
+          <p className="mt-1 text-base font-extrabold tabular-nums text-success">
+            ৳ {fmt(totals.dueReduction)}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-primary/30 bg-primary-soft/40 px-3 py-3 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-primary/70">সাপ্লায়ার ক্রেডিট</p>
+          <p className="mt-1 text-base font-extrabold tabular-nums text-primary">
+            ৳ {fmt(totals.supplierCredit)}
+          </p>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_26px_rgba(15,23,42,0.08)] space-y-3">
+      {/* ── Date + Note ── */}
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-3">
+          রিটার্নের তথ্য
+        </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <label className="text-xs font-semibold text-muted-foreground">রিটার্ন তারিখ</label>
             <input
               type="date"
               value={returnDate}
-              onChange={(event) => setReturnDate(event.target.value)}
+              onChange={(e) => setReturnDate(e.target.value)}
               className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-muted-foreground">নোট</label>
+            <label className="text-xs font-semibold text-muted-foreground">নোট (ঐচ্ছিক)</label>
             <input
               type="text"
               value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="যেমন: ভাঙা/ড্যামেজড পণ্য ফেরত"
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="যেমন: ভাঙা / ড্যামেজড পণ্য ফেরত"
               className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
         </div>
-        {error ? (
-          <div className="rounded-xl border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">
-            {error}
-          </div>
-        ) : null}
       </div>
 
+      {/* ── Item cards ── */}
       <div className="space-y-3">
         {items.map((item) => {
           const draft = drafts[item.id];
+          const qty = Number(draft?.qty || 0);
+          const lineTotal = qty * Number(item.unitCost || 0);
+          const returnableQty = Number(item.returnableQty || 0);
           const serialCount = parseSerials(draft?.serialInput || "").length;
+          const hasQty = qty > 0;
+
           return (
             <div
               key={item.id}
-              className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_26px_rgba(15,23,42,0.08)] space-y-3"
+              className={`rounded-2xl border bg-card p-4 shadow-sm transition-shadow ${
+                hasQty ? "border-warning/40 shadow-md" : "border-border"
+              }`}
             >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-1 min-w-0">
-                  <h2 className="text-sm font-bold text-foreground">
+              {/* Product header */}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold text-foreground leading-tight">
                     {item.productName}
-                    {item.variantLabel ? ` (${item.variantLabel})` : ""}
+                    {item.variantLabel ? (
+                      <span className="ml-1 font-normal text-muted-foreground">({item.variantLabel})</span>
+                    ) : null}
                   </h2>
-                  <div className="flex flex-wrap gap-2 text-[11px]">
-                    <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">
-                      কেনা: {Number(item.purchasedQty).toFixed(2)}
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    <span className="inline-flex items-center rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      কেনা {Number(item.purchasedQty).toFixed(2)}
                     </span>
-                    <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">
-                      আগে ফেরত: {Number(item.alreadyReturnedQty).toFixed(2)}
-                    </span>
-                    <span className="rounded-full border border-success/25 bg-success-soft px-2 py-1 text-success">
-                      এখন ফেরতযোগ্য: {Number(item.returnableQty).toFixed(2)}
+                    {Number(item.alreadyReturnedQty) > 0 ? (
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        আগে ফেরত {Number(item.alreadyReturnedQty).toFixed(2)}
+                      </span>
+                    ) : null}
+                    <span className="inline-flex items-center rounded-full border border-success/30 bg-success-soft px-2 py-0.5 text-[10px] font-semibold text-success">
+                      ফেরতযোগ্য {returnableQty.toFixed(2)}
                     </span>
                     {item.batchNo ? (
-                      <span className="rounded-full border border-primary/25 bg-primary-soft px-2 py-1 text-primary">
-                        Batch: {item.batchNo} · বাকি {Number(item.batchRemainingQty || 0).toFixed(2)}
+                      <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                        Batch {item.batchNo} · বাকি {Number(item.batchRemainingQty || 0).toFixed(2)}
                       </span>
                     ) : null}
                     {item.trackCutLength ? (
-                      <span className="rounded-full border border-warning/25 bg-warning-soft px-2 py-1 text-warning">
-                        Cut-length tracked
+                      <span className="inline-flex items-center rounded-full border border-warning/30 bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning">
+                        Cut-length
                       </span>
                     ) : null}
                   </div>
                 </div>
-                <div className="text-right text-xs">
-                  <p className="text-muted-foreground">ক্রয় মূল্য</p>
-                  <p className="font-semibold text-foreground">৳ {Number(item.unitCost).toFixed(2)}</p>
+                <div className="shrink-0 text-right">
+                  <p className="text-[10px] text-muted-foreground">একক মূল্য</p>
+                  <p className="text-sm font-bold tabular-nums text-foreground">৳ {fmt(Number(item.unitCost))}</p>
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              {/* Qty + Line total */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-muted-foreground">রিটার্ন পরিমাণ</label>
                   <input
@@ -274,49 +277,74 @@ export default function PurchaseReturnClient({
                     step="0.01"
                     max={item.returnableQty}
                     value={draft?.qty || ""}
-                    onChange={(event) => updateDraft(item.id, { qty: event.target.value })}
+                    onChange={(e) => updateDraft(item.id, { qty: e.target.value })}
                     placeholder="0"
-                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-warning/30"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-muted-foreground">লাইন টোটাল</label>
-                  <div className="flex h-11 items-center rounded-xl border border-border bg-card px-3 text-sm font-semibold text-foreground">
-                    ৳ {(Number(draft?.qty || 0) * Number(item.unitCost || 0)).toFixed(2)}
+                  <div className={`flex h-11 items-center rounded-xl border px-3 text-sm font-bold tabular-nums transition-colors ${
+                    hasQty
+                      ? "border-warning/30 bg-warning-soft/40 text-warning"
+                      : "border-border bg-card text-muted-foreground"
+                  }`}>
+                    ৳ {fmt(lineTotal)}
                   </div>
                 </div>
               </div>
 
+              {/* Serial numbers */}
               {item.trackSerialNumbers ? (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="font-semibold text-muted-foreground">Available serials</span>
-                    {item.availableSerials.map((serial) => (
-                      <button
-                        key={serial}
-                        type="button"
-                        onClick={() => {
-                          const current = parseSerials(draft?.serialInput || "");
-                          if (current.includes(serial)) return;
-                          updateDraft(item.id, {
-                            serialInput: [...current, serial].join(", "),
-                          });
-                        }}
-                        className="rounded-full border border-border px-2 py-1 text-foreground hover:bg-muted"
-                      >
-                        {serial}
-                      </button>
-                    ))}
-                  </div>
+                <div className="mt-3 space-y-2 rounded-xl border border-primary/20 bg-primary-soft/20 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-primary/70">
+                    Serial Numbers
+                  </p>
+                  {item.availableSerials.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {item.availableSerials.map((serial) => {
+                        const selected = parseSerials(draft?.serialInput || "").includes(serial);
+                        return (
+                          <button
+                            key={serial}
+                            type="button"
+                            onClick={() => {
+                              const current = parseSerials(draft?.serialInput || "");
+                              if (selected) {
+                                updateDraft(item.id, { serialInput: current.filter((s) => s !== serial).join(", ") });
+                              } else {
+                                updateDraft(item.id, { serialInput: [...current, serial].join(", ") });
+                              }
+                            }}
+                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                              selected
+                                ? "border-primary/40 bg-primary text-primary-foreground shadow-sm"
+                                : "border-primary/30 bg-primary-soft text-primary hover:bg-primary/15"
+                            }`}
+                          >
+                            {serial}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                   <textarea
                     value={draft?.serialInput || ""}
-                    onChange={(event) => updateDraft(item.id, { serialInput: event.target.value })}
-                    rows={3}
-                    placeholder="Serial number লিখুন, কমা বা space দিয়ে আলাদা করুন"
-                    className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    onChange={(e) => updateDraft(item.id, { serialInput: e.target.value })}
+                    rows={2}
+                    placeholder="Serial number লিখুন, কমা বা space দিয়ে আলাদা করুন"
+                    className="w-full resize-none rounded-xl border border-primary/20 bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                   <p className="text-xs text-muted-foreground">
-                    বাছাই করা serial: <span className="font-semibold text-foreground">{serialCount}</span>
+                    বাছাই করা:{" "}
+                    <span className={`font-semibold ${serialCount > 0 ? "text-primary" : "text-muted-foreground"}`}>
+                      {serialCount} টি serial
+                    </span>
+                    {qty > 0 && serialCount !== Math.round(qty) ? (
+                      <span className="ml-2 text-danger font-semibold">
+                        (qty {Math.round(qty)} এর সাথে মিলছে না)
+                      </span>
+                    ) : null}
                   </p>
                 </div>
               ) : null}
@@ -325,22 +353,31 @@ export default function PurchaseReturnClient({
         })}
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <button
-          type="button"
-          onClick={() => router.push(`/dashboard/purchases/${purchaseId}?shopId=${shopId}`)}
-          className="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
-        >
-          বাতিল
-        </button>
+      {/* ── Error ── */}
+      {error ? (
+        <div className="rounded-2xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">
+          {error}
+        </div>
+      ) : null}
+
+      {/* ── Actions ── */}
+      <div className="space-y-2">
         <button
           type="submit"
           disabled={saving}
-          className="inline-flex h-11 items-center justify-center rounded-xl border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary disabled:opacity-60"
+          className="w-full h-12 rounded-2xl bg-warning text-white text-sm font-bold shadow-sm hover:bg-warning/90 disabled:opacity-60 transition-colors"
         >
-          {saving ? "সংরক্ষণ হচ্ছে..." : "সাপ্লায়ার রিটার্ন সংরক্ষণ করুন"}
+          {saving ? "সংরক্ষণ হচ্ছে..." : "সাপ্লায়ার রিটার্ন সংরক্ষণ করুন"}
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push(`/dashboard/purchases/${purchaseId}?shopId=${shopId}`)}
+          className="w-full h-10 rounded-2xl border border-border bg-card text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          বাতিল করুন
         </button>
       </div>
+
     </form>
   );
 }

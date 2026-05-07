@@ -116,32 +116,6 @@ export default function PurchasePaymentClient({
         </p>
         {suppliers.length === 0 ? (
           <p className="text-sm text-muted-foreground">কোনো সরবরাহকারী নেই।</p>
-        ) : suppliers.length <= 8 ? (
-          <div className="flex flex-wrap gap-2">
-            {suppliers.map((s) => {
-              const active = supplierId === s.id;
-              const initial = s.name.trim().charAt(0).toUpperCase();
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => { setSupplierId(s.id); setPurchaseId(""); }}
-                  className={`flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${
-                    active
-                      ? "border-primary/40 bg-primary-soft text-primary shadow-sm"
-                      : "border-border bg-card text-foreground hover:border-primary/30 hover:bg-primary-soft/40"
-                  }`}
-                >
-                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                    active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                  }`}>
-                    {initial}
-                  </span>
-                  {s.name}
-                </button>
-              );
-            })}
-          </div>
         ) : (
           <select
             value={supplierId}
