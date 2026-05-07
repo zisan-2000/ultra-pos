@@ -97,69 +97,25 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
   return (
     <div className="space-y-4 sm:space-y-5 section-gap">
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/60 via-card to-card" />
         <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
         <div className="relative space-y-3 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-                এপি লেজার
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                সরবরাহকারী
               </p>
-              <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
-                সরবরাহকারী তালিকা
-              </h1>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
-                দোকান:
-                <span className="truncate font-semibold text-foreground">
-                  {selectedShop.name}
-                </span>
+              <p className="text-3xl font-bold tabular-nums leading-tight text-foreground sm:text-4xl">
+                {suppliers.length.toLocaleString("bn-BD")}
               </p>
+              <p className="text-xs text-muted-foreground">{selectedShop.name}</p>
             </div>
-            <div className="w-full sm:w-auto">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <ShopSelectorClient
-                  shops={shops}
-                  selectedShopId={selectedShopId}
-                />
-                <DashboardManualRefresh
-                  label="রিফ্রেশ"
-                  className="h-10 px-3"
-                />
-              </div>
+            <div className="flex items-center gap-2">
+              <DashboardManualRefresh label="রিফ্রেশ" className="h-9 px-3 text-xs" />
             </div>
           </div>
+          <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
         </div>
-      </div>
-
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_26px_rgba(15,23,42,0.08)]">
-        <p className="text-xs font-semibold text-muted-foreground">দ্রুত কাজ</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {canCreatePurchase ? (
-            <Link
-              href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
-              className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-            >
-              ➕ নতুন ক্রয়
-            </Link>
-          ) : null}
-          {canCreatePurchasePayment ? (
-            <Link
-              href={`/dashboard/purchases/pay?shopId=${selectedShopId}`}
-              className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
-            >
-              বাকি পরিশোধ
-            </Link>
-          ) : null}
-          <Link
-            href={`/dashboard/purchases?shopId=${selectedShopId}`}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
-          >
-            ক্রয় তালিকা
-          </Link>
-        </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          স্টেটমেন্ট দেখতে যে কোনো সরবরাহকারীর কার্ডে “স্টেটমেন্ট” চাপুন।
-        </p>
       </div>
 
       <SuppliersClient shopId={selectedShopId} suppliers={suppliers} />

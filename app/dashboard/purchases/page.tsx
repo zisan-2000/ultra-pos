@@ -9,6 +9,7 @@ import {
 } from "@/app/actions/purchases";
 import ShopSelectorClient from "./ShopSelectorClient";
 import DashboardManualRefresh from "@/components/dashboard-manual-refresh";
+import PurchaseDateFilterClient from "./PurchaseDateFilterClient";
 import { getDhakaDateString } from "@/lib/dhaka-date";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
@@ -132,16 +133,17 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
 
   const totalAmount = Number(summary.totalAmount ?? 0);
   const purchaseReturnTotal = Number(summary.purchaseReturnTotal ?? 0);
+  const paidTotal = Number(summary.paidTotal ?? 0);
   const formattedTotal = Number.isFinite(totalAmount)
-    ? totalAmount.toFixed(2)
-    : "0.00";
+    ? totalAmount.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : "০.০০";
 
   const buildHref = (targetPage: number) => {
     const params = new URLSearchParams();
     params.set("shopId", selectedShopId);
     params.set("from", from);
     params.set("to", to);
-    if (targetPage > 1) params.set("page", `${targetPage}`);
+    if (targetPage > 1) params.set("page", String(targetPage));
     return `/dashboard/purchases?${params.toString()}`;
   };
 
@@ -150,151 +152,58 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
 
   return (
     <div className="space-y-4 sm:space-y-5 section-gap">
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-success-soft/60 via-card to-card" />
-        <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-success/20 blur-3xl" />
-        <div className="relative space-y-3 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0 space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-                স্টক ইন
-              </p>
-              <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
-                পণ্য ক্রয় তালিকা
-              </h1>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
-                দোকান:
-                <span className="truncate font-semibold text-foreground">
-                  {selectedShop.name}
-                </span>
-              </p>
-            </div>
 
-            {canCreatePurchase ? (
-              <Link
-                href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
-                className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-              >
-                ➕ নতুন ক্রয়
-              </Link>
-            ) : null}
-          </div>
+      {/* ── Hero card ── */}
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_20px_40px_rgba(15,23,42,0.10)] animate-fade-in">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="pointer-events-none absolute -top-20 right-0 h-52 w-52 rounded-full bg-primary/10 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 left-10 h-32 w-32 rounded-full bg-success/10 blur-2xl" />
+        <div className="relative p-4 space-y-4">
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="w-full sm:w-auto">
-              <ShopSelectorClient
-                shops={shops}
-                selectedShopId={selectedShopId}
-              />
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-0.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                পণ্য ক্রয়
+              </p>
+              <p className="text-4xl font-extrabold tabular-nums leading-none text-foreground">
+                {(summary.count ?? 0).toLocaleString("bn-BD")}
+              </p>
             </div>
             {canCreatePurchase ? (
               <Link
                 href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
-                className="sm:hidden inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
               >
-                ➕ নতুন ক্রয় যোগ করুন
+                + নতুন ক্রয়
               </Link>
             ) : null}
           </div>
 
-          <form
-            action={buildHref(1)}
-            method="get"
-            className="grid grid-cols-1 sm:grid-cols-3 gap-2"
-          >
-            <input type="hidden" name="shopId" value={selectedShopId} />
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] text-muted-foreground font-semibold">
-                শুরু তারিখ
-              </label>
-              <input
-                type="date"
-                name="from"
-                defaultValue={from}
-                className="h-10 rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] text-muted-foreground font-semibold">
-                শেষ তারিখ
-              </label>
-              <input
-                type="date"
-                name="to"
-                defaultValue={to}
-                className="h-10 rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] text-muted-foreground font-semibold">
-                ফিল্টার
-              </label>
-              <button
-                type="submit"
-                className="h-10 rounded-xl bg-primary-soft text-primary border border-primary/30 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-              >
-                দেখুন
-              </button>
-            </div>
-          </form>
+          <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3 text-xs">
-            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-foreground border border-border shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-              মোট {summary.count ?? 0} টি
-            </span>
-            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border">
-              নেট ৳ {formattedTotal}
-            </span>
-            <span className="inline-flex h-7 items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-warning border border-warning/20">
-              রিটার্ন ৳ {purchaseReturnTotal.toFixed(2)}
-            </span>
-            <span className="inline-flex h-7 max-w-[200px] items-center gap-1 rounded-full bg-card/80 px-3 font-semibold text-muted-foreground border border-border truncate">
-              সময়: {from === to ? from : `${from} → ${to}`}
-            </span>
-            <DashboardManualRefresh
-              label="রিফ্রেশ"
-              className="h-7 px-2.5 text-xs"
-            />
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl border border-border bg-card/60 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">নেট ক্রয়</p>
+              <p className="mt-0.5 text-sm font-bold tabular-nums text-foreground">৳ {formattedTotal}</p>
+            </div>
+            <div className="rounded-xl border border-success/30 bg-success-soft/60 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-success/80">পরিশোধ</p>
+              <p className="mt-0.5 text-sm font-bold tabular-nums text-success">
+                ৳ {paidTotal.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="rounded-xl border border-warning/30 bg-warning-soft/60 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-warning/80">রিটার্ন</p>
+              <p className="mt-0.5 text-sm font-bold tabular-nums text-warning">
+                ৳ {purchaseReturnTotal.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
           </div>
+
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_26px_rgba(15,23,42,0.08)]">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground">
-              দ্রুত কাজ
-            </p>
-            <p className="text-sm text-muted-foreground">
-              নতুন ক্রয়, বাকি পরিশোধ বা সরবরাহকারী তালিকা এক জায়গায়।
-            </p>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {canCreatePurchase ? (
-            <Link
-              href={`/dashboard/purchases/new?shopId=${selectedShopId}`}
-              className="inline-flex h-10 items-center justify-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors"
-            >
-              ➕ নতুন ক্রয়
-            </Link>
-          ) : null}
-          {canCreatePurchasePayment ? (
-            <Link
-              href={`/dashboard/purchases/pay?shopId=${selectedShopId}`}
-              className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
-            >
-              বাকি পরিশোধ
-            </Link>
-          ) : null}
-          <Link
-            href={`/dashboard/suppliers?shopId=${selectedShopId}`}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
-          >
-            সরবরাহকারী তালিকা
-          </Link>
-        </div>
-      </div>
+      <PurchaseDateFilterClient shopId={selectedShopId} from={from} to={to} />
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground space-y-3">
@@ -312,88 +221,117 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
         <div className="space-y-3">
           {items.map((purchase) => {
             const topItems = purchase.items.slice(0, 3);
-            const extraCount =
-              purchase.items.length > 3
-                ? purchase.items.length - 3
-                : 0;
+            const extraCount = purchase.items.length > 3 ? purchase.items.length - 3 : 0;
+            const dueAmt = Number(purchase.dueAmount);
+            const paidAmt = Number(purchase.paidAmount);
+            const totalAmt = Number(purchase.totalAmount);
+            const initials = purchase.supplierName
+              ? purchase.supplierName.trim().charAt(0).toUpperCase()
+              : "?";
+            const isFullyPaid = dueAmt <= 0;
             return (
               <div
                 key={purchase.id}
-                className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_26px_rgba(15,23,42,0.08)]"
+                className={`rounded-2xl border bg-card overflow-hidden shadow-sm transition-shadow hover:shadow-md ${
+                  dueAmt > 0 ? "border-warning/30" : "border-border"
+                }`}
               >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">ক্রয় তারিখ</p>
-                    <p className="text-base font-semibold text-foreground">
-                      {new Date(purchase.purchaseDate).toLocaleDateString(
-                        "bn-BD"
-                      )}
-                    </p>
-                    {purchase.supplierName ? (
-                      <p className="text-xs text-muted-foreground">
-                        সরবরাহকারী:{" "}
-                        <span className="font-semibold text-foreground">
-                          {purchase.supplierName}
-                        </span>
-                      </p>
+                <div className="p-4 space-y-3">
+
+                  {/* ── Top row: avatar + supplier/date + amount ── */}
+                  <div className="flex items-start gap-3">
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                      purchase.supplierName
+                        ? "bg-primary-soft text-primary border border-primary/20"
+                        : "bg-muted text-muted-foreground border border-border"
+                    }`}>
+                      {initials}
+                    </div>
+
+                    <div className="flex flex-1 min-w-0 items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-foreground leading-tight truncate">
+                          {purchase.supplierName || "সরবরাহকারী নেই"}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {new Date(purchase.purchaseDate).toLocaleDateString("bn-BD")}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-base font-extrabold tabular-nums text-foreground leading-tight">
+                          ৳ {totalAmt.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">মোট ক্রয়</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Status chips ── */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full border border-success/30 bg-success-soft px-2.5 py-0.5 text-[11px] font-semibold text-success">
+                      পরিশোধ ৳ {paidAmt.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    {dueAmt > 0 ? (
+                      <span className="inline-flex items-center rounded-full border border-warning/30 bg-warning-soft px-2.5 py-0.5 text-[11px] font-semibold text-warning">
+                        বাকি ৳ {dueAmt.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full border border-success/20 bg-success-soft/50 px-2.5 py-0.5 text-[11px] font-semibold text-success/70">
+                        সম্পূর্ণ পরিশোধিত ✓
+                      </span>
+                    )}
+                  </div>
+
+                  {/* ── Items ── */}
+                  {topItems.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {topItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between rounded-xl border border-border/50 bg-muted/30 px-3 py-2 text-xs"
+                        >
+                          <span className="font-semibold text-foreground truncate mr-2">{item.name}</span>
+                          <span className="shrink-0 tabular-nums text-muted-foreground">
+                            {Number(item.quantity).toLocaleString("bn-BD", { maximumFractionDigits: 2 })} × ৳{" "}
+                            {Number(item.unitCost).toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      ))}
+                      {extraCount > 0 ? (
+                        <p className="pl-1 text-[11px] text-muted-foreground">
+                          + আরও {extraCount.toLocaleString("bn-BD")}টি পণ্য
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {/* ── Note ── */}
+                  {purchase.note ? (
+                    <div className="rounded-xl border border-border/50 bg-muted/25 px-3 py-2 text-[11px] text-muted-foreground">
+                      <span className="font-semibold text-foreground/80">নোট: </span>{purchase.note}
+                    </div>
+                  ) : null}
+
+                  {/* ── Actions ── */}
+                  <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-3">
+                    <Link
+                      href={`/dashboard/purchases/${purchase.id}?shopId=${selectedShopId}`}
+                      className="text-xs font-semibold text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      পেমেন্ট ইতিহাস →
+                    </Link>
+                    {dueAmt > 0 && canCreatePurchasePayment ? (
+                      <Link
+                        href={`/dashboard/purchases/pay?shopId=${selectedShopId}&purchaseId=${purchase.id}${
+                          purchase.supplierId ? `&supplierId=${purchase.supplierId}` : ""
+                        }`}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-3 text-xs font-semibold text-warning hover:bg-warning/15 transition-colors"
+                      >
+                        বাকি পরিশোধ করুন
+                      </Link>
                     ) : null}
                   </div>
-                  <div className="space-y-1 text-right">
-                    <p className="text-xs text-muted-foreground">মোট ক্রয়</p>
-                    <p className="text-base font-bold text-foreground">
-                      ৳ {Number(purchase.totalAmount).toFixed(2)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      পরিশোধ: ৳ {Number(purchase.paidAmount).toFixed(2)} · বাকি: ৳{" "}
-                      {Number(purchase.dueAmount).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                  {topItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-3 py-2"
-                    >
-                      <span className="font-semibold text-foreground">
-                        {item.name}
-                      </span>
-                      <span>
-                        {Number(item.quantity).toFixed(2)} × ৳{" "}
-                        {Number(item.unitCost).toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
-                  {extraCount > 0 ? (
-                    <div className="text-[11px] text-muted-foreground">
-                      আরও {extraCount}টি আইটেম...
-                    </div>
-                  ) : null}
-                </div>
-
-                {purchase.note ? (
-                  <div className="mt-2 text-[11px] text-muted-foreground">
-                    নোট: {purchase.note}
-                  </div>
-                ) : null}
-                <div className="mt-3 flex flex-wrap gap-2 justify-end">
-                  <Link
-                    href={`/dashboard/purchases/${purchase.id}?shopId=${selectedShopId}`}
-                    className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-semibold text-foreground hover:bg-muted"
-                  >
-                    পেমেন্ট ইতিহাস
-                  </Link>
-                  {Number(purchase.dueAmount) > 0 && canCreatePurchasePayment ? (
-                    <Link
-                      href={`/dashboard/purchases/pay?shopId=${selectedShopId}&purchaseId=${purchase.id}${
-                        purchase.supplierId ? `&supplierId=${purchase.supplierId}` : ""
-                      }`}
-                      className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary-soft px-4 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15"
-                    >
-                      বাকি পরিশোধ করুন
-                    </Link>
-                  ) : null}
                 </div>
               </div>
             );
@@ -411,10 +349,10 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
               : "border-border/50 text-muted-foreground pointer-events-none"
           }`}
         >
-          Prev
+          ◀ আগের
         </Link>
         <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground">
-          Page {page} / {totalPages}
+          পৃষ্ঠা {page.toLocaleString("bn-BD")} / {totalPages.toLocaleString("bn-BD")}
         </span>
         <Link
           href={nextHref ?? "#"}
@@ -425,7 +363,7 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
               : "border-border/50 text-muted-foreground pointer-events-none"
           }`}
         >
-          Next
+          পরের ▶
         </Link>
       </div>
     </div>

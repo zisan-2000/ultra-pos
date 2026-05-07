@@ -1037,7 +1037,7 @@ export async function getPurchaseSummaryByRange(
   const [agg, returnAgg] = await Promise.all([
     prisma.purchase.aggregate({
       where: purchaseWhere,
-      _sum: { totalAmount: true },
+      _sum: { totalAmount: true, paidAmount: true },
       _count: { _all: true },
     }),
     prisma.purchaseReturn.aggregate({
@@ -1050,12 +1050,14 @@ export async function getPurchaseSummaryByRange(
   const purchaseTotal = Number(agg._sum.totalAmount ?? 0);
   const returnTotal = Number(returnAgg._sum.totalAmount ?? 0);
 
+  const paidTotal = Number(agg._sum.paidAmount ?? 0);
   return {
     totalAmount: Number((purchaseTotal - returnTotal).toFixed(2)).toString(),
     count: agg._count._all ?? 0,
     returnCount: returnAgg._count._all ?? 0,
     purchaseTotal: purchaseTotal.toFixed(2),
     purchaseReturnTotal: returnTotal.toFixed(2),
+    paidTotal: paidTotal.toFixed(2),
   };
 }
 

@@ -120,38 +120,26 @@ export default async function PurchaseNewPage({
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
-        <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-          স্টক ইন
-        </p>
-        <h1 className="text-2xl font-bold text-foreground leading-tight tracking-tight sm:text-3xl">
-          নতুন পণ্য ক্রয়
-        </h1>
-        <p className="text-xs text-muted-foreground mt-1">
-          দোকান: <span className="font-semibold">{selectedShop.name}</span>
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_26px_rgba(15,23,42,0.08)]">
-        <p className="text-xs font-semibold text-muted-foreground">দ্রুত কাজ</p>
-        <div className="mt-3 flex flex-wrap gap-2">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
+        <div className="pointer-events-none absolute -top-12 right-0 h-32 w-32 rounded-full bg-primary/20 blur-3xl" />
+        <div className="relative flex items-start justify-between gap-3 p-4">
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              স্টক ইন
+            </p>
+            <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-3xl">
+              নতুন পণ্য ক্রয়
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              দোকান: <span className="font-semibold">{selectedShop.name}</span>
+            </p>
+          </div>
           <Link
             href={`/dashboard/purchases?shopId=${selectedShopId}`}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
+            className="inline-flex h-9 shrink-0 items-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground shadow-sm hover:bg-muted transition-colors"
           >
-            ক্রয় তালিকা
-          </Link>
-          <Link
-            href={`/dashboard/purchases/pay?shopId=${selectedShopId}`}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
-          >
-            বাকি পরিশোধ
-          </Link>
-          <Link
-            href={`/dashboard/suppliers?shopId=${selectedShopId}`}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
-          >
-            সরবরাহকারী তালিকা
+            ← ফিরে যান
           </Link>
         </div>
       </div>
