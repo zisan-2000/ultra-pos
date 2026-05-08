@@ -105,8 +105,18 @@ type VariantDraft = {
   buyPrice: string;
   sellPrice: string;
   stockQty: string;
+  reorderPoint: string;
+  storageLocation: string;
   sku: string;
   barcode: string;
+  sortOrder: number;
+  isActive: boolean;
+};
+
+type UnitConversionDraft = {
+  id?: string;
+  label: string;
+  baseUnitQuantity: string;
   sortOrder: number;
   isActive: boolean;
 };
@@ -222,8 +232,22 @@ function createVariantDraft(seed?: Partial<VariantDraft>): VariantDraft {
     buyPrice: seed?.buyPrice ?? "",
     sellPrice: seed?.sellPrice ?? "",
     stockQty: seed?.stockQty ?? "0",
+    reorderPoint: seed?.reorderPoint ?? "",
+    storageLocation: seed?.storageLocation ?? "",
     sku: seed?.sku ?? "",
     barcode: seed?.barcode ?? "",
+    sortOrder: seed?.sortOrder ?? 0,
+    isActive: seed?.isActive ?? true,
+  };
+}
+
+function createUnitConversionDraft(
+  seed?: Partial<UnitConversionDraft>
+): UnitConversionDraft {
+  return {
+    id: seed?.id,
+    label: seed?.label ?? "",
+    baseUnitQuantity: seed?.baseUnitQuantity ?? "",
     sortOrder: seed?.sortOrder ?? 0,
     isActive: seed?.isActive ?? true,
   };
@@ -377,6 +401,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             buyPrice: String(variant?.buyPrice ?? ""),
             sellPrice: String(variant?.sellPrice ?? ""),
             stockQty: String(variant?.stockQty ?? "0"),
+            reorderPoint:
+              variant?.reorderPoint == null ? "" : String(variant.reorderPoint),
+            storageLocation: String(variant?.storageLocation ?? ""),
             sku: String(variant?.sku ?? ""),
             barcode: String(variant?.barcode ?? ""),
             sortOrder:
@@ -384,6 +411,22 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                 ? Number(variant.sortOrder)
                 : index,
             isActive: variant?.isActive !== false,
+          })
+        )
+      : []
+  );
+  const [unitConversions, setUnitConversions] = useState<UnitConversionDraft[]>(() =>
+    Array.isArray(product.unitConversions)
+      ? product.unitConversions.map((conversion: any, index: number) =>
+          createUnitConversionDraft({
+            id: typeof conversion?.id === "string" ? conversion.id : undefined,
+            label: String(conversion?.label || ""),
+            baseUnitQuantity: String(conversion?.baseUnitQuantity ?? ""),
+            sortOrder:
+              Number.isFinite(Number(conversion?.sortOrder))
+                ? Number(conversion.sortOrder)
+                : index,
+            isActive: conversion?.isActive !== false,
           })
         )
       : []
@@ -444,6 +487,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       : null
   );
   const [catalogLinkRemoved, setCatalogLinkRemoved] = useState(false);
+  const [storageLocation, setStorageLocation] = useState(
+    String(product.storageLocation ?? "")
+  );
 
   const autoGenerateSku = useCallback(
     async (force = false) => {
@@ -1020,6 +1066,32 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     setVariantModeEnabled(true);
   }
 
+  function upsertUnitConversion(index: number, patch: Partial<UnitConversionDraft>) {
+    setUnitConversions((prev) =>
+      prev.map((conversion, current) =>
+        current === index ? { ...conversion, ...patch } : conversion
+      )
+    );
+  }
+
+  function addUnitConversion(seed?: Partial<UnitConversionDraft>) {
+    setUnitConversions((prev) => [
+      ...prev,
+      createUnitConversionDraft({
+        ...seed,
+        sortOrder: prev.length,
+      }),
+    ]);
+  }
+
+  function removeUnitConversion(index: number) {
+    setUnitConversions((prev) =>
+      prev
+        .filter((_, current) => current !== index)
+        .map((conversion, current) => ({ ...conversion, sortOrder: current }))
+    );
+  }
+
   function collectReservedVariantCodes(
     excludeIndex: number,
     field: "sku" | "barcode"
@@ -1351,7 +1423,8 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     if (!scannerAssistEnabled) return;
     if (typeof window === "undefined") return;
     if (!navigator.mediaDevices?.getUserMedia) {
-      const message = "এই ডিভাইসে ক্যামেরা সাপোর্ট নেই।";
+      const message =
+        "এই ডিভাইসে ক্যামেরা সাপোর্ট নেই। external barcode scanner বা manual scan box ব্যবহার করুন।";
       setCameraError(message);
       setScanFeedback({ type: "error", message });
       return;
@@ -1360,7 +1433,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     const BarcodeDetectorCtor = (window as any).BarcodeDetector;
     if (!BarcodeDetectorCtor) {
       const message =
-        "এই ব্রাউজারে live camera barcode scan সাপোর্ট নেই। Chrome/Edge latest ব্যবহার করুন।";
+        "এই ব্রাউজারে live camera barcode scan সাপোর্ট নেই। Chrome/Edge latest ব্যবহার করুন, না হলে external scanner দিয়ে scan box-এ code দিন।";
       setCameraError(message);
       setScanFeedback({ type: "error", message });
       return;
@@ -1496,6 +1569,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     const reorderPoint = reorderPointRaw && reorderPointRaw.trim() !== ""
       ? Math.max(1, parseInt(reorderPointRaw, 10))
       : null;
+    const resolvedStorageLocation = stockEnabled
+      ? storageLocation.trim() || null
+      : null;
 
     const expiryDate = isFieldVisible("expiry")
       ? ((form.get("expiryDate") as string) || null)
@@ -1524,6 +1600,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             buyPrice: variant.buyPrice.trim() || null,
             sellPrice: variant.sellPrice.trim(),
             stockQty: variant.stockQty || "0",
+            reorderPoint:
+              stockEnabled && variant.reorderPoint.trim() !== ""
+                ? Math.max(1, parseInt(variant.reorderPoint, 10))
+                : null,
+            storageLocation: stockEnabled ? variant.storageLocation.trim() || null : null,
             sku: normalizeCodeInput(variant.sku || ""),
             barcode: normalizeCodeInput(variant.barcode || ""),
             sortOrder: index,
@@ -1536,6 +1617,18 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             barcode: variant.barcode || null,
           }))
       : [];
+    const resolvedUnitConversions = unitConversions
+      .map((conversion, index) => ({
+        id: conversion.id,
+        label: conversion.label.trim(),
+        baseUnitQuantity: conversion.baseUnitQuantity.trim(),
+        sortOrder: index,
+        isActive: conversion.isActive !== false,
+      }))
+      .filter(
+        (conversion) =>
+          conversion.label.length > 0 && conversion.baseUnitQuantity.length > 0
+      );
 
     if (variantModeEnabled && resolvedVariants.length === 0) {
       toast.error("ভ্যারিয়েন্ট চালু থাকলে অন্তত ১টি label + price দিন।");
@@ -1579,10 +1672,12 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       defaultCutLength:
         cutLengthEnabled && stockEnabled ? defaultCutLengthRaw : null,
       reorderPoint,
+      storageLocation: resolvedStorageLocation,
       businessType,
       expiryDate,
       size,
       variants: resolvedVariants,
+      unitConversions: resolvedUnitConversions,
       updatedAt: Date.now(),
       syncStatus: "updated",
     };
@@ -2045,6 +2140,42 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                           ✕
                         </button>
                       </div>
+                      {stockEnabled ? (
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <label className="space-y-1">
+                            <span className="block text-[11px] font-semibold text-muted-foreground">
+                              Variant restock limit
+                            </span>
+                            <input
+                              type="number"
+                              step="1"
+                              min="1"
+                              value={variant.reorderPoint}
+                              onChange={(e) =>
+                                upsertVariant(index, { reorderPoint: e.target.value })
+                              }
+                              placeholder="যেমন: 20"
+                              className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm"
+                            />
+                          </label>
+                          <label className="space-y-1">
+                            <span className="block text-[11px] font-semibold text-muted-foreground">
+                              Variant rack / shelf
+                            </span>
+                            <input
+                              type="text"
+                              value={variant.storageLocation}
+                              onChange={(e) =>
+                                upsertVariant(index, {
+                                  storageLocation: e.target.value,
+                                })
+                              }
+                              placeholder="যেমন: Rack B / Shelf 2"
+                              className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm"
+                            />
+                          </label>
+                        </div>
+                      ) : null}
                       {canUseBarcodeScan && showVariantCodeFields ? (
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           <div className="flex items-center gap-2">
@@ -2187,6 +2318,18 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                     SKU
                   </button>
                 </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={focusScanInput}
+                    className="inline-flex h-8 items-center rounded-full border border-border bg-card px-3 text-[11px] font-semibold text-foreground hover:bg-muted"
+                  >
+                    External scanner ready
+                  </button>
+                  <span className="text-[11px] text-muted-foreground">
+                    বেশিরভাগ USB/Bluetooth scanner keyboard-এর মতো কাজ করবে
+                  </span>
+                </div>
                 <div className="flex items-center gap-2">
                   <input
                     ref={scanInputRef}
@@ -2233,7 +2376,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                     "Enter ছাড়াও scanner idle হলেই code auto বসবে, beep দিয়ে success বোঝাবে।"}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  Camera mode-এ mobile scan হবে, আর duplicate code খুব দ্রুত repeat হলে ignore হবে।
+                  Camera না চললে scan box-এ cursor রেখে external scanner trigger করুন। duplicate code খুব দ্রুত repeat হলে ignore হবে।
                 </p>
               </>
             ) : (
@@ -2621,6 +2764,89 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
               <label className="block text-sm font-medium text-foreground">রিস্টক সীমা (ঐচ্ছিক)</label>
               <input name="reorderPoint" type="number" step="1" min="1" disabled={!stockEnabled} defaultValue={product.reorderPoint ?? ""} className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground" placeholder="যেমন: 50 — এর নিচে গেলে alert দেখাবে" />
               <p className="text-xs text-muted-foreground">খালি রাখলে report-এর global threshold ব্যবহার হবে</p>
+            </div>
+          )}
+          {stockEnabled ? (
+            <div className="space-y-1 pt-1">
+              <label className="block text-sm font-medium text-foreground">র্যাক / শেলফ / লোকেশন</label>
+              <input
+                type="text"
+                value={storageLocation}
+                onChange={(e) => setStorageLocation(e.target.value)}
+                disabled={!stockEnabled}
+                className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
+                placeholder="যেমন: Godown A / Rack 3 / Shelf B"
+              />
+              <p className="text-xs text-muted-foreground">stock audit বা item খুঁজে পেতে storage location লিখে রাখুন</p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-xl border border-border/70 bg-card p-3 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">ইউনিট কনভার্সন</h4>
+              <p className="text-xs text-muted-foreground">
+                base unit: <span className="font-semibold text-foreground">{selectedUnit || "pcs"}</span>
+                {" "}। যেমন: 1 bundle = 10 {selectedUnit || "pcs"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => addUnitConversion()}
+              className="h-8 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground"
+            >
+              + Conversion
+            </button>
+          </div>
+          {unitConversions.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              optional। bundle, coil, box, carton এর মতো alternate pack/unit save করতে পারবেন।
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {unitConversions.map((conversion, index) => (
+                <div
+                  key={`${conversion.id || "new"}-${index}`}
+                  className="grid grid-cols-1 gap-2 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-[minmax(0,1fr)_140px_44px]"
+                >
+                  <input
+                    type="text"
+                    value={conversion.label}
+                    onChange={(e) =>
+                      upsertUnitConversion(index, { label: e.target.value })
+                    }
+                    placeholder="যেমন: bundle / coil / box"
+                    className="h-9 rounded-lg border border-border bg-card px-3 text-sm"
+                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={conversion.baseUnitQuantity}
+                      onChange={(e) =>
+                        upsertUnitConversion(index, {
+                          baseUnitQuantity: e.target.value,
+                        })
+                      }
+                      placeholder="10"
+                      className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm"
+                    />
+                    <span className="text-[11px] font-semibold text-muted-foreground">
+                      {selectedUnit || "pcs"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeUnitConversion(index)}
+                    aria-label="কনভার্সন মুছুন"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-danger/30 bg-danger-soft text-sm font-bold text-danger"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>

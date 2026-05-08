@@ -17,6 +17,9 @@ type ValuationRow = {
   qty: number;
   buyPrice: number;
   sellPrice: number;
+  reorderPoint?: number | null;
+  storageLocation?: string | null;
+  conversionSummary?: string | null;
   costValue: number;
   retailValue: number;
 };
@@ -236,6 +239,16 @@ export default function StockValuationReport({ shopId }: Props) {
                     <p className="text-xs text-muted-foreground">
                       {row.category} · {Number(row.qty).toFixed(2)} {row.unit}
                     </p>
+                    {row.storageLocation ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        লোকেশন: {row.storageLocation}
+                      </p>
+                    ) : null}
+                    {row.reorderPoint ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Restock limit: {row.reorderPoint}
+                      </p>
+                    ) : null}
                   </div>
                   <span className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">
                     {row.kind === "variant" ? "ভ্যারিয়েন্ট" : "সাধারণ"}
@@ -251,6 +264,11 @@ export default function StockValuationReport({ shopId }: Props) {
                     <p className="font-semibold text-foreground">{money(row.costValue)}</p>
                   </div>
                 </div>
+                {row.conversionSummary ? (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    {row.conversionSummary}
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>
@@ -264,6 +282,8 @@ export default function StockValuationReport({ shopId }: Props) {
               <th className="p-3 text-left text-foreground">পণ্য</th>
               <th className="p-3 text-left text-foreground">ক্যাটাগরি</th>
               <th className="p-3 text-right text-foreground">স্টক</th>
+              <th className="p-3 text-left text-foreground">লোকেশন</th>
+              <th className="p-3 text-right text-foreground">Restock</th>
               <th className="p-3 text-right text-foreground">Buy Price</th>
               <th className="p-3 text-right text-foreground">Cost Value</th>
               <th className="p-3 text-right text-foreground">Retail Value</th>
@@ -272,7 +292,7 @@ export default function StockValuationReport({ shopId }: Props) {
           <tbody>
             {data.rows.length === 0 ? (
               <tr>
-                <td className="p-3 text-center text-muted-foreground" colSpan={6}>
+                <td className="p-3 text-center text-muted-foreground" colSpan={8}>
                   {showEmpty ? "স্টক ভ্যালুয়েশন দেখানোর মতো tracked stock নেই" : "লোড হচ্ছে..."}
                 </td>
               </tr>
@@ -290,6 +310,10 @@ export default function StockValuationReport({ shopId }: Props) {
                   <td className="p-3 text-muted-foreground">{row.category}</td>
                   <td className="p-3 text-right text-foreground">
                     {Number(row.qty).toFixed(2)} {row.unit}
+                  </td>
+                  <td className="p-3 text-muted-foreground">{row.storageLocation || "—"}</td>
+                  <td className="p-3 text-right text-muted-foreground">
+                    {row.reorderPoint ?? "—"}
                   </td>
                   <td className="p-3 text-right text-foreground">{money(row.buyPrice)}</td>
                   <td className="p-3 text-right font-semibold text-foreground">{money(row.costValue)}</td>

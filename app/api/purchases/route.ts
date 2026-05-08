@@ -22,6 +22,10 @@ const bodySchema = z.object({
   supplierAddress: z.string().optional().nullable(),
   paymentMethod: z.enum(["cash", "bkash", "bank", "due"]).optional(),
   paidNow: z.union([z.string(), z.number()]).optional().nullable(),
+  transportCost: z.union([z.string(), z.number()]).optional().nullable(),
+  unloadingCost: z.union([z.string(), z.number()]).optional().nullable(),
+  carryingCost: z.union([z.string(), z.number()]).optional().nullable(),
+  otherLandedCost: z.union([z.string(), z.number()]).optional().nullable(),
   note: z.string().optional().nullable(),
 });
 

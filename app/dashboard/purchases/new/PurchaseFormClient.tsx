@@ -111,6 +111,10 @@ export default function PurchaseFormClient({
     return `${y}-${m}-${day}`;
   });
   const [paidNow, setPaidNow] = useState("0");
+  const [transportCost, setTransportCost] = useState("0");
+  const [unloadingCost, setUnloadingCost] = useState("0");
+  const [carryingCost, setCarryingCost] = useState("0");
+  const [otherLandedCost, setOtherLandedCost] = useState("0");
   const [note, setNote] = useState("");
   const [purchaseMethod, setPurchaseMethod] = useState<PurchaseMethod>("cash");
   const [currentStep, setCurrentStep] = useState(0);
@@ -136,21 +140,32 @@ export default function PurchaseFormClient({
     }, 0);
   }, [items]);
 
+  const landedCostTotal = useMemo(() => {
+    const total =
+      Number(transportCost || 0) +
+      Number(unloadingCost || 0) +
+      Number(carryingCost || 0) +
+      Number(otherLandedCost || 0);
+    return Number.isFinite(total) ? Math.max(0, total) : 0;
+  }, [carryingCost, otherLandedCost, transportCost, unloadingCost]);
+
+  const grandTotal = useMemo(() => totalAmount + landedCostTotal, [landedCostTotal, totalAmount]);
+
   const validItemCount = useMemo(() => {
     return items.filter((item) => item.productId).length;
   }, [items]);
 
   const paidNowAmount = useMemo(() => {
-    if (purchaseMethod !== "due") return totalAmount;
+    if (purchaseMethod !== "due") return grandTotal;
     const amount = Number(paidNow || 0);
     if (!Number.isFinite(amount) || amount <= 0) return 0;
     return amount;
-  }, [paidNow, purchaseMethod, totalAmount]);
+  }, [grandTotal, paidNow, purchaseMethod]);
 
   const dueAmount = useMemo(() => {
     if (purchaseMethod !== "due") return 0;
-    return Math.max(totalAmount - paidNowAmount, 0);
-  }, [paidNowAmount, purchaseMethod, totalAmount]);
+    return Math.max(grandTotal - paidNowAmount, 0);
+  }, [grandTotal, paidNowAmount, purchaseMethod]);
 
   const selectedSupplierLabel = supplierId
     ? supplierMap.get(supplierId) || "নির্বাচিত সরবরাহকারী"
@@ -271,6 +286,13 @@ export default function PurchaseFormClient({
   };
 
   const validatePaymentStep = () => {
+    const extraCosts = [transportCost, unloadingCost, carryingCost, otherLandedCost];
+    for (const raw of extraCosts) {
+      const value = Number(raw || 0);
+      if (!Number.isFinite(value) || value < 0) {
+        return "অতিরিক্ত খরচের ঘরগুলোতে সঠিক সংখ্যা দিন।";
+      }
+    }
     if (purchaseMethod !== "due") return null;
     if (!supplierId && !supplierName.trim()) {
       return "বাকি ক্রয়ের জন্য সরবরাহকারী দিন।";
@@ -279,7 +301,7 @@ export default function PurchaseFormClient({
     if (!Number.isFinite(currentPaidNow) || currentPaidNow < 0) {
       return "আজ কত দিলেন, সেটা সঠিকভাবে লিখুন।";
     }
-    if (currentPaidNow > totalAmount) {
+    if (currentPaidNow > grandTotal) {
       return "আজ পরিশোধ মোট ক্রয়ের চেয়ে বেশি হতে পারবে না।";
     }
     return null;
@@ -339,6 +361,10 @@ export default function PurchaseFormClient({
             purchaseDate,
             paymentMethod: purchaseMethod,
             paidNow: purchaseMethod === "due" ? paidNow || "0" : "0",
+            transportCost,
+            unloadingCost,
+            carryingCost,
+            otherLandedCost,
             note: note || null,
           }),
         });
@@ -358,7 +384,7 @@ export default function PurchaseFormClient({
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-border bg-card p-3 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div className="rounded-xl border border-border bg-muted/35 px-2 py-2 text-center">
             <p className="text-[10px] font-semibold text-muted-foreground">পণ্য</p>
             <p className="mt-0.5 text-xl font-extrabold tabular-nums text-foreground">
@@ -366,21 +392,21 @@ export default function PurchaseFormClient({
             </p>
           </div>
           <div className="rounded-xl border border-border bg-muted/35 px-2 py-2 text-center">
-            <p className="text-[10px] font-semibold text-muted-foreground">মোট</p>
+            <p className="text-[10px] font-semibold text-muted-foreground">সাবটোটাল</p>
             <p className="mt-0.5 text-xs font-bold tabular-nums text-foreground">
               ৳{formatMoney(totalAmount)}
             </p>
           </div>
-          <div className="rounded-xl border border-border bg-muted/35 px-2 py-2 text-center">
-            <p className="text-[10px] font-semibold text-muted-foreground">পরিশোধ</p>
+          <div className={`rounded-xl border px-2 py-2 text-center ${landedCostTotal > 0 ? "border-primary/20 bg-primary-soft/35" : "border-border bg-muted/35"}`}>
+            <p className="text-[10px] font-semibold text-muted-foreground">অতিরিক্ত</p>
             <p className="mt-0.5 text-xs font-bold tabular-nums text-foreground">
-              ৳{formatMoney(paidNowAmount)}
+              ৳{formatMoney(landedCostTotal)}
             </p>
           </div>
-          <div className={`rounded-xl border px-2 py-2 text-center ${dueAmount > 0 ? "border-warning/30 bg-warning-soft/50" : "border-border bg-muted/35"}`}>
-            <p className="text-[10px] font-semibold text-muted-foreground">বাকি</p>
-            <p className={`mt-0.5 text-xs font-bold tabular-nums ${dueAmount > 0 ? "text-warning" : "text-success"}`}>
-              ৳{formatMoney(dueAmount)}
+          <div className={`rounded-xl border px-2 py-2 text-center ${grandTotal > totalAmount ? "border-success/20 bg-success-soft/35" : "border-border bg-muted/35"}`}>
+            <p className="text-[10px] font-semibold text-muted-foreground">গ্র্যান্ড টোটাল</p>
+            <p className={`mt-0.5 text-xs font-bold tabular-nums ${grandTotal > 0 ? "text-foreground" : "text-success"}`}>
+              ৳{formatMoney(grandTotal)}
             </p>
           </div>
         </div>
@@ -848,13 +874,21 @@ export default function PurchaseFormClient({
               })}
             </div>
 
-            <div className="rounded-2xl border border-border bg-muted/50 px-4 py-4">
+            <div className="rounded-2xl border border-border bg-muted/50 px-4 py-4 space-y-2">
               <div className="flex items-center justify-between text-sm font-semibold text-foreground">
-                <span>এখন পর্যন্ত মোট ক্রয়</span>
+                <span>পণ্যের সাবটোটাল</span>
                 <span>৳ {formatMoney(totalAmount)}</span>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                সব পরিমাণ আর ক্রয় মূল্য ঠিক থাকলে পরের ধাপে পেমেন্ট ঠিক করুন।
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>ল্যান্ডেড কস্ট</span>
+                <span>৳ {formatMoney(landedCostTotal)}</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-border/60 pt-2 text-sm font-bold text-foreground">
+                <span>সব মিলিয়ে মোট</span>
+                <span>৳ {formatMoney(grandTotal)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                সব পরিমাণ, ক্রয় মূল্য আর অতিরিক্ত খরচ ঠিক থাকলে পরের ধাপে পেমেন্ট ঠিক করুন।
               </p>
             </div>
           </div>
@@ -864,11 +898,71 @@ export default function PurchaseFormClient({
           <div className="space-y-4">
             <div>
               <h2 className="text-lg font-bold text-foreground">
-                কীভাবে পরিশোধ করছেন
+                অতিরিক্ত খরচ ও পেমেন্ট
               </h2>
               <p className="text-xs text-muted-foreground">
-                পুরো টাকা দিলে শুধু মাধ্যম বেছে নিন। বাকিতে হলে আজ কত দিলেন সেটাও লিখুন।
+                transport, unloading, carrying add করলে stock cost আরও accurate হবে। তারপর payment ঠিক করুন।
               </p>
+            </div>
+
+            <div className="rounded-2xl border border-primary/20 bg-primary-soft/20 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Landed Cost Allocation</p>
+                  <p className="text-xs text-muted-foreground">
+                    এই খরচগুলো সব পণ্যের cost-এ proportional ভাবে ভাগ হবে।
+                  </p>
+                </div>
+                <span className="rounded-full border border-primary/20 bg-card px-3 py-1 text-xs font-semibold text-primary">
+                  মোট ৳ {formatMoney(landedCostTotal)}
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Transport</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={transportCost}
+                    onChange={(e) => setTransportCost(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Unloading</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={unloadingCost}
+                    onChange={(e) => setUnloadingCost(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Carrying</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={carryingCost}
+                    onChange={(e) => setCarryingCost(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Other Cost</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={otherLandedCost}
+                    onChange={(e) => setOtherLandedCost(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-2 flex-wrap">
@@ -920,9 +1014,21 @@ export default function PurchaseFormClient({
                   </p>
                   <div className="mt-3 space-y-2 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">মোট ক্রয়</span>
+                      <span className="text-muted-foreground">পণ্যের সাবটোটাল</span>
                       <span className="font-semibold text-foreground">
                         ৳ {formatMoney(totalAmount)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">ল্যান্ডেড কস্ট</span>
+                      <span className="font-semibold text-foreground">
+                        ৳ {formatMoney(landedCostTotal)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">সব মিলিয়ে মোট</span>
+                      <span className="font-semibold text-foreground">
+                        ৳ {formatMoney(grandTotal)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -970,6 +1076,18 @@ export default function PurchaseFormClient({
                   <p className="mt-1 font-semibold text-foreground">
                     {PAYMENT_OPTIONS.find((option) => option.value === purchaseMethod)?.label}
                   </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">সাবটোটাল</p>
+                  <p className="mt-1 font-semibold text-foreground">৳ {formatMoney(totalAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">ল্যান্ডেড কস্ট</p>
+                  <p className="mt-1 font-semibold text-foreground">৳ {formatMoney(landedCostTotal)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">গ্র্যান্ড টোটাল</p>
+                  <p className="mt-1 font-semibold text-foreground">৳ {formatMoney(grandTotal)}</p>
                 </div>
               </div>
             </div>

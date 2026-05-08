@@ -42,10 +42,12 @@ type CreateProductInput = {
   trackCutLength?: boolean;
   defaultCutLength?: string | number | null;
   reorderPoint?: number | null;
+  storageLocation?: string | null;
   businessType?: string;
   expiryDate?: string | null;
   size?: string | null;
   variants?: ProductVariantInput[] | null;
+  unitConversions?: ProductUnitConversionInput[] | null;
 };
 
 type UpdateProductInput = {
@@ -72,10 +74,12 @@ type UpdateProductInput = {
   trackCutLength?: boolean;
   defaultCutLength?: string | number | null;
   reorderPoint?: number | null;
+  storageLocation?: string | null;
   businessType?: string;
   expiryDate?: string | null;
   size?: string | null;
   variants?: ProductVariantInput[] | null;
+  unitConversions?: ProductUnitConversionInput[] | null;
 };
 
 export type ProductVariantInput = {
@@ -84,8 +88,18 @@ export type ProductVariantInput = {
   buyPrice?: string | number | null;
   sellPrice: string | number;
   stockQty?: string | number | null;
+  reorderPoint?: number | null;
+  storageLocation?: string | null;
   sku?: string | null;
   barcode?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+};
+
+export type ProductUnitConversionInput = {
+  id?: string;
+  label: string;
+  baseUnitQuantity: string | number;
   sortOrder?: number;
   isActive?: boolean;
 };
@@ -107,6 +121,8 @@ type ProductListRow = {
   trackBatch: boolean;
   trackCutLength: boolean;
   defaultCutLength: string | null;
+  reorderPoint?: number | null;
+  storageLocation?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -116,11 +132,21 @@ type ProductListRow = {
     buyPrice?: string | null;
     sellPrice: string;
     stockQty: string;
+    reorderPoint?: number | null;
+    storageLocation?: string | null;
     sku?: string | null;
     barcode?: string | null;
     sortOrder?: number;
     isActive?: boolean;
   }>;
+  unitConversions?: Array<{
+    id: string;
+    label: string;
+    baseUnitQuantity: string;
+    sortOrder?: number;
+    isActive?: boolean;
+  }>;
+  conversionSummary?: string | null;
   metrics?: ProductCardMetrics;
 };
 
@@ -442,11 +468,34 @@ type NormalizedProductVariant = {
   buyPrice: string | null;
   sellPrice: string;
   stockQty: string;
+  reorderPoint: number | null;
+  storageLocation: string | null;
   sku: string | null;
   barcode: string | null;
   sortOrder: number;
   isActive: boolean;
 };
+
+type NormalizedProductUnitConversion = {
+  id?: string;
+  label: string;
+  baseUnitQuantity: string;
+  sortOrder: number;
+  isActive: boolean;
+};
+
+function normalizeOptionalPositiveInt(
+  value: unknown,
+  options?: { field?: string }
+) {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) {
+    throw new Error(`${options?.field ?? "Value"} must be a positive whole number`);
+  }
+  return Math.max(1, Math.floor(num));
+}
 
 function normalizeVariantInputs(
   variants: unknown,
@@ -498,6 +547,11 @@ function normalizeVariantInputs(
       { defaultValue: "0", field: `Variant stock (${label})` }
     );
     const stockQty = stockQtyRaw ?? "0";
+    const reorderPoint = normalizeOptionalPositiveInt(row?.reorderPoint, {
+      field: `Variant reorder point (${label})`,
+    });
+    const storageLocation =
+      normalizeNullableTextInput(row?.storageLocation, 120) ?? null;
 
     normalized.push({
       id,
@@ -505,6 +559,8 @@ function normalizeVariantInputs(
       buyPrice: buyPrice === undefined ? null : buyPrice,
       sellPrice,
       stockQty,
+      reorderPoint: reorderPoint ?? null,
+      storageLocation,
       sku,
       barcode,
       sortOrder,
@@ -513,6 +569,79 @@ function normalizeVariantInputs(
   }
 
   return normalized;
+}
+
+function normalizeUnitConversionInputs(
+  conversions: unknown,
+  options?: { fieldPrefix?: string }
+) {
+  if (conversions === undefined) return undefined;
+  if (conversions === null) return [] as NormalizedProductUnitConversion[];
+  if (!Array.isArray(conversions)) {
+    throw new Error(`${options?.fieldPrefix ?? "Unit conversions"} must be an array`);
+  }
+
+  const normalized: NormalizedProductUnitConversion[] = [];
+  const labelSet = new Set<string>();
+
+  for (let index = 0; index < conversions.length; index += 1) {
+    const row = conversions[index] as Record<string, unknown>;
+    const label = normalizeNullableTextInput(row?.label, 80) ?? "";
+    if (!label) continue;
+
+    const labelKey = label.toLowerCase();
+    if (labelSet.has(labelKey)) {
+      throw new Error("Unit conversion labels must be unique for a product");
+    }
+    labelSet.add(labelKey);
+
+    const baseUnitQuantity = normalizeOptionalNumberInput(
+      row?.baseUnitQuantity as string | number | null | undefined,
+      { field: `Base unit quantity (${label})` }
+    );
+    if (!baseUnitQuantity) {
+      throw new Error(`Base unit quantity (${label}) is required`);
+    }
+
+    const sortOrderRaw = Number(row?.sortOrder ?? index);
+    const sortOrder = Number.isFinite(sortOrderRaw)
+      ? Math.max(0, Math.floor(sortOrderRaw))
+      : index;
+    const isActive = row?.isActive === undefined ? true : Boolean(row?.isActive);
+    const id =
+      typeof row?.id === "string" && row.id.trim().length > 0
+        ? row.id.trim()
+        : undefined;
+
+    normalized.push({
+      id,
+      label,
+      baseUnitQuantity,
+      sortOrder,
+      isActive,
+    });
+  }
+
+  return normalized;
+}
+
+function buildConversionSummary(
+  conversions:
+    | Array<{
+        label: string;
+        baseUnitQuantity: string | number;
+        isActive?: boolean | null;
+      }>
+    | null
+    | undefined,
+  baseUnit?: string | null
+) {
+  const active = (conversions ?? []).filter((row) => row.isActive !== false);
+  if (active.length === 0) return null;
+  const unit = baseUnit || "pcs";
+  return active
+    .map((row) => `1 ${row.label} = ${row.baseUnitQuantity} ${unit}`)
+    .join(" • ");
 }
 
 async function assertNoCodeCollisionsInShop(params: {
@@ -824,8 +953,12 @@ export async function createProduct(input: CreateProductInput) {
   const baseUnit = normalizeBaseUnitInput(input.baseUnit, { defaultValue: "pcs" });
   const expiryDate = normalizeDateOnlyInput(input.expiryDate);
   const size = normalizeNullableTextInput(input.size, 80);
+  const storageLocation = normalizeNullableTextInput(input.storageLocation, 120);
   const variants = normalizeVariantInputs(input.variants, {
     fieldPrefix: "Variants",
+  });
+  const unitConversions = normalizeUnitConversionInputs(input.unitConversions, {
+    fieldPrefix: "Unit conversions",
   });
   const productSource = normalizeProductSourceInput(input.productSource);
 
@@ -857,6 +990,7 @@ export async function createProduct(input: CreateProductInput) {
     trackCutLength,
     defaultCutLength,
     reorderPoint: trackStock && input.reorderPoint != null ? input.reorderPoint : null,
+    storageLocation: storageLocation === undefined ? undefined : storageLocation,
   };
 
   if (input.id) {
@@ -877,10 +1011,25 @@ export async function createProduct(input: CreateProductInput) {
             buyPrice: variant.buyPrice,
             sellPrice: variant.sellPrice,
             stockQty: variant.stockQty ?? "0",
+            reorderPoint: trackStock ? variant.reorderPoint : null,
+            storageLocation: variant.storageLocation,
             sku: variant.sku,
             barcode: variant.barcode,
             sortOrder: variant.sortOrder ?? index,
             isActive: variant.isActive,
+          })),
+        });
+      }
+      if (unitConversions && unitConversions.length > 0) {
+        await tx.productUnitConversion.createMany({
+          data: unitConversions.map((conversion, index) => ({
+            id: conversion.id,
+            shopId: input.shopId,
+            productId: createdProduct.id,
+            label: conversion.label,
+            baseUnitQuantity: conversion.baseUnitQuantity,
+            sortOrder: conversion.sortOrder ?? index,
+            isActive: conversion.isActive,
           })),
         });
       }
@@ -1057,12 +1206,32 @@ export async function getProductsByShop(shopId: string) {
       trackBatch: true,
       trackCutLength: true,
       defaultCutLength: true,
+      reorderPoint: true,
+      storageLocation: true,
       createdAt: true,
       updatedAt: true,
       variants: {
         where: { isActive: true },
-        select: { id: true, label: true, buyPrice: true, stockQty: true },
+        select: {
+          id: true,
+          label: true,
+          buyPrice: true,
+          stockQty: true,
+          reorderPoint: true,
+          storageLocation: true,
+        },
         orderBy: { sortOrder: "asc" },
+      },
+      unitConversions: {
+        where: { isActive: true },
+        orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+        select: {
+          id: true,
+          label: true,
+          baseUnitQuantity: true,
+          sortOrder: true,
+          isActive: true,
+        },
       },
     },
   });
@@ -1147,6 +1316,8 @@ export async function getProductsByShopPaginated({
       trackBatch: true,
       trackCutLength: true,
       defaultCutLength: true,
+      reorderPoint: true,
+      storageLocation: true,
       isActive: true,
       createdAt: true,
       updatedAt: true,
@@ -1177,6 +1348,8 @@ export async function getProductsByShopPaginated({
       (product as any).defaultCutLength === null || (product as any).defaultCutLength === undefined
         ? null
         : (product as any).defaultCutLength.toString?.() ?? String((product as any).defaultCutLength),
+    reorderPoint: (product as any).reorderPoint ?? null,
+    storageLocation: (product as any).storageLocation ?? null,
     isActive: product.isActive,
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
@@ -1285,6 +1458,8 @@ export async function getProductsByShopCursorPaginated({
         trackBatch: true,
         trackCutLength: true,
         defaultCutLength: true,
+        reorderPoint: true,
+        storageLocation: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -1297,8 +1472,21 @@ export async function getProductsByShopCursorPaginated({
             buyPrice: true,
             sellPrice: true,
             stockQty: true,
+            reorderPoint: true,
+            storageLocation: true,
             sku: true,
             barcode: true,
+            sortOrder: true,
+            isActive: true,
+          },
+        },
+        unitConversions: {
+          where: { isActive: true },
+          orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+          select: {
+            id: true,
+            label: true,
+            baseUnitQuantity: true,
             sortOrder: true,
             isActive: true,
           },
@@ -1335,6 +1523,8 @@ export async function getProductsByShopCursorPaginated({
       (p as any).defaultCutLength === null || (p as any).defaultCutLength === undefined
         ? null
         : (p as any).defaultCutLength.toString?.() ?? String((p as any).defaultCutLength),
+    reorderPoint: (p as any).reorderPoint ?? null,
+    storageLocation: (p as any).storageLocation ?? null,
     isActive: p.isActive,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -1344,12 +1534,24 @@ export async function getProductsByShopCursorPaginated({
       buyPrice: variant.buyPrice?.toString?.() ?? null,
       sellPrice: variant.sellPrice?.toString?.() ?? String(variant.sellPrice ?? "0"),
       stockQty: variant.stockQty?.toString?.() ?? (variant as any).stockQty ?? "0",
+      reorderPoint: (variant as any).reorderPoint ?? null,
+      storageLocation: (variant as any).storageLocation ?? null,
       sku: variant.sku ?? null,
       barcode: variant.barcode ?? null,
       sortOrder:
         typeof variant.sortOrder === "number" ? variant.sortOrder : undefined,
       isActive: variant.isActive,
     })),
+    unitConversions: (p as any).unitConversions?.map((conversion: any) => ({
+      id: conversion.id,
+      label: conversion.label,
+      baseUnitQuantity:
+        conversion.baseUnitQuantity?.toString?.() ?? String(conversion.baseUnitQuantity ?? "0"),
+      sortOrder:
+        typeof conversion.sortOrder === "number" ? conversion.sortOrder : undefined,
+      isActive: conversion.isActive,
+    })),
+    conversionSummary: buildConversionSummary((p as any).unitConversions, (p as any).baseUnit),
     metrics: metricsByProduct.get(p.id) ?? emptyProductCardMetrics(),
   }));
 
@@ -1523,6 +1725,9 @@ export async function getProduct(id: string) {
       variants: {
         orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
       },
+      unitConversions: {
+        orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+      },
     },
   });
 
@@ -1598,6 +1803,10 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
       : undefined;
   const size =
     data.size !== undefined ? normalizeNullableTextInput(data.size, 80) : undefined;
+  const storageLocation =
+    data.storageLocation !== undefined
+      ? normalizeNullableTextInput(data.storageLocation, 120)
+      : undefined;
   const defaultCutLength =
     data.defaultCutLength !== undefined
       ? nextTrackCutLength
@@ -1613,6 +1822,9 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   const variants = normalizeVariantInputs(data.variants, {
     fieldPrefix: "Variants",
   });
+  const unitConversions = normalizeUnitConversionInputs(data.unitConversions, {
+    fieldPrefix: "Unit conversions",
+  });
   const existingVariantsForCollisionCheck =
     variants === undefined
       ? await prisma.productVariant.findMany({
@@ -1622,6 +1834,8 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
             label: true,
             buyPrice: true,
             sellPrice: true,
+            reorderPoint: true,
+            storageLocation: true,
             sku: true,
             barcode: true,
             sortOrder: true,
@@ -1636,6 +1850,8 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
       label: variant.label,
       buyPrice: variant.buyPrice?.toString?.() ?? null,
       sellPrice: variant.sellPrice.toString(),
+      reorderPoint: (variant as any).reorderPoint ?? null,
+      storageLocation: (variant as any).storageLocation ?? null,
       sku: variant.sku ?? null,
       barcode: variant.barcode ?? null,
       sortOrder: variant.sortOrder,
@@ -1670,6 +1886,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   if (baseUnit !== undefined) payload.baseUnit = baseUnit;
   if (expiryDate !== undefined) payload.expiryDate = expiryDate;
   if (size !== undefined) payload.size = size;
+  if (storageLocation !== undefined) payload.storageLocation = storageLocation;
   if (data.isActive !== undefined) payload.isActive = data.isActive;
   if (data.trackStock !== undefined) payload.trackStock = data.trackStock;
   if (data.trackSerialNumbers !== undefined)
@@ -1712,10 +1929,28 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
               buyPrice: variant.buyPrice,
               sellPrice: variant.sellPrice,
               stockQty: variant.stockQty ?? "0",
+              reorderPoint: trackStockFlag ? variant.reorderPoint : null,
+              storageLocation: variant.storageLocation,
               sku: variant.sku,
               barcode: variant.barcode,
               sortOrder: variant.sortOrder ?? index,
               isActive: variant.isActive,
+            })),
+          });
+        }
+      }
+      if (unitConversions !== undefined) {
+        await tx.productUnitConversion.deleteMany({ where: { productId: id } });
+        if (unitConversions.length > 0) {
+          await tx.productUnitConversion.createMany({
+            data: unitConversions.map((conversion, index) => ({
+              id: conversion.id,
+              shopId: product.shopId,
+              productId: id,
+              label: conversion.label,
+              baseUnitQuantity: conversion.baseUnitQuantity,
+              sortOrder: conversion.sortOrder ?? index,
+              isActive: conversion.isActive,
             })),
           });
         }
@@ -1799,6 +2034,8 @@ export async function getActiveProductsByShop(shopId: string) {
       trackBatch: true,
       trackCutLength: true,
       defaultCutLength: true,
+      reorderPoint: true,
+      storageLocation: true,
       variants: {
         where: { isActive: true },
         orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
@@ -1808,8 +2045,21 @@ export async function getActiveProductsByShop(shopId: string) {
           buyPrice: true,
           sellPrice: true,
           stockQty: true,
+          reorderPoint: true,
+          storageLocation: true,
           sku: true,
           barcode: true,
+          sortOrder: true,
+          isActive: true,
+        },
+      },
+      unitConversions: {
+        where: { isActive: true },
+        orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+        select: {
+          id: true,
+          label: true,
+          baseUnitQuantity: true,
           sortOrder: true,
           isActive: true,
         },
@@ -1837,16 +2087,30 @@ export async function getActiveProductsByShop(shopId: string) {
       (p as any).defaultCutLength === null || (p as any).defaultCutLength === undefined
         ? null
         : (p as any).defaultCutLength.toString?.() ?? String((p as any).defaultCutLength),
+    reorderPoint: (p as any).reorderPoint ?? null,
+    storageLocation: (p as any).storageLocation ?? null,
     variants: (p.variants || []).map((variant) => ({
       id: variant.id,
       label: variant.label,
       buyPrice: variant.buyPrice?.toString?.() ?? null,
       sellPrice: variant.sellPrice.toString(),
       stockQty: variant.stockQty?.toString() ?? "0",
+      reorderPoint: (variant as any).reorderPoint ?? null,
+      storageLocation: (variant as any).storageLocation ?? null,
       sku: variant.sku ?? null,
       barcode: variant.barcode ?? null,
       sortOrder: variant.sortOrder,
       isActive: variant.isActive,
     })),
+    unitConversions: (p as any).unitConversions?.map((conversion: any) => ({
+      id: conversion.id,
+      label: conversion.label,
+      baseUnitQuantity:
+        conversion.baseUnitQuantity?.toString?.() ?? String(conversion.baseUnitQuantity ?? "0"),
+      sortOrder:
+        typeof conversion.sortOrder === "number" ? conversion.sortOrder : undefined,
+      isActive: conversion.isActive,
+    })),
+    conversionSummary: buildConversionSummary((p as any).unitConversions, (p as any).baseUnit),
   }));
 }

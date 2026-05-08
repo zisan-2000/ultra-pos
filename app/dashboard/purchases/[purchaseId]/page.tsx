@@ -84,6 +84,12 @@ export default async function PurchaseDetailPage({
   const dueAmount = Number(purchase.dueAmount ?? 0);
   const paidAmount = Number(purchase.paidAmount ?? 0);
   const totalAmount = Number(purchase.totalAmount ?? 0);
+  const subtotalAmount = Number(purchase.subtotalAmount ?? totalAmount);
+  const landedCostTotal = Number(purchase.landedCostTotal ?? 0);
+  const transportCost = Number(purchase.transportCost ?? 0);
+  const unloadingCost = Number(purchase.unloadingCost ?? 0);
+  const carryingCost = Number(purchase.carryingCost ?? 0);
+  const otherLandedCost = Number(purchase.otherLandedCost ?? 0);
   const supplierInitial = purchase.supplierName?.trim().charAt(0).toUpperCase() ?? "?";
   const isFullyPaid = dueAmount <= 0;
 
@@ -134,9 +140,17 @@ export default async function PurchaseDetailPage({
           </div>
 
           {/* Financial chips */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div className="rounded-xl border border-border bg-card/60 px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">মোট ক্রয়</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">সাবটোটাল</p>
+              <p className="mt-0.5 text-sm font-extrabold tabular-nums text-foreground">৳ {fmt(subtotalAmount)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/60 px-3 py-2 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary/80">ল্যান্ডেড কস্ট</p>
+              <p className="mt-0.5 text-sm font-extrabold tabular-nums text-primary">৳ {fmt(landedCostTotal)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/60 px-3 py-2 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">গ্র্যান্ড টোটাল</p>
               <p className="mt-0.5 text-sm font-extrabold tabular-nums text-foreground">৳ {fmt(totalAmount)}</p>
             </div>
             <div className="rounded-xl border border-success/30 bg-success-soft/60 px-3 py-2 text-center">
@@ -150,6 +164,17 @@ export default async function PurchaseDetailPage({
               </p>
             </div>
           </div>
+
+          {landedCostTotal > 0 ? (
+            <div className="rounded-xl border border-primary/20 bg-primary-soft/20 px-4 py-3 text-xs text-foreground">
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                <span>Transport: ৳ {fmt(transportCost)}</span>
+                <span>Unloading: ৳ {fmt(unloadingCost)}</span>
+                <span>Carrying: ৳ {fmt(carryingCost)}</span>
+                <span>Other: ৳ {fmt(otherLandedCost)}</span>
+              </div>
+            </div>
+          ) : null}
 
           {/* Action buttons */}
           <div className="flex flex-wrap gap-2 border-t border-border/40 pt-3">
@@ -188,6 +213,9 @@ export default async function PurchaseDetailPage({
           <div className="divide-y divide-border/40">
             {purchase.items.map((item) => {
               const lineTotal = Number(item.quantity) * Number(item.unitCost);
+              const landedAllocated = Number(item.landedCostAllocated ?? 0);
+              const effectiveLineTotal = Number(item.effectiveLineTotal ?? lineTotal);
+              const effectiveUnitCost = Number(item.effectiveUnitCost ?? item.unitCost);
               return (
                 <div key={item.id} className="flex items-center justify-between px-4 py-3">
                   <div>
@@ -196,10 +224,20 @@ export default async function PurchaseDetailPage({
                       {Number(item.quantity).toLocaleString("bn-BD", { maximumFractionDigits: 2 })} ×
                       ৳ {fmt(Number(item.unitCost))}
                     </p>
+                    {landedAllocated > 0 ? (
+                      <p className="text-[11px] text-primary tabular-nums">
+                        landed ৳ {fmt(landedAllocated)} → effective unit ৳ {fmt(effectiveUnitCost)}
+                      </p>
+                    ) : null}
                   </div>
-                  <p className="text-sm font-bold tabular-nums text-foreground">
-                    ৳ {fmt(lineTotal)}
-                  </p>
+                  <div className="text-right">
+                    <p className="text-sm font-bold tabular-nums text-foreground">
+                      ৳ {fmt(effectiveLineTotal)}
+                    </p>
+                    {landedAllocated > 0 ? (
+                      <p className="text-[11px] text-muted-foreground">base ৳ {fmt(lineTotal)}</p>
+                    ) : null}
+                  </div>
                 </div>
               );
             })}

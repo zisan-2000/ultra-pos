@@ -1245,6 +1245,16 @@ async function computeStockValuationReport(shopId: string, limit: number) {
         stockQty: true,
         buyPrice: true,
         sellPrice: true,
+        reorderPoint: true,
+        storageLocation: true,
+        unitConversions: {
+          where: { isActive: true },
+          orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+          select: {
+            label: true,
+            baseUnitQuantity: true,
+          },
+        },
       },
     }),
     prisma.productVariant.findMany({
@@ -1264,6 +1274,8 @@ async function computeStockValuationReport(shopId: string, limit: number) {
         stockQty: true,
         buyPrice: true,
         sellPrice: true,
+        reorderPoint: true,
+        storageLocation: true,
         product: {
           select: {
             id: true,
@@ -1272,6 +1284,16 @@ async function computeStockValuationReport(shopId: string, limit: number) {
             baseUnit: true,
             buyPrice: true,
             sellPrice: true,
+            reorderPoint: true,
+            storageLocation: true,
+            unitConversions: {
+              where: { isActive: true },
+              orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+              select: {
+                label: true,
+                baseUnitQuantity: true,
+              },
+            },
           },
         },
       },
@@ -1293,6 +1315,17 @@ async function computeStockValuationReport(shopId: string, limit: number) {
         qty,
         buyPrice,
         sellPrice,
+        reorderPoint: product.reorderPoint ?? null,
+        storageLocation: product.storageLocation ?? null,
+        conversionSummary:
+          product.unitConversions.length > 0
+            ? product.unitConversions
+                .map(
+                  (conversion) =>
+                    `1 ${conversion.label} = ${Number(conversion.baseUnitQuantity)} ${product.baseUnit || "pcs"}`
+                )
+                .join(" • ")
+            : null,
         costValue: Number((qty * buyPrice).toFixed(2)),
         retailValue: Number((qty * sellPrice).toFixed(2)),
       };
@@ -1311,6 +1344,17 @@ async function computeStockValuationReport(shopId: string, limit: number) {
         qty,
         buyPrice,
         sellPrice,
+        reorderPoint: variant.reorderPoint ?? variant.product.reorderPoint ?? null,
+        storageLocation: variant.storageLocation ?? variant.product.storageLocation ?? null,
+        conversionSummary:
+          variant.product.unitConversions.length > 0
+            ? variant.product.unitConversions
+                .map(
+                  (conversion) =>
+                    `1 ${conversion.label} = ${Number(conversion.baseUnitQuantity)} ${variant.product.baseUnit || "pcs"}`
+                )
+                .join(" • ")
+            : null,
         costValue: Number((qty * buyPrice).toFixed(2)),
         retailValue: Number((qty * sellPrice).toFixed(2)),
       };
@@ -1388,7 +1432,7 @@ async function computeLowStockReport(shopId: string, limit: number) {
     WHERE p.shop_id = CAST(${shopId} AS uuid)
       AND p.is_active = true
       AND p.track_stock = true
-      AND pv.stock_qty <= COALESCE(p.reorder_point, ${limit})
+      AND pv.stock_qty <= COALESCE(pv.reorder_point, p.reorder_point, ${limit})
 
     ORDER BY stock_qty ASC
     LIMIT ${limit}

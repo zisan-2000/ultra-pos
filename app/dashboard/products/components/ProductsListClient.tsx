@@ -54,6 +54,8 @@ type ProductVariant = {
   label: string;
   sellPrice: string | number;
   stockQty?: string | number | null;
+  reorderPoint?: number | null;
+  storageLocation?: string | null;
   sku?: string | null;
   barcode?: string | null;
   sortOrder?: number;
@@ -70,6 +72,9 @@ type Product = {
   buyPrice?: string | null;
   sellPrice: string;
   stockQty: string;
+  reorderPoint?: number | null;
+  storageLocation?: string | null;
+  conversionSummary?: string | null;
   trackStock?: boolean | null;
   isActive: boolean;
   createdAt?: string;
@@ -3208,6 +3213,26 @@ export default function ProductsListClient({
                   </div>
                 </div>
 
+                {product.storageLocation || product.reorderPoint || product.conversionSummary ? (
+                  <div className="mb-4 flex flex-wrap gap-1.5">
+                    {product.storageLocation ? (
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        লোকেশন {product.storageLocation}
+                      </span>
+                    ) : null}
+                    {product.reorderPoint ? (
+                      <span className="inline-flex items-center rounded-full border border-warning/20 bg-warning-soft/40 px-2 py-0.5 text-[10px] font-medium text-warning">
+                        Restock {product.reorderPoint}
+                      </span>
+                    ) : null}
+                    {product.conversionSummary ? (
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {product.conversionSummary}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="mb-4 rounded-xl border border-border bg-muted/20 p-2.5 transition-all duration-200">
                   <button
                     type="button"
@@ -4013,4 +4038,3 @@ export default function ProductsListClient({
     </div>
   );
 }
-

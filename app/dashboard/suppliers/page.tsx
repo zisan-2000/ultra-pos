@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { getShopsByUser } from "@/app/actions/shops";
-import { getSuppliersByShop } from "@/app/actions/suppliers";
+import {
+  getSupplierPerformanceSummary,
+} from "@/app/actions/suppliers";
 import ShopSelectorClient from "../purchases/ShopSelectorClient";
 import SuppliersClient from "./suppliers-client";
 import DashboardManualRefresh from "@/components/dashboard-manual-refresh";
@@ -92,7 +94,7 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
       </div>
     );
   }
-  const suppliers = await getSuppliersByShop(selectedShopId);
+  const performance = await getSupplierPerformanceSummary(selectedShopId);
 
   return (
     <div className="space-y-4 sm:space-y-5 section-gap">
@@ -106,7 +108,7 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
                 সরবরাহকারী
               </p>
               <p className="text-3xl font-bold tabular-nums leading-tight text-foreground sm:text-4xl">
-                {suppliers.length.toLocaleString("bn-BD")}
+                {performance.rows.length.toLocaleString("bn-BD")}
               </p>
               <p className="text-xs text-muted-foreground">{selectedShop.name}</p>
             </div>
@@ -118,7 +120,11 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
         </div>
       </div>
 
-      <SuppliersClient shopId={selectedShopId} suppliers={suppliers} />
+      <SuppliersClient
+        shopId={selectedShopId}
+        suppliers={performance.rows}
+        performance={performance.overview}
+      />
     </div>
   );
 }

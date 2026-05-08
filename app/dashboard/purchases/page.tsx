@@ -133,6 +133,7 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
 
   const totalAmount = Number(summary.totalAmount ?? 0);
   const purchaseReturnTotal = Number(summary.purchaseReturnTotal ?? 0);
+  const landedCostTotal = Number(summary.landedCostTotal ?? 0);
   const paidTotal = Number(summary.paidTotal ?? 0);
   const formattedTotal = Number.isFinite(totalAmount)
     ? totalAmount.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -181,10 +182,16 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
 
           <ShopSelectorClient shops={shops} selectedShopId={selectedShopId} />
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div className="rounded-xl border border-border bg-card/60 px-3 py-2.5 text-center">
               <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">নেট ক্রয়</p>
               <p className="mt-0.5 text-sm font-bold tabular-nums text-foreground">৳ {formattedTotal}</p>
+            </div>
+            <div className="rounded-xl border border-primary/30 bg-primary-soft/60 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-primary/80">ল্যান্ডেড কস্ট</p>
+              <p className="mt-0.5 text-sm font-bold tabular-nums text-primary">
+                ৳ {landedCostTotal.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
             </div>
             <div className="rounded-xl border border-success/30 bg-success-soft/60 px-3 py-2.5 text-center">
               <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-success/80">পরিশোধ</p>

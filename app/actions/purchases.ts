@@ -35,6 +35,10 @@ type CreatePurchaseInput = {
   supplierAddress?: string | null;
   paymentMethod?: "cash" | "bkash" | "bank" | "due";
   paidNow?: number | string | null;
+  transportCost?: number | string | null;
+  unloadingCost?: number | string | null;
+  carryingCost?: number | string | null;
+  otherLandedCost?: number | string | null;
   note?: string | null;
 };
 
@@ -65,6 +69,48 @@ function normalizePurchaseDate(raw?: string | null) {
   const day = trimmed || getDhakaDateString();
   const { start } = parseDhakaDateOnlyRange(day, day, true);
   return start ?? new Date(`${day}T00:00:00.000Z`);
+}
+
+function roundMoney(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function allocateLandedCost<T extends { qty: number; lineTotal: number }>(
+  rows: T[],
+  landedCostTotal: number
+) {
+  if (!Number.isFinite(landedCostTotal) || landedCostTotal <= 0 || rows.length === 0) {
+    return rows.map((row) => ({
+      ...row,
+      landedCostAllocated: 0,
+      effectiveLineTotal: roundMoney(row.lineTotal),
+      effectiveUnitCost: row.qty > 0 ? row.lineTotal / row.qty : 0,
+    }));
+  }
+
+  const baseTotal = rows.reduce((sum, row) => sum + Math.max(0, row.lineTotal), 0);
+  const totalQty = rows.reduce((sum, row) => sum + Math.max(0, row.qty), 0);
+  let remaining = roundMoney(landedCostTotal);
+
+  return rows.map((row, index) => {
+    const isLast = index === rows.length - 1;
+    const weight =
+      baseTotal > 0
+        ? row.lineTotal / baseTotal
+        : totalQty > 0
+        ? row.qty / totalQty
+        : 1 / rows.length;
+    const allocated = isLast ? remaining : roundMoney(landedCostTotal * weight);
+    remaining = roundMoney(remaining - allocated);
+    const effectiveLineTotal = roundMoney(row.lineTotal + allocated);
+    const effectiveUnitCost = row.qty > 0 ? effectiveLineTotal / row.qty : row.lineTotal;
+    return {
+      ...row,
+      landedCostAllocated: allocated,
+      effectiveLineTotal,
+      effectiveUnitCost,
+    };
+  });
 }
 
 async function getReturnedQtyByPurchaseItemId(
@@ -257,7 +303,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
     throw new Error("Supplier required for due purchase");
   }
 
-  let totalAmount = 0;
+  let subtotalAmount = 0;
   const variantIds = input.items
     .map((i) => i.variantId)
     .filter((id): id is string => !!id);
@@ -292,7 +338,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
     const unitCost = toMoney(item.unitCost, "Unit cost");
     if (qty <= 0) throw new Error("Quantity must be greater than 0");
     const lineTotal = qty * unitCost;
-    totalAmount += lineTotal;
+    subtotalAmount += lineTotal;
     return {
       product,
       variantId,
@@ -302,6 +348,16 @@ export async function createPurchase(input: CreatePurchaseInput) {
       lineTotal,
     };
   });
+
+  const transportCost = toMoney(input.transportCost ?? 0, "Transport cost");
+  const unloadingCost = toMoney(input.unloadingCost ?? 0, "Unloading cost");
+  const carryingCost = toMoney(input.carryingCost ?? 0, "Carrying cost");
+  const otherLandedCost = toMoney(input.otherLandedCost ?? 0, "Other landed cost");
+  const landedCostTotal = roundMoney(
+    transportCost + unloadingCost + carryingCost + otherLandedCost
+  );
+  const rowsWithLanded = allocateLandedCost(rows, landedCostTotal);
+  const totalAmount = roundMoney(subtotalAmount + landedCostTotal);
 
   const paidNowRaw = Number(input.paidNow ?? 0);
   const paidNow = Number.isFinite(paidNowRaw) ? Math.max(0, paidNowRaw) : 0;
@@ -324,6 +380,12 @@ export async function createPurchase(input: CreatePurchaseInput) {
         supplierName,
         purchaseDate,
         paymentMethod,
+        subtotalAmount: subtotalAmount.toFixed(2),
+        transportCost: transportCost.toFixed(2),
+        unloadingCost: unloadingCost.toFixed(2),
+        carryingCost: carryingCost.toFixed(2),
+        otherLandedCost: otherLandedCost.toFixed(2),
+        landedCostTotal: landedCostTotal.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
         paidAmount: paidAmount.toFixed(2),
         dueAmount: dueAmount.toFixed(2),
@@ -335,8 +397,8 @@ export async function createPurchase(input: CreatePurchaseInput) {
 
     // Create purchase items individually to capture IDs for serial number linking
     const createdItemIds: Array<{ id: string; index: number }> = [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+    for (let i = 0; i < rowsWithLanded.length; i++) {
+      const row = rowsWithLanded[i];
       const createdItem = await tx.purchaseItem.create({
         data: {
           purchaseId: created.id,
@@ -345,6 +407,9 @@ export async function createPurchase(input: CreatePurchaseInput) {
           quantity: row.qty.toFixed(2),
           unitCost: row.unitCost.toFixed(2),
           lineTotal: row.lineTotal.toFixed(2),
+          landedCostAllocated: row.landedCostAllocated.toFixed(2),
+          effectiveUnitCost: row.effectiveUnitCost.toFixed(4),
+          effectiveLineTotal: row.effectiveLineTotal.toFixed(2),
         },
         select: { id: true },
       });
@@ -353,7 +418,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
 
     // Create serial number records for serialized products
     for (const { id: purchaseItemId, index } of createdItemIds) {
-      const row = rows[index];
+      const row = rowsWithLanded[index];
       const inputItem = input.items[index];
       const product = row.product;
 
@@ -433,7 +498,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
       }
     }
 
-    for (const row of rows) {
+    for (const row of rowsWithLanded) {
       const product = row.product;
       if (row.variantId && row.variant) {
         const currentVariantStock = Number(row.variant.stockQty ?? 0);
@@ -442,12 +507,12 @@ export async function createPurchase(input: CreatePurchaseInput) {
         const variantTotalUnits = variantBaseStock + row.qty;
         const weightedVariantCost =
           variantTotalUnits > 0
-            ? (variantBaseStock * currentVariantCost + row.qty * row.unitCost) /
+            ? (variantBaseStock * currentVariantCost + row.qty * row.effectiveUnitCost) /
               variantTotalUnits
-            : row.unitCost;
+            : row.effectiveUnitCost;
         const nextVariantCost = Number.isFinite(weightedVariantCost)
           ? weightedVariantCost
-          : row.unitCost;
+          : row.effectiveUnitCost;
 
         await tx.productVariant.update({
           where: { id: row.variantId },
@@ -464,9 +529,9 @@ export async function createPurchase(input: CreatePurchaseInput) {
         const totalUnits = baseStock + row.qty;
         const weighted =
           totalUnits > 0
-            ? (baseStock * currentCost + row.qty * row.unitCost) / totalUnits
-            : row.unitCost;
-        const nextCost = Number.isFinite(weighted) ? weighted : row.unitCost;
+            ? (baseStock * currentCost + row.qty * row.effectiveUnitCost) / totalUnits
+            : row.effectiveUnitCost;
+        const nextCost = Number.isFinite(weighted) ? weighted : row.effectiveUnitCost;
 
         await tx.product.update({
           where: { id: product.id },
@@ -979,6 +1044,9 @@ export async function getPurchasesByShopPaginated({
             quantity: true,
             unitCost: true,
             lineTotal: true,
+            landedCostAllocated: true,
+            effectiveUnitCost: true,
+            effectiveLineTotal: true,
             product: { select: { name: true } },
           },
         },
@@ -994,6 +1062,12 @@ export async function getPurchasesByShopPaginated({
     supplierName: p.supplier?.name ?? p.supplierName,
     purchaseDate: p.purchaseDate?.toISOString?.() ?? p.purchaseDate,
     paymentMethod: p.paymentMethod,
+    subtotalAmount: p.subtotalAmount?.toString?.() ?? "0",
+    transportCost: p.transportCost?.toString?.() ?? "0",
+    unloadingCost: p.unloadingCost?.toString?.() ?? "0",
+    carryingCost: p.carryingCost?.toString?.() ?? "0",
+    otherLandedCost: p.otherLandedCost?.toString?.() ?? "0",
+    landedCostTotal: p.landedCostTotal?.toString?.() ?? "0",
     totalAmount: p.totalAmount?.toString?.() ?? "0",
     paidAmount: p.paidAmount?.toString?.() ?? "0",
     dueAmount: p.dueAmount?.toString?.() ?? "0",
@@ -1043,7 +1117,7 @@ export async function getPurchaseSummaryByRange(
   const [agg, returnAgg] = await Promise.all([
     prisma.purchase.aggregate({
       where: purchaseWhere,
-      _sum: { totalAmount: true, paidAmount: true },
+      _sum: { totalAmount: true, paidAmount: true, landedCostTotal: true },
       _count: { _all: true },
     }),
     prisma.purchaseReturn.aggregate({
@@ -1063,6 +1137,7 @@ export async function getPurchaseSummaryByRange(
     returnCount: returnAgg._count._all ?? 0,
     purchaseTotal: purchaseTotal.toFixed(2),
     purchaseReturnTotal: returnTotal.toFixed(2),
+    landedCostTotal: Number(agg._sum.landedCostTotal ?? 0).toFixed(2),
     paidTotal: paidTotal.toFixed(2),
   };
 }
@@ -1088,6 +1163,9 @@ export async function getPurchaseWithPayments(
           quantity: true,
           unitCost: true,
           lineTotal: true,
+          landedCostAllocated: true,
+          effectiveUnitCost: true,
+          effectiveLineTotal: true,
           product: { select: { name: true } },
         },
       },
@@ -1141,6 +1219,12 @@ export async function getPurchaseWithPayments(
     supplierName: purchase.supplier?.name ?? purchase.supplierName,
     purchaseDate: purchase.purchaseDate?.toISOString?.() ?? purchase.purchaseDate,
     paymentMethod: purchase.paymentMethod,
+    subtotalAmount: purchase.subtotalAmount?.toString?.() ?? "0",
+    transportCost: purchase.transportCost?.toString?.() ?? "0",
+    unloadingCost: purchase.unloadingCost?.toString?.() ?? "0",
+    carryingCost: purchase.carryingCost?.toString?.() ?? "0",
+    otherLandedCost: purchase.otherLandedCost?.toString?.() ?? "0",
+    landedCostTotal: purchase.landedCostTotal?.toString?.() ?? "0",
     totalAmount: purchase.totalAmount?.toString?.() ?? "0",
     paidAmount: purchase.paidAmount?.toString?.() ?? "0",
     dueAmount: purchase.dueAmount?.toString?.() ?? "0",
@@ -1151,6 +1235,9 @@ export async function getPurchaseWithPayments(
       quantity: item.quantity?.toString?.() ?? "0",
       unitCost: item.unitCost?.toString?.() ?? "0",
       lineTotal: item.lineTotal?.toString?.() ?? "0",
+      landedCostAllocated: item.landedCostAllocated?.toString?.() ?? "0",
+      effectiveUnitCost: item.effectiveUnitCost?.toString?.() ?? "0",
+      effectiveLineTotal: item.effectiveLineTotal?.toString?.() ?? "0",
     })),
     payments: purchase.payments.map((p) => ({
       id: p.id,

@@ -26,15 +26,25 @@ export type LocalProduct = {
   trackCutLength?: boolean;
   defaultCutLength?: string | null;
   reorderPoint?: number | null;
+  storageLocation?: string | null;
   businessType?: string;
   expiryDate?: string | null;
   size?: string | null;
+  unitConversions?: Array<{
+    id?: string;
+    label: string;
+    baseUnitQuantity: string | number;
+    sortOrder?: number;
+    isActive?: boolean;
+  }>;
   variants?: Array<{
     id?: string;
     label: string;
     buyPrice?: string | number | null;
     sellPrice: string | number;
     stockQty?: string | number | null;
+    reorderPoint?: number | null;
+    storageLocation?: string | null;
     sku?: string | null;
     barcode?: string | null;
     sortOrder?: number;

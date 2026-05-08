@@ -48,6 +48,11 @@ function fmt(n: number) {
   return n.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function clampQty(raw: number, max: number) {
+  if (!Number.isFinite(raw) || raw <= 0) return "";
+  return Math.min(raw, max).toFixed(2).replace(/\.00$/, "");
+}
+
 export default function PurchaseReturnClient({
   shopId,
   purchaseId,
@@ -84,6 +89,46 @@ export default function PurchaseReturnClient({
 
   function updateDraft(itemId: string, patch: Partial<DraftRow>) {
     setDrafts((prev) => ({ ...prev, [itemId]: { ...prev[itemId], ...patch } }));
+  }
+
+  function applyQuickQty(item: PurchaseReturnItemRow, mode: "quarter" | "half" | "full" | "clear") {
+    const returnableQty = Number(item.returnableQty || 0);
+    if (mode === "clear") {
+      updateDraft(item.id, { qty: "", serialInput: "" });
+      return;
+    }
+    const nextQty =
+      mode === "full"
+        ? returnableQty
+        : mode === "half"
+        ? returnableQty / 2
+        : returnableQty / 4;
+    updateDraft(item.id, {
+      qty: clampQty(nextQty, returnableQty),
+    });
+  }
+
+  function toggleSerial(item: PurchaseReturnItemRow, serial: string) {
+    const current = parseSerials(drafts[item.id]?.serialInput || "");
+    const next = current.includes(serial)
+      ? current.filter((s) => s !== serial)
+      : [...current, serial];
+    updateDraft(item.id, {
+      serialInput: next.join(", "),
+      qty: next.length > 0 ? String(next.length) : "",
+    });
+  }
+
+  function selectAllSerials(item: PurchaseReturnItemRow) {
+    const serials = item.availableSerials;
+    updateDraft(item.id, {
+      serialInput: serials.join(", "),
+      qty: serials.length > 0 ? String(serials.length) : "",
+    });
+  }
+
+  function clearSerials(item: PurchaseReturnItemRow) {
+    updateDraft(item.id, { serialInput: "", qty: "" });
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -267,6 +312,49 @@ export default function PurchaseReturnClient({
                 </div>
               </div>
 
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => applyQuickQty(item, "quarter")}
+                  className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted"
+                >
+                  ২৫%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyQuickQty(item, "half")}
+                  className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted"
+                >
+                  ৫০%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyQuickQty(item, "full")}
+                  className="inline-flex items-center rounded-full border border-warning/30 bg-warning-soft px-2.5 py-1 text-[11px] font-semibold text-warning hover:bg-warning/15"
+                >
+                  সব ফেরত
+                </button>
+                {hasQty ? (
+                  <button
+                    type="button"
+                    onClick={() => applyQuickQty(item, "clear")}
+                    className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted"
+                  >
+                    ক্লিয়ার
+                  </button>
+                ) : null}
+              </div>
+
+              {(item.trackBatch || item.trackSerialNumbers || item.trackCutLength) ? (
+                <div className="mb-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+                  {item.trackSerialNumbers
+                    ? "serial বাছাই করলে qty auto count হবে।"
+                    : item.trackBatch
+                    ? `batch ${item.batchNo || ""} থেকেই stock কমবে, তাই return quantity দ্রুত verify করুন।`
+                    : "cut-length return-এ system remnant/stock adjust করবে।"}
+                </div>
+              ) : null}
+
               {/* Qty + Line total */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -301,21 +389,31 @@ export default function PurchaseReturnClient({
                     Serial Numbers
                   </p>
                   {item.availableSerials.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
+                    <>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => selectAllSerials(item)}
+                          className="inline-flex items-center rounded-full border border-primary/30 bg-primary-soft px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15"
+                        >
+                          সব serial নিন
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => clearSerials(item)}
+                          className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted"
+                        >
+                          serial ক্লিয়ার
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
                       {item.availableSerials.map((serial) => {
                         const selected = parseSerials(draft?.serialInput || "").includes(serial);
                         return (
                           <button
                             key={serial}
                             type="button"
-                            onClick={() => {
-                              const current = parseSerials(draft?.serialInput || "");
-                              if (selected) {
-                                updateDraft(item.id, { serialInput: current.filter((s) => s !== serial).join(", ") });
-                              } else {
-                                updateDraft(item.id, { serialInput: [...current, serial].join(", ") });
-                              }
-                            }}
+                            onClick={() => toggleSerial(item, serial)}
                             className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
                               selected
                                 ? "border-primary/40 bg-primary text-primary-foreground shadow-sm"
@@ -326,7 +424,8 @@ export default function PurchaseReturnClient({
                           </button>
                         );
                       })}
-                    </div>
+                      </div>
+                    </>
                   ) : null}
                   <textarea
                     value={draft?.serialInput || ""}

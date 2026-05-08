@@ -1545,7 +1545,8 @@ export const PosProductSearch = memo(function PosProductSearch({
     if (!scannerAssistEnabled) return;
     if (typeof window === "undefined") return;
     if (!navigator.mediaDevices?.getUserMedia) {
-      const message = "এই ডিভাইসে ক্যামেরা সাপোর্ট নেই।";
+      const message =
+        "এই ডিভাইসে ক্যামেরা সাপোর্ট নেই। external barcode scanner বা scan box ব্যবহার করুন।";
       setCameraError(message);
       setScanFeedback({ type: "error", message });
       return;
@@ -1554,7 +1555,7 @@ export const PosProductSearch = memo(function PosProductSearch({
     const BarcodeDetectorCtor = (window as any).BarcodeDetector;
     if (!BarcodeDetectorCtor) {
       const message =
-        "এই ব্রাউজারে live camera barcode scan সাপোর্ট নেই। Chrome/Edge latest ব্যবহার করুন।";
+        "এই ব্রাউজারে live camera barcode scan সাপোর্ট নেই। Chrome/Edge latest ব্যবহার করুন, না হলে external scanner দিয়ে scan box-এ code দিন।";
       setCameraError(message);
       setScanFeedback({ type: "error", message });
       return;
@@ -2209,6 +2210,18 @@ export const PosProductSearch = memo(function PosProductSearch({
                     Camera
                   </button>
                 </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={focusScanInput}
+                    className="inline-flex h-8 items-center rounded-full border border-border bg-card px-3 text-[11px] font-semibold text-foreground hover:bg-muted"
+                  >
+                    External scanner ready
+                  </button>
+                  <span className="text-[11px] text-muted-foreground">
+                    scan box-এ cursor থাকলে handheld scanner keyboard-এর মতো code পাঠাবে
+                  </span>
+                </div>
                 <input
                   disabled
                   value=""
@@ -2226,7 +2239,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                     "Enter ছাড়াও scanner idle হলেই auto add হবে, beep দিয়ে success বোঝাবে।"}
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Scan box scanner-ready থাকবে, accidental duplicate খুব দ্রুত এলে ignore হবে।
+                  Camera না চললে scan box-এ cursor রেখে external scanner trigger করুন। accidental duplicate খুব দ্রুত এলে ignore হবে।
                 </p>
               </div>
             )}
@@ -2447,14 +2460,14 @@ export const PosProductSearch = memo(function PosProductSearch({
       />
       {variantPicker ? (
         <div className="fixed inset-0 z-[65] bg-black/40 backdrop-blur-[1px]">
-          <div className="mx-auto flex h-full w-full max-w-md items-end p-3 sm:items-center">
-            <div className="w-full rounded-2xl border border-border bg-card p-4 shadow-[0_20px_45px_rgba(15,23,42,0.25)]">
-              <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="mx-auto flex h-full w-full max-w-md items-end p-2 sm:items-center sm:p-3">
+            <div className="flex max-h-[calc(100dvh-1rem)] w-full flex-col overflow-hidden rounded-2xl border border-border bg-card p-2.5 shadow-[0_20px_45px_rgba(15,23,42,0.25)] sm:max-h-[calc(100dvh-2rem)] sm:p-3">
+              <div className="mb-2 flex shrink-0 items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-base font-bold leading-tight text-foreground">
                     সাইজ / ধরন বাছাই করুন
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     {variantPicker.product.name}
                   </p>
                 </div>
@@ -2466,14 +2479,11 @@ export const PosProductSearch = memo(function PosProductSearch({
                   ✕
                 </button>
               </div>
-              <div className="mb-3 flex items-center justify-between rounded-xl border border-border/70 bg-muted/30 px-3 py-2">
-                <div>
-                  <p className="text-xs font-semibold text-foreground">কতটি যোগ করবেন</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    আগে quantity ঠিক করুন, তারপর variant বাছাই করুন
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
+              <div className="mb-2 flex shrink-0 items-center gap-2 rounded-xl border border-border/70 bg-muted/30 px-2 py-2">
+                <p className="shrink-0 text-[11px] font-semibold text-muted-foreground">
+                  Qty
+                </p>
+                <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
                   <button
                     type="button"
                     disabled={variantPicker.quantity <= 0.01}
@@ -2489,39 +2499,41 @@ export const PosProductSearch = memo(function PosProductSearch({
                   >
                     −
                   </button>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0.01"
-                    max={
-                      Number.isFinite(variantPickerMaxAvailable)
-                        ? Math.max(0.01, Number(variantPickerMaxAvailable.toFixed(2)))
-                        : undefined
-                    }
-                    value={variantPicker.quantity}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      setVariantPicker((current) =>
-                        current
-                          ? {
-                              ...current,
-                              quantity: Number.isFinite(val) && val > 0
-                                ? Number(
-                                    (
-                                      current.product.trackStock === true &&
-                                      Number.isFinite(variantPickerMaxAvailable)
-                                        ? Math.min(val, Math.max(0.01, variantPickerMaxAvailable))
-                                        : val
-                                    ).toFixed(2)
-                                  )
-                                : 0.01,
-                            }
-                          : current
-                      );
-                    }}
-                    className="w-[70px] rounded-xl border border-primary/20 bg-primary-soft px-2 py-1 text-center text-sm font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
+                  <div className="min-w-0 flex-1">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0.01"
+                      max={
+                        Number.isFinite(variantPickerMaxAvailable)
+                          ? Math.max(0.01, Number(variantPickerMaxAvailable.toFixed(2)))
+                          : undefined
+                      }
+                      value={variantPicker.quantity}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setVariantPicker((current) =>
+                          current
+                            ? {
+                                ...current,
+                                quantity: Number.isFinite(val) && val > 0
+                                  ? Number(
+                                      (
+                                        current.product.trackStock === true &&
+                                        Number.isFinite(variantPickerMaxAvailable)
+                                          ? Math.min(val, Math.max(0.01, variantPickerMaxAvailable))
+                                          : val
+                                      ).toFixed(2)
+                                    )
+                                  : 0.01,
+                              }
+                            : current
+                        );
+                      }}
+                      className="h-9 w-full min-w-[84px] rounded-xl border border-primary/20 bg-primary-soft px-2 py-1 text-center text-sm font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
                   <button
                     type="button"
                     disabled={
@@ -2553,13 +2565,13 @@ export const PosProductSearch = memo(function PosProductSearch({
                 </div>
               </div>
               {variantPicker.product.trackStock === true ? (
-                <div className="mb-3 rounded-xl border border-border/70 bg-card px-3 py-2 text-[11px]">
+                <div className="mb-2 shrink-0 rounded-xl border border-border/70 bg-card px-2.5 py-1.5 text-[11px]">
                   {variantPickerQuantityWarning ? (
                     <p className="font-semibold text-danger">{variantPickerQuantityWarning}</p>
                   ) : (
                     <p className="text-muted-foreground">
                       {variantPickerHasAnyAvailable
-                        ? `এই quantity-তে যেসব variant-এর enough stock আছে, শুধু সেগুলোই বাছাই করা যাবে। সর্বোচ্চ ${
+                        ? `এই quantity-তে যেসব variant-এর enough stock আছে, সেগুলোই বাছাই করা যাবে। সর্বোচ্চ ${
                             Number.isFinite(variantPickerMaxAvailable)
                               ? variantPickerMaxAvailable.toFixed(2)
                               : "∞"
@@ -2569,7 +2581,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                   )}
                 </div>
               ) : null}
-              <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5 pb-[max(env(safe-area-inset-bottom),0.25rem)]">
                 {getActiveVariants(variantPicker.product).map((variant) => {
                   const tracksStock = variantPicker.product.trackStock === true;
                   const unit = variantPicker.product.baseUnit || "";
@@ -2614,11 +2626,11 @@ export const PosProductSearch = memo(function PosProductSearch({
                           : "border-border bg-card hover:border-primary/35 hover:bg-primary-soft/15"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`truncate text-sm font-semibold ${outOfStock || insufficientForSelectedQty ? "text-muted-foreground" : "text-foreground"}`}>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <span className={`min-w-0 break-words pr-1 text-sm font-semibold ${outOfStock || insufficientForSelectedQty ? "text-muted-foreground" : "text-foreground"}`}>
                           {variant.label}
                         </span>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
                           {tracksStock && insufficientForSelectedQty ? (
                             <span className="inline-flex items-center rounded-full border border-warning/25 bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning">
                               সর্বোচ্চ {availableStock.toFixed(2)}
@@ -2638,7 +2650,7 @@ export const PosProductSearch = memo(function PosProductSearch({
                         </div>
                       </div>
                       {variant.sku || variant.barcode ? (
-                        <p className="mt-1 text-[11px] text-muted-foreground">
+                        <p className="mt-1 break-all text-[11px] text-muted-foreground">
                           {variant.sku ? `SKU: ${variant.sku}` : ""}{" "}
                           {variant.barcode ? `বারকোড: ${variant.barcode}` : ""}
                         </p>

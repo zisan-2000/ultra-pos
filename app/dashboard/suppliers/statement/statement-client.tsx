@@ -29,7 +29,7 @@ function fmt(n: number) {
 const ENTRY_META: Record<string, { label: string; icon: string; color: string; amountColor: string }> = {
   PURCHASE: { label: "ক্রয়", icon: "📦", color: "border-warning/30 bg-warning-soft/50 text-warning", amountColor: "text-warning" },
   PAYMENT:  { label: "পরিশোধ", icon: "💳", color: "border-success/30 bg-success-soft/50 text-success", amountColor: "text-success" },
-  RETURN:   { label: "রিটার্ন", icon: "🔄", color: "border-primary/30 bg-primary-soft/50 text-primary", amountColor: "text-primary" },
+  PURCHASE_RETURN: { label: "রিটার্ন", icon: "🔄", color: "border-primary/30 bg-primary-soft/50 text-primary", amountColor: "text-primary" },
 };
 
 export default function SupplierStatementClient({
@@ -310,7 +310,7 @@ export default function SupplierStatementClient({
             📊
           </div>
           <p className="text-sm font-semibold text-muted-foreground">সরবরাহকারী নির্বাচন করুন</p>
-          <p className="text-xs text-muted-foreground">উপরের ফিল্টারে সরবরাহকারী বেছে "স্টেটমেন্ট দেখুন" চাপুন</p>
+          <p className="text-xs text-muted-foreground">উপরের ফিল্টারে সরবরাহকারী বেছে &quot;স্টেটমেন্ট দেখুন&quot; চাপুন</p>
           <a
             href={`/dashboard/suppliers?shopId=${shopId}`}
             className="inline-flex h-9 items-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted transition-colors"

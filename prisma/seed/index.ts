@@ -7,6 +7,7 @@ import { seedBilling } from "./billing/seedBilling";
 import { seedBusinessProductTemplates } from "./catalog/seedBusinessProductTemplates";
 import { seedShops } from "./pos/seedShops";
 import { seedProducts } from "./pos/seedProducts";
+import { seedHardwareDemo } from "./pos/seedHardwareDemo";
 
 const prisma = new PrismaClient();
 
@@ -44,8 +45,15 @@ async function main() {
 
   console.log("🔥 Seeding products...");
   const products = await seedProducts(prisma, shops);
+  void products;
 
-  // Intentionally skipping demo customers/sales/expenses/cash entries.
+  if (shops.hardware) {
+    console.log("INFO: Seeding professional hardware demo data...");
+    await seedHardwareDemo(prisma, shops.hardware.id, {
+      ownerUserId: ownerUser.id,
+      staffUserId: usersByRole.staff?.id ?? null,
+    });
+  }
 
   console.log("\n🎉 Seed Completed Successfully!");
   console.log("=========================================\n");

@@ -32,6 +32,8 @@ const productCreateSchema = z.object({
         buyPrice: z.union([z.string(), z.number()]).optional().nullable(),
         sellPrice: z.union([z.string(), z.number()]),
         stockQty: z.union([z.string(), z.number()]).optional().nullable(),
+        reorderPoint: z.number().int().positive().optional().nullable(),
+        storageLocation: z.string().optional().nullable(),
         sku: z.string().optional().nullable(),
         barcode: z.string().optional().nullable(),
         sortOrder: z.number().int().nonnegative().optional(),
@@ -48,6 +50,20 @@ const productCreateSchema = z.object({
   trackBatch: z.boolean().optional(),
   trackCutLength: z.boolean().optional(),
   defaultCutLength: z.union([z.string(), z.number()]).optional().nullable(),
+  reorderPoint: z.number().int().positive().optional().nullable(),
+  storageLocation: z.string().optional().nullable(),
+  unitConversions: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        label: z.string(),
+        baseUnitQuantity: z.union([z.string(), z.number()]),
+        sortOrder: z.number().int().nonnegative().optional(),
+        isActive: z.boolean().optional(),
+      })
+    )
+    .optional()
+    .nullable(),
   isActive: z.boolean().optional(),
   updatedAt: z.union([z.string(), z.number(), z.date()]).optional(),
 });
@@ -153,11 +169,13 @@ function sanitizeVariants(value: unknown) {
     label: string;
     buyPrice: string | null;
     sellPrice: string;
-    stockQty: string;
-    sku: string | null;
-    barcode: string | null;
-    sortOrder: number;
-    isActive: boolean;
+      stockQty: string;
+      reorderPoint: number | null;
+      storageLocation: string | null;
+      sku: string | null;
+      barcode: string | null;
+      sortOrder: number;
+      isActive: boolean;
   }>;
   if (!Array.isArray(value)) {
     throw new Error("variants must be an array");
@@ -168,11 +186,13 @@ function sanitizeVariants(value: unknown) {
     label: string;
     buyPrice: string | null;
     sellPrice: string;
-    stockQty: string;
-    sku: string | null;
-    barcode: string | null;
-    sortOrder: number;
-    isActive: boolean;
+      stockQty: string;
+      reorderPoint: number | null;
+      storageLocation: string | null;
+      sku: string | null;
+      barcode: string | null;
+      sortOrder: number;
+      isActive: boolean;
   }> = [];
   const seenLabels = new Set<string>();
 
@@ -207,8 +227,69 @@ function sanitizeVariants(value: unknown) {
           "variant stockQty",
           { defaultValue: "0.00" }
         ) as string) ?? "0.00",
+      reorderPoint:
+        row?.reorderPoint === undefined || row?.reorderPoint === null || row?.reorderPoint === ""
+          ? null
+          : Math.max(1, Math.floor(Number(row.reorderPoint))),
+      storageLocation: normalizeNullableText(row?.storageLocation, 120) ?? null,
       sku: normalizeCode(row?.sku as string | null | undefined) ?? null,
       barcode: normalizeCode(row?.barcode as string | null | undefined) ?? null,
+      sortOrder: Number.isFinite(sortOrderRaw)
+        ? Math.max(0, Math.floor(sortOrderRaw))
+        : index,
+      isActive: row?.isActive === undefined ? true : Boolean(row?.isActive),
+    });
+  }
+
+  return normalized;
+}
+
+function sanitizeUnitConversions(value: unknown) {
+  if (value === undefined) return undefined;
+  if (value === null) return [] as Array<{
+    id?: string;
+    label: string;
+    baseUnitQuantity: string;
+    sortOrder: number;
+    isActive: boolean;
+  }>;
+  if (!Array.isArray(value)) {
+    throw new Error("unitConversions must be an array");
+  }
+
+  const normalized: Array<{
+    id?: string;
+    label: string;
+    baseUnitQuantity: string;
+    sortOrder: number;
+    isActive: boolean;
+  }> = [];
+  const seenLabels = new Set<string>();
+
+  for (let index = 0; index < value.length; index += 1) {
+    const row = value[index] as Record<string, unknown>;
+    const label = normalizeNullableText(row?.label, 80) ?? "";
+    if (!label) continue;
+    const labelKey = label.toLowerCase();
+    if (seenLabels.has(labelKey)) {
+      throw new Error("unit conversion labels must be unique");
+    }
+    seenLabels.add(labelKey);
+    const baseUnitQuantity = normalizeOptionalPositiveDecimal(
+      row?.baseUnitQuantity,
+      `baseUnitQuantity (${label})`
+    );
+    if (!baseUnitQuantity) {
+      throw new Error(`baseUnitQuantity (${label}) is required`);
+    }
+    const sortOrderRaw = Number(row?.sortOrder ?? index);
+    normalized.push({
+      id:
+        typeof row?.id === "string" && row.id.trim().length > 0
+          ? row.id.trim()
+          : undefined,
+      label,
+      baseUnitQuantity,
       sortOrder: Number.isFinite(sortOrderRaw)
         ? Math.max(0, Math.floor(sortOrderRaw))
         : index,
@@ -236,6 +317,7 @@ function sanitizeCreate(item: IncomingProduct) {
   const expiryDate = normalizeDateOnly(item.expiryDate);
   const size = normalizeNullableText(item.size, 80);
   const variants = sanitizeVariants(item.variants);
+  const unitConversions = sanitizeUnitConversions(item.unitConversions);
   const trackStock = Boolean(item.trackStock);
   const trackSerialNumbers = Boolean(item.trackSerialNumbers) && trackStock;
   const trackBatch = Boolean(item.trackBatch) && trackStock;
@@ -273,8 +355,17 @@ function sanitizeCreate(item: IncomingProduct) {
     trackBatch,
     trackCutLength,
     defaultCutLength,
+    reorderPoint:
+      item.reorderPoint === undefined || item.reorderPoint === null
+        ? undefined
+        : Math.max(1, Math.floor(Number(item.reorderPoint))),
+    storageLocation:
+      normalizeNullableText(item.storageLocation, 120) === undefined
+        ? undefined
+        : normalizeNullableText(item.storageLocation, 120),
     isActive: item.isActive !== false,
     variants,
+    unitConversions,
   };
 }
 
@@ -314,6 +405,15 @@ function sanitizeUpdate(item: IncomingProduct) {
       "defaultCutLength"
     );
   }
+  if (item.reorderPoint !== undefined) {
+    payload.reorderPoint =
+      item.reorderPoint === null || item.reorderPoint === ""
+        ? null
+        : Math.max(1, Math.floor(Number(item.reorderPoint)));
+  }
+  if (item.storageLocation !== undefined) {
+    payload.storageLocation = normalizeNullableText(item.storageLocation, 120);
+  }
 
   if (item.buyPrice !== undefined) {
     payload.buyPrice = toMoneyString(item.buyPrice, "buyPrice", { allowNull: true });
@@ -349,7 +449,12 @@ function sanitizeUpdate(item: IncomingProduct) {
     payload.defaultCutLength = null;
   }
 
-  return { id, data: payload, variants: sanitizeVariants(item.variants) };
+  return {
+    id,
+    data: payload,
+    variants: sanitizeVariants(item.variants),
+    unitConversions: sanitizeUnitConversions(item.unitConversions),
+  };
 }
 
 function toDateOrUndefined(value?: string | number | Date | null) {
@@ -462,16 +567,20 @@ export async function POST(req: Request) {
       if (Array.isArray(newItems) && newItems.length > 0) {
         const sanitized = newItems.map(sanitizeCreate);
         await prisma.product.createMany({
-          data: sanitized.map(({ variants: _variants, ...row }) => row) as any,
+          data: sanitized.map(
+            ({ variants: _variants, unitConversions: _unitConversions, ...row }) => row
+          ) as any,
           skipDuplicates: true,
         });
 
-        const withVariants = sanitized.filter(
-          (item) => item.id && item.variants !== undefined
+        const withRelations = sanitized.filter(
+          (item) =>
+            item.id &&
+            (item.variants !== undefined || item.unitConversions !== undefined)
         ) as Array<
           ReturnType<typeof sanitizeCreate> & { id: string }
         >;
-        for (const item of withVariants) {
+        for (const item of withRelations) {
           const existing = await prisma.product.findUnique({
             where: { id: item.id },
             select: { id: true, shopId: true },
@@ -490,10 +599,28 @@ export async function POST(req: Request) {
                 buyPrice: variant.buyPrice,
                 sellPrice: variant.sellPrice,
                 stockQty: variant.stockQty,
+                reorderPoint: item.trackStock ? variant.reorderPoint : null,
+                storageLocation: variant.storageLocation,
                 sku: variant.sku,
                 barcode: variant.barcode,
                 sortOrder: variant.sortOrder ?? index,
                 isActive: variant.isActive,
+              })),
+            });
+          }
+          await prisma.productUnitConversion.deleteMany({
+            where: { productId: existing.id },
+          });
+          if (item.unitConversions && item.unitConversions.length > 0) {
+            await prisma.productUnitConversion.createMany({
+              data: item.unitConversions.map((conversion, index) => ({
+                id: conversion.id,
+                shopId: item.shopId,
+                productId: existing.id,
+                label: conversion.label,
+                baseUnitQuantity: conversion.baseUnitQuantity,
+                sortOrder: conversion.sortOrder ?? index,
+                isActive: conversion.isActive,
               })),
             });
           }
@@ -539,7 +666,7 @@ export async function POST(req: Request) {
               continue;
             }
           }
-          const { id, data, variants } = sanitizeUpdate(item);
+          const { id, data, variants, unitConversions } = sanitizeUpdate(item);
           const updated = await prisma.product.update({
             where: { id },
             data,
@@ -557,10 +684,28 @@ export async function POST(req: Request) {
                   buyPrice: variant.buyPrice,
                   sellPrice: variant.sellPrice,
                   stockQty: variant.stockQty,
+                  reorderPoint: updated.trackStock ? variant.reorderPoint : null,
+                  storageLocation: variant.storageLocation,
                   sku: variant.sku,
                   barcode: variant.barcode,
                   sortOrder: variant.sortOrder ?? index,
                   isActive: variant.isActive,
+                })),
+              });
+            }
+          }
+          if (unitConversions !== undefined && existing?.shopId) {
+            await prisma.productUnitConversion.deleteMany({ where: { productId: id } });
+            if (unitConversions.length > 0) {
+              await prisma.productUnitConversion.createMany({
+                data: unitConversions.map((conversion, index) => ({
+                  id: conversion.id,
+                  shopId: existing.shopId,
+                  productId: id,
+                  label: conversion.label,
+                  baseUnitQuantity: conversion.baseUnitQuantity,
+                  sortOrder: conversion.sortOrder ?? index,
+                  isActive: conversion.isActive,
                 })),
               });
             }

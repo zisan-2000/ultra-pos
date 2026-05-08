@@ -1,6 +1,8 @@
 "use client";
 
 import { Fragment, useState, useMemo } from "react";
+import { generateCSV } from "@/lib/utils/csv";
+import { downloadFile } from "@/lib/utils/download";
 
 type BatchRow = {
   id: string;
@@ -49,6 +51,80 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
   const activeCnt = rows.filter((r) => r.isActive).length;
   const depletedCnt = rows.filter((r) => !r.isActive).length;
 
+  function exportRows() {
+    const flattened = filtered.flatMap((row) => {
+      const netOutQty = row.allocations.reduce((sum, allocation) => {
+        const allocated = Number(allocation.quantityAllocated || 0);
+        const returned = Number(allocation.quantityReturned || 0);
+        return sum + Math.max(0, allocated - returned);
+      }, 0);
+
+      if (row.allocations.length === 0) {
+        return [
+          {
+            batchNo: row.batchNo,
+            productName: row.productName,
+            variantLabel: row.variantLabel || "",
+            purchaseDate: row.purchaseDate || "",
+            totalQty: row.totalQty,
+            remainingQty: row.remainingQty,
+            netOutQty: netOutQty.toFixed(2),
+            invoiceNo: "",
+            customerName: "",
+            saleDate: "",
+            saleStatus: "",
+            quantityAllocated: "0.00",
+            quantityReturned: "0.00",
+            outsideQty: "0.00",
+          },
+        ];
+      }
+
+      return row.allocations.map((allocation) => {
+        const allocated = Number(allocation.quantityAllocated || 0);
+        const returned = Number(allocation.quantityReturned || 0);
+        const outsideQty = Math.max(0, allocated - returned);
+        return {
+          batchNo: row.batchNo,
+          productName: row.productName,
+          variantLabel: row.variantLabel || "",
+          purchaseDate: row.purchaseDate || "",
+          totalQty: row.totalQty,
+          remainingQty: row.remainingQty,
+          netOutQty: netOutQty.toFixed(2),
+          invoiceNo: allocation.invoiceNo || "",
+          customerName: allocation.customerName || "",
+          saleDate: allocation.saleDate,
+          saleStatus: allocation.saleStatus || "",
+          quantityAllocated: allocated.toFixed(2),
+          quantityReturned: returned.toFixed(2),
+          outsideQty: outsideQty.toFixed(2),
+        };
+      });
+    });
+
+    const csv = generateCSV(
+      [
+        "batchNo",
+        "productName",
+        "variantLabel",
+        "purchaseDate",
+        "totalQty",
+        "remainingQty",
+        "netOutQty",
+        "invoiceNo",
+        "customerName",
+        "saleDate",
+        "saleStatus",
+        "quantityAllocated",
+        "quantityReturned",
+        "outsideQty",
+      ],
+      flattened
+    );
+    downloadFile("batch-recall-export.csv", csv);
+  }
+
   return (
     <div className="space-y-4">
       {/* Filters */}
@@ -61,6 +137,13 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
           className="flex-1 h-11 rounded-xl border border-border bg-card px-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
         <div className="flex gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={exportRows}
+            className="h-9 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted"
+          >
+            CSV export
+          </button>
           {(["all", "active", "depleted"] as const).map((s) => (
             <button
               key={s}

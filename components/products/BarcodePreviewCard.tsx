@@ -38,6 +38,7 @@ export default function BarcodePreviewCard({
 }: Props) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [copies, setCopies] = useState("1");
+  const [printStatus, setPrintStatus] = useState<string | null>(null);
 
   const trimmedValue = value.trim();
   const printablePrice = useMemo(() => normalizePriceLabel(sellPrice), [sellPrice]);
@@ -78,9 +79,7 @@ export default function BarcodePreviewCard({
     }
   }, [renderConfig, renderError, trimmedValue]);
 
-  function handlePrint() {
-    if (!trimmedValue || !svgRef.current || renderError) return;
-
+  function buildPrintHtml(svgMarkup: string) {
     const copyCount = Math.min(
       24,
       Math.max(1, Number.parseInt(copies || "1", 10) || 1)
@@ -98,8 +97,6 @@ export default function BarcodePreviewCard({
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
-    const svgMarkup = svgRef.current.outerHTML;
-
     const labels = Array.from({ length: copyCount }, () => `
       <article class="label">
         <div class="name">${safeName}</div>
@@ -109,7 +106,7 @@ export default function BarcodePreviewCard({
       </article>
     `).join("");
 
-    const html = `
+    return `
       <!doctype html>
       <html>
         <head>
@@ -175,6 +172,30 @@ export default function BarcodePreviewCard({
         </body>
       </html>
     `;
+  }
+
+  function openPrintPopup(html: string) {
+    const popup = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
+    if (!popup) {
+      setPrintStatus("Popup blocked. Browser-এর print allow করুন অথবা অন্য browser ব্যবহার করুন।");
+      return false;
+    }
+
+    popup.document.open();
+    popup.document.write(html);
+    popup.document.close();
+    popup.focus();
+    window.setTimeout(() => {
+      popup.print();
+    }, 200);
+    setPrintStatus("নতুন window-এ print sheet খোলা হয়েছে।");
+    return true;
+  }
+
+  function handlePrint() {
+    if (!trimmedValue || !svgRef.current || renderError) return;
+
+    const html = buildPrintHtml(svgRef.current.outerHTML);
 
     const frame = document.createElement("iframe");
     frame.style.position = "fixed";
@@ -196,12 +217,18 @@ export default function BarcodePreviewCard({
       const printTarget = frame.contentWindow;
       if (!printTarget) {
         cleanup();
+        openPrintPopup(html);
         return;
       }
 
       printTarget.focus();
       window.setTimeout(() => {
-        printTarget.print();
+        try {
+          printTarget.print();
+          setPrintStatus("Print dialog খোলা হয়েছে। thermal বা A4 label page বেছে নিন।");
+        } catch {
+          openPrintPopup(html);
+        }
         cleanup();
       }, 150);
     };
@@ -236,6 +263,9 @@ export default function BarcodePreviewCard({
           {renderError ? (
             <p className="text-xs font-medium text-danger">{renderError}</p>
           ) : null}
+          {printStatus ? (
+            <p className="text-xs font-medium text-primary">{printStatus}</p>
+          ) : null}
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -267,6 +297,9 @@ export default function BarcodePreviewCard({
               </button>
             </div>
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            mobile print dialog না খুললে desktop Chrome/Edge, Bluetooth thermal printer, বা popup allow করে আবার try করুন।
+          </p>
         </div>
       ) : (
         <div className="rounded-xl border border-dashed border-border bg-card p-3 text-xs text-muted-foreground">
