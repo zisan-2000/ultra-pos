@@ -1293,16 +1293,49 @@ export function DashboardShell({
                     <Menu className="h-5 w-5" />
                   </button>
 
-                  {/* Shop name — desktop only */}
-                  <div className="hidden lg:block flex-1 min-w-0">
-                    <button
-                      onClick={() => setShopNameOpen(true)}
-                      className="text-left w-full"
-                    >
-                      <h2 className="text-base font-bold text-foreground leading-snug tracking-tight line-clamp-1 hover:underline">
-                        {currentShopName}
-                      </h2>
-                    </button>
+                  {/* Shop selector as pill — desktop only, inline in header row */}
+                  <div className="hidden lg:flex items-center min-w-0">
+                    {shops?.length > 0 ? (
+                      mounted ? (
+                        <Select
+                          value={safeShopId ?? undefined}
+                          onValueChange={(value) => handleShopChange(value)}
+                        >
+                          <SelectTrigger className="h-9 w-auto max-w-[260px] rounded-full border border-border/70 bg-muted/50 px-3 text-sm font-semibold text-foreground shadow-sm hover:bg-muted hover:border-border transition-colors focus:ring-1 focus:ring-primary/30 justify-start gap-1.5 [&>span]:truncate">
+                            <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <SelectValue placeholder="দোকান নির্বাচন করুন" />
+                          </SelectTrigger>
+                          <SelectContent align="start" className="w-[240px]">
+                            {shops.map((shop) => (
+                              <SelectItem key={shop.id} value={shop.id}>
+                                {shop.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <select
+                          value={safeShopId ?? ""}
+                          onChange={(event) => handleShopChange(event.target.value)}
+                          className="h-9 w-auto max-w-[240px] rounded-full border border-border/70 bg-muted/50 px-3 text-sm font-semibold text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
+                        >
+                          <option value="" disabled>দোকান নির্বাচন করুন</option>
+                          {shops.map((shop) => (
+                            <option key={shop.id} value={shop.id}>{shop.name}</option>
+                          ))}
+                        </select>
+                      )
+                    ) : (
+                      <Link
+                        href={buildShopHref("/dashboard/shops/new")}
+                        prefetch={false}
+                        onClick={(event) => handleNavClick(event, "/dashboard/shops/new")}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-3 text-sm font-semibold text-primary hover:bg-muted transition-colors"
+                      >
+                        <Store className="h-3.5 w-3.5 shrink-0" />
+                        নতুন দোকান →
+                      </Link>
+                    )}
                   </div>
                 </div>
 
@@ -1342,7 +1375,7 @@ export function DashboardShell({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 lg:hidden">
                 {shops?.length > 0 ? (
                   mounted ? (
                     <Select
