@@ -56,6 +56,7 @@ import {
   Users,
   Wallet,
   X,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -661,11 +662,16 @@ export function DashboardShell({
               }`}
             >
               <div className={sidebarCollapsed ? "lg:hidden" : ""}>
-                <h1 className="text-lg font-semibold tracking-tight text-sidebar-foreground">
-                  মাইক্রো
-                </h1>
-                <p className="text-xs text-sidebar-accent-foreground mt-1">
-                  POS সিস্টেম
+                <div className="flex items-center gap-1.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sidebar-primary shadow-sm">
+                    <Zap className="h-4 w-4 text-sidebar-primary-foreground" />
+                  </div>
+                  <h1 className="text-lg font-extrabold tracking-tight text-sidebar-foreground">
+                    SellFlick
+                  </h1>
+                </div>
+                <p className="text-[11px] text-sidebar-accent-foreground mt-1 pl-0.5 tracking-wide">
+                  বিক্রয় ব্যবস্থাপনা
                 </p>
               </div>
 
@@ -708,44 +714,47 @@ export function DashboardShell({
             </div>
 
             <nav className="flex-1 min-h-0 px-2 py-3 overflow-y-auto">
-              <div
-                className={`px-2 pb-2 text-[11px] font-semibold text-sidebar-accent-foreground uppercase tracking-wider ${
-                  sidebarCollapsed ? "lg:hidden" : ""
-                }`}
-              >
-                প্রধান মেনু
-              </div>
-
-              {!sidebarCollapsed ? (
-                <div className="mb-3 px-2">
-                  <div className="inline-flex w-full rounded-xl border border-sidebar-border bg-sidebar-accent/70 p-1 shadow-sm">
+              {mounted && !sidebarCollapsed ? (
+                <div className="mb-2 flex items-center justify-between px-2">
+                  <span className="text-[11px] font-semibold text-sidebar-accent-foreground uppercase tracking-wider">
+                    প্রধান মেনু
+                  </span>
+                  <div className="inline-flex items-center rounded-lg border border-sidebar-border bg-sidebar-accent/60 p-0.5 gap-0.5">
                     <button
                       type="button"
                       onClick={() => setNavLayout("grid")}
                       aria-pressed={sidebarNavLayout === "grid"}
-                      className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                      aria-label="Grid view"
+                      title="Grid"
+                      className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
                         sidebarNavLayout === "grid"
                           ? "bg-sidebar text-sidebar-foreground shadow-sm"
                           : "text-sidebar-accent-foreground hover:text-sidebar-foreground"
                       }`}
                     >
-                      <LayoutGrid className="h-3.5 w-3.5" />
-                      <span>Grid</span>
+                      <LayoutGrid className="h-3 w-3" />
                     </button>
                     <button
                       type="button"
                       onClick={() => setNavLayout("list")}
                       aria-pressed={sidebarNavLayout === "list"}
-                      className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                      aria-label="List view"
+                      title="List"
+                      className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
                         sidebarNavLayout === "list"
                           ? "bg-sidebar text-sidebar-foreground shadow-sm"
                           : "text-sidebar-accent-foreground hover:text-sidebar-foreground"
                       }`}
                     >
-                      <List className="h-3.5 w-3.5" />
-                      <span>List</span>
+                      <List className="h-3 w-3" />
                     </button>
                   </div>
+                </div>
+              ) : !sidebarCollapsed ? (
+                <div className="mb-2 px-2">
+                  <span className="text-[11px] font-semibold text-sidebar-accent-foreground uppercase tracking-wider">
+                    প্রধান মেনু
+                  </span>
                 </div>
               ) : null}
 
@@ -1158,63 +1167,75 @@ export function DashboardShell({
               )}
             </nav>
 
-            <div
-              className={`border-t border-sidebar-border px-4 py-4 ${
-                sidebarCollapsed ? "lg:px-3" : ""
-              }`}
-            >
+            <div className={`border-t border-sidebar-border px-3 py-3 ${sidebarCollapsed ? "lg:px-2" : ""}`}>
               <div ref={userMenuRef} className="relative">
+
+                {/* User trigger button */}
                 <button
                   type="button"
                   onClick={() => setUserMenuOpen((p) => !p)}
-                  className={`w-full flex items-center gap-3 rounded-xl border border-sidebar-border bg-sidebar-accent px-3 py-2 text-left shadow-sm hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
+                  className={`w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar ${
                     sidebarCollapsed ? "lg:justify-center" : ""
                   }`}
                   aria-label="Open user menu"
                   aria-expanded={userMenuOpen}
                 >
-                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-sm font-semibold">
+                  {/* Avatar */}
+                  <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-xs font-bold shadow-sm">
                     {userInitials}
+                    <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-success border-2 border-sidebar" />
                   </span>
 
-                  <span
-                    className={sidebarCollapsed ? "hidden" : "min-w-0 flex-1"}
-                  >
-                    <span className="block truncate text-sm font-semibold text-sidebar-foreground">
+                  {/* Name + role */}
+                  <span className={sidebarCollapsed ? "hidden" : "min-w-0 flex-1"}>
+                    <span className="block truncate text-[13px] font-semibold text-sidebar-foreground leading-tight">
                       {userDisplayName}
                     </span>
-                    {userEmail ? (
-                      <span className="block truncate text-xs text-sidebar-accent-foreground">
+                    {primaryRoleLabel ? (
+                      <span className="block truncate text-[11px] text-sidebar-accent-foreground leading-tight mt-0.5">
+                        {primaryRoleLabel}
+                      </span>
+                    ) : userEmail ? (
+                      <span className="block truncate text-[11px] text-sidebar-accent-foreground leading-tight mt-0.5">
                         {userEmail}
                       </span>
                     ) : null}
                   </span>
 
-                  <span
-                    className={
-                      sidebarCollapsed ? "hidden" : "flex items-center gap-2"
-                    }
-                  >
-                    {primaryRoleLabel ? (
-                      <span className="inline-flex items-center rounded-full border border-sidebar-border bg-sidebar-accent px-2 py-0.5 text-[11px] font-semibold text-sidebar-accent-foreground">
-                        {primaryRoleLabel}
-                      </span>
-                    ) : null}
-                    <ChevronDown
-                      className={`h-4 w-4 text-sidebar-accent-foreground transition-transform ${
-                        userMenuOpen ? "rotate-180" : "rotate-0"
-                      }`}
-                    />
-                  </span>
+                  {/* Chevron */}
+                  <ChevronDown
+                    className={`hidden ${sidebarCollapsed ? "" : "lg:block"} h-3.5 w-3.5 shrink-0 text-sidebar-accent-foreground transition-transform ${
+                      userMenuOpen ? "rotate-180" : "rotate-0"
+                    }`}
+                  />
                 </button>
 
+                {/* Popup menu */}
                 {userMenuOpen && (
                   <div
-                    className={`absolute bottom-[56px] z-50 rounded-xl border border-border bg-card shadow-[0_16px_40px_rgba(15,23,42,0.18)] overflow-hidden ${
+                    className={`absolute bottom-[calc(100%+8px)] z-50 overflow-hidden rounded-2xl border border-border bg-card shadow-[0_20px_48px_rgba(15,23,42,0.18)] ${
                       sidebarCollapsed ? "left-0 w-64" : "left-0 right-0"
                     }`}
                   >
-                    <div className="p-2">
+                    {/* User info header */}
+                    <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-sm font-bold">
+                        {userInitials}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">{userDisplayName}</p>
+                        {userEmail ? (
+                          <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
+                        ) : null}
+                      </div>
+                      {primaryRoleLabel ? (
+                        <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground shrink-0">
+                          {primaryRoleLabel}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="p-1.5 space-y-0.5">
                       <Link
                         href={buildShopHref(profileHref)}
                         onClick={(event) => {
@@ -1225,33 +1246,27 @@ export function DashboardShell({
                         prefetch={false}
                         onMouseEnter={() => handleNavPrefetch(profileHref)}
                         onTouchStart={() => handleNavPrefetch(profileHref)}
-                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                       >
-                        <User className="h-4 w-4" />
-                        <span>Profile</span>
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span>প্রোফাইল</span>
                       </Link>
 
                       {rbacUser?.isImpersonating ? (
-                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
-                          <p className="text-xs font-semibold text-amber-900">
-                            ইমপার্সোনেশন চালু আছে
-                          </p>
-                          <p className="mt-1 text-[11px] text-amber-800/90">
-                            আপনি অন্য user-এর permission view করছেন।
+                        <div className="mx-1 my-1 rounded-xl border border-warning/30 bg-warning-soft/50 px-3 py-2.5">
+                          <p className="text-xs font-semibold text-warning">ইমপার্সোনেশন চালু</p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            অন্য user-এর permission view করছেন।
                           </p>
                           <div className="mt-2">
                             <StopImpersonationButton compact />
                           </div>
                         </div>
                       ) : null}
+                    </div>
 
-                      <div className="mt-2">
-                        <div className="flex items-center gap-2 px-3 pb-2 text-xs font-semibold text-muted-foreground">
-                          <LogOut className="h-4 w-4" />
-                          <span>Logout</span>
-                        </div>
-                        <LogoutButton variant="menu" />
-                      </div>
+                    <div className="border-t border-border/60 p-1.5">
+                      <LogoutButton variant="menu" />
                     </div>
                   </div>
                 )}
