@@ -8,6 +8,7 @@ const itemSchema = z.object({
   variantId: z.string().optional().nullable(),
   qty: z.union([z.string(), z.number()]),
   unitCost: z.union([z.string(), z.number()]),
+  unitConversionId: z.string().optional().nullable(),
   serialNumbers: z.array(z.string().min(1).max(120)).optional().nullable(),
   batchNo: z.string().max(120).optional().nullable(),
 });

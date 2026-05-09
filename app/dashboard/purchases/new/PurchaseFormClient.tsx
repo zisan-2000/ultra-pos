@@ -10,21 +10,30 @@ type ProductVariantOption = {
   stockQty: string;
 };
 
+type ProductUnitConversionOption = {
+  id: string;
+  label: string;
+  baseUnitQuantity: string;
+};
+
 type ProductOption = {
   id: string;
   name: string;
+  baseUnit: string;
   buyPrice?: string | null;
   stockQty?: string | null;
   trackStock?: boolean | null;
   trackSerialNumbers?: boolean | null;
   trackBatch?: boolean | null;
   variants?: ProductVariantOption[];
+  unitConversions?: ProductUnitConversionOption[];
 };
 
 type PurchaseItemDraft = {
   id: string;
   productId: string;
   variantId?: string | null;
+  unitConversionId?: string | null;
   qty: string;
   unitCost: string;
   serialNumbers: string[];
@@ -76,6 +85,7 @@ const blankItem = (): PurchaseItemDraft => ({
   id: crypto.randomUUID(),
   productId: "",
   variantId: null,
+  unitConversionId: null,
   qty: "1",
   unitCost: "",
   serialNumbers: [],
@@ -89,6 +99,12 @@ function formatMoney(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function toPositiveNumber(raw: string | number | null | undefined, fallback = 0) {
+  const num = Number(raw);
+  if (!Number.isFinite(num) || num <= 0) return fallback;
+  return num;
 }
 
 export default function PurchaseFormClient({
@@ -130,6 +146,43 @@ export default function PurchaseFormClient({
     () => new Map(suppliers.map((supplier) => [supplier.id, supplier.name])),
     [suppliers]
   );
+
+  const resolveSelectedConversion = (
+    product: ProductOption | undefined,
+    unitConversionId: string | null | undefined
+  ) => {
+    if (!product || !unitConversionId) return null;
+    return (product.unitConversions ?? []).find(
+      (conversion) => conversion.id === unitConversionId
+    ) ?? null;
+  };
+
+  const resolveUnitMultiplier = (
+    product: ProductOption | undefined,
+    unitConversionId: string | null | undefined
+  ) => {
+    const selected = resolveSelectedConversion(product, unitConversionId);
+    const factor = toPositiveNumber(selected?.baseUnitQuantity, 1);
+    return factor > 0 ? factor : 1;
+  };
+
+  const resolveSuggestedPurchaseUnitCost = (
+    product: ProductOption | undefined,
+    variantId: string | null | undefined,
+    unitConversionId: string | null | undefined
+  ) => {
+    if (!product) return "";
+    const selectedVariant = variantId
+      ? (product.variants ?? []).find((variant) => variant.id === variantId)
+      : null;
+    const baseCost = toPositiveNumber(
+      selectedVariant?.buyPrice ?? product.buyPrice ?? "",
+      0
+    );
+    if (baseCost <= 0) return "";
+    const factor = resolveUnitMultiplier(product, unitConversionId);
+    return String(Number((baseCost * factor).toFixed(2)));
+  };
 
   const totalAmount = useMemo(() => {
     return items.reduce((sum, item) => {
@@ -226,6 +279,7 @@ export default function PurchaseFormClient({
 
   const handleProductSelect = (id: string, productId: string) => {
     const product = productMap.get(productId);
+    const suggestedCost = resolveSuggestedPurchaseUnitCost(product, null, null);
     setItems((prev) =>
       prev.map((item) =>
         item.id === id
@@ -233,9 +287,8 @@ export default function PurchaseFormClient({
               ...item,
               productId,
               variantId: null,
-              unitCost:
-                item.unitCost ||
-                (product?.buyPrice != null ? String(product.buyPrice) : ""),
+              unitConversionId: null,
+              unitCost: item.unitCost || suggestedCost,
             }
           : item
       )
@@ -247,20 +300,43 @@ export default function PurchaseFormClient({
     const selectedProduct = currentItem?.productId
       ? productMap.get(currentItem.productId)
       : null;
-    const selectedVariant = variantId
-      ? (selectedProduct?.variants ?? []).find((variant) => variant.id === variantId)
-      : null;
+    const nextVariantId = variantId || null;
+    const suggestedCost = resolveSuggestedPurchaseUnitCost(
+      selectedProduct ?? undefined,
+      nextVariantId,
+      currentItem?.unitConversionId ?? null
+    );
     setItems((prev) =>
       prev.map((item) =>
         item.id === itemId
           ? {
               ...item,
-              variantId: variantId || null,
-              unitCost:
-                item.unitCost ||
-                (selectedVariant?.buyPrice != null
-                  ? String(selectedVariant.buyPrice)
-                  : item.unitCost),
+              variantId: nextVariantId,
+              unitCost: item.unitCost || suggestedCost,
+            }
+          : item
+      )
+    );
+  };
+
+  const handleUnitConversionSelect = (itemId: string, unitConversionId: string) => {
+    const currentItem = items.find((item) => item.id === itemId);
+    const selectedProduct = currentItem?.productId
+      ? productMap.get(currentItem.productId)
+      : null;
+    const nextUnitConversionId = unitConversionId || null;
+    const suggestedCost = resolveSuggestedPurchaseUnitCost(
+      selectedProduct ?? undefined,
+      currentItem?.variantId ?? null,
+      nextUnitConversionId
+    );
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              unitConversionId: nextUnitConversionId,
+              unitCost: suggestedCost || item.unitCost,
             }
           : item
       )
@@ -351,6 +427,7 @@ export default function PurchaseFormClient({
               variantId: item.variantId || null,
               qty: item.qty,
               unitCost: item.unitCost,
+              unitConversionId: item.unitConversionId || null,
               serialNumbers: item.serialNumbers.length > 0 ? item.serialNumbers : null,
               batchNo: item.batchNo.trim() || null,
             })),
@@ -633,7 +710,7 @@ export default function PurchaseFormClient({
                       ) : null}
                     </div>
 
-                    <div className="mt-3 grid gap-3 sm:grid-cols-[1.4fr_0.8fr_0.8fr]">
+                    <div className="mt-3 grid gap-3 sm:grid-cols-[1.35fr_0.95fr_0.8fr_0.8fr]">
                       <div className="space-y-1">
                         <label className="text-[11px] font-semibold text-muted-foreground">
                           পণ্য
@@ -649,6 +726,29 @@ export default function PurchaseFormClient({
                           {products.map((productOption) => (
                             <option key={productOption.id} value={productOption.id}>
                               {productOption.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-muted-foreground">
+                          ক্রয় ইউনিট
+                        </label>
+                        <select
+                          value={item.unitConversionId ?? ""}
+                          onChange={(e) =>
+                            handleUnitConversionSelect(item.id, e.target.value)
+                          }
+                          disabled={!product}
+                          className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <option value="">
+                            {product?.baseUnit ? `Base: ${product.baseUnit}` : "Base ইউনিট"}
+                          </option>
+                          {(product?.unitConversions ?? []).map((conversion) => (
+                            <option key={conversion.id} value={conversion.id}>
+                              {conversion.label} ({conversion.baseUnitQuantity} {product?.baseUnit})
                             </option>
                           ))}
                         </select>
@@ -714,6 +814,17 @@ export default function PurchaseFormClient({
                       const selectedVariant = item.variantId
                         ? (product.variants ?? []).find((v) => v.id === item.variantId)
                         : null;
+                      const selectedConversion = item.unitConversionId
+                        ? (product.unitConversions ?? []).find(
+                            (conversion) => conversion.id === item.unitConversionId
+                          )
+                        : null;
+                      const baseMultiplier = toPositiveNumber(
+                        selectedConversion?.baseUnitQuantity,
+                        1
+                      );
+                      const purchaseQty = Math.max(0, Number(item.qty || 0));
+                      const convertedBaseQty = purchaseQty * baseMultiplier;
                       const stockDisplay = selectedVariant
                         ? selectedVariant.stockQty
                         : product.trackStock
@@ -726,6 +837,8 @@ export default function PurchaseFormClient({
                             ? ` | বর্তমান স্টক: ${stockDisplay}`
                             : " | স্টক ট্র্যাক নয়"}
                           {selectedVariant ? ` (${selectedVariant.label})` : ""}
+                          {` | কনভার্টেড: ${convertedBaseQty.toFixed(2)} ${product.baseUnit}`}
+                          {selectedConversion ? ` (${selectedConversion.label})` : ""}
                         </div>
                       );
                     })() : null}

@@ -2790,6 +2790,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                 base unit: <span className="font-semibold text-foreground">{selectedUnit || "pcs"}</span>
                 {" "}। যেমন: 1 bundle = 10 {selectedUnit || "pcs"}
               </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                পুরনো conversion বন্ধ করতে `Active` অফ করুন। `X` চাপলে conversion স্থায়ীভাবে মুছে যাবে।
+              </p>
             </div>
             <button
               type="button"
@@ -2808,7 +2811,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
               {unitConversions.map((conversion, index) => (
                 <div
                   key={`${conversion.id || "new"}-${index}`}
-                  className="grid grid-cols-1 gap-2 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-[minmax(0,1fr)_140px_44px]"
+                  className={`grid grid-cols-1 gap-2 rounded-xl border p-3 sm:grid-cols-[minmax(0,1fr)_140px_120px_44px] ${
+                    conversion.isActive
+                      ? "border-border bg-muted/20"
+                      : "border-warning/40 bg-warning-soft/25"
+                  }`}
                 >
                   <input
                     type="text"
@@ -2836,6 +2843,22 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                     <span className="text-[11px] font-semibold text-muted-foreground">
                       {selectedUnit || "pcs"}
                     </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-2.5 py-1.5">
+                    <span
+                      className={`text-[11px] font-semibold ${
+                        conversion.isActive ? "text-success" : "text-warning"
+                      }`}
+                    >
+                      {conversion.isActive ? "Active" : "Inactive"}
+                    </span>
+                    <Switch
+                      checked={conversion.isActive !== false}
+                      onCheckedChange={(checked) =>
+                        upsertUnitConversion(index, { isActive: checked })
+                      }
+                      aria-label="কনভার্সন চালু বা বন্ধ করুন"
+                    />
                   </div>
                   <button
                     type="button"

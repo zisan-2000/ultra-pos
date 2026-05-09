@@ -21,6 +21,7 @@ type PurchaseItemInput = {
   variantId?: string | null;
   qty: number | string;
   unitCost: number | string;
+  unitConversionId?: string | null;
   serialNumbers?: string[] | null;
   batchNo?: string | null;
 };
@@ -251,6 +252,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
       id: true,
       shopId: true,
       name: true,
+      baseUnit: true,
       buyPrice: true,
       stockQty: true,
       trackStock: true,
@@ -320,6 +322,38 @@ export async function createPurchase(input: CreatePurchaseInput) {
     for (const v of variants) variantMap.set(v.id, v);
   }
 
+  const unitConversionIds = input.items
+    .map((item) => item.unitConversionId?.trim())
+    .filter((id): id is string => Boolean(id));
+  const unitConversionMap = new Map<
+    string,
+    {
+      id: string;
+      productId: string;
+      label: string;
+      baseUnitQuantity: Prisma.Decimal;
+      isActive: boolean;
+    }
+  >();
+  if (unitConversionIds.length > 0) {
+    const unitConversions = await prisma.productUnitConversion.findMany({
+      where: {
+        id: { in: Array.from(new Set(unitConversionIds)) },
+        shopId: input.shopId,
+      },
+      select: {
+        id: true,
+        productId: true,
+        label: true,
+        baseUnitQuantity: true,
+        isActive: true,
+      },
+    });
+    for (const row of unitConversions) {
+      unitConversionMap.set(row.id, row);
+    }
+  }
+
   const rows = input.items.map((item) => {
     const product = productMap.get(item.productId);
     if (!product) throw new Error("Product not found");
@@ -335,15 +369,47 @@ export async function createPurchase(input: CreatePurchaseInput) {
       }
     }
     const qty = toMoney(item.qty, "Quantity");
-    const unitCost = toMoney(item.unitCost, "Unit cost");
+    const enteredUnitCost = toMoney(item.unitCost, "Unit cost");
     if (qty <= 0) throw new Error("Quantity must be greater than 0");
-    const lineTotal = qty * unitCost;
+    const unitConversionId = item.unitConversionId?.trim() || null;
+    const selectedConversion = unitConversionId
+      ? unitConversionMap.get(unitConversionId)
+      : null;
+    if (unitConversionId && !selectedConversion) {
+      throw new Error("Selected unit conversion was not found");
+    }
+    if (selectedConversion && selectedConversion.productId !== product.id) {
+      throw new Error("Selected unit conversion does not belong to the product");
+    }
+    if (selectedConversion && !selectedConversion.isActive) {
+      throw new Error("Selected unit conversion is inactive");
+    }
+    const baseUnitQuantity = selectedConversion
+      ? Number(selectedConversion.baseUnitQuantity ?? 0)
+      : 1;
+    if (!Number.isFinite(baseUnitQuantity) || baseUnitQuantity <= 0) {
+      throw new Error("Invalid base unit conversion quantity");
+    }
+    const baseQty = qty * baseUnitQuantity;
+    const lineTotal = qty * enteredUnitCost;
+    const unitCost = baseQty > 0 ? lineTotal / baseQty : 0;
+    if (!Number.isFinite(baseQty) || baseQty <= 0) {
+      throw new Error("Converted base quantity must be greater than 0");
+    }
+    if (!Number.isFinite(unitCost) || unitCost <= 0) {
+      throw new Error("Converted base unit cost must be greater than 0");
+    }
     subtotalAmount += lineTotal;
     return {
       product,
       variantId,
       variant: variantId ? variantMap.get(variantId) ?? null : null,
-      qty,
+      qty: baseQty,
+      purchaseQty: qty,
+      baseQty,
+      baseUnitQuantity,
+      purchaseUnitLabel: selectedConversion?.label ?? product.baseUnit,
+      unitConversionId: selectedConversion?.id ?? null,
       unitCost,
       lineTotal,
     };
@@ -404,7 +470,11 @@ export async function createPurchase(input: CreatePurchaseInput) {
           purchaseId: created.id,
           productId: row.product.id,
           variantId: row.variantId,
-          quantity: row.qty.toFixed(2),
+          quantity: row.baseQty.toFixed(2),
+          purchaseQty: row.purchaseQty.toFixed(2),
+          purchaseUnitLabel: row.purchaseUnitLabel,
+          baseUnitQuantity: row.baseUnitQuantity.toFixed(4),
+          unitConversionId: row.unitConversionId,
           unitCost: row.unitCost.toFixed(2),
           lineTotal: row.lineTotal.toFixed(2),
           landedCostAllocated: row.landedCostAllocated.toFixed(2),
@@ -427,7 +497,10 @@ export async function createPurchase(input: CreatePurchaseInput) {
         const serials = rawSerials
           .map((s) => s.trim().toUpperCase())
           .filter(Boolean);
-        const expectedQty = Math.round(row.qty);
+        const expectedQty = Math.round(row.baseQty);
+        if (Math.abs(row.baseQty - expectedQty) > 0.000001) {
+          throw new Error(`"${product.name}" এর base quantity পূর্ণসংখ্যা হতে হবে serial tracking-এর জন্য`);
+        }
 
         if (serials.length !== expectedQty) {
           throw new Error(
@@ -485,12 +558,12 @@ export async function createPurchase(input: CreatePurchaseInput) {
               variantId: row.variantId ?? null,
               batchNo,
               purchaseItemId,
-              totalQty: row.qty,
-              remainingQty: row.qty,
+              totalQty: row.baseQty,
+              remainingQty: row.baseQty,
             },
             update: {
-              totalQty: { increment: row.qty },
-              remainingQty: { increment: row.qty },
+              totalQty: { increment: row.baseQty },
+              remainingQty: { increment: row.baseQty },
               isActive: true,
             },
           });
@@ -504,10 +577,10 @@ export async function createPurchase(input: CreatePurchaseInput) {
         const currentVariantStock = Number(row.variant.stockQty ?? 0);
         const currentVariantCost = Number(row.variant.buyPrice ?? 0);
         const variantBaseStock = product.trackStock ? currentVariantStock : 0;
-        const variantTotalUnits = variantBaseStock + row.qty;
+        const variantTotalUnits = variantBaseStock + row.baseQty;
         const weightedVariantCost =
           variantTotalUnits > 0
-            ? (variantBaseStock * currentVariantCost + row.qty * row.effectiveUnitCost) /
+            ? (variantBaseStock * currentVariantCost + row.baseQty * row.effectiveUnitCost) /
               variantTotalUnits
             : row.effectiveUnitCost;
         const nextVariantCost = Number.isFinite(weightedVariantCost)
@@ -518,18 +591,18 @@ export async function createPurchase(input: CreatePurchaseInput) {
           where: { id: row.variantId },
           data: {
             buyPrice: nextVariantCost.toFixed(2),
-            ...(product.trackStock ? { stockQty: { increment: row.qty } } : {}),
+            ...(product.trackStock ? { stockQty: { increment: row.baseQty } } : {}),
           },
         });
       } else {
         const currentStock = Number(product.stockQty ?? 0);
         const currentCost = Number(product.buyPrice ?? 0);
         const baseStock = product.trackStock ? currentStock : 0;
-        const nextStock = product.trackStock ? currentStock + row.qty : currentStock;
-        const totalUnits = baseStock + row.qty;
+        const nextStock = product.trackStock ? currentStock + row.baseQty : currentStock;
+        const totalUnits = baseStock + row.baseQty;
         const weighted =
           totalUnits > 0
-            ? (baseStock * currentCost + row.qty * row.effectiveUnitCost) / totalUnits
+            ? (baseStock * currentCost + row.baseQty * row.effectiveUnitCost) / totalUnits
             : row.effectiveUnitCost;
         const nextCost = Number.isFinite(weighted) ? weighted : row.effectiveUnitCost;
 

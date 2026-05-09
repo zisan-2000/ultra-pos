@@ -150,6 +150,7 @@ export default async function PurchaseNewPage({
         products={products.map((p) => ({
           id: p.id,
           name: p.name,
+          baseUnit: p.baseUnit || "pcs",
           buyPrice: p.buyPrice?.toString?.() ?? null,
           stockQty: p.stockQty?.toString?.() ?? null,
           trackStock: p.trackStock,
@@ -162,6 +163,15 @@ export default async function PurchaseNewPage({
               label: v.label,
               buyPrice: v.buyPrice?.toString?.() ?? null,
               stockQty: v.stockQty?.toString?.() ?? "0",
+            })),
+          unitConversions: (p.unitConversions ?? [])
+            .filter((conversion: any) => conversion.isActive !== false)
+            .map((conversion: any) => ({
+              id: conversion.id,
+              label: conversion.label,
+              baseUnitQuantity:
+                conversion.baseUnitQuantity?.toString?.() ??
+                String(conversion.baseUnitQuantity ?? "0"),
             })),
         }))}
         suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
