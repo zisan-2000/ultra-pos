@@ -170,7 +170,11 @@ function formatImpactLabel(
 }
 
 function getTopSellerAction(businessType: string, productName: string) {
-  if (["quick_counter", "food_service"].includes(getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)))) {
+  if (
+    ["quick_counter", "food_service", "food_cart_quick_service"].includes(
+      getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)),
+    )
+  ) {
     return `${productName} মেনুর উপরে রাখুন, কাউন্টার থেকে আগে বলুন, আর কম্বো দিয়ে বিক্রি বাড়ান।`;
   }
   if (getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)) === "digital_recharge") {
@@ -195,9 +199,12 @@ function isRetailHeavyType(businessType: string) {
 }
 
 function isFoodType(businessType: string) {
-  return ["quick_counter", "food_service", "produce_inventory"].includes(
-    getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)),
-  );
+  return [
+    "quick_counter",
+    "food_service",
+    "food_cart_quick_service",
+    "produce_inventory",
+  ].includes(getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)));
 }
 
 function isServiceType(businessType: string) {

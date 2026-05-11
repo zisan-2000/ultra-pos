@@ -1,6 +1,7 @@
 export type BusinessProfileKey =
   | "quick_counter"
   | "food_service"
+  | "food_cart_quick_service"
   | "retail_inventory"
   | "produce_inventory"
   | "fashion_variant"
@@ -44,6 +45,12 @@ const PROFILE_FEATURE_DEFAULTS: Record<BusinessProfileKey, FeatureBundleDefaults
     queueWorkflow: null,
   },
   food_service: {
+    inventoryByDefault: false,
+    cogsByDefault: false,
+    barcodeByDefault: false,
+    queueWorkflow: "restaurant",
+  },
+  food_cart_quick_service: {
     inventoryByDefault: false,
     cogsByDefault: false,
     barcodeByDefault: false,
@@ -109,6 +116,20 @@ const PROFILE_ASSISTS: Record<BusinessProfileKey, BusinessAssist> = {
     defaultCategory: "খাবার",
     categoryChips: ["খাবার", "ড্রিংকস", "ডেজার্ট"],
     priceHints: ["50", "80", "120", "180"],
+  },
+  food_cart_quick_service: {
+    defaultCategory: "ফাস্ট ফুড",
+    fallbackName: "Chicken Burger",
+    quickNames: [
+      "Chicken Burger",
+      "Beef Burger",
+      "Chicken Roll",
+      "Egg Roll",
+      "French Fries",
+      "Soft Drink 250ml",
+    ],
+    categoryChips: ["ফাস্ট ফুড", "ড্রিংকস", "স্ন্যাক্স", "কম্বো", "অ্যাড-অন"],
+    priceHints: ["30", "50", "80", "120"],
   },
   retail_inventory: {
     defaultCategory: "রিটেইল",
@@ -186,14 +207,11 @@ const SELECTABLE_SPECS = [
     key: "food_cart",
     label: "ফুড কার্ট / ছোট খাবারের দোকান",
     canonicalKey: "food_cart",
-    profile: "food_service",
+    profile: "food_cart_quick_service",
     selectable: true,
-    templateCandidates: ["tea_stall", "snacks_stationery"],
+    templateCandidates: ["food_cart", "tea_stall", "snacks_stationery"],
     assist: {
-      ...PROFILE_ASSISTS.food_service,
-      defaultCategory: "ফাস্ট ফুড",
-      categoryChips: ["ফাস্ট ফুড", "ড্রিংকস", "স্ন্যাক্স"],
-      priceHints: ["30", "50", "80", "120"],
+      ...PROFILE_ASSISTS.food_cart_quick_service,
     },
   },
   {

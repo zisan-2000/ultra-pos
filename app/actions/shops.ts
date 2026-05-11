@@ -328,6 +328,12 @@ export async function createShop(data: {
       "Enable Purchases/Suppliers first before turning on COGS analytics"
     );
   }
+  const explicitQueueWorkflow =
+    data.queueWorkflow !== undefined
+      ? sanitizeQueueWorkflow(data.queueWorkflow)
+      : undefined;
+  const resolvedQueueWorkflow =
+    explicitQueueWorkflow ?? getSuggestedQueueWorkflow(resolvedBusinessType);
 
   let createdShopId: string | null = null;
   await prisma.$transaction(async (tx) => {
@@ -369,9 +375,7 @@ export async function createShop(data: {
       ...(data.queueTokenPrefix !== undefined
         ? { queueTokenPrefix: sanitizeQueueTokenPrefix(data.queueTokenPrefix) }
         : {}),
-      ...(data.queueWorkflow !== undefined
-        ? { queueWorkflow: sanitizeQueueWorkflow(data.queueWorkflow) }
-        : {}),
+      ...(resolvedQueueWorkflow ? { queueWorkflow: resolvedQueueWorkflow } : {}),
     };
 
     const shop = await tx.shop.create({

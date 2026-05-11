@@ -99,6 +99,18 @@ const profileFieldConfig: Record<BusinessProfileKey, BusinessFieldConfig> = {
     stock: { enabledByDefault: false, requiredWhenEnabled: true },
     unit: { enabled: false, options: [] },
   },
+  food_cart_quick_service: {
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: {},
+      unit: { hidden: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: false, requiredWhenEnabled: true },
+    unit: { enabled: false, default: "pcs", options: ["pcs"] },
+  },
   retail_inventory: {
     fields: buildFields({
       name: { required: true },
