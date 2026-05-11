@@ -36,6 +36,7 @@ import {
   type VoiceSession,
 } from "@/lib/voice-recognition";
 import { toast } from "sonner";
+import { DEFAULT_BUSINESS_TYPE, getBusinessAssist } from "@/lib/business-types";
 import {
   Select,
   SelectContent,
@@ -131,74 +132,6 @@ const KEYWORD_CATEGORY_RULES: { keywords: string[]; category: string }[] = [
   { keywords: ["ট্যাবলেট", "ক্যাপসুল", "সিরাপ", "প্যারাসিটামল"], category: "ঔষধ" },
   { keywords: ["টি শার্ট", "শার্ট", "প্যান্ট", "ড্রেস"], category: "কাপড়" },
 ];
-
-const BUSINESS_ASSISTS: Record<
-  BusinessType,
-  {
-    defaultCategory: string;
-    fallbackName?: string;
-    categoryChips: string[];
-    priceHints: string[];
-  }
-> = {
-  tea_stall: {
-    defaultCategory: "চা/কফি",
-    categoryChips: ["চা/কফি", "স্ন্যাক্স", "বিস্কুট"],
-    priceHints: ["5", "10", "15", "20"],
-  },
-  pan_cigarette: {
-    defaultCategory: "পান/সিগারেট",
-    categoryChips: ["পান/সিগারেট", "স্ন্যাক্স", "রিচার্জ"],
-    priceHints: ["5", "10", "12", "20"],
-  },
-  mobile_recharge: {
-    defaultCategory: "রিচার্জ",
-    categoryChips: ["রিচার্জ", "ডেটা প্যাক"],
-    priceHints: ["20", "50", "100", "200"],
-    fallbackName: "Mobile Recharge",
-  },
-  fruits_veg: {
-    defaultCategory: "সবজি/ফল",
-    categoryChips: ["সবজি/ফল", "পাতাজাতীয়", "মসলা"],
-    priceHints: ["40", "60", "80", "120"],
-  },
-  snacks_stationery: {
-    defaultCategory: "স্ন্যাক্স",
-    categoryChips: ["স্ন্যাক্স", "স্টেশনারি", "পানীয়"],
-    priceHints: ["10", "20", "30", "50"],
-  },
-  mini_grocery: {
-    defaultCategory: "মুদি",
-    categoryChips: ["মুদি", "পানীয়", "স্ন্যাক্স"],
-    priceHints: ["50", "80", "100", "120"],
-  },
-  clothing: {
-    defaultCategory: "কাপড়",
-    categoryChips: ["কাপড়", "এক্সেসরিজ"],
-    priceHints: ["150", "250", "350", "500"],
-  },
-  cosmetics_gift: {
-    defaultCategory: "কসমেটিকস",
-    categoryChips: ["কসমেটিকস", "গিফট আইটেম", "হেয়ার কেয়ার"],
-    priceHints: ["60", "80", "120", "200"],
-  },
-  pharmacy: {
-    defaultCategory: "ঔষধ",
-    categoryChips: ["ঔষধ", "বেবি কেয়ার", "হেলথ কেয়ার"],
-    priceHints: ["5", "30", "60", "120"],
-  },
-  mini_wholesale: {
-    defaultCategory: "হোলসেল",
-    categoryChips: ["হোলসেল", "মুদি", "স্ন্যাক্স"],
-    priceHints: ["500", "1000", "1500", "2000"],
-  },
-  hardware: {
-    defaultCategory: "হার্ডওয়্যার",
-    categoryChips: ["সিমেন্ট/বিল্ডিং", "পাইপ/ফিটিংস", "ইলেকট্রিক্যাল", "রং/কেমিক্যাল"],
-    priceHints: ["50", "120", "250", "500"],
-  },
-};
-
 
 function parseProductText(input: string) {
   const cleaned = input.replace(/টাকা|tk|taka|price/gi, " ").replace(/:/g, " ");
@@ -306,7 +239,7 @@ export default function EditProductClient({
 }: Props) {
   const router = useRouter();
   const online = useOnlineStatus();
-  const businessType = (shop.businessType as BusinessType) || "tea_stall";
+  const businessType = (shop.businessType as BusinessType) || DEFAULT_BUSINESS_TYPE;
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const voiceSessionRef = useRef<VoiceSession | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
@@ -327,7 +260,7 @@ export default function EditProductClient({
     [shop.id]
   );
   const shopId = shop.id;
-  const businessAssist = BUSINESS_ASSISTS[businessType];
+  const businessAssist = getBusinessAssist(businessType);
   const fallbackName = businessAssist?.fallbackName || "Unnamed product";
   const {
     isFieldVisible,

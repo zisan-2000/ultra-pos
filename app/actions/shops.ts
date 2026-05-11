@@ -13,7 +13,13 @@ import { sanitizeSalesInvoicePrintSize } from "@/lib/sales-invoice-print";
 import { sanitizeQueueTokenPrefix } from "@/lib/queue-token";
 import { sanitizeQueueWorkflow } from "@/lib/queue-workflow";
 import { sanitizeSaleTaxLabel, sanitizeSaleTaxRate } from "@/lib/sales/tax";
-import { isLegacyCogsBusinessType } from "@/lib/accounting/cogs-types";
+import {
+  DEFAULT_BUSINESS_TYPE,
+  getSuggestedQueueWorkflow,
+  resolveBusinessTypeStorageKey,
+  usesCogsByDefault,
+  usesInventoryByDefault,
+} from "@/lib/business-types";
 
 async function getCurrentUser() {
   return requireUser();
@@ -159,7 +165,9 @@ export async function createShop(data: {
   }
 
   const targetOwnerId = isSuperAdmin ? requestedOwnerId ?? user.id : user.id;
-  const resolvedBusinessType = data.businessType || "tea_stall";
+  const resolvedBusinessType = resolveBusinessTypeStorageKey(
+    data.businessType || DEFAULT_BUSINESS_TYPE,
+  );
 
   const wantsInvoiceEntitlementChange = data.salesInvoiceEntitled === true;
   if (wantsInvoiceEntitlementChange) {
@@ -287,7 +295,7 @@ export async function createShop(data: {
       "SMS summary cannot be enabled before super-admin entitlement is turned on"
     );
   }
-  const defaultInventoryEnabled = isLegacyCogsBusinessType(resolvedBusinessType);
+  const defaultInventoryEnabled = usesInventoryByDefault(resolvedBusinessType);
   const useOwnerLegacyInventoryDefault =
     !isSuperAdmin && data.inventoryFeatureEntitled === undefined;
   const resolvedInventoryEntitled = Boolean(
@@ -303,11 +311,12 @@ export async function createShop(data: {
       "Purchases/Suppliers cannot be enabled before super-admin entitlement is turned on"
     );
   }
+  const defaultCogsEnabled = usesCogsByDefault(resolvedBusinessType);
   const resolvedCogsEntitled = Boolean(
-    data.cogsFeatureEntitled ?? resolvedInventoryEntitled
+    data.cogsFeatureEntitled ?? (resolvedInventoryEntitled && defaultCogsEnabled)
   );
   const resolvedCogsEnabled = resolvedCogsEntitled
-    ? Boolean(data.cogsEnabled ?? resolvedInventoryEnabled)
+    ? Boolean(data.cogsEnabled ?? (resolvedInventoryEnabled && defaultCogsEnabled))
     : false;
   if (Boolean(data.cogsEnabled) && !resolvedCogsEntitled) {
     throw new Error(
@@ -467,7 +476,9 @@ export async function updateShop(id: string, data: any) {
     ...(data.name !== undefined ? { name: data.name } : {}),
     ...(data.address !== undefined ? { address: data.address } : {}),
     ...(data.phone !== undefined ? { phone: data.phone } : {}),
-    ...(data.businessType !== undefined ? { businessType: data.businessType } : {}),
+    ...(data.businessType !== undefined
+      ? { businessType: resolveBusinessTypeStorageKey(data.businessType) }
+      : {}),
     ...(data.closingTime !== undefined ? { closingTime: data.closingTime } : {}),
   };
 

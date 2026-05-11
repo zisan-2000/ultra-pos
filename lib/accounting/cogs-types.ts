@@ -1,14 +1,27 @@
+import { usesCogsByDefault, usesInventoryByDefault } from "@/lib/business-types";
+
 export const LEGACY_SHOP_TYPES_WITH_COGS = new Set([
-  "mini_grocery",
+  "grocery",
+  "mini_mart",
+  "fruits_vegetables",
+  "snacks_shop",
+  "stationery",
   "pharmacy",
   "clothing",
   "cosmetics_gift",
+  "mobile_accessories",
+  "electronics",
+  "hardware",
+  "wholesale",
+  "general_retail",
+  "mini_grocery",
   "mini_wholesale",
+  "fruits_veg",
+  "snacks_stationery",
 ]);
 
 export function isLegacyCogsBusinessType(businessType?: string | null) {
-  if (!businessType) return false;
-  return LEGACY_SHOP_TYPES_WITH_COGS.has(businessType);
+  return usesInventoryByDefault(businessType);
 }
 
 export function resolveInventoryModuleEnabled(shop: {
@@ -22,7 +35,7 @@ export function resolveInventoryModuleEnabled(shop: {
   if (hasExplicitToggle) {
     return Boolean(shop.inventoryFeatureEntitled) && Boolean(shop.inventoryEnabled);
   }
-  return isLegacyCogsBusinessType(shop.businessType);
+  return usesInventoryByDefault(shop.businessType);
 }
 
 export function resolveCogsEnabled(shop: {
@@ -38,5 +51,5 @@ export function resolveCogsEnabled(shop: {
   if (hasExplicitCogsToggle) {
     return Boolean(shop.cogsFeatureEntitled) && Boolean(shop.cogsEnabled);
   }
-  return resolveInventoryModuleEnabled(shop);
+  return resolveInventoryModuleEnabled(shop) && usesCogsByDefault(shop.businessType);
 }

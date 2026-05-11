@@ -14,7 +14,7 @@ export function useProductFields(
   businessType: BusinessType | string,
   overrideConfig?: BusinessFieldConfig | null,
 ) {
-  const fallbackConfig = businessFieldConfig.mini_grocery;
+  const fallbackConfig = businessFieldConfig.general_retail;
   const config = overrideConfig ?? businessFieldConfig[businessType as BusinessType] ?? fallbackConfig;
 
   const isFieldVisible = (field: Field) => !config.fields[field]?.hidden;

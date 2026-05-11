@@ -113,7 +113,7 @@ export default function BusinessTypesClient({
       const key = rawKey.toLowerCase();
       const existing = types.find((t) => t.key === key);
       const fallbackConfig =
-        STATIC_CONFIGS[key as BusinessType] ?? STATIC_CONFIGS.mini_grocery;
+        STATIC_CONFIGS[key as BusinessType] ?? STATIC_CONFIGS.general_retail;
 
       const label =
         (formData.get("label") as string | null)?.trim() ||
@@ -285,7 +285,7 @@ export default function BusinessTypesClient({
       const key = rawKey.toLowerCase();
       const label = (formData.get("label") as string | null)?.trim() || key;
       const config =
-        STATIC_CONFIGS[key as BusinessType] ?? STATIC_CONFIGS.mini_grocery;
+        STATIC_CONFIGS[key as BusinessType] ?? STATIC_CONFIGS.general_retail;
 
       updateTypes((prev) => {
         const next = [...prev];

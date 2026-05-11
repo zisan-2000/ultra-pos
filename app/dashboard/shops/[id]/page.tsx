@@ -7,6 +7,11 @@ import Link from "next/link";
 import ShopFormClient from "../ShopFormClient";
 import { listActiveBusinessTypes } from "@/app/actions/business-types";
 import { businessOptions } from "@/lib/productFormConfig";
+import {
+  DEFAULT_BUSINESS_TYPE,
+  getBusinessTypeLabel,
+  isBusinessTypeKey,
+} from "@/lib/business-types";
 import { getCurrentUser } from "@/lib/auth-session";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_SALES_INVOICE_PRINT_SIZE } from "@/lib/sales-invoice-print";
@@ -149,7 +154,9 @@ export default async function EditShop({ params, searchParams }: PageProps) {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">ব্যবসার ধরন</p>
-            <p className="text-sm text-foreground">{shop.businessType || "-"}</p>
+            <p className="text-sm text-foreground">
+              {shop.businessType ? getBusinessTypeLabel(shop.businessType) : "-"}
+            </p>
           </div>
         </div>
         <Link
@@ -167,8 +174,18 @@ export default async function EditShop({ params, searchParams }: PageProps) {
     () => ({})
   );
   const businessTypeOptions = [
-    ...dbBusinessTypes.map((t) => ({ id: t.key, label: t.label })),
-    ...businessOptions.filter((opt) => !dbBusinessTypes.some((t) => t.key === opt.id)),
+    ...businessOptions.map((option) => {
+      const dbMatch = dbBusinessTypes.find((t) => t.key === option.id);
+      return dbMatch ? { id: dbMatch.key, label: dbMatch.label } : option;
+    }),
+    ...dbBusinessTypes
+      .filter((t) => !businessOptions.some((opt) => opt.id === t.key) && !isBusinessTypeKey(t.key))
+      .map((t) => ({ id: t.key, label: t.label })),
+    ...((shop.businessType &&
+    !dbBusinessTypes.some((t) => t.key === shop.businessType && !isBusinessTypeKey(t.key)) &&
+    !businessOptions.some((opt) => opt.id === shop.businessType)
+      ? [{ id: shop.businessType, label: getBusinessTypeLabel(shop.businessType) }]
+      : []) as Array<{ id: string; label: string }>),
   ];
 
   const backHref = "/dashboard/shops";
@@ -180,7 +197,7 @@ export default async function EditShop({ params, searchParams }: PageProps) {
       name: formData.get("name"),
       address: formData.get("address"),
       phone: formData.get("phone"),
-      businessType: (formData.get("businessType") as any) || "tea_stall",
+      businessType: (formData.get("businessType") as any) || DEFAULT_BUSINESS_TYPE,
       ...(canManageSalesInvoiceEntitlement || canManageSalesInvoiceFeature
         ? {
             ...(canManageSalesInvoiceEntitlement
@@ -352,7 +369,7 @@ export default async function EditShop({ params, searchParams }: PageProps) {
           name: shop.name || "",
           address: shop.address || "",
           phone: shop.phone || "",
-          businessType: (shop.businessType as any) || "tea_stall",
+          businessType: (shop.businessType as any) || DEFAULT_BUSINESS_TYPE,
           salesInvoiceEntitled: Boolean((shop as any).salesInvoiceEntitled),
           salesInvoiceEnabled: Boolean((shop as any).salesInvoiceEnabled),
           salesInvoicePrefix: (shop as any).salesInvoicePrefix || "INV",

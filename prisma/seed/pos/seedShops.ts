@@ -21,7 +21,7 @@ export async function seedShops(
       name: "Green Leaf Mini Grocery",
       address: "Dhanmondi 27, Dhaka",
       phone: "01700-200000",
-      businessType: "mini_grocery",
+      businessType: "grocery",
     },
     {
       key: "hotel",

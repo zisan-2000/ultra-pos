@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { businessOptions } from "@/lib/productFormConfig";
+import { DEFAULT_BUSINESS_TYPE } from "@/lib/business-types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOnlineStatus } from "@/lib/sync/net-status";
@@ -246,7 +247,7 @@ export default function ShopFormClient({
   const [phone, setPhone] = useState(initial?.phone || "");
   const availableBusinessTypes = businessTypeOptions?.length ? businessTypeOptions : businessOptions;
   const [businessType, setBusinessType] = useState<string>(
-    initial?.businessType || availableBusinessTypes[0]?.id || "tea_stall"
+    initial?.businessType || availableBusinessTypes[0]?.id || DEFAULT_BUSINESS_TYPE
   );
   const [salesInvoiceEntitled, setSalesInvoiceEntitled] = useState<boolean>(
     Boolean(initial?.salesInvoiceEntitled ?? false)
@@ -776,7 +777,7 @@ export default function ShopFormClient({
     setName(t.name);
     setAddress(t.address || "");
     setPhone(t.phone || "");
-    setBusinessType(t.businessType || "tea_stall");
+    setBusinessType(t.businessType || DEFAULT_BUSINESS_TYPE);
   }
 
   function formatRequestDateTime(iso: string | null | undefined) {

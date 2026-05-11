@@ -1,4 +1,8 @@
-import { businessOptions } from "@/lib/productFormConfig";
+import {
+  getBusinessTypeLabel,
+  getBusinessTypeProfileKey,
+  canonicalizeBusinessTypeKey,
+} from "@/lib/business-types";
 import type { BillingStatus } from "@/lib/billing";
 import type { TodaySummary } from "@/lib/reports/today-summary";
 
@@ -71,6 +75,8 @@ export type OwnerCopilotInsight = {
   actionNotes: string[];
   actions: OwnerCopilotAction[];
 };
+
+export { getBusinessTypeLabel };
 
 function roundMoney(value?: number | null) {
   const amount = Number(value ?? 0);
@@ -164,41 +170,40 @@ function formatImpactLabel(
 }
 
 function getTopSellerAction(businessType: string, productName: string) {
-  if (businessType.includes("restaurant") || businessType === "tea_stall") {
+  if (["quick_counter", "food_service"].includes(getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)))) {
     return `${productName} মেনুর উপরে রাখুন, কাউন্টার থেকে আগে বলুন, আর কম্বো দিয়ে বিক্রি বাড়ান।`;
   }
-  if (businessType === "mobile_recharge") {
+  if (getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)) === "digital_recharge") {
     return `${productName} চোখে পড়ার মতো জায়গায় রাখুন এবং quick তালিকায় উপরে দিন।`;
   }
   return `${productName} সামনে রাখুন, দ্রুত বিক্রিতে দিন, আর স্টাফকে আগে এটা অফার করতে বলুন।`;
 }
 
-export function getBusinessTypeLabel(value?: string | null) {
-  const key = String(value || "").trim().toLowerCase();
-  return (
-    businessOptions.find((item) => item.id === key)?.label ||
-    (key ? key.replace(/_/g, " ") : "দোকান")
-  );
+function normalizeBusinessTypeForRules(businessType: string) {
+  return canonicalizeBusinessTypeKey(businessType);
 }
 
 function isRetailHeavyType(businessType: string) {
   return [
-    "mini_grocery",
-    "mini_wholesale",
-    "pharmacy",
-    "clothing",
-    "cosmetics_gift",
-    "snacks_stationery",
-    "fruits_veg",
-  ].includes(businessType);
+    "retail_inventory",
+    "produce_inventory",
+    "fashion_variant",
+    "pharmacy_inventory",
+    "wholesale_inventory",
+    "hardware_advanced",
+  ].includes(getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)));
 }
 
 function isFoodType(businessType: string) {
-  return ["tea_stall", "fruits_veg", "snacks_stationery"].includes(businessType);
+  return ["quick_counter", "food_service", "produce_inventory"].includes(
+    getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)),
+  );
 }
 
 function isServiceType(businessType: string) {
-  return ["mobile_recharge"].includes(businessType);
+  return ["digital_recharge", "service_only"].includes(
+    getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)),
+  );
 }
 
 function buildMetricRows(summary: TodaySummary, snapshot: OwnerCopilotSnapshot) {
@@ -364,7 +369,7 @@ export function buildOwnerCopilotInsight(
     bullets.push("সাবস্ক্রিপশনের বিল বাকি আছে; পরিশোধ করলে সেবা বন্ধ হবে না।");
   }
 
-  if (snapshot.payablesTotal > 0 && (isRetailHeavyType(businessType) || businessType === "mini_wholesale")) {
+  if (snapshot.payablesTotal > 0 && isRetailHeavyType(businessType)) {
     bullets.push(
       `${snapshot.payableSupplierCount} জন সাপ্লায়ারের কাছে বাকি আছে ${formatMoney(
         snapshot.payablesTotal

@@ -8,9 +8,9 @@ import { isSuperAdmin } from "@/lib/rbac";
 import {
   type BusinessFieldConfig,
   businessFieldConfig as STATIC_CONFIGS,
-  businessOptions,
   validateConfig,
 } from "@/lib/productFormConfig";
+import { listDefaultBusinessTypeSeedRows } from "@/lib/business-types";
 
 type UpsertBusinessTypeInput = {
   key: string;
@@ -110,24 +110,21 @@ export async function syncDefaultBusinessTypes() {
   const user = await requireUser();
   assertSuperAdmin(user);
 
-  const labelMap = new Map<string, string>(
-    businessOptions.map((b) => [b.id as string, b.label as string]),
-  );
-
-  for (const [key, config] of Object.entries(STATIC_CONFIGS)) {
-    validateConfig({ [key]: config });
+  for (const row of listDefaultBusinessTypeSeedRows()) {
+    const config = STATIC_CONFIGS[row.key as keyof typeof STATIC_CONFIGS];
+    validateConfig({ [row.key]: config });
     await prisma.businessType.upsert({
-      where: { key },
+      where: { key: row.key },
       create: {
-        key,
-        label: labelMap.get(key) || key,
+        key: row.key,
+        label: row.label,
         isActive: true,
         fieldRules: config.fields,
         stockRules: config.stock,
         unitRules: config.unit,
       },
       update: {
-        label: labelMap.get(key) || key,
+        label: row.label,
         fieldRules: config.fields,
         stockRules: config.stock,
         unitRules: config.unit,

@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth-session";
 import { isSuperAdmin, requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
 import { Prisma } from "@prisma/client";
+import { getBusinessTypeTemplateCandidates } from "@/lib/business-types";
 
 type TemplateInput = {
   id?: string;
@@ -689,11 +690,11 @@ export async function listActiveBusinessProductTemplates(businessType: string) {
   const user = await requireUser();
   requirePermission(user, "view_products");
 
-  const key = businessType?.toString().trim();
-  if (!key) return [];
+  const keys = getBusinessTypeTemplateCandidates(businessType);
+  if (keys.length === 0) return [];
 
   const rows = await prisma.businessProductTemplate.findMany({
-    where: { businessType: key, isActive: true },
+    where: { businessType: { in: keys }, isActive: true },
     orderBy: [{ popularityScore: "desc" }, { name: "asc" }],
   });
 
@@ -727,11 +728,12 @@ export async function addBusinessProductTemplatesToShop(input: {
     return { createdCount: 0, skippedCount: 0, inactiveCount: 0 };
   }
 
+  const templateBusinessTypeKeys = getBusinessTypeTemplateCandidates(shop.businessType);
   const templates = await prisma.businessProductTemplate.findMany({
     where: {
       id: { in: uniqueIds },
       isActive: true,
-      businessType: shop.businessType,
+      businessType: { in: templateBusinessTypeKeys },
     },
     orderBy: [{ name: "asc" }],
   });

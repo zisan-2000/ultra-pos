@@ -3,6 +3,7 @@
 
 import { createShop } from "@/app/actions/shops";
 import { redirect } from "next/navigation";
+import { DEFAULT_BUSINESS_TYPE } from "@/lib/business-types";
 
 export async function handleCreateShop(formData: FormData) {
   const hasInvoiceSettings =
@@ -35,7 +36,7 @@ export async function handleCreateShop(formData: FormData) {
     name: formData.get("name") as string,
     address: formData.get("address") as string,
     phone: formData.get("phone") as string,
-    businessType: (formData.get("businessType") as any) || "tea_stall",
+    businessType: (formData.get("businessType") as any) || DEFAULT_BUSINESS_TYPE,
     ownerId: (formData.get("ownerId") as string) || undefined,
     ...(hasInvoiceSettings
       ? {

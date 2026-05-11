@@ -1,15 +1,13 @@
-export type BusinessType =
-  | "tea_stall"
-  | "pan_cigarette"
-  | "mobile_recharge"
-  | "fruits_veg"
-  | "snacks_stationery"
-  | "mini_grocery"
-  | "clothing"
-  | "cosmetics_gift"
-  | "pharmacy"
-  | "mini_wholesale"
-  | "hardware";
+import {
+  BUSINESS_TYPE_SPECS,
+  businessTypeOptions,
+  type BusinessProfileKey,
+  type BusinessType,
+  getBusinessTypeProfileKey,
+} from "@/lib/business-types";
+
+export type { BusinessType } from "@/lib/business-types";
+export const businessOptions = businessTypeOptions;
 
 export type Field =
   | "name"
@@ -44,20 +42,6 @@ export type BusinessFieldConfig = {
   unit: UnitRule;
 };
 
-export const businessOptions: { id: BusinessType; label: string }[] = [
-  { id: "tea_stall", label: "চা/কফি দোকান" },
-  { id: "pan_cigarette", label: "পান/সিগারেট দোকান" },
-  { id: "mobile_recharge", label: "মোবাইল রিচার্জ" },
-  { id: "fruits_veg", label: "সবজি/ফল" },
-  { id: "snacks_stationery", label: "স্ন্যাক্স/স্টেশনারি" },
-  { id: "mini_grocery", label: "মিনি মুদি" },
-  { id: "clothing", label: "কাপড়/গার্মেন্টস" },
-  { id: "cosmetics_gift", label: "কসমেটিকস/গিফট" },
-  { id: "pharmacy", label: "ফার্মেসি" },
-  { id: "mini_wholesale", label: "হোলসেল" },
-  { id: "hardware", label: "হার্ডওয়্যার/সিমেন্ট/ফিটিংস" },
-];
-
 const COMMON_FIELDS: Field[] = ["name", "sellPrice", "buyPrice", "unit", "expiry", "size"];
 
 export const DEFAULT_UNIT_KEYWORD_RULES: UnitKeywordRule[] = [
@@ -75,7 +59,10 @@ export const HARDWARE_UNIT_KEYWORD_RULES: UnitKeywordRule[] = [
   { keywords: ["পাইপ", "pipe", "এঙ্গেল", "angle", "চ্যানেল"], unit: "ft" },
   { keywords: ["স্ক্রু", "screw", "বোল্ট", "bolt", "নাট", "nut"], unit: "box" },
   { keywords: ["রং", "paint", "থিনার", "thinner", "পুটি"], unit: "liter" },
-  { keywords: ["ইট", "brick", "টাইলস", "tiles", "সুইচ", "switch", "সকেট", "socket", "হোল্ডার"], unit: "pcs" },
+  {
+    keywords: ["ইট", "brick", "টাইলস", "tiles", "সুইচ", "switch", "সকেট", "socket", "হোল্ডার"],
+    unit: "pcs",
+  },
   { keywords: ["ক্যাবল", "cable"], unit: "coil" },
   { keywords: ["ফিটিংস", "fitting", "এলবো", "elbow", "টি", "tee", "কাপলিং"], unit: "pcs" },
 ];
@@ -87,8 +74,8 @@ function buildFields(overrides: Partial<Record<Field, FieldRule>>): Record<Field
   }, {} as Record<Field, FieldRule>);
 }
 
-export const businessFieldConfig: Record<BusinessType, BusinessFieldConfig> = {
-  tea_stall: {
+const profileFieldConfig: Record<BusinessProfileKey, BusinessFieldConfig> = {
+  quick_counter: {
     fields: buildFields({
       name: { required: true },
       sellPrice: { required: true },
@@ -100,7 +87,7 @@ export const businessFieldConfig: Record<BusinessType, BusinessFieldConfig> = {
     stock: { enabledByDefault: false, requiredWhenEnabled: true },
     unit: { enabled: false, options: [] },
   },
-  pan_cigarette: {
+  food_service: {
     fields: buildFields({
       name: { required: true },
       sellPrice: { required: true },
@@ -112,24 +99,29 @@ export const businessFieldConfig: Record<BusinessType, BusinessFieldConfig> = {
     stock: { enabledByDefault: false, requiredWhenEnabled: true },
     unit: { enabled: false, options: [] },
   },
-  mobile_recharge: {
-    fields: buildFields({
-      name: { hidden: true },
-      sellPrice: { required: true },
-      buyPrice: { hidden: true },
-      unit: { hidden: true },
-      expiry: { hidden: true },
-      size: { hidden: true },
-    }),
-    stock: { enabledByDefault: false, requiredWhenEnabled: true },
-    unit: { enabled: false, options: [] },
-  },
-  fruits_veg: {
+  retail_inventory: {
     fields: buildFields({
       name: { required: true },
       sellPrice: { required: true },
+      buyPrice: {},
       unit: { required: true },
-      buyPrice: { hidden: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: true, requiredWhenEnabled: true },
+    unit: {
+      enabled: true,
+      options: ["pcs", "packet", "box", "dozen", "kg", "gm", "liter", "ml"],
+      default: "pcs",
+      keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
+    },
+  },
+  produce_inventory: {
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: {},
+      unit: { required: true },
       expiry: { hidden: true },
       size: { hidden: true },
     }),
@@ -141,36 +133,7 @@ export const businessFieldConfig: Record<BusinessType, BusinessFieldConfig> = {
       keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
     },
   },
-  snacks_stationery: {
-    fields: buildFields({
-      name: { required: true },
-      sellPrice: { required: true },
-      buyPrice: { hidden: true },
-      unit: { hidden: true },
-      expiry: { hidden: true },
-      size: { hidden: true },
-    }),
-    stock: { enabledByDefault: false, requiredWhenEnabled: true },
-    unit: { enabled: false, options: [] },
-  },
-  mini_grocery: {
-    fields: buildFields({
-      name: { required: true },
-      sellPrice: { required: true },
-      buyPrice: {},
-      unit: { required: true },
-      expiry: { hidden: true },
-      size: { hidden: true },
-    }),
-    stock: { enabledByDefault: true, requiredWhenEnabled: true },
-    unit: {
-      enabled: true,
-      options: ["pcs", "kg", "liter"],
-      default: "kg",
-      keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
-    },
-  },
-  clothing: {
+  fashion_variant: {
     fields: buildFields({
       name: { required: true },
       sellPrice: { required: true },
@@ -182,19 +145,7 @@ export const businessFieldConfig: Record<BusinessType, BusinessFieldConfig> = {
     stock: { enabledByDefault: false, requiredWhenEnabled: true },
     unit: { enabled: false, options: [] },
   },
-  cosmetics_gift: {
-    fields: buildFields({
-      name: { required: true },
-      sellPrice: { required: true },
-      buyPrice: {},
-      unit: { hidden: true },
-      expiry: { hidden: true },
-      size: { hidden: true },
-    }),
-    stock: { enabledByDefault: false, requiredWhenEnabled: true },
-    unit: { enabled: false, options: [] },
-  },
-  pharmacy: {
+  pharmacy_inventory: {
     fields: buildFields({
       name: { required: true },
       sellPrice: { required: true },
@@ -211,24 +162,7 @@ export const businessFieldConfig: Record<BusinessType, BusinessFieldConfig> = {
       keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
     },
   },
-  mini_wholesale: {
-    fields: buildFields({
-      name: { required: true },
-      sellPrice: { required: true },
-      buyPrice: { required: true },
-      unit: { required: true },
-      expiry: { hidden: true },
-      size: { hidden: true },
-    }),
-    stock: { enabledByDefault: true, requiredWhenEnabled: true },
-    unit: {
-      enabled: true,
-      options: ["kg", "carton", "box"],
-      default: "carton",
-      keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
-    },
-  },
-  hardware: {
+  hardware_advanced: {
     fields: buildFields({
       name: { required: true },
       sellPrice: { required: true },
@@ -245,7 +179,55 @@ export const businessFieldConfig: Record<BusinessType, BusinessFieldConfig> = {
       keywordRules: HARDWARE_UNIT_KEYWORD_RULES,
     },
   },
+  wholesale_inventory: {
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: { required: true },
+      unit: { required: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: true, requiredWhenEnabled: true },
+    unit: {
+      enabled: true,
+      options: ["kg", "carton", "box"],
+      default: "carton",
+      keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
+    },
+  },
+  digital_recharge: {
+    fields: buildFields({
+      name: { hidden: true },
+      sellPrice: { required: true },
+      buyPrice: { hidden: true },
+      unit: { hidden: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: false, requiredWhenEnabled: true },
+    unit: { enabled: false, options: [] },
+  },
+  service_only: {
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: { hidden: true },
+      unit: { hidden: true },
+      expiry: { hidden: true },
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: false, requiredWhenEnabled: true },
+    unit: { enabled: false, options: [] },
+  },
 };
+
+export const businessFieldConfig: Record<BusinessType, BusinessFieldConfig> = Object.fromEntries(
+  (Object.keys(BUSINESS_TYPE_SPECS) as BusinessType[]).map((key) => [
+    key,
+    profileFieldConfig[getBusinessTypeProfileKey(key)],
+  ])
+) as Record<BusinessType, BusinessFieldConfig>;
 
 function validateConfig(configs: Record<string, BusinessFieldConfig>) {
   Object.entries(configs).forEach(([type, config]) => {

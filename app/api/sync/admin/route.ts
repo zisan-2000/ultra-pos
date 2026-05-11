@@ -33,6 +33,7 @@ import {
 import { getPasswordPolicyError } from "@/lib/password-policy";
 import { STAFF_PERMISSION_PRESET_KEYS } from "@/lib/staff-permission-presets";
 import { businessFieldConfig as STATIC_CONFIGS, type BusinessType } from "@/lib/productFormConfig";
+import { DEFAULT_BUSINESS_TYPE } from "@/lib/business-types";
 
 function isBusinessType(value: string): value is BusinessType {
   return value in STATIC_CONFIGS;
@@ -297,7 +298,7 @@ export async function POST(req: Request) {
               const normalizedKey = input.key.trim().toLowerCase();
               const config = isBusinessType(normalizedKey)
                 ? STATIC_CONFIGS[normalizedKey]
-                : STATIC_CONFIGS.mini_grocery;
+                : STATIC_CONFIGS.general_retail;
               const label = input.label?.trim() || normalizedKey;
               await upsertBusinessType({
                 key: normalizedKey,
@@ -378,7 +379,7 @@ export async function POST(req: Request) {
                 name: input.name,
                 address: input.address ?? "",
                 phone: input.phone ?? "",
-                businessType: input.businessType ?? "tea_stall",
+                businessType: input.businessType ?? DEFAULT_BUSINESS_TYPE,
                 inventoryFeatureEntitled: input.inventoryFeatureEntitled,
                 inventoryEnabled: input.inventoryEnabled,
                 cogsFeatureEntitled: input.cogsFeatureEntitled,

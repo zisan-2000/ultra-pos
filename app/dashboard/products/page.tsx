@@ -8,6 +8,7 @@ import { listActiveBusinessProductTemplates } from "@/app/actions/business-produ
 import { listActiveBusinessTypes } from "@/app/actions/business-types";
 import ProductsListClient from "./components/ProductsListClient";
 import { businessOptions } from "@/lib/productFormConfig";
+import { DEFAULT_BUSINESS_TYPE, getBusinessTypeLabel } from "@/lib/business-types";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
 import {
@@ -111,7 +112,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
 
   const activeShopId = urlSelectedShopId ?? cookieSelectedShopId ?? shops[0].id;
   const activeShop = shops.find((shop) => shop.id === activeShopId) ?? shops[0];
-  const businessType = activeShop.businessType || "tea_stall";
+  const businessType = activeShop.businessType || DEFAULT_BUSINESS_TYPE;
   const activeBusinessTypes = await listActiveBusinessTypes().catch(() => []);
   const mergedBusinessTypes = [
     ...activeBusinessTypes.map((t) => ({ id: t.key, label: t.label })),

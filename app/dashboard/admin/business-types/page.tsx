@@ -33,7 +33,7 @@ async function handleCreateFromStatic(formData: FormData) {
   const key = (formData.get("key") as string | null)?.trim() as BusinessType | null;
   if (!key) return;
 
-  const config = STATIC_CONFIGS[key] ?? STATIC_CONFIGS.mini_grocery;
+  const config = STATIC_CONFIGS[key] ?? STATIC_CONFIGS.general_retail;
   const label = formData.get("label")?.toString().trim() || key;
 
   await upsertBusinessType({
@@ -74,7 +74,7 @@ async function handleStructuredEdit(formData: FormData) {
   if (!key) return;
 
   const existing = (await getBusinessType(key)) ?? null;
-  const fallbackConfig = STATIC_CONFIGS[key as BusinessType] ?? STATIC_CONFIGS.mini_grocery;
+  const fallbackConfig = STATIC_CONFIGS[key as BusinessType] ?? STATIC_CONFIGS.general_retail;
 
   const label = (formData.get("label") as string | null)?.trim() || existing?.label || key;
   const isActive = formData.get("isActive") === "on";

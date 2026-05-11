@@ -12,6 +12,7 @@ import {
 } from "@/app/actions/shop-creation-requests";
 import { listActiveBusinessTypes } from "@/app/actions/business-types";
 import { businessOptions } from "@/lib/productFormConfig";
+import { isBusinessTypeKey } from "@/lib/business-types";
 
 type PageProps = {
   searchParams?: Promise<{ requested?: string } | undefined>;
@@ -247,8 +248,13 @@ export default async function NewShopPage({ searchParams }: PageProps) {
   const ownerOptions = isSuperAdmin ? await getOwnerOptions() : undefined;
   const dbBusinessTypes = await listActiveBusinessTypes().catch(() => []);
   const mergedBusinessTypes = [
-    ...dbBusinessTypes.map((t) => ({ id: t.key, label: t.label })),
-    ...businessOptions.filter((opt) => !dbBusinessTypes.some((t) => t.key === opt.id)),
+    ...businessOptions.map((option) => {
+      const dbMatch = dbBusinessTypes.find((t) => t.key === option.id);
+      return dbMatch ? { id: dbMatch.key, label: dbMatch.label } : option;
+    }),
+    ...dbBusinessTypes
+      .filter((t) => !businessOptions.some((opt) => opt.id === t.key) && !isBusinessTypeKey(t.key))
+      .map((t) => ({ id: t.key, label: t.label })),
   ];
 
   return (
