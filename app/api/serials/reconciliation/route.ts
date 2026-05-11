@@ -24,8 +24,8 @@ export async function GET(req: Request) {
       where: { id: productId, shopId },
       select: {
         id: true,
-        trackSerialNumbers: true,
         stockQty: true,
+        trackSerialNumbers: true,
         variants: {
           where: { isActive: true },
           select: { id: true, stockQty: true },
@@ -42,6 +42,7 @@ export async function GET(req: Request) {
 
     let stockQty = Number(product.stockQty ?? 0);
     let variantCondition: { variantId?: string | null } = {};
+
     if (variantId) {
       const variant = product.variants.find((row) => row.id === variantId);
       if (!variant) {
@@ -53,40 +54,28 @@ export async function GET(req: Request) {
       stockQty = Number(variant.stockQty ?? 0);
       variantCondition = { variantId };
     } else if (product.variants.length > 0) {
-      // For variant products, unscoped query should not mix all variant serials.
       variantCondition = { variantId: null };
     }
 
-    const allSerials = await prisma.serialNumber.findMany({
-      where: {
-        shopId,
-        productId,
-        ...variantCondition,
-        status: "IN_STOCK",
-      },
-      select: { id: true, serialNo: true, createdAt: true },
-      orderBy: { createdAt: "asc" },
-    });
-
-    const stockCap = Math.max(0, Math.floor(stockQty + 1e-9));
-    const invalidSerializedStock =
-      product.trackSerialNumbers && !Number.isInteger(stockQty);
-    const hasMismatch = invalidSerializedStock || allSerials.length !== stockCap;
-    const serials = hasMismatch ? [] : allSerials;
-    const blockingReason = invalidSerializedStock
-      ? `Serial-tracked item-এর stock integer না (${stockQty}). বিক্রির আগে reconciliation করুন।`
-      : hasMismatch
-      ? `Serial mismatch: stock ${stockCap}, IN_STOCK serial ${allSerials.length}. বিক্রির আগে reconciliation করুন।`
-      : null;
+    const serials = product.trackSerialNumbers
+      ? await prisma.serialNumber.findMany({
+          where: {
+            shopId,
+            productId,
+            ...variantCondition,
+            status: "IN_STOCK",
+          },
+          select: { id: true, serialNo: true, createdAt: true },
+          orderBy: [{ createdAt: "asc" }, { serialNo: "asc" }],
+        })
+      : [];
 
     return NextResponse.json({
       success: true,
-      serials,
       stockQty,
-      serialInStockCount: allSerials.length,
-      trimmedSerialCount: 0,
-      hasMismatch,
-      blockingReason,
+      trackSerialNumbers: product.trackSerialNumbers,
+      serialCount: serials.length,
+      serials,
     });
   } catch (err: any) {
     return NextResponse.json(

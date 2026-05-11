@@ -13,6 +13,7 @@ export type CartItem = {
   qty: number;
   total: number;
   baseUnit?: string | null;
+  trackSerialNumbers?: boolean | null;
   serialNumbers?: string[] | null;
 };
 
@@ -29,6 +30,7 @@ type CartState = {
     name: string;
     unitPrice: number;
     baseUnit?: string | null;
+    trackSerialNumbers?: boolean | null;
     qty?: number;
   }) => void;
   remove: (itemKey: string) => void;

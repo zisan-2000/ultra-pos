@@ -328,6 +328,11 @@ export async function syncOfflineSalesBatch({
       if (!product.isActive) {
         throw new Error(`Inactive product in cart: ${product.name}`);
       }
+      if ((product as any).trackSerialNumbers) {
+        throw new Error(
+          `Serialized product "${product.name}" offline sync-এ সমর্থিত নয়`
+        );
+      }
     }
 
     const needsCogs = await shopNeedsCogs(db, shopId);

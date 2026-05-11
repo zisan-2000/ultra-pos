@@ -72,6 +72,13 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
       initialDraft.returnableItems.map((item) => [item.saleItemId, ""])
     )
   );
+  const [selectedSerialsBySaleItem, setSelectedSerialsBySaleItem] = useState<
+    Record<string, string[]>
+  >(() =>
+    Object.fromEntries(
+      initialDraft.returnableItems.map((item) => [item.saleItemId, []])
+    )
+  );
   const [isPending, startTransition] = useTransition();
 
   const itemById = useMemo(
@@ -89,17 +96,22 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
         const enteredQty = toNumber(returnQtyBySaleItem[item.saleItemId]);
         const unitPrice = toNumber(item.unitPrice);
         const maxQty = toNumber(item.maxReturnQty);
-        const safeQty = Math.max(0, Math.min(enteredQty, maxQty));
+        const selectedSerials = selectedSerialsBySaleItem[item.saleItemId] ?? [];
+        const serialQty = selectedSerials.length;
+        const safeQty = item.trackSerialNumbers
+          ? Math.max(0, Math.min(serialQty, maxQty))
+          : Math.max(0, Math.min(enteredQty, maxQty));
         return {
           ...item,
           enteredQty,
           safeQty,
           maxQty,
+          selectedSerials,
           lineTotal: safeQty * unitPrice,
           hasValue: safeQty > 0,
         };
       }),
-    [initialDraft.returnableItems, returnQtyBySaleItem]
+    [initialDraft.returnableItems, returnQtyBySaleItem, selectedSerialsBySaleItem]
   );
 
   const selectedReturnRows = useMemo(
@@ -127,6 +139,7 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
         if (!row.productId || qty <= 0) return null;
 
         const product = productById.get(row.productId);
+        if (product?.trackSerialNumbers) return null;
         const fallbackPrice = product ? toNumber(product.sellPrice) : 0;
         const unitPrice = row.unitPrice.trim()
           ? toNumber(row.unitPrice)
@@ -259,6 +272,18 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
     maxQty: string,
     force = false
   ) => {
+    const item = itemById.get(saleItemId);
+    if (item?.trackSerialNumbers) {
+      const allSerials = item.soldSerialNumbers.slice(
+        0,
+        Math.max(0, Math.round(toNumber(item.maxReturnQty)))
+      );
+      setSelectedSerialsBySaleItem((prev) => ({
+        ...prev,
+        [saleItemId]: allSerials,
+      }));
+      return;
+    }
     const current = toNumber(returnQtyBySaleItem[saleItemId]);
     if (!force && current > 0) return;
     setReturnQtyBySaleItem((prev) => ({
@@ -281,6 +306,18 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
     handleAutoSelectMax(saleItemId, maxQty);
   };
 
+  const toggleSoldSerial = (saleItemId: string, serialNo: string) => {
+    setSelectedSerialsBySaleItem((prev) => {
+      const current = prev[saleItemId] ?? [];
+      return {
+        ...prev,
+        [saleItemId]: current.includes(serialNo)
+          ? current.filter((row) => row !== serialNo)
+          : [...current, serialNo],
+      };
+    });
+  };
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canSubmit || isPending) return;
@@ -296,6 +333,7 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
     const returnedItems = selectedReturnRows.map((row) => ({
       saleItemId: row.saleItemId,
       qty: row.safeQty,
+      serialNumbers: row.trackSerialNumbers ? row.selectedSerials : null,
     }));
 
     const exchangeItems =
@@ -513,7 +551,11 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
                         min="0"
                         max={item.maxReturnQty}
                         step="0.01"
-                        value={returnQtyBySaleItem[item.saleItemId] ?? ""}
+                        value={
+                          item.trackSerialNumbers
+                            ? String(item.selectedSerials.length)
+                            : returnQtyBySaleItem[item.saleItemId] ?? ""
+                        }
                         onChange={(e) =>
                           setReturnQtyBySaleItem((prev) => ({
                             ...prev,
@@ -521,7 +563,8 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
                           }))
                         }
                         className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-right text-sm"
-                        disabled={isPending || disabled}
+                        disabled={isPending || disabled || item.trackSerialNumbers}
+                        readOnly={item.trackSerialNumbers}
                       />
                     </div>
 
@@ -541,10 +584,15 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
                           type="button"
                           disabled={isPending}
                           onClick={() =>
-                            setReturnQtyBySaleItem((prev) => ({
-                              ...prev,
-                              [item.saleItemId]: "",
-                            }))
+                            item.trackSerialNumbers
+                              ? setSelectedSerialsBySaleItem((prev) => ({
+                                  ...prev,
+                                  [item.saleItemId]: [],
+                                }))
+                              : setReturnQtyBySaleItem((prev) => ({
+                                  ...prev,
+                                  [item.saleItemId]: "",
+                                }))
                           }
                           className="rounded-full border border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50"
                         >
@@ -556,6 +604,41 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
                       </p>
                     </div>
                   </div>
+                  {item.trackSerialNumbers ? (
+                    <div className="mt-3 space-y-2 rounded-lg border border-primary/20 bg-primary-soft/20 p-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold text-primary">
+                          Sold serial বাছাই করুন
+                        </p>
+                        <span className="rounded-full bg-card px-2 py-0.5 text-[11px] font-semibold text-foreground">
+                          {item.selectedSerials.length} / {Math.round(item.maxQty)}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {item.soldSerialNumbers.map((serialNo) => {
+                          const selected = item.selectedSerials.includes(serialNo);
+                          return (
+                            <button
+                              key={serialNo}
+                              type="button"
+                              disabled={isPending}
+                              onClick={() => toggleSoldSerial(item.saleItemId, serialNo)}
+                              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                                selected
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-border bg-card text-foreground"
+                              }`}
+                            >
+                              {serialNo}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Serialized item-এ partial return মানে exactly কোন serial ফিরছে সেটা বাছাই করতে হবে।
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -633,7 +716,11 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
                         {initialDraft.exchangeProducts.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name} · ৳ {formatMoney(toNumber(p.sellPrice))}
-                            {p.trackStock ? ` · স্টক ${formatMoney(toNumber(p.stockQty))}` : ""}
+                            {p.trackSerialNumbers
+                              ? " · serialized"
+                              : p.trackStock
+                              ? ` · স্টক ${formatMoney(toNumber(p.stockQty))}`
+                              : ""}
                           </option>
                         ))}
                       </select>
@@ -680,6 +767,9 @@ export default function ReturnSaleClient({ initialDraft }: Props) {
                     {product ? (
                       <p className="mt-2 text-[11px] text-muted-foreground">
                         {product.name} · ডিফল্ট ৳ {formatMoney(toNumber(product.sellPrice))}
+                        {product.trackSerialNumbers
+                          ? " · serialized product exchange এই screen-এ blocked"
+                          : ""}
                         {product.trackStock
                           ? ` · স্টক ${formatMoney(toNumber(product.stockQty))}`
                           : " · স্টক ট্র্যাকিং বন্ধ"}

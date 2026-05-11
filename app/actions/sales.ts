@@ -116,6 +116,7 @@ type GetSalesByShopPaginatedInput = {
 type SaleReturnRowInput = {
   saleItemId: string;
   qty: number;
+  serialNumbers?: string[] | null;
 };
 
 type SaleExchangeRowInput = {
@@ -215,6 +216,8 @@ export type SaleReturnDraft = {
     maxReturnQty: string;
     unitPrice: string;
     lineTotal: string;
+    trackSerialNumbers: boolean;
+    soldSerialNumbers: string[];
   }[];
   exchangeProducts: {
     id: string;
@@ -222,6 +225,7 @@ export type SaleReturnDraft = {
     sellPrice: string;
     stockQty: string;
     trackStock: boolean;
+    trackSerialNumbers: boolean;
     isActive: boolean;
   }[];
   existingReturns: SaleReturnHistoryItem[];
@@ -283,6 +287,194 @@ function toSafePositiveNumber(value: unknown) {
 
 function roundMoney(value: number) {
   return Number(toMoney(value));
+}
+
+function normalizeSerialList(value?: string[] | null) {
+  const seen = new Set<string>();
+  const serials: string[] = [];
+  for (const raw of value ?? []) {
+    const serial = String(raw ?? "").trim().toUpperCase();
+    if (!serial || seen.has(serial)) continue;
+    seen.add(serial);
+    serials.push(serial);
+  }
+  return serials;
+}
+
+async function assertSerialInventoryConsistent(
+  tx: Prisma.TransactionClient,
+  params: {
+    shopId: string;
+    productId: string;
+    productName: string;
+    variantId: string | null;
+    variantLabel?: string | null;
+  }
+) {
+  const serialCount = await tx.serialNumber.count({
+    where: {
+      shopId: params.shopId,
+      productId: params.productId,
+      variantId: params.variantId,
+      status: "IN_STOCK",
+    },
+  });
+
+  const stockQty = params.variantId
+    ? Number(
+        (
+          await tx.productVariant.findUnique({
+            where: { id: params.variantId },
+            select: { stockQty: true },
+          })
+        )?.stockQty ?? 0
+      )
+    : Number(
+        (
+          await tx.product.findUnique({
+            where: { id: params.productId },
+            select: { stockQty: true },
+          })
+        )?.stockQty ?? 0
+      );
+
+  if (!Number.isInteger(stockQty)) {
+    throw new Error(
+      `"${params.productName}${
+        params.variantLabel ? ` (${params.variantLabel})` : ""
+      }" serial-tracked item, তাই stock integer হতে হবে`
+    );
+  }
+
+  if (serialCount !== stockQty) {
+    throw new Error(
+      `"${params.productName}${
+        params.variantLabel ? ` (${params.variantLabel})` : ""
+      }" serial mismatch: stock ${stockQty}, IN_STOCK serial ${serialCount}. বিক্রির আগে reconciliation করুন।`
+    );
+  }
+}
+
+async function assertBatchInventoryConsistent(
+  tx: Prisma.TransactionClient | typeof prisma,
+  params: {
+    shopId: string;
+    productId: string;
+    productName: string;
+    variantId: string | null;
+    variantLabel?: string | null;
+    requestedQty: number;
+  }
+) {
+  const batchSummary = await tx.batch.aggregate({
+    where: {
+      shopId: params.shopId,
+      productId: params.productId,
+      variantId: params.variantId,
+      remainingQty: { gt: 0 },
+    },
+    _sum: {
+      remainingQty: true,
+    },
+  });
+
+  const batchQty = Number(batchSummary._sum.remainingQty ?? 0);
+  const stockQty = params.variantId
+    ? Number(
+        (
+          await tx.productVariant.findUnique({
+            where: { id: params.variantId },
+            select: { stockQty: true },
+          })
+        )?.stockQty ?? 0
+      )
+    : Number(
+        (
+          await tx.product.findUnique({
+            where: { id: params.productId },
+            select: { stockQty: true },
+          })
+        )?.stockQty ?? 0
+      );
+
+  const itemLabel = `"${params.productName}${
+    params.variantLabel ? ` (${params.variantLabel})` : ""
+  }"`;
+
+  if (Math.abs(batchQty - stockQty) > 0.000001) {
+    throw new Error(
+      `${itemLabel} batch mismatch: stock ${stockQty.toFixed(
+        2
+      )}, batch remaining ${batchQty.toFixed(
+        2
+      )}. বিক্রির আগে Batch / Recall থেকে reconcile করুন।`
+    );
+  }
+
+  if (!Number.isFinite(batchQty) || batchQty + 0.000001 < params.requestedQty) {
+    throw new Error(
+      `${itemLabel} batch remaining ${batchQty.toFixed(
+        2
+      )}, কিন্তু চাওয়া হয়েছে ${params.requestedQty.toFixed(
+        2
+      )}. বিক্রির আগে batch stock ঠিক করুন।`
+    );
+  }
+}
+
+async function assertCutLengthInventoryConsistent(
+  tx: Prisma.TransactionClient | typeof prisma,
+  params: {
+    shopId: string;
+    productId: string;
+    productName: string;
+    variantId: string | null;
+    variantLabel?: string | null;
+  }
+) {
+  const remnantSummary = await tx.remnantPiece.aggregate({
+    where: {
+      shopId: params.shopId,
+      productId: params.productId,
+      variantId: params.variantId,
+      status: "ACTIVE",
+      remainingLength: { gt: 0 },
+    },
+    _sum: {
+      remainingLength: true,
+    },
+  });
+
+  const activeRemnantQty = Number(remnantSummary._sum.remainingLength ?? 0);
+  const stockQty = params.variantId
+    ? Number(
+        (
+          await tx.productVariant.findUnique({
+            where: { id: params.variantId },
+            select: { stockQty: true },
+          })
+        )?.stockQty ?? 0
+      )
+    : Number(
+        (
+          await tx.product.findUnique({
+            where: { id: params.productId },
+            select: { stockQty: true },
+          })
+        )?.stockQty ?? 0
+      );
+
+  if (activeRemnantQty - stockQty > 0.000001) {
+    throw new Error(
+      `"${params.productName}${
+        params.variantLabel ? ` (${params.variantLabel})` : ""
+      }" remnant mismatch: active remnant ${activeRemnantQty.toFixed(
+        2
+      )}, stock ${stockQty.toFixed(
+        2
+      )}. বিক্রির আগে Cut Pieces / Remnants দেখে reconcile করুন।`
+    );
+  }
 }
 
 async function restoreBatchAllocationsForSaleItem(
@@ -364,6 +556,41 @@ async function restoreOutstandingBatchAllocationsForSale(
         quantityReturned: allocation.quantityAllocated,
       },
     });
+  }
+}
+
+async function restoreSerialNumbersForSaleItem(
+  tx: Prisma.TransactionClient,
+  params: {
+    shopId: string;
+    saleItemId: string;
+    productId: string;
+    variantId: string | null;
+    serialNumbers: string[];
+    note: string;
+  }
+) {
+  const serials = normalizeSerialList(params.serialNumbers);
+  if (serials.length === 0) return;
+
+  const updated = await tx.serialNumber.updateMany({
+    where: {
+      shopId: params.shopId,
+      productId: params.productId,
+      variantId: params.variantId,
+      saleItemId: params.saleItemId,
+      serialNo: { in: serials },
+      status: "SOLD",
+    },
+    data: {
+      status: "IN_STOCK",
+      saleItemId: null,
+      note: params.note,
+    },
+  });
+
+  if (updated.count !== serials.length) {
+    throw new Error("Serial restore অসম্পূর্ণ হয়েছে");
   }
 }
 
@@ -846,7 +1073,12 @@ export async function getSaleReturnDraft(
           unitPrice: true,
           lineTotal: true,
           product: {
-            select: { name: true },
+            select: { name: true, trackSerialNumbers: true },
+          },
+          serialNumbers: {
+            where: { status: "SOLD" },
+            select: { serialNo: true },
+            orderBy: [{ serialNo: "asc" }],
           },
         },
       },
@@ -869,6 +1101,7 @@ export async function getSaleReturnDraft(
         sellPrice: true,
         stockQty: true,
         trackStock: true,
+        trackSerialNumbers: true,
         isActive: true,
       },
       take: 300,
@@ -902,24 +1135,27 @@ export async function getSaleReturnDraft(
       const soldQty = Number(item.quantity ?? 0);
       const returnedQty = returnedMap.get(item.id) ?? 0;
       const maxReturnQty = Math.max(0, soldQty - returnedQty);
-      return {
-        saleItemId: item.id,
-        productId: item.productId,
+        return {
+          saleItemId: item.id,
+          productId: item.productId,
         productName:
           item.productNameSnapshot || item.product?.name || "Unnamed product",
         soldQty: toMoney(soldQty),
         returnedQty: toMoney(returnedQty),
-        maxReturnQty: toMoney(maxReturnQty),
-        unitPrice: item.unitPrice.toString(),
-        lineTotal: item.lineTotal.toString(),
-      };
-    }),
+          maxReturnQty: toMoney(maxReturnQty),
+          unitPrice: item.unitPrice.toString(),
+          lineTotal: item.lineTotal.toString(),
+          trackSerialNumbers: Boolean(item.product?.trackSerialNumbers),
+          soldSerialNumbers: (item.serialNumbers ?? []).map((row) => row.serialNo),
+        };
+      }),
     exchangeProducts: exchangeProducts.map((row) => ({
       id: row.id,
       name: row.name,
       sellPrice: row.sellPrice.toString(),
       stockQty: row.stockQty.toString(),
       trackStock: row.trackStock,
+      trackSerialNumbers: Boolean(row.trackSerialNumbers),
       isActive: row.isActive,
     })),
     existingReturns,
@@ -1314,6 +1550,24 @@ export async function createSale(input: CreateSaleInput) {
       throw new Error("Inactive product in cart");
     }
 
+    if (p.trackSerialNumbers) {
+      if (!Number.isInteger(item.qty)) {
+        throw new Error(`"${p.name}" serial পণ্য, qty অবশ্যই পূর্ণসংখ্যা হতে হবে`);
+      }
+      const serials = Array.from(
+        new Set(
+          (item.serialNumbers ?? [])
+            .map((serial) => String(serial ?? "").trim().toUpperCase())
+            .filter(Boolean)
+        )
+      );
+      if (serials.length !== Math.round(item.qty)) {
+        throw new Error(
+          `"${p.name}" এর qty ${Math.round(item.qty)} কিন্তু serial ${serials.length}টি`
+        );
+      }
+    }
+
     computedTotal += item.unitPrice * item.qty;
   }
 
@@ -1348,6 +1602,25 @@ export async function createSale(input: CreateSaleInput) {
         )}, কিন্তু চাওয়া হয়েছে ${requestedQty.toFixed(2)}`
       );
     }
+    if (product.trackBatch) {
+      await assertBatchInventoryConsistent(prisma, {
+        shopId: input.shopId,
+        productId: variant.productId,
+        productName: product.name,
+        variantId,
+        variantLabel: variant.label,
+        requestedQty,
+      });
+    }
+    if (product.trackCutLength) {
+      await assertCutLengthInventoryConsistent(prisma, {
+        shopId: input.shopId,
+        productId: variant.productId,
+        productName: product.name,
+        variantId,
+        variantLabel: variant.label,
+      });
+    }
   }
 
   for (const [productId, requestedQty] of productDemandMap.entries()) {
@@ -1362,6 +1635,23 @@ export async function createSale(input: CreateSaleInput) {
           2
         )}, কিন্তু চাওয়া হয়েছে ${requestedQty.toFixed(2)}`
       );
+    }
+    if (product.trackBatch) {
+      await assertBatchInventoryConsistent(prisma, {
+        shopId: input.shopId,
+        productId,
+        productName: product.name,
+        variantId: null,
+        requestedQty,
+      });
+    }
+    if (product.trackCutLength) {
+      await assertCutLengthInventoryConsistent(prisma, {
+        shopId: input.shopId,
+        productId,
+        productName: product.name,
+        variantId: null,
+      });
     }
   }
 
@@ -1479,6 +1769,23 @@ export async function createSale(input: CreateSaleInput) {
       }
     });
 
+    const serializedScopes = new Set<string>();
+    for (const item of input.items) {
+      const product = productMap.get(item.productId);
+      if (!product?.trackSerialNumbers) continue;
+      const scopeKey = `${item.productId}::${item.variantId ?? "base"}`;
+      if (serializedScopes.has(scopeKey)) continue;
+      serializedScopes.add(scopeKey);
+      const variant = item.variantId ? variantMap.get(item.variantId) : null;
+      await assertSerialInventoryConsistent(tx, {
+        shopId: input.shopId,
+        productId: item.productId,
+        productName: product.name,
+        variantId: item.variantId ?? null,
+        variantLabel: variant?.label ?? null,
+      });
+    }
+
     const issuedInvoice = shouldIssueSalesInvoice
       ? await allocateSalesInvoiceNumber(tx, input.shopId, saleTimestamp)
       : null;
@@ -1559,6 +1866,7 @@ export async function createSale(input: CreateSaleInput) {
         where: {
           shopId: input.shopId,
           productId: item.productId,
+          variantId: item.variantId ?? null,
           serialNo: { in: serials },
           status: "IN_STOCK",
         },
@@ -1577,6 +1885,7 @@ export async function createSale(input: CreateSaleInput) {
         where: {
           shopId: input.shopId,
           productId: item.productId,
+          variantId: item.variantId ?? null,
           serialNo: { in: serials },
         },
         data: {
@@ -1798,6 +2107,7 @@ export async function createSale(input: CreateSaleInput) {
     revalidatePath("/dashboard/reports"),
     revalidatePath("/dashboard/cash"),
     revalidatePath("/dashboard/products"),
+    revalidatePath("/dashboard/products/serials"),
   ]).catch(err => console.warn("Revalidation failed:", err));
   revalidateReportsForSale();
 
@@ -1886,11 +2196,13 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
   const note = (input.note || "").toString().trim() || null;
 
   const returnRequestMap = new Map<string, number>();
+  const serialRequestMap = new Map<string, string[]>();
   for (const row of input.returnedItems || []) {
     const saleItemId = (row?.saleItemId || "").toString().trim();
     const qty = toSafePositiveNumber(row?.qty);
     if (!saleItemId || qty <= 0) continue;
     returnRequestMap.set(saleItemId, (returnRequestMap.get(saleItemId) ?? 0) + qty);
+    serialRequestMap.set(saleItemId, normalizeSerialList(row?.serialNumbers));
   }
   if (returnRequestMap.size === 0) {
     throw new Error("At least one returned item quantity is required");
@@ -1969,9 +2281,16 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
                 buyPrice: true,
                 stockQty: true,
                 trackStock: true,
+                trackSerialNumbers: true,
                 trackBatch: true,
                 trackCutLength: true,
                 isActive: true,
+              },
+            },
+            serialNumbers: {
+              select: {
+                serialNo: true,
+                status: true,
               },
             },
           },
@@ -2029,6 +2348,29 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
       }
 
       const unitPrice = Number(saleItem.unitPrice ?? 0);
+      if (saleItem.product?.trackSerialNumbers) {
+        if (!Number.isInteger(qty)) {
+          throw new Error(
+            `${saleItem.productNameSnapshot || saleItem.product?.name || saleItemId} এর return qty পূর্ণসংখ্যা হতে হবে`
+          );
+        }
+        const serials = serialRequestMap.get(saleItemId) ?? [];
+        if (serials.length !== Math.round(qty)) {
+          throw new Error(
+            `${saleItem.productNameSnapshot || saleItem.product?.name || saleItemId} এর জন্য ${Math.round(qty)}টি sold serial বাছাই করুন`
+          );
+        }
+        const soldSerials = new Set(
+          (saleItem.serialNumbers ?? [])
+            .filter((row) => row.status === "SOLD")
+            .map((row) => row.serialNo)
+        );
+        for (const serial of serials) {
+          if (!soldSerials.has(serial)) {
+            throw new Error(`Serial "${serial}" এই sale item-এ SOLD অবস্থায় নেই`);
+          }
+        }
+      }
       const lineTotal = roundMoney(unitPrice * qty);
       returnedSubtotal += lineTotal;
 
@@ -2079,6 +2421,7 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
             buyPrice: true,
             stockQty: true,
             trackStock: true,
+            trackSerialNumbers: true,
             trackCutLength: true,
             defaultCutLength: true,
             isActive: true,
@@ -2108,6 +2451,11 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
       }
       if (!product.isActive) {
         throw new Error(`Inactive exchange product: ${product.name}`);
+      }
+      if (product.trackSerialNumbers) {
+        throw new Error(
+          `${product.name} serialized product। exchange screen থেকে এটা দেওয়া নিরাপদ নয়; refund করে নতুন sale দিন।`
+        );
       }
 
       const unitPrice =
@@ -2231,6 +2579,19 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
         costAtReturn: row.costAtReturn,
       })),
     });
+
+    for (const row of returnRows) {
+      const saleItem = saleItemsById.get(row.saleItemId);
+      if (!saleItem?.product?.trackSerialNumbers) continue;
+      await restoreSerialNumbersForSaleItem(tx, {
+        shopId: sale.shopId,
+        saleItemId: row.saleItemId,
+        productId: row.productId,
+        variantId: row.variantId,
+        serialNumbers: serialRequestMap.get(row.saleItemId) ?? [],
+        note: `Returned from sale return ${createdReturn.returnNo}`,
+      });
+    }
 
     for (const row of returnRows) {
       if (!Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0) continue;
@@ -2475,6 +2836,7 @@ export async function processSaleReturn(input: ProcessSaleReturnInput) {
   revalidatePath("/dashboard/cash");
   revalidatePath("/dashboard/due");
   revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/products/serials");
 
   return {
     success: true,
@@ -2610,9 +2972,14 @@ type SaleInvoiceItem = {
   id: string;
   productId: string;
   productName: string;
+  variantLabel: string | null;
+  trackBatch: boolean;
+  batchNumbers: string[];
+  trackCutLength: boolean;
   quantity: string;
   unitPrice: string;
   lineTotal: string;
+  serialNumbers: string[];
 };
 
 type SaleInvoiceDetails = {
@@ -2700,12 +3067,35 @@ export async function getSaleInvoiceDetails(
           id: true,
           productId: true,
           productNameSnapshot: true,
+          variant: {
+            select: {
+              label: true,
+            },
+          },
           quantity: true,
           unitPrice: true,
           lineTotal: true,
+          serialNumbers: {
+            orderBy: { serialNo: "asc" },
+            select: {
+              serialNo: true,
+            },
+          },
+          batchAllocations: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: {
+              batch: {
+                select: {
+                  batchNo: true,
+                },
+              },
+            },
+          },
           product: {
             select: {
               name: true,
+              trackBatch: true,
+              trackCutLength: true,
             },
           },
         },
@@ -2770,9 +3160,20 @@ export async function getSaleInvoiceDetails(
       productId: item.productId,
       productName:
         item.productNameSnapshot || item.product?.name || "Unnamed product",
+      variantLabel: item.variant?.label ?? null,
+      trackBatch: Boolean(item.product?.trackBatch),
+      batchNumbers: Array.from(
+        new Set(
+          (item.batchAllocations ?? [])
+            .map((row) => row.batch?.batchNo?.trim() || "")
+            .filter(Boolean)
+        )
+      ),
+      trackCutLength: Boolean(item.product?.trackCutLength),
       quantity: item.quantity.toString(),
       unitPrice: item.unitPrice.toString(),
       lineTotal: item.lineTotal.toString(),
+      serialNumbers: (item.serialNumbers ?? []).map((row) => row.serialNo),
     })),
   };
 }
@@ -2928,6 +3329,23 @@ export async function voidSale(saleId: string, reason?: string | null) {
         });
       }
 
+      if ((p as any).trackSerialNumbers) {
+        await tx.serialNumber.updateMany({
+          where: {
+            shopId: sale.shopId,
+            productId: it.productId,
+            variantId: it.variantId ?? null,
+            saleItemId: it.id,
+            status: "SOLD",
+          },
+          data: {
+            status: "IN_STOCK",
+            saleItemId: null,
+            note: `Restored from void sale ${sale.id}`,
+          },
+        });
+      }
+
       if ((p as any).trackCutLength) {
         await restoreCutLengthRemnantForSaleItem(tx, {
           shopId: sale.shopId,
@@ -3071,6 +3489,7 @@ export async function voidSale(saleId: string, reason?: string | null) {
   revalidatePath("/dashboard/cash");
   revalidatePath("/dashboard/due");
   revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/products/serials");
 
   return { success: true };
 }

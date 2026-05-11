@@ -43,6 +43,7 @@ type PosProductSearchProps = {
     sellPrice: string;
     stockQty?: string | number;
     category?: string | null;
+    storageLocation?: string | null;
     trackStock?: boolean | null;
     trackSerialNumbers?: boolean | null;
     trackBatch?: boolean | null;
@@ -54,6 +55,7 @@ type PosProductSearchProps = {
       label: string;
       sellPrice: string;
       stockQty?: string | number;
+      storageLocation?: string | null;
       sku?: string | null;
       barcode?: string | null;
       sortOrder?: number;
@@ -632,6 +634,11 @@ const ProductButton = memo(function ProductButton({
       <p className="mt-2 text-[11px] font-medium tracking-[0.08em] text-muted-foreground">
         {formatCategoryLabel(product.category)}
       </p>
+      {product.storageLocation ? (
+        <p className="mt-1 text-[11px] font-medium text-primary">
+          📍 {product.storageLocation}
+        </p>
+      ) : null}
       {hasVariants ? (
         <p className="mt-1 text-[11px] font-semibold text-primary">
           {variantCount}টি সাইজ →
@@ -1202,14 +1209,17 @@ export const PosProductSearch = memo(function PosProductSearch({
     return filteredByCategory.filter((p) => {
       const fields: string[] = [
         p.name,
+        p.category,
         String(p.sku || ""),
         String(p.barcode || ""),
+        String(p.storageLocation || ""),
       ];
       for (const variant of getActiveVariants(p)) {
         fields.push(
           String(variant.label || ""),
           String(variant.sku || ""),
-          String(variant.barcode || "")
+          String(variant.barcode || ""),
+          String(variant.storageLocation || "")
         );
       }
 
@@ -1381,6 +1391,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         name: buildCartItemName(product, variant),
         unitPrice: productPrice,
         baseUnit: product.baseUnit ?? null,
+        trackSerialNumbers: product.trackSerialNumbers ?? false,
         qty: safeQuantity,
       });
 
@@ -2655,6 +2666,15 @@ export const PosProductSearch = memo(function PosProductSearch({
                           {variant.barcode ? `বারকোড: ${variant.barcode}` : ""}
                         </p>
                       ) : null}
+                      {variant.storageLocation ? (
+                        <p className="mt-1 text-[11px] font-medium text-primary">
+                          📍 {variant.storageLocation}
+                        </p>
+                      ) : variantPicker.product.storageLocation ? (
+                        <p className="mt-1 text-[11px] font-medium text-primary">
+                          📍 {variantPicker.product.storageLocation}
+                        </p>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -2772,6 +2792,11 @@ const ProductListButton = memo(function ProductListButton({
           <p className="mt-0.5 text-[11px] font-medium tracking-[0.08em] text-muted-foreground">
             {formatCategoryLabel(product.category)}
           </p>
+          {product.storageLocation ? (
+            <p className="mt-0.5 text-[11px] font-medium text-primary">
+              📍 {product.storageLocation}
+            </p>
+          ) : null}
           {hasVariants ? (
             <p className="mt-0.5 text-[11px] font-semibold text-primary">
               {variantCount}টি সাইজ →

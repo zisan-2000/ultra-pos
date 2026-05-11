@@ -256,6 +256,120 @@ function normalizeOptionalNumberInput(
   return parsed.toString();
 }
 
+async function assertNoActiveBaseInventoryForVariantTransition(
+  tx: Prisma.TransactionClient,
+  params: {
+    productId: string;
+    shopId: string;
+    nextVariantCount: number;
+    previousVariantCount: number;
+  }
+) {
+  if (params.nextVariantCount <= 0 || params.previousVariantCount > 0) {
+    return;
+  }
+
+  const [productRow, baseSerialCount, baseBatchCount, activeRemnantCount] =
+    await Promise.all([
+      tx.product.findUnique({
+        where: { id: params.productId },
+        select: { stockQty: true },
+      }),
+      tx.serialNumber.count({
+        where: {
+          shopId: params.shopId,
+          productId: params.productId,
+          variantId: null,
+          status: "IN_STOCK",
+        },
+      }),
+      tx.batch.count({
+        where: {
+          shopId: params.shopId,
+          productId: params.productId,
+          variantId: null,
+          isActive: true,
+          remainingQty: { gt: 0 },
+        },
+      }),
+      tx.remnantPiece.count({
+        where: {
+          shopId: params.shopId,
+          productId: params.productId,
+          variantId: null,
+          status: "ACTIVE",
+          remainingLength: { gt: 0 },
+        },
+      }),
+    ]);
+
+  const baseStockQty = Number(productRow?.stockQty ?? 0);
+  const hasActiveBaseInventory =
+    baseStockQty > 0 ||
+    baseSerialCount > 0 ||
+    baseBatchCount > 0 ||
+    activeRemnantCount > 0;
+
+  if (!hasActiveBaseInventory) {
+    return;
+  }
+
+  throw new Error(
+    "এই product-এ আগে base stock/serial/batch আছে। variant চালুর আগে base inventory zero বা migrate করুন।"
+  );
+}
+
+async function assertCanEnableBatchTracking(
+  tx: Prisma.TransactionClient,
+  params: {
+    productId: string;
+    shopId: string;
+    previousTrackBatch: boolean;
+    nextTrackBatch: boolean;
+    nextVariantCount: number;
+  }
+) {
+  if (!params.nextTrackBatch || params.previousTrackBatch) {
+    return;
+  }
+
+  const [productRow, activeVariantStockCount, activeBatchCount] = await Promise.all([
+    tx.product.findUnique({
+      where: { id: params.productId },
+      select: { stockQty: true },
+    }),
+    tx.productVariant.count({
+      where: {
+        productId: params.productId,
+        stockQty: { gt: 0 },
+      },
+    }),
+    tx.batch.count({
+      where: {
+        shopId: params.shopId,
+        productId: params.productId,
+        remainingQty: { gt: 0 },
+      },
+    }),
+  ]);
+
+  if (activeBatchCount > 0) {
+    return;
+  }
+
+  const baseStockQty = Number(productRow?.stockQty ?? 0);
+  const hasStockWithoutBatch =
+    params.nextVariantCount > 0 ? activeVariantStockCount > 0 : baseStockQty > 0;
+
+  if (!hasStockWithoutBatch) {
+    return;
+  }
+
+  throw new Error(
+    "এই product-এ আগে stock আছে কিন্তু batch record নেই। batch tracking চালুর আগে existing stock zero/migrate করুন, তারপর নতুন batch দিয়ে stock-in করুন।"
+  );
+}
+
 function normalizeProductCodeInput(value: unknown) {
   if (value === undefined) return undefined;
   const raw = value === null ? "" : String(value);
@@ -947,7 +1061,6 @@ export async function createProduct(input: CreateProductInput) {
         field: "Default cut length",
       })
     : null;
-  const stockQty = trackStock ? normalizedStock : "0";
   const sku = normalizeProductCodeInput(input.sku);
   const barcode = normalizeProductCodeInput(input.barcode);
   const baseUnit = normalizeBaseUnitInput(input.baseUnit, { defaultValue: "pcs" });
@@ -957,10 +1070,25 @@ export async function createProduct(input: CreateProductInput) {
   const variants = normalizeVariantInputs(input.variants, {
     fieldPrefix: "Variants",
   });
+  const stockQty =
+    trackStock && !(variants && variants.length > 0) ? normalizedStock : "0";
   const unitConversions = normalizeUnitConversionInputs(input.unitConversions, {
     fieldPrefix: "Unit conversions",
   });
   const productSource = normalizeProductSourceInput(input.productSource);
+
+  if (trackBatch) {
+    if (Number(stockQty) > 0) {
+      throw new Error(
+        "Batch-tracked product-এ opening stock product form থেকে দেওয়া যাবে না। আগে product save করুন, তারপর purchase/stock-in দিয়ে batch সহ stock যোগ করুন।"
+      );
+    }
+    if ((variants ?? []).some((variant) => Number(variant.stockQty ?? 0) > 0)) {
+      throw new Error(
+        "Batch-tracked variant product-এ opening stock product form থেকে দেওয়া যাবে না। আগে product save করুন, তারপর purchase/stock-in দিয়ে batch সহ stock যোগ করুন।"
+      );
+    }
+  }
 
   await assertNoCodeCollisionsInShop({
     shopId: input.shopId,
@@ -1269,6 +1397,19 @@ export async function getProductsByShopPaginated({
       { category: { contains: term, mode: "insensitive" } },
       { sku: { contains: term, mode: "insensitive" } },
       { barcode: { contains: term, mode: "insensitive" } },
+      { storageLocation: { contains: term, mode: "insensitive" } },
+      {
+        variants: {
+          some: {
+            OR: [
+              { label: { contains: term, mode: "insensitive" } },
+              { sku: { contains: term, mode: "insensitive" } },
+              { barcode: { contains: term, mode: "insensitive" } },
+              { storageLocation: { contains: term, mode: "insensitive" } },
+            ],
+          },
+        },
+      },
       { catalogProduct: { is: { name: { contains: term, mode: "insensitive" } } } },
       { catalogProduct: { is: { brand: { contains: term, mode: "insensitive" } } } },
       {
@@ -1400,6 +1541,19 @@ export async function getProductsByShopCursorPaginated({
       { category: { contains: term, mode: "insensitive" } },
       { sku: { contains: term, mode: "insensitive" } },
       { barcode: { contains: term, mode: "insensitive" } },
+      { storageLocation: { contains: term, mode: "insensitive" } },
+      {
+        variants: {
+          some: {
+            OR: [
+              { label: { contains: term, mode: "insensitive" } },
+              { sku: { contains: term, mode: "insensitive" } },
+              { barcode: { contains: term, mode: "insensitive" } },
+              { storageLocation: { contains: term, mode: "insensitive" } },
+            ],
+          },
+        },
+      },
       { catalogProduct: { is: { name: { contains: term, mode: "insensitive" } } } },
       { catalogProduct: { is: { brand: { contains: term, mode: "insensitive" } } } },
       {
@@ -1825,6 +1979,10 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   const unitConversions = normalizeUnitConversionInputs(data.unitConversions, {
     fieldPrefix: "Unit conversions",
   });
+  const previousVariantCount = await prisma.productVariant.count({
+    where: { productId: id },
+  });
+
   const existingVariantsForCollisionCheck =
     variants === undefined
       ? await prisma.productVariant.findMany({
@@ -1858,7 +2016,75 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
       isActive: variant.isActive,
       stockQty: "0",
     }));
-  const resolvedStockQty = trackStockFlag ? stockQty : "0";
+  const currentBaseStockQty = Number(product.stockQty ?? 0);
+  if (
+    nextTrackBatch &&
+    stockQty !== undefined &&
+    !Number.isNaN(Number(stockQty)) &&
+    Math.abs(Number(stockQty) - currentBaseStockQty) > 0.000001
+  ) {
+    throw new Error(
+      "Batch-tracked product-এর stock product edit form থেকে বদলানো যাবে না। purchase / stock adjustment flow ব্যবহার করুন।"
+    );
+  }
+  if (
+    nextTrackCutLength &&
+    stockQty !== undefined &&
+    !Number.isNaN(Number(stockQty)) &&
+    Math.abs(Number(stockQty) - currentBaseStockQty) > 0.000001
+  ) {
+    throw new Error(
+      "Cut-length product-এর stock product edit form থেকে বদলানো যাবে না। stock adjustment / sales / return flow ব্যবহার করুন।"
+    );
+  }
+  if (nextTrackBatch && variants !== undefined) {
+    const existingVariantStockRows = await prisma.productVariant.findMany({
+      where: { productId: id },
+      select: { id: true, stockQty: true },
+    });
+    const existingVariantStockMap = new Map(
+      existingVariantStockRows.map((variant) => [
+        variant.id,
+        Number(variant.stockQty ?? 0),
+      ])
+    );
+    for (const variant of variants) {
+      const nextVariantStock = Number(variant.stockQty ?? 0);
+      const currentVariantStock = variant.id
+        ? existingVariantStockMap.get(variant.id) ?? 0
+        : 0;
+      if (Math.abs(nextVariantStock - currentVariantStock) > 0.000001) {
+        throw new Error(
+          "Batch-tracked variant stock product edit form থেকে বদলানো যাবে না। purchase / stock adjustment flow ব্যবহার করুন।"
+        );
+      }
+    }
+  }
+  if (nextTrackCutLength && variants !== undefined) {
+    const existingVariantStockRows = await prisma.productVariant.findMany({
+      where: { productId: id },
+      select: { id: true, stockQty: true },
+    });
+    const existingVariantStockMap = new Map(
+      existingVariantStockRows.map((variant) => [
+        variant.id,
+        Number(variant.stockQty ?? 0),
+      ])
+    );
+    for (const variant of variants) {
+      const nextVariantStock = Number(variant.stockQty ?? 0);
+      const currentVariantStock = variant.id
+        ? existingVariantStockMap.get(variant.id) ?? 0
+        : 0;
+      if (Math.abs(nextVariantStock - currentVariantStock) > 0.000001) {
+        throw new Error(
+          "Cut-length variant stock product edit form থেকে বদলানো যাবে না। stock adjustment / sales / return flow ব্যবহার করুন।"
+        );
+      }
+    }
+  }
+  const resolvedStockQty =
+    trackStockFlag && !(variants && variants.length > 0) ? stockQty : "0";
   const payload: Record<string, any> = {};
 
   if (catalogProductId !== undefined && catalogProductId !== null) {
@@ -1912,6 +2138,20 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
 
   try {
     await prisma.$transaction(async (tx) => {
+      await assertNoActiveBaseInventoryForVariantTransition(tx, {
+        productId: id,
+        shopId: product.shopId,
+        previousVariantCount,
+        nextVariantCount: variants?.length ?? previousVariantCount,
+      });
+      await assertCanEnableBatchTracking(tx, {
+        productId: id,
+        shopId: product.shopId,
+        previousTrackBatch: Boolean((product as any).trackBatch),
+        nextTrackBatch,
+        nextVariantCount: variants?.length ?? previousVariantCount,
+      });
+
       await tx.product.update({
         where: { id },
         data: payload,

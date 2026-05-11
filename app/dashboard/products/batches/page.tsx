@@ -8,7 +8,12 @@ import { prisma } from "@/lib/prisma";
 import BatchLookupClient from "./BatchLookupClient";
 
 type Props = {
-  searchParams?: Promise<{ shopId?: string }>;
+  searchParams?: Promise<{
+    shopId?: string;
+    query?: string;
+    status?: string;
+    productId?: string;
+  }>;
 };
 
 export default async function BatchLookupPage({ searchParams }: Props) {
@@ -36,6 +41,10 @@ export default async function BatchLookupPage({ searchParams }: Props) {
 
   const cookieStore = await cookies();
   const cookieShopId = cookieStore.get("activeShopId")?.value;
+  const initialQuery = typeof resolvedSearch?.query === "string" ? resolvedSearch.query : "";
+  const initialStatus = typeof resolvedSearch?.status === "string" ? resolvedSearch.status : "all";
+  const initialProductId =
+    typeof resolvedSearch?.productId === "string" ? resolvedSearch.productId : "";
   const selectedShopId =
     resolvedSearch?.shopId && shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
@@ -125,7 +134,7 @@ export default async function BatchLookupPage({ searchParams }: Props) {
           পণ্য ট্র্যাকিং
         </p>
         <h1 className="text-2xl font-bold text-foreground leading-tight">
-          Batch / Lot Lookup
+          Batch / Lot Recall
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
           দোকান: <span className="font-semibold">{selectedShop.name}</span>{" "}
@@ -154,7 +163,13 @@ export default async function BatchLookupPage({ searchParams }: Props) {
 
       {/* Lookup client */}
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <BatchLookupClient rows={rows} />
+        <BatchLookupClient
+          rows={rows}
+          shopId={selectedShopId}
+          initialQuery={initialQuery}
+          initialStatus={initialStatus}
+          initialProductId={initialProductId}
+        />
       </div>
     </div>
   );

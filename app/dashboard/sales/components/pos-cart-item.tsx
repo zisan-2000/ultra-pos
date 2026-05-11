@@ -69,6 +69,7 @@ export const PosCartItem = memo(function PosCartItem({
 
   const showUnit = item.baseUnit && item.baseUnit !== "pcs";
   const isDiscounted = item.originalPrice > item.unitPrice;
+  const serialized = item.trackSerialNumbers === true;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-3 shadow-sm text-foreground space-y-2.5">
@@ -123,6 +124,7 @@ export const PosCartItem = memo(function PosCartItem({
           <button
             type="button"
             onClick={handleDecrease}
+            disabled={serialized}
             className="flex h-8 w-9 items-center justify-center rounded-lg border border-border bg-muted/60 text-sm font-semibold hover:bg-muted"
           >
             −
@@ -132,16 +134,18 @@ export const PosCartItem = memo(function PosCartItem({
             inputMode="decimal"
             value={qtyInput}
             onChange={(e) => setQtyInput(e.target.value)}
-            onBlur={commitQty}
+            onBlur={serialized ? undefined : commitQty}
             onKeyDown={(e) => {
-              if (e.key === "Enter") { commitQty(); (e.target as HTMLInputElement).blur(); }
+              if (!serialized && e.key === "Enter") { commitQty(); (e.target as HTMLInputElement).blur(); }
             }}
             onFocus={(e) => e.target.select()}
-            className="h-8 w-14 rounded-lg border border-border bg-background px-1 text-center text-sm font-semibold text-foreground outline-none transition focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+            readOnly={serialized}
+            className="h-8 w-14 rounded-lg border border-border bg-background px-1 text-center text-sm font-semibold text-foreground outline-none transition focus:border-primary/40 focus:ring-1 focus:ring-primary/20 read-only:bg-muted/40"
           />
           <button
             type="button"
             onClick={handleIncrease}
+            disabled={serialized}
             className="flex h-8 w-9 items-center justify-center rounded-lg border border-border bg-muted/60 text-sm font-semibold hover:bg-muted"
           >
             +
@@ -177,6 +181,11 @@ export const PosCartItem = memo(function PosCartItem({
           ))}
         </div>
       )}
+      {serialized ? (
+        <p className="text-[10px] font-medium text-muted-foreground">
+          Qty serial picker থেকেই নিয়ন্ত্রণ করুন।
+        </p>
+      ) : null}
     </div>
   );
 });

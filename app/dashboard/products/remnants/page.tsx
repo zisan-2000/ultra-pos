@@ -8,7 +8,13 @@ import { prisma } from "@/lib/prisma";
 import RemnantLookupClient from "./RemnantLookupClient";
 
 type Props = {
-  searchParams?: Promise<{ shopId?: string }>;
+  searchParams?: Promise<{
+    shopId?: string;
+    query?: string;
+    status?: string;
+    productId?: string;
+    variantId?: string;
+  }>;
 };
 
 export default async function RemnantLookupPage({ searchParams }: Props) {
@@ -36,6 +42,13 @@ export default async function RemnantLookupPage({ searchParams }: Props) {
 
   const cookieStore = await cookies();
   const cookieShopId = cookieStore.get("activeShopId")?.value;
+  const initialQuery = typeof resolvedSearch?.query === "string" ? resolvedSearch.query : "";
+  const initialStatus =
+    typeof resolvedSearch?.status === "string" ? resolvedSearch.status : "active";
+  const initialProductId =
+    typeof resolvedSearch?.productId === "string" ? resolvedSearch.productId : "";
+  const initialVariantId =
+    typeof resolvedSearch?.variantId === "string" ? resolvedSearch.variantId : "";
   const selectedShopId =
     resolvedSearch?.shopId && shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
@@ -61,7 +74,7 @@ export default async function RemnantLookupPage({ searchParams }: Props) {
       createdAt: true,
       updatedAt: true,
       product: { select: { id: true, name: true, baseUnit: true } },
-      variant: { select: { label: true } },
+      variant: { select: { id: true, label: true } },
       consumedSaleItem: {
         select: {
           id: true,
@@ -78,27 +91,107 @@ export default async function RemnantLookupPage({ searchParams }: Props) {
     },
   });
 
-  const rows = remnants.map((row) => ({
-    id: row.id,
-    productId: row.product.id,
-    productName: row.product.name,
-    baseUnit: row.product.baseUnit ?? "pcs",
-    variantLabel: row.variant?.label ?? null,
-    originalLength: row.originalLength.toString(),
-    remainingLength: row.remainingLength.toString(),
-    consumedLength: row.originalLength.sub(row.remainingLength).toString(),
-    source: row.source,
-    sourceRef: row.sourceRef ?? null,
-    status: row.status,
-    note: row.note ?? null,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-    invoiceNo: row.consumedSaleItem?.sale.invoiceNo ?? null,
-    customerName: row.consumedSaleItem?.sale.customer?.name ?? null,
-    saleDate: row.consumedSaleItem?.sale.saleDate
-      ? row.consumedSaleItem.sale.saleDate.toISOString().slice(0, 10)
-      : null,
-  }));
+  const sourceSaleItemIds = Array.from(
+    new Set(
+      remnants
+        .filter(
+          (row) =>
+            Boolean(row.sourceRef) &&
+            (row.source === "CUT_SALE" ||
+              row.source === "SALE_RETURN" ||
+              row.source === "SALE_VOID")
+        )
+        .map((row) => String(row.sourceRef))
+    )
+  );
+
+  const sourceSaleItems =
+    sourceSaleItemIds.length > 0
+      ? await prisma.saleItem.findMany({
+          where: { id: { in: sourceSaleItemIds } },
+          select: {
+            id: true,
+            sale: {
+              select: {
+                id: true,
+                invoiceNo: true,
+                saleDate: true,
+                customer: { select: { name: true } },
+              },
+            },
+          },
+        })
+      : [];
+
+  const productIds = Array.from(new Set(remnants.map((row) => row.product.id)));
+  const productSummaries =
+    productIds.length > 0
+      ? await prisma.product.findMany({
+          where: {
+            shopId: selectedShopId,
+            id: { in: productIds },
+          },
+          select: {
+            id: true,
+            name: true,
+            baseUnit: true,
+            stockQty: true,
+            variants: {
+              where: { isActive: true },
+              select: {
+                id: true,
+                label: true,
+                stockQty: true,
+              },
+              orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+            },
+          },
+        })
+      : [];
+
+  const sourceSaleItemMap = new Map(
+    sourceSaleItems.map((row) => [
+      row.id,
+      {
+        saleId: row.sale.id,
+        invoiceNo: row.sale.invoiceNo ?? null,
+        saleDate: row.sale.saleDate
+          ? row.sale.saleDate.toISOString().slice(0, 10)
+          : null,
+        customerName: row.sale.customer?.name ?? null,
+      },
+    ])
+  );
+
+  const rows = remnants.map((row) => {
+    const sourceSaleMeta = row.sourceRef
+      ? sourceSaleItemMap.get(String(row.sourceRef)) ?? null
+      : null;
+    return {
+      id: row.id,
+      productId: row.product.id,
+      productName: row.product.name,
+      baseUnit: row.product.baseUnit ?? "pcs",
+      variantId: row.variant?.id ?? null,
+      variantLabel: row.variant?.label ?? null,
+      originalLength: row.originalLength.toString(),
+      remainingLength: row.remainingLength.toString(),
+      consumedLength: row.originalLength.sub(row.remainingLength).toString(),
+      source: row.source,
+      sourceRef: row.sourceRef ?? null,
+      status: row.status,
+      note: row.note ?? null,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      saleId: row.consumedSaleItem?.sale.id ?? sourceSaleMeta?.saleId ?? null,
+      invoiceNo: row.consumedSaleItem?.sale.invoiceNo ?? sourceSaleMeta?.invoiceNo ?? null,
+      customerName:
+        row.consumedSaleItem?.sale.customer?.name ?? sourceSaleMeta?.customerName ?? null,
+      saleDate: row.consumedSaleItem?.sale.saleDate
+        ? row.consumedSaleItem.sale.saleDate.toISOString().slice(0, 10)
+        : sourceSaleMeta?.saleDate ?? null,
+    };
+  });
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -107,11 +200,11 @@ export default async function RemnantLookupPage({ searchParams }: Props) {
           পণ্য ট্র্যাকিং
         </p>
         <h1 className="text-2xl font-bold leading-tight text-foreground">
-          Cut-Length Remnant Lookup
+          কাটা বাকি অংশ
         </h1>
         <p className="mt-1 text-xs text-muted-foreground">
           দোকান: <span className="font-semibold">{selectedShop.name}</span> — মোট{" "}
-          {rows.length}টি remnant/history row
+          {rows.length}টি cut-piece/history row
         </p>
       </div>
 
@@ -134,7 +227,25 @@ export default async function RemnantLookupPage({ searchParams }: Props) {
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <RemnantLookupClient rows={rows} />
+        <RemnantLookupClient
+          rows={rows}
+          shopId={selectedShopId}
+          productSummaries={productSummaries.map((product) => ({
+            id: product.id,
+            name: product.name,
+            baseUnit: product.baseUnit ?? "pcs",
+            stockQty: product.stockQty.toString(),
+            variants: product.variants.map((variant) => ({
+              id: variant.id,
+              label: variant.label,
+              stockQty: variant.stockQty.toString(),
+            })),
+          }))}
+          initialQuery={initialQuery}
+          initialStatus={initialStatus}
+          initialProductId={initialProductId}
+          initialVariantId={initialVariantId}
+        />
       </div>
     </div>
   );

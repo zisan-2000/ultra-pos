@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
@@ -8,6 +9,7 @@ type ProductVariantOption = {
   label: string;
   buyPrice?: string | null;
   stockQty: string;
+  storageLocation?: string | null;
 };
 
 type ProductUnitConversionOption = {
@@ -22,6 +24,7 @@ type ProductOption = {
   baseUnit: string;
   buyPrice?: string | null;
   stockQty?: string | null;
+  storageLocation?: string | null;
   trackStock?: boolean | null;
   trackSerialNumbers?: boolean | null;
   trackBatch?: boolean | null;
@@ -105,6 +108,25 @@ function toPositiveNumber(raw: string | number | null | undefined, fallback = 0)
   const num = Number(raw);
   if (!Number.isFinite(num) || num <= 0) return fallback;
   return num;
+}
+
+function parseSerialTokens(raw: string) {
+  const all = raw
+    .split(/[\n,]+/)
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  let duplicateCount = 0;
+  for (const serial of all) {
+    if (seen.has(serial)) {
+      duplicateCount++;
+      continue;
+    }
+    seen.add(serial);
+    unique.push(serial);
+  }
+  return { unique, duplicateCount };
 }
 
 export default function PurchaseFormClient({
@@ -235,28 +257,39 @@ export default function PurchaseFormClient({
   };
 
   const handleBulkSerialChange = (itemId: string, raw: string) => {
-    const serials = raw
-      .split(/[\n,]+/)
-      .map((s) => s.trim().toUpperCase())
-      .filter(Boolean);
     setItems((prev) =>
       prev.map((item) =>
         item.id === itemId
-          ? { ...item, serialInput: raw, serialNumbers: serials }
+          ? { ...item, serialInput: raw }
           : item
       )
     );
   };
 
+  const handleApplyBulkSerials = (itemId: string, mode: "append" | "replace") => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const { unique } = parseSerialTokens(item.serialInput);
+        if (mode === "replace") {
+          return { ...item, serialNumbers: unique };
+        }
+        const merged = new Set(item.serialNumbers);
+        for (const serial of unique) merged.add(serial);
+        return { ...item, serialNumbers: Array.from(merged) };
+      })
+    );
+  };
+
   const handleAddOneSerial = (itemId: string, value: string) => {
-    const serial = value.trim().toUpperCase();
-    if (!serial) return;
+    const { unique } = parseSerialTokens(value);
+    if (unique.length === 0) return;
     setItems((prev) =>
       prev.map((item) =>
-        item.id === itemId && !item.serialNumbers.includes(serial)
+        item.id === itemId
           ? {
               ...item,
-              serialNumbers: [...item.serialNumbers, serial],
+              serialNumbers: Array.from(new Set([...item.serialNumbers, ...unique])),
               serialInput: "",
             }
           : item
@@ -277,6 +310,26 @@ export default function PurchaseFormClient({
     );
   };
 
+  const handleClearSerials = (itemId: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? { ...item, serialNumbers: [], serialInput: "" }
+          : item
+      )
+    );
+  };
+
+  const handleSyncQtyWithSerialCount = (itemId: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? { ...item, qty: String(item.serialNumbers.length || 1) }
+          : item
+      )
+    );
+  };
+
   const handleProductSelect = (id: string, productId: string) => {
     const product = productMap.get(productId);
     const suggestedCost = resolveSuggestedPurchaseUnitCost(product, null, null);
@@ -288,6 +341,9 @@ export default function PurchaseFormClient({
               productId,
               variantId: null,
               unitConversionId: null,
+              serialNumbers: [],
+              serialInput: "",
+              batchNo: "",
               unitCost: item.unitCost || suggestedCost,
             }
           : item
@@ -312,6 +368,9 @@ export default function PurchaseFormClient({
           ? {
               ...item,
               variantId: nextVariantId,
+              serialNumbers: [],
+              serialInput: "",
+              batchNo: "",
               unitCost: item.unitCost || suggestedCost,
             }
           : item
@@ -351,6 +410,13 @@ export default function PurchaseFormClient({
     if (!items.length) return "কমপক্ষে একটি পণ্য যোগ করুন।";
     for (const item of items) {
       if (!item.productId) return "প্রতিটি আইটেমে পণ্য নির্বাচন করুন।";
+      const product = productMap.get(item.productId);
+      if ((product?.variants?.length ?? 0) > 0 && !item.variantId) {
+        return `"${product?.name ?? "এই পণ্য"}" variant-wise managed। আগে variant নির্বাচন করুন।`;
+      }
+      if (product?.trackBatch && !item.batchNo.trim()) {
+        return `"${product.name}" batch / lot tracked। batch নম্বর দিন।`;
+      }
       const qty = Number(item.qty);
       const unitCost = Number(item.unitCost);
       if (!Number.isFinite(qty) || qty <= 0) return "পরিমাণ সঠিক দিন।";
@@ -681,9 +747,23 @@ export default function PurchaseFormClient({
             <div className="space-y-3">
               {items.map((item, index) => {
                 const product = productMap.get(item.productId);
+                const hasVariants = (product?.variants?.length ?? 0) > 0;
+                const selectedVariant = item.variantId
+                  ? (product?.variants ?? []).find((v) => v.id === item.variantId)
+                  : null;
+                const totalVariantStock = (product?.variants ?? []).reduce(
+                  (sum, variant) => sum + Math.max(0, Number(variant.stockQty ?? 0)),
+                  0
+                );
                 const lineTotal =
                   Math.max(0, Number(item.qty || 0)) *
                   Math.max(0, Number(item.unitCost || 0));
+                const serialQtyTarget = Math.max(0, Math.round(Number(item.qty || 0)));
+                const serialBulkPreview = parseSerialTokens(item.serialInput);
+                const serialRemaining = Math.max(
+                  serialQtyTarget - item.serialNumbers.length,
+                  0
+                );
 
                 return (
                   <div
@@ -768,6 +848,9 @@ export default function PurchaseFormClient({
                           }
                           className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                         />
+                        <p className="text-[10px] text-muted-foreground">
+                          এখানে এখন কত কিনছেন সেটা দিন। এটা current stock না।
+                        </p>
                       </div>
 
                       <div className="space-y-1">
@@ -804,6 +887,7 @@ export default function PurchaseFormClient({
                             <option key={v.id} value={v.id}>
                               {v.label} — স্টক: {v.stockQty}
                               {v.buyPrice != null ? ` — ক্রয়: ${v.buyPrice}` : ""}
+                              {v.storageLocation ? ` — লোকেশন: ${v.storageLocation}` : ""}
                             </option>
                           ))}
                         </select>
@@ -811,9 +895,6 @@ export default function PurchaseFormClient({
                     ) : null}
 
                     {product ? (() => {
-                      const selectedVariant = item.variantId
-                        ? (product.variants ?? []).find((v) => v.id === item.variantId)
-                        : null;
                       const selectedConversion = item.unitConversionId
                         ? (product.unitConversions ?? []).find(
                             (conversion) => conversion.id === item.unitConversionId
@@ -827,6 +908,8 @@ export default function PurchaseFormClient({
                       const convertedBaseQty = purchaseQty * baseMultiplier;
                       const stockDisplay = selectedVariant
                         ? selectedVariant.stockQty
+                        : hasVariants
+                        ? totalVariantStock.toFixed(2)
                         : product.trackStock
                         ? product.stockQty ?? "0"
                         : null;
@@ -836,19 +919,44 @@ export default function PurchaseFormClient({
                           {stockDisplay != null
                             ? ` | বর্তমান স্টক: ${stockDisplay}`
                             : " | স্টক ট্র্যাক নয়"}
-                          {selectedVariant ? ` (${selectedVariant.label})` : ""}
+                          {selectedVariant
+                            ? ` (${selectedVariant.label})`
+                            : hasVariants
+                            ? " (সব variant মিলিয়ে)"
+                            : ""}
+                          {selectedVariant?.storageLocation
+                            ? ` | লোকেশন: ${selectedVariant.storageLocation}`
+                            : product.storageLocation
+                            ? ` | লোকেশন: ${product.storageLocation}`
+                            : ""}
                           {` | কনভার্টেড: ${convertedBaseQty.toFixed(2)} ${product.baseUnit}`}
                           {selectedConversion ? ` (${selectedConversion.label})` : ""}
                         </div>
                       );
                     })() : null}
 
+                    {product && hasVariants && !item.variantId ? (
+                      <div className="mt-3 rounded-xl border border-warning/30 bg-warning-soft/40 px-3 py-2 text-[11px] text-warning">
+                        এই product variant-wise managed। আগে variant বাছাই করুন, তারপর qty/serial final করুন।
+                      </div>
+                    ) : null}
+
                     {/* Batch number input — shown when product has trackBatch */}
                     {productMap.get(item.productId)?.trackBatch && (
                       <div className="mt-3 rounded-xl border border-warning/30 bg-warning-soft/60 p-3 space-y-2">
-                        <span className="text-[11px] font-semibold text-warning">
-                          Batch / Lot নম্বর
-                        </span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold text-warning">
+                            Batch / Lot নম্বর <span className="text-danger">*</span>
+                          </span>
+                          {item.productId ? (
+                            <Link
+                              href={`/dashboard/products/batches?shopId=${shopId}&productId=${item.productId}${item.batchNo.trim() ? `&query=${encodeURIComponent(item.batchNo.trim())}` : ""}`}
+                              className="text-[10px] font-semibold text-warning underline underline-offset-2"
+                            >
+                              আগের batch দেখুন
+                            </Link>
+                          ) : null}
+                        </div>
                         <input
                           type="text"
                           value={item.batchNo}
@@ -865,27 +973,58 @@ export default function PurchaseFormClient({
                           className="w-full h-9 rounded-lg border border-warning/20 bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-warning/30"
                         />
                         <p className="text-[10px] text-warning/80">
-                          ফাঁকা রাখলে batch রেকর্ড হবে না
+                          এই চালানের lot code লিখুন। পরে recall, supplier claim, আর FIFO trace এই code দিয়েই হবে।
                         </p>
                       </div>
                     )}
 
                     {/* Serial number input — shown when product has trackSerialNumbers */}
-                    {productMap.get(item.productId)?.trackSerialNumbers && (
+                    {productMap.get(item.productId)?.trackSerialNumbers &&
+                    (!hasVariants || Boolean(item.variantId)) ? (
                       <div className="mt-3 rounded-xl border border-primary/30 bg-primary-soft/60 p-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-primary">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold text-primary shrink-0">
                             Serial Numbers
                           </span>
                           <span
-                            className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${
-                              item.serialNumbers.length === Math.round(Number(item.qty || 0))
+                            className={`text-[11px] font-semibold rounded-full px-2 py-0.5 whitespace-nowrap ${
+                              item.serialNumbers.length === serialQtyTarget
                                 ? "bg-success-soft text-success"
                                 : "bg-warning-soft text-warning"
                             }`}
                           >
-                            {item.serialNumbers.length} / {Math.round(Number(item.qty || 0))}
+                            {item.serialNumbers.length} / {serialQtyTarget}
                           </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleSyncQtyWithSerialCount(item.id)}
+                            className="rounded-full border border-primary/30 bg-card px-2.5 py-1 text-[10px] font-semibold text-primary hover:bg-primary/10"
+                          >
+                            qty = serial ({item.serialNumbers.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleClearSerials(item.id)}
+                            className="rounded-full border border-danger/30 bg-card px-2.5 py-1 text-[10px] font-semibold text-danger hover:bg-danger-soft"
+                          >
+                            clear all
+                          </button>
+                          <span className="text-[10px] text-muted-foreground">
+                            বাকি: {serialRemaining}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-primary/80">
+                          শুধু নতুন incoming serial দিন। existing serial এখানে দেখানো হয় না।
+                        </p>
+                        <div>
+                          <Link
+                            href={`/dashboard/products/serials?shopId=${shopId}&productId=${item.productId}&status=IN_STOCK`}
+                            className="text-[10px] font-semibold text-primary underline underline-offset-2"
+                          >
+                            আগের in-stock serial দেখুন
+                          </Link>
                         </div>
 
                         {/* Tab switcher */}
@@ -913,7 +1052,7 @@ export default function PurchaseFormClient({
                         </div>
 
                         {item.serialTab === "bulk" ? (
-                          <div className="space-y-1">
+                          <div className="space-y-1.5">
                             <textarea
                               rows={3}
                               value={item.serialInput}
@@ -923,8 +1062,27 @@ export default function PurchaseFormClient({
                               placeholder={"প্রতিটা serial এক লাইনে বা কমা দিয়ে আলাদা করুন\nযেমন: SN001\nSN002\nSN003"}
                               className="w-full rounded-lg border border-primary/20 bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
                             />
+                            <div className="flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleApplyBulkSerials(item.id, "append")}
+                                className="h-8 rounded-lg border border-primary/30 bg-card px-3 text-[11px] font-semibold text-primary hover:bg-primary/10"
+                              >
+                                list-এ যোগ করুন
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplyBulkSerials(item.id, "replace")}
+                                className="h-8 rounded-lg border border-warning/30 bg-card px-3 text-[11px] font-semibold text-warning hover:bg-warning/10"
+                              >
+                                list replace
+                              </button>
+                            </div>
                             <p className="text-[10px] text-primary/70">
-                              Enter বা কমা দিয়ে আলাদা করুন — {item.serialNumbers.length}টি পাওয়া গেছে
+                              parse preview: {serialBulkPreview.unique.length}টি serial
+                              {serialBulkPreview.duplicateCount > 0
+                                ? `, duplicate বাদ: ${serialBulkPreview.duplicateCount}`
+                                : ""}
                             </p>
                           </div>
                         ) : (
@@ -943,7 +1101,7 @@ export default function PurchaseFormClient({
                                   )
                                 }
                                 onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
+                                  if (e.key === "Enter" || e.key === ",") {
                                     e.preventDefault();
                                     handleAddOneSerial(item.id, item.serialInput);
                                   }
@@ -980,8 +1138,17 @@ export default function PurchaseFormClient({
                             )}
                           </div>
                         )}
+                        {serialQtyTarget > 0 && item.serialNumbers.length !== serialQtyTarget ? (
+                          <p className="text-[10px] font-semibold text-warning">
+                            qty ({serialQtyTarget}) এবং serial count ({item.serialNumbers.length}) সমান করুন।
+                          </p>
+                        ) : null}
                       </div>
-                    )}
+                    ) : productMap.get(item.productId)?.trackSerialNumbers && hasVariants ? (
+                      <div className="mt-3 rounded-xl border border-warning/30 bg-warning-soft/40 px-3 py-2 text-[11px] text-warning">
+                        Serial add করার আগে variant নির্বাচন করুন। variant-specific incoming serial-ই এখানে নথিভুক্ত হবে।
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}

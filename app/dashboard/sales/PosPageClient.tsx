@@ -63,6 +63,7 @@ type ProductOption = {
   sellPrice: string;
   stockQty?: string | number;
   category?: string | null;
+  storageLocation?: string | null;
   trackStock?: boolean | null;
   trackSerialNumbers?: boolean | null;
   trackBatch?: boolean | null;
@@ -73,6 +74,8 @@ type ProductOption = {
     id: string;
     label: string;
     sellPrice: string;
+    stockQty?: string | number;
+    storageLocation?: string | null;
     sku?: string | null;
     barcode?: string | null;
     sortOrder?: number;
@@ -89,6 +92,7 @@ type PosPageClientProps = {
     sellPrice: string | number;
     stockQty?: string | number;
     category?: string | null;
+    storageLocation?: string | null;
     trackStock?: boolean | null;
     trackSerialNumbers?: boolean | null;
     trackBatch?: boolean | null;
@@ -99,6 +103,8 @@ type PosPageClientProps = {
       id: string;
       label: string;
       sellPrice: string | number;
+      stockQty?: string | number;
+      storageLocation?: string | null;
       sku?: string | null;
       barcode?: string | null;
       sortOrder?: number;
@@ -166,6 +172,7 @@ export function PosPageClient({
     items: cartItems,
     currentShopId: cartShopId,
     setSerialNumbers,
+    updateQty,
   } = useCart(
     useShallow((s) => ({
       clear: s.clear,
@@ -173,6 +180,7 @@ export function PosPageClient({
       items: s.items,
       currentShopId: s.currentShopId,
       setSerialNumbers: s.setSerialNumbers,
+      updateQty: s.updateQty,
     }))
   );
 
@@ -189,6 +197,10 @@ export function PosPageClient({
   const [availableSerials, setAvailableSerials] = useState<
     { id: string; serialNo: string }[]
   >([]);
+  const [serialStockQty, setSerialStockQty] = useState<number | null>(null);
+  const [serialInStockCount, setSerialInStockCount] = useState<number | null>(null);
+  const [serialHasMismatch, setSerialHasMismatch] = useState(false);
+  const [serialBlockingReason, setSerialBlockingReason] = useState<string | null>(null);
   const [serialPickerInput, setSerialPickerInput] = useState("");
   const [selectedSerials, setSelectedSerials] = useState<string[]>([]);
   const [serialsLoading, setSerialsLoading] = useState(false);
@@ -201,17 +213,48 @@ export function PosPageClient({
       variantId: string | null,
       qty: number
     ) => {
-      setSerialPicker({ itemKey, productId, productName, variantId, qty });
-      setSelectedSerials([]);
+      const currentItem = useCart
+        .getState()
+        .items.find((row) => row.itemKey === itemKey && row.shopId === shopId);
+      const currentQty = Math.max(1, Math.round(Number(currentItem?.qty ?? qty)));
+      const existingSerials = (currentItem?.serialNumbers ?? [])
+        .map((serial) => String(serial || "").trim().toUpperCase())
+        .filter(Boolean);
+
+      setSerialPicker({ itemKey, productId, productName, variantId, qty: currentQty });
+      setSelectedSerials(Array.from(new Set(existingSerials)));
       setSerialPickerInput("");
+      setSerialStockQty(null);
+      setSerialInStockCount(null);
+      setSerialHasMismatch(false);
+      setSerialBlockingReason(null);
       setSerialsLoading(true);
       try {
         const url = `/api/serials/available?shopId=${shopId}&productId=${productId}${variantId ? `&variantId=${variantId}` : ""}`;
         const res = await fetch(url);
         const data = await res.json();
-        setAvailableSerials(data.serials ?? []);
+        const serials = Array.isArray(data?.serials) ? data.serials : [];
+        setAvailableSerials(serials);
+        setSerialStockQty(
+          Number.isFinite(Number(data?.stockQty)) ? Number(data.stockQty) : null
+        );
+        setSerialInStockCount(
+          Number.isFinite(Number(data?.serialInStockCount))
+            ? Number(data.serialInStockCount)
+            : serials.length
+        );
+        setSerialHasMismatch(Boolean(data?.hasMismatch));
+        setSerialBlockingReason(
+          typeof data?.blockingReason === "string" && data.blockingReason.trim()
+            ? data.blockingReason.trim()
+            : null
+        );
       } catch {
         setAvailableSerials([]);
+        setSerialStockQty(null);
+        setSerialInStockCount(null);
+        setSerialHasMismatch(false);
+        setSerialBlockingReason(null);
       } finally {
         setSerialsLoading(false);
       }
@@ -221,18 +264,31 @@ export function PosPageClient({
 
   const confirmSerialPicker = useCallback(() => {
     if (!serialPicker) return;
-    setSerialNumbers(serialPicker.itemKey, selectedSerials);
+    if (serialHasMismatch) return;
+    const normalized = Array.from(
+      new Set(
+        selectedSerials
+          .map((serial) => String(serial || "").trim().toUpperCase())
+          .filter(Boolean)
+      )
+    );
+    setSerialNumbers(serialPicker.itemKey, normalized);
+    if (normalized.length > 0 && normalized.length !== serialPicker.qty) {
+      updateQty(serialPicker.itemKey, normalized.length);
+    }
     setSerialPicker(null);
-  }, [serialPicker, selectedSerials, setSerialNumbers]);
+  }, [serialHasMismatch, serialPicker, selectedSerials, setSerialNumbers, updateQty]);
 
   const addManualSerial = useCallback((value: string) => {
     const sn = value.trim().toUpperCase();
     if (!sn) return;
-    setSelectedSerials((prev) =>
-      prev.includes(sn) ? prev : [...prev, sn]
-    );
+    setSelectedSerials((prev) => (prev.includes(sn) ? prev : [...prev, sn]));
     setSerialPickerInput("");
   }, []);
+  const serialTargetQty = Math.max(
+    serialPicker?.qty ?? 0,
+    selectedSerials.length
+  );
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
   const [barExpanded, setBarExpanded] = useState(false);
   const [barFlash, setBarFlash] = useState(false);
@@ -751,6 +807,41 @@ export function PosPageClient({
 
     if (paymentMethod === "due" && !customerId) {
       toast.warning("বাকিতে বিক্রির জন্য কাস্টমার নির্বাচন করুন।");
+      return;
+    }
+
+    const hasSerializedItem = items.some((item) => {
+      const product = productOptions.find((p) => p.id === item.productId);
+      return Boolean(product?.trackSerialNumbers);
+    });
+    if (!online && hasSerializedItem) {
+      toast.error("Serial-tracked পণ্য offline sale-এ সমর্থিত নয়। online হয়ে বিক্রি করুন।");
+      return;
+    }
+
+    const serialMismatchItem = items.find((item) => {
+      const product = productOptions.find((p) => p.id === item.productId);
+      if (!product?.trackSerialNumbers) return false;
+      if (!Number.isInteger(item.qty)) return true;
+      const expected = Math.max(0, Math.round(item.qty));
+      const actual = (item.serialNumbers ?? []).filter((serial) =>
+        Boolean(String(serial ?? "").trim())
+      ).length;
+      return expected !== actual;
+    });
+    if (serialMismatchItem) {
+      const expected = Math.max(0, Math.round(serialMismatchItem.qty));
+      const actual = (serialMismatchItem.serialNumbers ?? []).length;
+      toast.error(
+        `Serial mismatch: qty ${expected}, selected serial ${actual}. আগে serial ঠিক করুন।`
+      );
+      await openSerialPicker(
+        serialMismatchItem.itemKey,
+        serialMismatchItem.productId,
+        serialMismatchItem.name,
+        serialMismatchItem.variantId ?? null,
+        serialMismatchItem.qty
+      );
       return;
     }
 
@@ -2221,16 +2312,21 @@ export function PosPageClient({
           </DialogHeader>
 
           <div className="space-y-3">
-            {/* Counter */}
             <div
               className={`text-center text-sm font-semibold rounded-lg py-1.5 ${
-                selectedSerials.length === (serialPicker?.qty ?? 0)
+                !serialHasMismatch && selectedSerials.length === serialTargetQty
                   ? "bg-green-50 text-green-700"
                   : "bg-orange-50 text-orange-700"
               }`}
             >
-              {selectedSerials.length} / {serialPicker?.qty ?? 0} serial নির্বাচিত
+              {selectedSerials.length} / {serialTargetQty} serial নির্বাচিত
             </div>
+
+            {serialBlockingReason ? (
+              <div className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs font-semibold text-danger">
+                {serialBlockingReason}
+              </div>
+            ) : null}
 
             {/* Manual input */}
             <div className="flex gap-2">
@@ -2287,6 +2383,12 @@ export function PosPageClient({
                 <p className="text-[11px] font-semibold text-muted-foreground">
                   স্টকে থাকা serial ({availableSerials.length}টি):
                 </p>
+                {serialHasMismatch ? (
+                  <p className="text-[11px] text-warning">
+                    স্টক mismatch: stock {serialStockQty ?? "?"}, IN_STOCK serial{" "}
+                    {serialInStockCount ?? availableSerials.length}
+                  </p>
+                ) : null}
                 <div className="max-h-36 overflow-y-auto flex flex-wrap gap-1">
                   {availableSerials.map((s) => {
                     const selected = selectedSerials.includes(s.serialNo);
@@ -2317,7 +2419,9 @@ export function PosPageClient({
               </div>
             ) : (
               <p className="text-xs text-muted-foreground text-center py-1">
-                স্টকে কোনো registered serial নেই — manually type করুন
+                {serialBlockingReason
+                  ? "Mismatch থাকায় serial list দেখানো হয়নি। আগে reconcile করুন।"
+                  : "স্টকে কোনো registered serial নেই — manually type করুন"}
               </p>
             )}
           </div>
@@ -2333,6 +2437,10 @@ export function PosPageClient({
             <button
               type="button"
               onClick={confirmSerialPicker}
+              disabled={
+                serialHasMismatch ||
+                selectedSerials.length !== serialTargetQty
+              }
               className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90"
             >
               নিশ্চিত করুন

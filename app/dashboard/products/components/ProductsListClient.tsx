@@ -62,6 +62,12 @@ type ProductVariant = {
   isActive?: boolean;
 };
 
+type AdjustVariantOption = {
+  id: string;
+  label: string;
+  currentQty: string;
+};
+
 type Product = {
   id: string;
   name: string;
@@ -76,6 +82,9 @@ type Product = {
   storageLocation?: string | null;
   conversionSummary?: string | null;
   trackStock?: boolean | null;
+  trackSerialNumbers?: boolean | null;
+  trackBatch?: boolean | null;
+  trackCutLength?: boolean | null;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -377,6 +386,50 @@ function getVariantSummary(product?: Product | null) {
   return `${activeVariants.length.toLocaleString("bn-BD")}টি সাইজ`;
 }
 
+function getLocationSummary(product?: Product | null) {
+  if (!product) return null;
+  if (product.storageLocation) return product.storageLocation;
+  const locations = Array.from(
+    new Set(
+      getActiveVariants(product)
+        .map((variant) => String(variant.storageLocation || "").trim())
+        .filter(Boolean)
+    )
+  );
+  if (locations.length === 0) return null;
+  if (locations.length === 1) return locations[0];
+  return `${locations.length.toLocaleString("bn-BD")}টি লোকেশন`;
+}
+
+function getLocationEntries(product?: Product | null) {
+  if (!product) return [];
+  const entries: Array<{
+    key: string;
+    label: string;
+    location: string;
+    kind: "base" | "variant";
+  }> = [];
+  if (product.storageLocation) {
+    entries.push({
+      key: `${product.id}-base`,
+      label: "Base product",
+      location: product.storageLocation,
+      kind: "base",
+    });
+  }
+  for (const variant of getActiveVariants(product)) {
+    const location = String(variant.storageLocation || "").trim();
+    if (!location) continue;
+    entries.push({
+      key: `${product.id}-${variant.id || variant.label}`,
+      label: String(variant.label || "").trim() || "Variant",
+      location,
+      kind: "variant",
+    });
+  }
+  return entries;
+}
+
 function formatCompactMetric(value: unknown) {
   return toSafeNumber(value).toLocaleString("bn-BD", {
     minimumFractionDigits: 0,
@@ -409,6 +462,18 @@ function formatDateTime(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function parseSerialInput(raw: string) {
+  const seen = new Set<string>();
+  return raw
+    .split(/[\n,]+/)
+    .map((token) => token.trim().toUpperCase())
+    .filter((token) => {
+      if (!token || seen.has(token)) return false;
+      seen.add(token);
+      return true;
+    });
 }
 
 function formatTemplatePrice(value: string | number | null | undefined) {
@@ -688,13 +753,115 @@ export default function ProductsListClient({
     productName: string;
     variantLabel?: string | null;
     currentQty: string;
+    trackSerialNumbers?: boolean;
+    trackCutLength?: boolean;
+    variantOptions?: AdjustVariantOption[];
   };
   const [adjusting, setAdjusting] = useState<AdjustTarget | null>(null);
   const [adjustNewQty, setAdjustNewQty] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
   const [adjustNote, setAdjustNote] = useState("");
+  const [adjustSerialInput, setAdjustSerialInput] = useState("");
+  const [adjustSerialOutStatus, setAdjustSerialOutStatus] = useState<
+    "DAMAGED" | "RETURNED"
+  >("DAMAGED");
   const [adjustSubmitting, setAdjustSubmitting] = useState(false);
   const [adjustError, setAdjustError] = useState<string | null>(null);
+  const [adjustAvailableSerials, setAdjustAvailableSerials] = useState<
+    { id: string; serialNo: string }[]
+  >([]);
+  const [adjustSerialsLoading, setAdjustSerialsLoading] = useState(false);
+  const [adjustSerialLoadError, setAdjustSerialLoadError] = useState<string | null>(null);
+
+  const openStockAdjustment = useCallback((target: AdjustTarget) => {
+    setAdjusting(target);
+    setAdjustNewQty(target.currentQty);
+    setAdjustReason("");
+    setAdjustNote("");
+    setAdjustSerialInput("");
+    setAdjustSerialOutStatus("DAMAGED");
+    setAdjustError(null);
+  }, []);
+
+  const replaceAdjustSerialList = useCallback((serials: string[]) => {
+    const next = Array.from(
+      new Set(
+        serials
+          .map((serial) => String(serial ?? "").trim().toUpperCase())
+          .filter(Boolean)
+      )
+    );
+    setAdjustSerialInput(next.join("\n"));
+  }, []);
+
+  useEffect(() => {
+    if (!adjusting || !adjusting.trackSerialNumbers) {
+      setAdjustAvailableSerials([]);
+      setAdjustSerialsLoading(false);
+      setAdjustSerialLoadError(null);
+      return;
+    }
+
+    const needsVariantSelection = (adjusting.variantOptions?.length ?? 0) > 0;
+    if (needsVariantSelection && !adjusting.variantId) {
+      setAdjustAvailableSerials([]);
+      setAdjustSerialsLoading(false);
+      setAdjustSerialLoadError(null);
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+
+    const loadSerials = async () => {
+      setAdjustSerialsLoading(true);
+      setAdjustSerialLoadError(null);
+      try {
+        const params = new URLSearchParams({
+          shopId: activeShopId,
+          productId: adjusting.productId,
+        });
+        if (adjusting.variantId) {
+          params.set("variantId", adjusting.variantId);
+        }
+        const res = await fetch(`/api/serials/reconciliation?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.error || "Serial load failed");
+        }
+        if (!active) return;
+        setAdjustAvailableSerials(
+          Array.isArray(data?.serials)
+            ? data.serials.map((row: any) => ({
+                id: String(row.id),
+                serialNo: String(row.serialNo ?? "").trim().toUpperCase(),
+              }))
+            : []
+        );
+      } catch (err) {
+        if (!active || controller.signal.aborted) return;
+        setAdjustAvailableSerials([]);
+        setAdjustSerialLoadError(
+          err instanceof Error ? err.message : "Serial load failed"
+        );
+      } finally {
+        if (active) {
+          setAdjustSerialsLoading(false);
+        }
+      }
+    };
+
+    loadSerials();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [
+    activeShopId,
+    adjusting,
+  ]);
 
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
@@ -1213,7 +1380,12 @@ export default function ProductsListClient({
       if (status === "active" && !product.isActive) return false;
       if (status === "inactive" && product.isActive) return false;
       if (query.trim()) {
-        const haystack = `${product.name} ${product.category} ${product.sku ?? ""} ${product.barcode ?? ""}`;
+        const haystack = `${product.name} ${product.category} ${product.sku ?? ""} ${product.barcode ?? ""} ${product.storageLocation ?? ""} ${(product.variants ?? [])
+          .map(
+            (variant) =>
+              `${variant.label ?? ""} ${variant.sku ?? ""} ${variant.barcode ?? ""} ${variant.storageLocation ?? ""}`
+          )
+          .join(" ")}`;
         if (!matchesProductSearchQuery(query, haystack)) return false;
       }
       return true;
@@ -3131,6 +3303,7 @@ export default function ProductsListClient({
               : UNTRACKED_STOCK_CLASSES;
             const categoryLabel = formatCategoryLabel(product.category);
             const variantSummary = getVariantSummary(product);
+            const locationSummary = getLocationSummary(product);
             const stockText = formatStockText(product);
             const cardAccent = product.isActive
               ? "border-l-4 border-l-success/60"
@@ -3213,11 +3386,11 @@ export default function ProductsListClient({
                   </div>
                 </div>
 
-                {product.storageLocation || product.reorderPoint || product.conversionSummary ? (
+                {locationSummary || product.reorderPoint || product.conversionSummary ? (
                   <div className="mb-4 flex flex-wrap gap-1.5">
-                    {product.storageLocation ? (
+                    {locationSummary ? (
                       <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        লোকেশন {product.storageLocation}
+                        লোকেশন {locationSummary}
                       </span>
                     ) : null}
                     {product.reorderPoint ? (
@@ -3310,21 +3483,102 @@ export default function ProductsListClient({
                 {/* Action Buttons */}
                 {canUpdateProducts || canDeleteProducts ? (
                   <div className="mt-auto space-y-2">
+                    {product.trackSerialNumbers ? (
+                      <Link
+                        href={`/dashboard/products/serials?shopId=${activeShopId}&productId=${product.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic("light");
+                        }}
+                        className="flex items-center justify-center gap-2 w-full h-10 rounded-xl bg-primary-soft/60 text-primary border border-primary/25 font-semibold text-sm shadow-sm hover:bg-primary/15 hover:border-primary/40 active:scale-95 transition"
+                      >
+                        <span>🔎</span>
+                        <span>Serial / Warranty</span>
+                      </Link>
+                    ) : null}
+                    {product.trackBatch ? (
+                      <Link
+                        href={`/dashboard/products/batches?shopId=${activeShopId}&productId=${product.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic("light");
+                        }}
+                        className="flex items-center justify-center gap-2 w-full h-10 rounded-xl bg-warning-soft/45 text-warning border border-warning/25 font-semibold text-sm shadow-sm hover:bg-warning/15 hover:border-warning/40 active:scale-95 transition"
+                      >
+                        <span>📦</span>
+                        <span>Batch / Recall</span>
+                      </Link>
+                    ) : null}
+                    {product.trackCutLength ? (
+                      <Link
+                        href={`/dashboard/products/remnants?shopId=${activeShopId}&productId=${product.id}&status=active`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic("light");
+                        }}
+                        className="flex items-center justify-center gap-2 w-full h-10 rounded-xl bg-success-soft/50 text-success border border-success/25 font-semibold text-sm shadow-sm hover:bg-success/15 hover:border-success/40 active:scale-95 transition"
+                      >
+                        <span>📏</span>
+                        <span>কাটা বাকি অংশ</span>
+                      </Link>
+                    ) : null}
+                    {locationSummary ? (
+                      <Link
+                        href={`/dashboard/products/locations?shopId=${activeShopId}&productId=${product.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic("light");
+                        }}
+                        className="flex items-center justify-center gap-2 w-full h-10 rounded-xl bg-muted/50 text-foreground border border-border font-semibold text-sm shadow-sm hover:bg-muted hover:border-primary/25 active:scale-95 transition"
+                      >
+                        <span>📍</span>
+                        <span>লোকেশন</span>
+                      </Link>
+                    ) : null}
                     {canUpdateProducts && product.trackStock ? (
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setAdjusting({
+                          const activeVariants = getActiveVariants(product)
+                            .filter((variant): variant is ProductVariant & { id: string } =>
+                              Boolean(variant.id)
+                            )
+                            .map((variant) => ({
+                              id: variant.id!,
+                              label: String(variant.label || "").trim() || "Variant",
+                              currentQty: String(variant.stockQty ?? "0"),
+                            }));
+                          if (activeVariants.length > 0) {
+                            openStockAdjustment({
+                              productId: product.id,
+                              variantId: null,
+                              variantLabel: null,
+                              productName: product.name,
+                              currentQty: "",
+                              trackSerialNumbers:
+                                Boolean(product.trackSerialNumbers) &&
+                                product.trackStock === true,
+                              trackCutLength:
+                                Boolean(product.trackCutLength) &&
+                                product.trackStock === true,
+                              variantOptions: activeVariants,
+                            });
+                            return;
+                          }
+                          openStockAdjustment({
                             productId: product.id,
                             variantId: null,
                             productName: product.name,
                             currentQty: product.stockQty,
+                            trackSerialNumbers:
+                              Boolean(product.trackSerialNumbers) &&
+                              product.trackStock === true,
+                            trackCutLength:
+                              Boolean(product.trackCutLength) &&
+                              product.trackStock === true,
+                            variantOptions: [],
                           });
-                          setAdjustNewQty(product.stockQty);
-                          setAdjustReason("");
-                          setAdjustNote("");
-                          setAdjustError(null);
                         }}
                         className="flex items-center justify-center gap-2 w-full h-10 rounded-xl bg-warning-soft text-warning border border-warning/30 font-semibold text-sm shadow-sm hover:bg-warning/15 hover:border-warning/40 active:scale-95 transition"
                       >
@@ -3514,6 +3768,43 @@ export default function ProductsListClient({
                   </p>
                 </div>
               </div>
+
+              {getLocationEntries(selectedProduct).length > 0 ? (
+                <div className="rounded-2xl border border-border bg-muted/30 p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h5 className="text-sm font-semibold text-foreground">
+                      র্যাক / শেলফ / লোকেশন
+                    </h5>
+                    <Link
+                      href={`/dashboard/products/locations?shopId=${activeShopId}&productId=${selectedProduct.id}`}
+                      className="text-[11px] font-semibold text-primary hover:underline"
+                      onClick={() => triggerHaptic("light")}
+                    >
+                      লোকেশন ফাইন্ডার
+                    </Link>
+                  </div>
+                  <div className="space-y-2">
+                    {getLocationEntries(selectedProduct).map((entry) => (
+                      <div
+                        key={entry.key}
+                        className="flex items-start justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2.5"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-foreground">
+                            {entry.label}
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground break-words">
+                            {entry.location}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {entry.kind === "variant" ? "ভ্যারিয়েন্ট" : "বেস"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="rounded-2xl border border-border bg-muted/30 p-3 space-y-3">
                 <div className="flex items-center justify-between gap-2">
@@ -3915,57 +4206,353 @@ export default function ProductsListClient({
           if (!open) setAdjusting(null);
         }}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent className="flex max-h-[92vh] w-[calc(100vw-1rem)] max-w-lg flex-col overflow-hidden rounded-2xl p-0">
           <DialogHeader>
-            <DialogTitle>স্টক সমন্বয়</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="px-4 pt-4 text-base">স্টক সমন্বয়</DialogTitle>
+            <DialogDescription className="px-4 pb-2 text-xs">
               {adjusting?.productName}
               {adjusting?.variantLabel ? ` · ${adjusting.variantLabel}` : ""}
             </DialogDescription>
           </DialogHeader>
           {adjusting ? (() => {
-            const currentQty = parseFloat(adjusting.currentQty) || 0;
+            const variantOptions = adjusting.variantOptions ?? [];
+            const needsVariantSelection = variantOptions.length > 0;
+            const selectedVariant = needsVariantSelection
+              ? variantOptions.find((variant) => variant.id === adjusting.variantId) ?? null
+              : null;
+            const currentQty = needsVariantSelection
+              ? toSafeNumber(selectedVariant?.currentQty)
+              : parseFloat(adjusting.currentQty) || 0;
             const newQtyNum = parseFloat(adjustNewQty);
             const delta = Number.isFinite(newQtyNum) ? newQtyNum - currentQty : null;
             const unchanged = Number.isFinite(newQtyNum) && newQtyNum === currentQty;
-            const canSubmit = !adjustSubmitting && !unchanged && adjustReason && Number.isFinite(newQtyNum) && newQtyNum >= 0;
+            const serialTracked = Boolean(adjusting.trackSerialNumbers);
+            const cutLengthTracked = Boolean(adjusting.trackCutLength);
+            const serialList = parseSerialInput(adjustSerialInput);
+            const availableInStockCount = adjustAvailableSerials.length;
+            const serialDrift =
+              serialTracked && Number.isInteger(currentQty)
+                ? availableInStockCount - Math.round(currentQty)
+                : 0;
+            const hasSerialDrift = serialTracked && serialDrift !== 0;
+            const mismatchMode = hasSerialDrift
+              ? serialDrift > 0
+                ? "remove-extra"
+                : "add-missing"
+              : null;
+            const quantityChangeBlockedByMismatch =
+              hasSerialDrift && !unchanged;
+            const serialExpected =
+              delta === null
+                ? 0
+                : quantityChangeBlockedByMismatch
+                ? 0
+                : hasSerialDrift && unchanged
+                ? Math.abs(serialDrift)
+                : Math.abs(Math.round(delta));
+            const serialNeedsInput = serialTracked && serialExpected > 0;
+            const serialCountMatches = !serialNeedsInput || serialList.length === serialExpected;
+            const wholeNumberForSerial =
+              !serialTracked || (Number.isFinite(newQtyNum) && Number.isInteger(newQtyNum));
+            const needsAnyChange = !unchanged || hasSerialDrift;
+            const canToggleAvailableSerials =
+              serialTracked &&
+              ((delta !== null && delta < 0) ||
+                (hasSerialDrift && mismatchMode === "remove-extra"));
+            const canSubmit =
+              !adjustSubmitting &&
+              needsAnyChange &&
+              adjustReason &&
+              Number.isFinite(newQtyNum) &&
+              newQtyNum >= 0 &&
+              wholeNumberForSerial &&
+              !quantityChangeBlockedByMismatch &&
+              serialCountMatches &&
+              (!needsVariantSelection || Boolean(adjusting.variantId));
+            const qtyChangePreview =
+              delta === null || unchanged
+                ? null
+                : delta > 0
+                ? `${delta.toFixed(2).replace(/\.?0+$/, "")} বাড়বে`
+                : `${Math.abs(delta).toFixed(2).replace(/\.?0+$/, "")} কমবে`;
 
-            return (
-              <div className="space-y-4 pt-1">
-                <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
-                  <span className="text-muted-foreground">বর্তমান স্টক: </span>
-                  <span className="font-semibold text-foreground">{adjusting.currentQty}</span>
-                </div>
-
-                <label className="block space-y-1.5">
-                  <span className="text-sm font-semibold text-foreground">নতুন পরিমাণ</span>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={adjustNewQty}
-                      onChange={(e) => setAdjustNewQty(e.target.value)}
-                      className="h-10 flex-1 rounded-xl border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      placeholder="যেমন: ১৫"
-                      autoFocus
-                    />
-                    {delta !== null && !unchanged && (
-                      <span className={`text-sm font-semibold min-w-[3rem] text-right ${
-                        delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-danger"
-                      }`}>
-                        {delta > 0 ? `+${delta.toFixed(2).replace(/\.?0+$/, "")}` : delta.toFixed(2).replace(/\.?0+$/, "")}
+              return (
+                <div className="min-h-0 space-y-3 overflow-y-auto px-4 pb-4">
+                  {needsVariantSelection ? (
+                    <label className="block space-y-1.5">
+                      <span className="text-sm font-semibold text-foreground">
+                        ভ্যারিয়েন্ট বাছাই করুন
                       </span>
-                    )}
+                      <select
+                        value={adjusting.variantId ?? ""}
+                        onChange={(e) => {
+                          const nextVariantId = e.target.value || null;
+                          const nextVariant =
+                            variantOptions.find((variant) => variant.id === nextVariantId) ?? null;
+                          setAdjusting((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  variantId: nextVariant?.id ?? null,
+                                  variantLabel: nextVariant?.label ?? null,
+                                }
+                              : prev
+                          );
+                          if (nextVariant) {
+                            setAdjustNewQty(nextVariant.currentQty);
+                          } else {
+                            setAdjustNewQty("");
+                          }
+                          setAdjustSerialInput("");
+                          setAdjustError(null);
+                        }}
+                        className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      >
+                        <option value="">— সাইজ/ভ্যারিয়েন্ট সিলেক্ট করুন —</option>
+                        {variantOptions.map((variant) => (
+                          <option key={variant.id} value={variant.id}>
+                            {variant.label} (স্টক: {variant.currentQty})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-sm">
+                    <span className="text-muted-foreground">বর্তমান স্টক: </span>
+                    <span className="font-semibold text-foreground">
+                      {needsVariantSelection
+                        ? selectedVariant?.currentQty ?? "—"
+                        : adjusting.currentQty}
+                    </span>
                   </div>
-                </label>
+
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-semibold text-foreground">সঠিক/চূড়ান্ত স্টক</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={adjustNewQty}
+                        onChange={(e) => setAdjustNewQty(e.target.value)}
+                        className="h-11 flex-1 rounded-xl border border-border bg-card px-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        placeholder="যেমন: ১৫"
+                        autoFocus
+                        disabled={needsVariantSelection && !adjusting.variantId}
+                      />
+                      {delta !== null && !unchanged && (
+                        <span className={`text-sm font-semibold min-w-[3rem] text-right ${
+                          delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-danger"
+                        }`}>
+                          {delta > 0 ? `+${delta.toFixed(2).replace(/\.?0+$/, "")}` : delta.toFixed(2).replace(/\.?0+$/, "")}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      এখানে গুনে পাওয়া চূড়ান্ত stock লিখুন। এটা যোগ হয় না, সরাসরি stock এই সংখ্যায় সেট হবে।
+                    </p>
+                  </label>
+
+                  {cutLengthTracked ? (
+                    <div className="rounded-xl border border-success/30 bg-success-soft/35 px-3 py-2 text-xs text-success">
+                      <p className="font-semibold">Cut-length product</p>
+                      <p className="mt-1">
+                        stock কমলে system আগে full stock কমাবে, দরকার হলে active remnant থেকেও কাটবে।
+                      </p>
+                      <Link
+                        href={`/dashboard/products/remnants?shopId=${activeShopId}&productId=${adjusting.productId}&status=active${adjusting.variantId ? `&variantId=${adjusting.variantId}` : ""}`}
+                        className="mt-2 inline-flex font-semibold underline underline-offset-2"
+                      >
+                        বর্তমান cut pieces / remnants দেখুন
+                      </Link>
+                    </div>
+                  ) : null}
+
+                  {serialTracked ? (
+                    <div className="space-y-2 rounded-xl border border-primary/30 bg-primary-soft/40 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-primary">
+                          Serial reconciliation
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-card px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                            IN_STOCK serial {availableInStockCount}
+                          </span>
+                          {serialNeedsInput ? (
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              serialCountMatches
+                                ? "bg-success-soft text-success"
+                                : "bg-warning-soft text-warning"
+                            }`}>
+                              {serialList.length} / {serialExpected}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {adjustSerialsLoading ? (
+                        <p className="text-xs text-muted-foreground">Serial লোড হচ্ছে...</p>
+                      ) : null}
+                      {adjustSerialLoadError ? (
+                        <p className="text-xs font-medium text-danger">{adjustSerialLoadError}</p>
+                      ) : null}
+                      {wholeNumberForSerial ? null : (
+                        <p className="text-xs font-medium text-danger">
+                          Serial tracking পণ্যে চূড়ান্ত stock পূর্ণসংখ্যা হতে হবে।
+                        </p>
+                      )}
+                      {hasSerialDrift ? (
+                        <div className="rounded-xl border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
+                          {serialDrift > 0
+                            ? `Stock ${Math.round(currentQty)}, কিন্তু IN_STOCK serial ${availableInStockCount}। ${Math.abs(serialDrift)}টি extra serial আগে reconcile করুন।`
+                            : `Stock ${Math.round(currentQty)}, কিন্তু IN_STOCK serial ${availableInStockCount}। ${Math.abs(serialDrift)}টি missing serial আগে add/reactivate করুন।`}
+                        </div>
+                      ) : null}
+                      {quantityChangeBlockedByMismatch ? (
+                        <div className="rounded-xl border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger">
+                          <p className="font-semibold">
+                            আগে Step 1 শেষ করুন, তারপর qty change করুন।
+                          </p>
+                          <p className="mt-1">
+                            এখন final stock আবার {Math.round(currentQty)} রাখুন, extra/missing serial reconcile করে save দিন। তারপর নতুন করে {adjustNewQty || "চাইলে"} stock সেট করুন।
+                          </p>
+                          {qtyChangePreview ? (
+                            <p className="mt-1 font-medium">
+                              আপনি এখন {adjustNewQty} দিলে stock {qtyChangePreview}, কিন্তু এটা mismatch থাকা অবস্থায় allowed না।
+                            </p>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => setAdjustNewQty(String(Math.round(currentQty)))}
+                            className="mt-2 inline-flex rounded-full border border-danger/30 bg-card px-3 py-1 text-[11px] font-semibold text-danger hover:bg-danger/10"
+                          >
+                            Step 1 mode এ ফিরুন
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {serialNeedsInput ? (
+                        <>
+                          {hasSerialDrift && unchanged ? (
+                            <div className="rounded-xl border border-primary/20 bg-card/70 px-3 py-2 text-xs text-foreground">
+                              <p className="font-semibold text-primary">Step 1: Serial mismatch ঠিক করুন</p>
+                              <p className="mt-1 text-muted-foreground">
+                                Stock {Math.round(currentQty)}-ই থাকবে। শুধু serial record ঠিক হবে।
+                              </p>
+                            </div>
+                          ) : null}
+                          <p className="text-xs text-muted-foreground">
+                            {hasSerialDrift && unchanged
+                              ? serialDrift > 0
+                                ? `${serialExpected}টি extra serial বেছে দিন যেগুলো record থেকে সরাবেন। stock একই থাকবে।`
+                                : `${serialExpected}টি missing serial দিন যেগুলো record-এ add/reactivate হবে। stock একই থাকবে।`
+                              : delta && delta > 0
+                              ? `${serialExpected}টি serial যোগ করুন (নতুন পাওয়া বা re-activate)।`
+                              : `${serialExpected}টি serial বেছে দিন যেগুলো স্টক থেকে কমবে।`}
+                          </p>
+
+                          {canToggleAvailableSerials ? (
+                            <div className="space-y-2 rounded-xl border border-primary/20 bg-card/70 p-2.5">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-[11px] font-semibold text-muted-foreground">
+                                  বর্তমানে IN_STOCK serial
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      replaceAdjustSerialList(
+                                        adjustAvailableSerials
+                                          .slice(0, serialExpected)
+                                          .map((row) => row.serialNo)
+                                      )
+                                    }
+                                    className="rounded-full border border-primary/20 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary-soft"
+                                  >
+                                    প্রথম {serialExpected}টি নিন
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => replaceAdjustSerialList([])}
+                                    className="rounded-full border border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted"
+                                  >
+                                    Clear
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="max-h-32 overflow-y-auto">
+                                <div className="flex flex-wrap gap-1.5">
+                                  {adjustAvailableSerials.map((row) => {
+                                    const selected = serialList.includes(row.serialNo);
+                                    return (
+                                      <button
+                                        key={row.id}
+                                        type="button"
+                                        onClick={() => {
+                                          const next = selected
+                                            ? serialList.filter((serial) => serial !== row.serialNo)
+                                            : [...serialList, row.serialNo];
+                                          replaceAdjustSerialList(next);
+                                        }}
+                                        className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                          selected
+                                            ? "border-primary bg-primary text-primary-foreground"
+                                            : "border-border bg-card text-foreground hover:border-primary/30 hover:bg-primary-soft"
+                                        }`}
+                                      >
+                                        {row.serialNo}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <textarea
+                            rows={3}
+                            value={adjustSerialInput}
+                            onChange={(e) => setAdjustSerialInput(e.target.value)}
+                            placeholder={"এক লাইনে একটি serial, বা comma দিয়ে আলাদা করুন"}
+                            className="w-full rounded-xl border border-primary/20 bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                          />
+                          {(delta && delta < 0) || (hasSerialDrift && serialDrift > 0) ? (
+                            <label className="block space-y-1">
+                              <span className="text-xs font-semibold text-muted-foreground">
+                                কমানো serial-এর status
+                              </span>
+                              <select
+                                value={adjustSerialOutStatus}
+                                onChange={(e) =>
+                                  setAdjustSerialOutStatus(
+                                    e.target.value as "DAMAGED" | "RETURNED"
+                                  )
+                                }
+                                className="h-10 w-full rounded-xl border border-primary/20 bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              >
+                                <option value="DAMAGED">DAMAGED (নষ্ট/হারানো)</option>
+                                <option value="RETURNED">RETURNED (ফেরত/সরানো)</option>
+                              </select>
+                            </label>
+                          ) : null}
+                        </>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {quantityChangeBlockedByMismatch
+                            ? "এখন serial list disabled, কারণ আগে mismatch reconcile করতে হবে।"
+                            : "এই adjustment-এ serial list দরকার নেই।"}
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
 
                 <label className="block space-y-1.5">
                   <span className="text-sm font-semibold text-foreground">কারণ</span>
                   <select
                     value={adjustReason}
                     onChange={(e) => setAdjustReason(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   >
                     <option value="">— কারণ বেছে নিন —</option>
                     <option value="DAMAGE">ক্ষতি / নষ্ট</option>
@@ -3998,7 +4585,7 @@ export default function ProductsListClient({
                   <button
                     type="button"
                     onClick={() => setAdjusting(null)}
-                    className="flex-1 h-10 rounded-xl border border-border bg-card text-foreground text-sm font-semibold hover:bg-muted transition"
+                    className="flex-1 h-11 rounded-xl border border-border bg-card text-foreground text-sm font-semibold hover:bg-muted transition"
                   >
                     বাতিল
                   </button>
@@ -4017,6 +4604,21 @@ export default function ProductsListClient({
                           newQty: newQtyNum,
                           reason: adjustReason,
                           note: adjustNote || null,
+                          serialAdjustment: serialTracked
+                            ? {
+                                increaseSerials:
+                                  (delta && delta > 0) ||
+                                  (hasSerialDrift && unchanged && serialDrift < 0)
+                                    ? serialList
+                                    : [],
+                                decreaseSerials:
+                                  (delta && delta < 0) ||
+                                  (hasSerialDrift && unchanged && serialDrift > 0)
+                                    ? serialList
+                                    : [],
+                                decreaseStatus: adjustSerialOutStatus,
+                              }
+                            : null,
                         });
                         setAdjusting(null);
                       } catch (err) {
@@ -4025,7 +4627,7 @@ export default function ProductsListClient({
                         setAdjustSubmitting(false);
                       }
                     }}
-                    className="flex-1 h-10 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    className="flex-1 h-11 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
                   >
                     {adjustSubmitting ? "সংরক্ষণ হচ্ছে..." : "সমন্বয় করুন"}
                   </button>

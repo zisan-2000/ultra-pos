@@ -111,6 +111,9 @@ export default async function SalesInvoicePage({ params }: PageProps) {
   const statusUpper = (data.status || "").toUpperCase();
   const isVoided = statusUpper === "VOIDED";
   const isDueSale = (data.paymentMethod || "").toLowerCase() === "due";
+  const hasSerializedItems = data.items.some((item) => item.serialNumbers.length > 0);
+  const hasBatchItems = data.items.some((item) => item.trackBatch && item.batchNumbers.length > 0);
+  const hasCutLengthItems = data.items.some((item) => item.trackCutLength);
   const invoicePrintPaper = sanitizeSalesInvoicePrintSize(
     data.salesInvoicePrintSize
   );
@@ -140,6 +143,30 @@ export default async function SalesInvoicePage({ params }: PageProps) {
               className="inline-flex h-10 items-center rounded-full border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/15"
             >
               Due Edit / Reissue
+            </Link>
+          ) : null}
+          {hasSerializedItems ? (
+            <Link
+              href={`/dashboard/products/serials?shopId=${data.shopId}&query=${encodeURIComponent(data.invoiceNo)}`}
+              className="inline-flex h-10 items-center rounded-full border border-primary/30 bg-primary-soft px-4 text-sm font-semibold text-primary hover:bg-primary/15"
+            >
+              Serial / Warranty
+            </Link>
+          ) : null}
+          {hasBatchItems ? (
+            <Link
+              href={`/dashboard/products/batches?shopId=${data.shopId}`}
+              className="inline-flex h-10 items-center rounded-full border border-warning/30 bg-warning-soft px-4 text-sm font-semibold text-warning hover:bg-warning/15"
+            >
+              Batch / Recall
+            </Link>
+          ) : null}
+          {hasCutLengthItems ? (
+            <Link
+              href={`/dashboard/products/remnants?shopId=${data.shopId}&status=active`}
+              className="inline-flex h-10 items-center rounded-full border border-success/30 bg-success-soft px-4 text-sm font-semibold text-success hover:bg-success/15"
+            >
+              কাটা বাকি অংশ
             </Link>
           ) : null}
         </div>
@@ -275,7 +302,52 @@ export default async function SalesInvoicePage({ params }: PageProps) {
                 <tbody>
                   {data.items.map((item) => (
                     <tr key={item.id} className="border-t border-border/70">
-                      <td className="px-3 py-3 text-foreground">{item.productName}</td>
+                      <td className="px-3 py-3 text-foreground">
+                        <div className="space-y-1">
+                          <div>{item.productName}</div>
+                          {item.variantLabel ? (
+                            <div className="text-xs text-muted-foreground">
+                              Variant: {item.variantLabel}
+                            </div>
+                          ) : null}
+                          {item.serialNumbers.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {item.serialNumbers.map((serialNo) => (
+                                <Link
+                                  key={serialNo}
+                                  href={`/dashboard/products/serials?shopId=${data.shopId}&query=${encodeURIComponent(serialNo)}`}
+                                  className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/15"
+                                >
+                                  SN: {serialNo}
+                                </Link>
+                              ))}
+                            </div>
+                          ) : null}
+                          {item.batchNumbers.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {item.batchNumbers.map((batchNo) => (
+                                <Link
+                                  key={batchNo}
+                                  href={`/dashboard/products/batches?shopId=${data.shopId}&productId=${item.productId}&query=${encodeURIComponent(batchNo)}`}
+                                  className="inline-flex items-center rounded-full border border-warning/20 bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning hover:bg-warning/15"
+                                >
+                                  Batch: {batchNo}
+                                </Link>
+                              ))}
+                            </div>
+                          ) : null}
+                          {item.trackCutLength ? (
+                            <div className="flex flex-wrap gap-1">
+                              <Link
+                                href={`/dashboard/products/remnants?shopId=${data.shopId}&productId=${item.productId}&query=${encodeURIComponent(data.invoiceNo)}&status=all`}
+                                className="inline-flex items-center rounded-full border border-success/20 bg-success-soft px-2 py-0.5 text-[10px] font-semibold text-success hover:bg-success/15"
+                              >
+                                কাট ট্রেস
+                              </Link>
+                            </div>
+                          ) : null}
+                        </div>
+                      </td>
                       <td className="px-3 py-3 text-right font-medium tabular-nums text-foreground">
                         {formatMoney(item.quantity)}
                       </td>
@@ -303,6 +375,11 @@ export default async function SalesInvoicePage({ params }: PageProps) {
                     <div className="text-[11px] font-semibold text-foreground">
                       {item.productName}
                     </div>
+                    {item.variantLabel ? (
+                      <div className="mt-0.5 text-[10px] text-muted-foreground">
+                        Variant: {item.variantLabel}
+                      </div>
+                    ) : null}
                     <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground">
                       <span>
                         {formatMoney(item.quantity)} x ৳ {formatMoney(item.unitPrice)}
@@ -311,6 +388,48 @@ export default async function SalesInvoicePage({ params }: PageProps) {
                         ৳ {formatMoney(item.lineTotal)}
                       </span>
                     </div>
+                    {item.serialNumbers.length > 0 ? (
+                      <div className="mt-1 text-[10px] text-muted-foreground">
+                        Serial:{" "}
+                        {item.serialNumbers.map((serialNo, index) => (
+                          <span key={serialNo}>
+                            {index > 0 ? ", " : ""}
+                            <Link
+                              href={`/dashboard/products/serials?shopId=${data.shopId}&query=${encodeURIComponent(serialNo)}`}
+                              className="font-semibold text-primary"
+                            >
+                              {serialNo}
+                            </Link>
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {item.batchNumbers.length > 0 ? (
+                      <div className="mt-1 text-[10px] text-muted-foreground">
+                        Batch:{" "}
+                        {item.batchNumbers.map((batchNo, index) => (
+                          <span key={batchNo}>
+                            {index > 0 ? ", " : ""}
+                            <Link
+                              href={`/dashboard/products/batches?shopId=${data.shopId}&productId=${item.productId}&query=${encodeURIComponent(batchNo)}`}
+                              className="font-semibold text-warning"
+                            >
+                              {batchNo}
+                            </Link>
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {item.trackCutLength ? (
+                      <div className="mt-1 text-[10px] text-muted-foreground">
+                        <Link
+                          href={`/dashboard/products/remnants?shopId=${data.shopId}&productId=${item.productId}&query=${encodeURIComponent(data.invoiceNo)}&status=all`}
+                          className="font-semibold text-success"
+                        >
+                          কাট ট্রেস
+                        </Link>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>

@@ -258,6 +258,11 @@ export async function createPurchase(input: CreatePurchaseInput) {
       trackStock: true,
       trackSerialNumbers: true,
       trackBatch: true,
+      variants: {
+        where: { isActive: true },
+        select: { id: true, label: true, stockQty: true },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      },
     },
   });
 
@@ -361,6 +366,9 @@ export async function createPurchase(input: CreatePurchaseInput) {
       throw new Error("Product does not belong to this shop");
     }
     const variantId = item.variantId ?? null;
+    if ((product.variants?.length ?? 0) > 0 && !variantId) {
+      throw new Error(`"${product.name}" variant-wise managed। আগে variant নির্বাচন করুন`);
+    }
     if (variantId) {
       const variant = variantMap.get(variantId);
       if (!variant) throw new Error(`Variant not found: ${variantId}`);
@@ -399,6 +407,10 @@ export async function createPurchase(input: CreatePurchaseInput) {
     if (!Number.isFinite(unitCost) || unitCost <= 0) {
       throw new Error("Converted base unit cost must be greater than 0");
     }
+    const batchNo = (item.batchNo ?? "").trim().toUpperCase();
+    if (product.trackBatch && !batchNo) {
+      throw new Error(`"${product.name}" batch / lot tracked। ক্রয়ের সময় batch নম্বর দিন`);
+    }
     subtotalAmount += lineTotal;
     return {
       product,
@@ -410,6 +422,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
       baseUnitQuantity,
       purchaseUnitLabel: selectedConversion?.label ?? product.baseUnit,
       unitConversionId: selectedConversion?.id ?? null,
+      batchNo,
       unitCost,
       lineTotal,
     };
@@ -542,32 +555,58 @@ export async function createPurchase(input: CreatePurchaseInput) {
 
       // Create or upsert batch record for batch-tracked products
       if (product.trackBatch) {
-        const batchNo = (inputItem.batchNo ?? "").trim();
-        if (batchNo) {
-          await tx.batch.upsert({
-            where: {
-              shopId_productId_batchNo: {
-                shopId: input.shopId,
-                productId: product.id,
-                batchNo,
+        const batchNo = row.batchNo;
+        const conflictingBatch = await tx.batch.findFirst({
+          where: {
+            shopId: input.shopId,
+            productId: product.id,
+            batchNo,
+            NOT: {
+              variantId: row.variantId ?? null,
+            },
+          },
+          select: {
+            id: true,
+            variant: {
+              select: {
+                label: true,
               },
             },
-            create: {
+          },
+        });
+        if (conflictingBatch) {
+          throw new Error(
+            `"${product.name}"-এ batch "${batchNo}" অন্য variant-এর সাথে আগে থেকেই ব্যবহার হয়েছে${
+              conflictingBatch.variant?.label
+                ? ` (${conflictingBatch.variant.label})`
+                : ""
+            }। variant-wise product-এ আলাদা batch code দিন।`
+          );
+        }
+
+        await tx.batch.upsert({
+          where: {
+            shopId_productId_batchNo: {
               shopId: input.shopId,
               productId: product.id,
-              variantId: row.variantId ?? null,
               batchNo,
-              purchaseItemId,
-              totalQty: row.baseQty,
-              remainingQty: row.baseQty,
             },
-            update: {
-              totalQty: { increment: row.baseQty },
-              remainingQty: { increment: row.baseQty },
-              isActive: true,
-            },
-          });
-        }
+          },
+          create: {
+            shopId: input.shopId,
+            productId: product.id,
+            variantId: row.variantId ?? null,
+            batchNo,
+            purchaseItemId,
+            totalQty: row.baseQty,
+            remainingQty: row.baseQty,
+          },
+          update: {
+            totalQty: { increment: row.baseQty },
+            remainingQty: { increment: row.baseQty },
+            isActive: true,
+          },
+        });
       }
     }
 
@@ -673,6 +712,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
 
   revalidatePath("/dashboard/purchases");
   revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/products/serials");
   revalidatePath("/dashboard/reports");
   revalidatePath("/dashboard/suppliers");
   revalidateReportsForProduct();
@@ -967,6 +1007,7 @@ export async function createPurchaseReturn(input: CreatePurchaseReturnInput) {
   revalidatePath("/dashboard/purchases");
   revalidatePath(`/dashboard/purchases/${purchase.id}`);
   revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/products/serials");
   revalidatePath("/dashboard/suppliers");
   revalidatePath("/dashboard/reports");
   revalidateReportsForProduct();

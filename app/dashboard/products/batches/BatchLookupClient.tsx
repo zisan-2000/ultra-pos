@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useState, useMemo } from "react";
+import Link from "next/link";
+import { Fragment, useMemo, useState } from "react";
 import { generateCSV } from "@/lib/utils/csv";
 import { downloadFile } from "@/lib/utils/download";
 
@@ -28,9 +29,24 @@ type BatchRow = {
   }>;
 };
 
-export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "depleted">("all");
+export default function BatchLookupClient({
+  rows,
+  shopId,
+  initialQuery = "",
+  initialStatus = "all",
+  initialProductId = "",
+}: {
+  rows: BatchRow[];
+  shopId: string;
+  initialQuery?: string;
+  initialStatus?: string;
+  initialProductId?: string;
+}) {
+  const [query, setQuery] = useState(initialQuery);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "depleted">(
+    initialStatus === "active" || initialStatus === "depleted" ? initialStatus : "all"
+  );
+  const [productFilter, setProductFilter] = useState(initialProductId);
   const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -40,13 +56,31 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
         statusFilter === "all" ||
         (statusFilter === "active" && r.isActive) ||
         (statusFilter === "depleted" && !r.isActive);
+      const matchProduct = !productFilter || r.productId === productFilter;
       const matchQuery =
         !q ||
         r.batchNo.toLowerCase().includes(q) ||
         r.productName.toLowerCase().includes(q);
-      return matchStatus && matchQuery;
+      return matchStatus && matchProduct && matchQuery;
     });
-  }, [rows, query, statusFilter]);
+  }, [productFilter, query, rows, statusFilter]);
+
+  const productOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const row of rows) {
+      if (!seen.has(row.productId)) {
+        seen.set(row.productId, row.productName);
+      }
+    }
+    return Array.from(seen.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [rows]);
+
+  const activeProductLabel = useMemo(() => {
+    if (!productFilter) return null;
+    return productOptions.find((row) => row.id === productFilter)?.name ?? null;
+  }, [productFilter, productOptions]);
 
   const activeCnt = rows.filter((r) => r.isActive).length;
   const depletedCnt = rows.filter((r) => !r.isActive).length;
@@ -127,7 +161,6 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <input
           type="text"
@@ -165,17 +198,57 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
         </div>
       </div>
 
-      {/* Results count */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={productFilter}
+            onChange={(e) => setProductFilter(e.target.value)}
+            className="h-10 rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="">সব পণ্য</option>
+            {productOptions.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name}
+              </option>
+            ))}
+          </select>
+          {(query || statusFilter !== "all" || productFilter) && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                setStatusFilter("all");
+                setProductFilter("");
+              }}
+              className="h-10 rounded-xl border border-border bg-card px-3 text-sm font-semibold text-muted-foreground hover:bg-muted"
+            >
+              Clear filter
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {activeProductLabel ? (
+            <span>
+              এখন দেখাচ্ছে: <span className="font-semibold text-foreground">{activeProductLabel}</span>
+            </span>
+          ) : null}
+          <Link
+            href={`/dashboard/products?shopId=${shopId}`}
+            className="font-semibold text-primary hover:underline"
+          >
+            পণ্য তালিকায় ফিরুন
+          </Link>
+        </div>
+      </div>
+
       <p className="text-xs text-muted-foreground">{filtered.length}টি ফলাফল</p>
 
-      {/* Table */}
       {filtered.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card p-8 text-center">
           <p className="text-sm text-muted-foreground">কোনো batch পাওয়া যায়নি</p>
         </div>
       ) : (
         <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-          {/* Desktop table */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -288,6 +361,12 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
                                             <p className="text-xs text-muted-foreground">
                                               {allocation.customerName || "Walk-in customer"} · {allocation.saleDate}
                                             </p>
+                                            <Link
+                                              href={`/dashboard/sales/${allocation.saleId}/invoice`}
+                                              className="mt-1 inline-flex text-[11px] font-semibold text-primary hover:underline"
+                                            >
+                                              ইনভয়েস খুলুন
+                                            </Link>
                                           </div>
                                           <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
                                             <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
@@ -324,7 +403,6 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
             </table>
           </div>
 
-          {/* Mobile cards */}
           <div className="md:hidden divide-y divide-border">
             {filtered.map((r) => {
               const pct = Number(r.totalQty) > 0
@@ -388,6 +466,12 @@ export default function BatchLookupClient({ rows }: { rows: BatchRow[] }) {
                               <p className="text-xs text-muted-foreground">
                                 {allocation.customerName || "Walk-in customer"} · {allocation.saleDate}
                               </p>
+                              <Link
+                                href={`/dashboard/sales/${allocation.saleId}/invoice`}
+                                className="mt-1 inline-flex text-[11px] font-semibold text-primary hover:underline"
+                              >
+                                ইনভয়েস খুলুন
+                              </Link>
                               <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
                                 <span className="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-foreground">
                                   গেছে {allocated.toFixed(2)}

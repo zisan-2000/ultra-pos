@@ -1567,7 +1567,11 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       ? ((form.get("baseUnit") as string) || configDefaultUnit || configUnits[0] || "pcs")
       : undefined;
 
-    const stockQty = stockEnabled ? ((form.get("stockQty") as string) || "0") : "0";
+    const stockQty = stockEnabled
+      ? batchEnabled
+        ? "0"
+        : ((form.get("stockQty") as string) || "0")
+      : "0";
     const reorderPointRaw = stockEnabled ? (form.get("reorderPoint") as string) : null;
     const reorderPoint = reorderPointRaw && reorderPointRaw.trim() !== ""
       ? Math.max(1, parseInt(reorderPointRaw, 10))
@@ -1606,7 +1610,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
             barcode: normalizeCodeInput(variant.barcode || ""),
             sortOrder: index,
             isActive: variant.isActive !== false,
-            stockQty: variant.stockQty || "0",
+            stockQty: batchEnabled ? "0" : variant.stockQty || "0",
             reorderPoint:
               stockEnabled && variant.reorderPoint.trim() !== ""
                 ? Math.max(1, parseInt(variant.reorderPoint, 10))
@@ -2868,6 +2872,18 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
             <p className="text-xs text-muted-foreground">
               দোকানের ধরন দেখে ডিফল্ট অন/অফ সেট হয়; লাগলে বন্ধ করুন
             </p>
+          {variants.length > 0 || batchEnabled ? (
+            <>
+              <input name="stockQty" type="hidden" value="0" />
+              <div className="rounded-xl border border-primary/30 bg-primary-soft/30 px-4 py-3 text-xs text-primary">
+                {variants.length > 0 && batchEnabled
+                  ? "এই product-এ variant আছে এবং batch tracking চালু। opening stock এখানে দেওয়া হবে না; আগে product save করুন, তারপর purchase/stock-in দিয়ে batch সহ stock যোগ করুন।"
+                  : variants.length > 0
+                  ? "এই product-এ variant আছে। base stock এখানে রাখা হবে না; প্রতিটি variant-এর stock নিচে আলাদা দিন।"
+                  : "Batch tracking চালু থাকলে opening stock product form-এ দেওয়া যাবে না। আগে product save করুন, তারপর purchase/stock-in দিয়ে batch সহ stock যোগ করুন।"}
+              </div>
+            </>
+          ) : (
             <input
               name="stockQty"
               type="number"
@@ -2879,6 +2895,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
               className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground"
               placeholder="যেমন: 10, 5.50"
             />
+          )}
             {stockEnabled && (
               <div className="space-y-1 pt-1">
                 <label className="block text-sm font-medium text-foreground">

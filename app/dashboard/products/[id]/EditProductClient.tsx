@@ -1564,7 +1564,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       ? ((form.get("baseUnit") as string) || configDefaultUnit || configUnits[0] || "pcs")
       : undefined;
 
-    const stockQty = stockEnabled ? ((form.get("stockQty") as string) || "0") : "0";
+    const stockQty = stockEnabled
+      ? batchEnabled
+        ? String(product.stockQty || "0")
+        : ((form.get("stockQty") as string) || "0")
+      : "0";
     const reorderPointRaw = stockEnabled ? (form.get("reorderPoint") as string) : null;
     const reorderPoint = reorderPointRaw && reorderPointRaw.trim() !== ""
       ? Math.max(1, parseInt(reorderPointRaw, 10))
@@ -1599,7 +1603,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             label: variant.label.trim(),
             buyPrice: variant.buyPrice.trim() || null,
             sellPrice: variant.sellPrice.trim(),
-            stockQty: variant.stockQty || "0",
+            stockQty: batchEnabled
+              ? String(
+                  product.variants?.find((row: any) => row.id === variant.id)?.stockQty ?? "0"
+                )
+              : variant.stockQty || "0",
             reorderPoint:
               stockEnabled && variant.reorderPoint.trim() !== ""
                 ? Math.max(1, parseInt(variant.reorderPoint, 10))
@@ -2124,10 +2132,15 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                                 upsertVariant(index, { stockQty: e.target.value })
                               }
                               placeholder="স্টক"
+                              disabled={batchEnabled || cutLengthEnabled}
                               className={`h-9 w-full min-w-0 rounded-lg border px-3 text-sm ${getVariantStockInputTone(
                                 variant.stockQty
                               )}`}
-                              title="এই variant-এর স্টক পরিমাণ"
+                              title={
+                                batchEnabled || cutLengthEnabled
+                                  ? "Tracked inventory-র stock product edit form থেকে বদলানো যাবে না"
+                                  : "এই variant-এর স্টক পরিমাণ"
+                              }
                             />
                           </label>
                         ) : null}
@@ -2758,7 +2771,33 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             </span>
           </div>
           <p className="text-xs text-muted-foreground">দোকানের ধরন দেখে ডিফল্ট অন/অফ সেট হয়; লাগলে বন্ধ করুন</p>
-          <input name="stockQty" type="number" step="0.01" min="0" defaultValue={product.stockQty || "0"} required={stockEnabled && stock.requiredWhenEnabled} disabled={!stockEnabled} className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground" placeholder="যেমন: 10, 5.50" />
+          {variants.length > 0 || batchEnabled || cutLengthEnabled ? (
+            <>
+              <input
+                name="stockQty"
+                type="hidden"
+                value={
+                  batchEnabled || cutLengthEnabled
+                    ? String(product.stockQty || "0")
+                    : "0"
+                }
+              />
+              <div className="rounded-xl border border-primary/30 bg-primary-soft/30 px-4 py-3 text-xs text-primary">
+                {variants.length > 0 && batchEnabled
+                  ? "এই product এখন variant-wise batch stock manage করে। stock product form থেকে বদলাবেন না; purchase/stock adjustment দিয়ে batch reconcile করুন।"
+                  : variants.length > 0 && cutLengthEnabled
+                  ? "এই product এখন variant-wise cut-length stock manage করে। stock product form থেকে বদলাবেন না; stock adjustment / remnant tracking দিয়ে reconcile করুন।"
+                  : variants.length > 0
+                  ? "এই product এখন variant-wise stock manage করে। base stock 0 ধরা হবে, আর প্রতিটি variant-এর stock নিচে আলাদা থাকবে।"
+                  : cutLengthEnabled
+                  ? "Cut-length tracking চালু আছে। stock product form থেকে বদলাবেন না; stock adjustment / remnant tracking দিয়ে reconcile করুন।"
+                  : "Batch tracking চালু আছে। stock product form থেকে বদলাবেন না; purchase/stock adjustment দিয়ে batch reconcile করুন।"}
+                {Number(product.stockQty || 0) > 0 ? ` পুরনো base stock ${product.stockQty} থাকলে আগে reconcile/migrate করুন।` : ""}
+              </div>
+            </>
+          ) : (
+            <input name="stockQty" type="number" step="0.01" min="0" defaultValue={product.stockQty || "0"} required={stockEnabled && stock.requiredWhenEnabled} disabled={!stockEnabled} className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-muted disabled:text-muted-foreground" placeholder="যেমন: 10, 5.50" />
+          )}
           {stockEnabled && (
             <div className="space-y-1 pt-1">
               <label className="block text-sm font-medium text-foreground">রিস্টক সীমা (ঐচ্ছিক)</label>

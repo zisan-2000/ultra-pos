@@ -8,7 +8,12 @@ import { prisma } from "@/lib/prisma";
 import SerialLookupClient from "./SerialLookupClient";
 
 type Props = {
-  searchParams?: Promise<{ shopId?: string }>;
+  searchParams?: Promise<{
+    shopId?: string;
+    query?: string;
+    status?: string;
+    productId?: string;
+  }>;
 };
 
 export default async function SerialLookupPage({ searchParams }: Props) {
@@ -36,6 +41,10 @@ export default async function SerialLookupPage({ searchParams }: Props) {
 
   const cookieStore = await cookies();
   const cookieShopId = cookieStore.get("activeShopId")?.value;
+  const initialQuery = typeof resolvedSearch?.query === "string" ? resolvedSearch.query : "";
+  const initialStatus = typeof resolvedSearch?.status === "string" ? resolvedSearch.status : "all";
+  const initialProductId =
+    typeof resolvedSearch?.productId === "string" ? resolvedSearch.productId : "";
   const selectedShopId =
     resolvedSearch?.shopId && shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
@@ -55,8 +64,20 @@ export default async function SerialLookupPage({ searchParams }: Props) {
       id: true,
       serialNo: true,
       status: true,
+      note: true,
       createdAt: true,
-      product: { select: { id: true, name: true } },
+      updatedAt: true,
+      product: {
+        select: {
+          id: true,
+          name: true,
+          variants: {
+            where: { isActive: true },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      },
       variant: { select: { label: true } },
       purchaseItem: {
         select: {
@@ -84,7 +105,9 @@ export default async function SerialLookupPage({ searchParams }: Props) {
     status: s.status as "IN_STOCK" | "SOLD" | "RETURNED" | "DAMAGED",
     productId: s.product.id,
     productName: s.product.name,
-    variantLabel: s.variant?.label ?? null,
+    variantLabel:
+      s.variant?.label ??
+      ((s.product.variants?.length ?? 0) > 0 ? "পুরনো base stock" : null),
     purchaseDate: s.purchaseItem?.purchase?.purchaseDate
       ? new Date(s.purchaseItem.purchase.purchaseDate)
           .toISOString()
@@ -96,7 +119,9 @@ export default async function SerialLookupPage({ searchParams }: Props) {
     invoiceNo: s.saleItem?.sale?.invoiceNo ?? null,
     customerName: s.saleItem?.sale?.customer?.name ?? null,
     saleAmount: s.saleItem?.sale?.totalAmount?.toString() ?? null,
+    note: s.note ?? null,
     createdAt: s.createdAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString(),
   }));
 
   return (
@@ -107,7 +132,7 @@ export default async function SerialLookupPage({ searchParams }: Props) {
           পণ্য ট্র্যাকিং
         </p>
         <h1 className="text-2xl font-bold text-foreground leading-tight">
-          Serial Number Lookup
+          Serial / Warranty Tracking
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
           দোকান: <span className="font-semibold">{selectedShop.name}</span>{" "}
@@ -136,7 +161,13 @@ export default async function SerialLookupPage({ searchParams }: Props) {
 
       {/* Lookup client */}
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <SerialLookupClient rows={rows} />
+        <SerialLookupClient
+          rows={rows}
+          shopId={selectedShopId}
+          initialQuery={initialQuery}
+          initialStatus={initialStatus}
+          initialProductId={initialProductId}
+        />
       </div>
     </div>
   );
