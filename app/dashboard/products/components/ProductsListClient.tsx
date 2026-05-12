@@ -75,6 +75,7 @@ type Product = {
   sku?: string | null;
   barcode?: string | null;
   baseUnit?: string;
+  expiryDate?: string | null;
   genericName?: string | null;
   strength?: string | null;
   dosageForm?: string | null;
@@ -3511,6 +3512,19 @@ export default function ProductsListClient({
                       >
                         <span>📦</span>
                         <span>Batch / Recall</span>
+                      </Link>
+                    ) : null}
+                    {(product.trackBatch || product.expiryDate) ? (
+                      <Link
+                        href={`/dashboard/products/expiry?shopId=${activeShopId}&productId=${product.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic("light");
+                        }}
+                        className="flex items-center justify-center gap-2 w-full h-10 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 font-semibold text-sm shadow-sm hover:bg-amber-100 hover:border-amber-300 active:scale-95 transition"
+                      >
+                        <span>⏰</span>
+                        <span>Expiry</span>
                       </Link>
                     ) : null}
                     {product.trackCutLength ? (

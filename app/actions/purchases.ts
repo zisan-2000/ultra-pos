@@ -1472,6 +1472,7 @@ export async function getPurchaseReturnContext(purchaseId: string) {
             select: {
               id: true,
               batchNo: true,
+              expiryDate: true,
               remainingQty: true,
             },
             orderBy: [{ createdAt: "asc" }],
@@ -1540,6 +1541,7 @@ export async function getPurchaseReturnContext(purchaseId: string) {
       trackBatch: item.product.trackBatch,
       trackCutLength: item.product.trackCutLength,
       batchNo: item.batches[0]?.batchNo ?? null,
+      batchExpiryDate: item.batches[0]?.expiryDate?.toISOString?.().slice(0, 10) ?? null,
       batchRemainingQty: item.batches[0]?.remainingQty?.toString?.() ?? null,
       availableSerials,
     };

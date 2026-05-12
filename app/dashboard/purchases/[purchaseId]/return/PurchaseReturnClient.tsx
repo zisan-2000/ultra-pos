@@ -19,6 +19,7 @@ type PurchaseReturnItemRow = {
   trackBatch: boolean;
   trackCutLength: boolean;
   batchNo: string | null;
+  batchExpiryDate: string | null;
   batchRemainingQty: string | null;
   availableSerials: string[];
 };
@@ -299,6 +300,11 @@ export default function PurchaseReturnClient({
                         Batch {item.batchNo} · বাকি {Number(item.batchRemainingQty || 0).toFixed(2)}
                       </span>
                     ) : null}
+                    {item.batchExpiryDate ? (
+                      <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                        Expiry {item.batchExpiryDate}
+                      </span>
+                    ) : null}
                     {item.trackCutLength ? (
                       <span className="inline-flex items-center rounded-full border border-warning/30 bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning">
                         Cut-length
@@ -350,7 +356,7 @@ export default function PurchaseReturnClient({
                   {item.trackSerialNumbers
                     ? "serial বাছাই করলে qty auto count হবে।"
                     : item.trackBatch
-                    ? `batch ${item.batchNo || ""} থেকেই stock কমবে, তাই return quantity দ্রুত verify করুন।`
+                    ? `batch ${item.batchNo || ""}${item.batchExpiryDate ? ` · expiry ${item.batchExpiryDate}` : ""} থেকেই stock কমবে, তাই return quantity দ্রুত verify করুন।`
                     : "cut-length return-এ system remnant/stock adjust করবে।"}
                 </div>
               ) : null}

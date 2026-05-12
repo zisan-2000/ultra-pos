@@ -7,7 +7,7 @@ import { getShopsByUser } from "@/app/actions/shops";
 import { prisma } from "@/lib/prisma";
 
 type Props = {
-  searchParams?: Promise<{ shopId?: string; range?: string }>;
+  searchParams?: Promise<{ shopId?: string; range?: string; productId?: string }>;
 };
 
 type ExpiryRow = {
@@ -79,6 +79,8 @@ export default async function ProductExpiryPage({ searchParams }: Props) {
 
   const cookieStore = await cookies();
   const cookieShopId = cookieStore.get("activeShopId")?.value;
+  const selectedProductId =
+    typeof resolvedSearch?.productId === "string" ? resolvedSearch.productId : "";
   const selectedShopId =
     resolvedSearch?.shopId && shops.some((s) => s.id === resolvedSearch.shopId)
       ? resolvedSearch.shopId
@@ -93,6 +95,7 @@ export default async function ProductExpiryPage({ searchParams }: Props) {
     prisma.batch.findMany({
       where: {
         shopId: selectedShopId,
+        ...(selectedProductId ? { productId: selectedProductId } : {}),
         remainingQty: { gt: 0 },
         expiryDate: { not: null },
       },
@@ -120,6 +123,7 @@ export default async function ProductExpiryPage({ searchParams }: Props) {
     prisma.product.findMany({
       where: {
         shopId: selectedShopId,
+        ...(selectedProductId ? { id: selectedProductId } : {}),
         expiryDate: { not: null },
         trackBatch: false,
         stockQty: { gt: 0 },
@@ -195,6 +199,11 @@ export default async function ProductExpiryPage({ searchParams }: Props) {
         <p className="mt-1 text-xs text-muted-foreground">
           দোকান: <span className="font-semibold">{selectedShop.name}</span> — batch ও product expiry একসাথে
         </p>
+        {selectedProductId ? (
+          <p className="mt-1 text-xs font-semibold text-amber-700">
+            filtered by selected product
+          </p>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
