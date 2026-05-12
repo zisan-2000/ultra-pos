@@ -60,6 +60,11 @@ type ProductOption = {
   name: string;
   sku?: string | null;
   barcode?: string | null;
+  brand?: string | null;
+  modelName?: string | null;
+  compatibility?: string | null;
+  warrantyDays?: number | null;
+  size?: string | null;
   sellPrice: string;
   stockQty?: string | number;
   category?: string | null;
@@ -89,6 +94,11 @@ type PosPageClientProps = {
     name: string;
     sku?: string | null;
     barcode?: string | null;
+    brand?: string | null;
+    modelName?: string | null;
+    compatibility?: string | null;
+    warrantyDays?: number | null;
+    size?: string | null;
     sellPrice: string | number;
     stockQty?: string | number;
     category?: string | null;

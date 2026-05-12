@@ -75,6 +75,14 @@ export const HARDWARE_UNIT_KEYWORD_RULES: UnitKeywordRule[] = [
   { keywords: ["ফিটিংস", "fitting", "এলবো", "elbow", "টি", "tee", "কাপলিং"], unit: "pcs" },
 ];
 
+export const MOBILE_ACCESSORIES_UNIT_KEYWORD_RULES: UnitKeywordRule[] = [
+  { keywords: ["charger", "চার্জার", "adapter", "অ্যাডাপ্টার", "cover", "কভার", "glass"], unit: "pcs" },
+  { keywords: ["cable", "কেবল", "earphone", "earbuds", "neckband", "tripod"], unit: "pcs" },
+  { keywords: ["protector", "screen guard", "pack", "প্যাক"], unit: "packet" },
+  { keywords: ["case", "casing", "set", "combo"], unit: "set" },
+  { keywords: ["battery", "pair"], unit: "pair" },
+];
+
 function buildFields(overrides: Partial<Record<Field, FieldRule>>): Record<Field, FieldRule> {
   return COMMON_FIELDS.reduce((acc, field) => {
     acc[field] = { required: false, hidden: false, ...(overrides[field] ?? {}) };
@@ -151,6 +159,23 @@ const profileFieldConfig: Record<BusinessProfileKey, BusinessFieldConfig> = {
       options: ["pcs", "packet", "box", "dozen", "kg", "gm", "liter", "ml"],
       default: "pcs",
       keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
+    },
+  },
+  mobile_accessories_retail: {
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: {},
+      unit: { required: true },
+      expiry: { hidden: true },
+      size: {},
+    }),
+    stock: { enabledByDefault: true, requiredWhenEnabled: true },
+    unit: {
+      enabled: true,
+      options: ["pcs", "packet", "box", "set", "pair", "dozen"],
+      default: "pcs",
+      keywordRules: MOBILE_ACCESSORIES_UNIT_KEYWORD_RULES,
     },
   },
   produce_inventory: {

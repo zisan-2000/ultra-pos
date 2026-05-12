@@ -45,6 +45,10 @@ type CreateProductInput = {
   storageLocation?: string | null;
   businessType?: string;
   expiryDate?: string | null;
+  brand?: string | null;
+  modelName?: string | null;
+  compatibility?: string | null;
+  warrantyDays?: number | null;
   genericName?: string | null;
   strength?: string | null;
   dosageForm?: string | null;
@@ -81,6 +85,10 @@ type UpdateProductInput = {
   storageLocation?: string | null;
   businessType?: string;
   expiryDate?: string | null;
+  brand?: string | null;
+  modelName?: string | null;
+  compatibility?: string | null;
+  warrantyDays?: number | null;
   genericName?: string | null;
   strength?: string | null;
   dosageForm?: string | null;
@@ -120,6 +128,10 @@ type ProductListRow = {
   barcode?: string | null;
   baseUnit?: string;
   expiryDate?: string | null;
+  brand?: string | null;
+  modelName?: string | null;
+  compatibility?: string | null;
+  warrantyDays?: number | null;
   genericName?: string | null;
   strength?: string | null;
   dosageForm?: string | null;
@@ -1077,6 +1089,15 @@ export async function createProduct(input: CreateProductInput) {
   const barcode = normalizeProductCodeInput(input.barcode);
   const baseUnit = normalizeBaseUnitInput(input.baseUnit, { defaultValue: "pcs" });
   const expiryDate = normalizeDateOnlyInput(input.expiryDate);
+  const brand = normalizeNullableTextInput(input.brand, 120);
+  const modelName = normalizeNullableTextInput(input.modelName, 120);
+  const compatibility = normalizeNullableTextInput(input.compatibility, 160);
+  const warrantyDays =
+    input.warrantyDays === undefined
+      ? undefined
+      : input.warrantyDays === null
+      ? null
+      : Math.max(0, Math.floor(Number(input.warrantyDays)));
   const genericName = normalizeNullableTextInput(input.genericName, 160);
   const strength = normalizeNullableTextInput(input.strength, 80);
   const dosageForm = normalizeNullableTextInput(input.dosageForm, 80);
@@ -1123,6 +1144,10 @@ export async function createProduct(input: CreateProductInput) {
     barcode: barcode === undefined ? undefined : barcode,
     baseUnit: baseUnit ?? "pcs",
     expiryDate: expiryDate === undefined ? undefined : expiryDate,
+    brand: brand === undefined ? undefined : brand,
+    modelName: modelName === undefined ? undefined : modelName,
+    compatibility: compatibility === undefined ? undefined : compatibility,
+    warrantyDays: warrantyDays === undefined ? undefined : warrantyDays,
     genericName: genericName === undefined ? undefined : genericName,
     strength: strength === undefined ? undefined : strength,
     dosageForm: dosageForm === undefined ? undefined : dosageForm,
@@ -1344,6 +1369,10 @@ export async function getProductsByShop(shopId: string) {
       barcode: true,
       baseUnit: true,
       expiryDate: true,
+      brand: true,
+      modelName: true,
+      compatibility: true,
+      warrantyDays: true,
       genericName: true,
       strength: true,
       dosageForm: true,
@@ -1422,6 +1451,9 @@ export async function getProductsByShopPaginated({
       { sku: { contains: term, mode: "insensitive" } },
       { barcode: { contains: term, mode: "insensitive" } },
       { storageLocation: { contains: term, mode: "insensitive" } },
+      { brand: { contains: term, mode: "insensitive" } },
+      { modelName: { contains: term, mode: "insensitive" } },
+      { compatibility: { contains: term, mode: "insensitive" } },
       { genericName: { contains: term, mode: "insensitive" } },
       { strength: { contains: term, mode: "insensitive" } },
       { dosageForm: { contains: term, mode: "insensitive" } },
@@ -1476,6 +1508,10 @@ export async function getProductsByShopPaginated({
       barcode: true,
       baseUnit: true,
       expiryDate: true,
+      brand: true,
+      modelName: true,
+      compatibility: true,
+      warrantyDays: true,
       genericName: true,
       strength: true,
       dosageForm: true,
@@ -1508,6 +1544,10 @@ export async function getProductsByShopPaginated({
     barcode: (product as any).barcode ?? null,
     baseUnit: (product as any).baseUnit ?? "pcs",
     expiryDate: product.expiryDate ? product.expiryDate.toISOString().slice(0, 10) : null,
+    brand: (product as any).brand ?? null,
+    modelName: (product as any).modelName ?? null,
+    compatibility: (product as any).compatibility ?? null,
+    warrantyDays: (product as any).warrantyDays ?? null,
     genericName: (product as any).genericName ?? null,
     strength: (product as any).strength ?? null,
     dosageForm: (product as any).dosageForm ?? null,
@@ -1578,6 +1618,9 @@ export async function getProductsByShopCursorPaginated({
       { sku: { contains: term, mode: "insensitive" } },
       { barcode: { contains: term, mode: "insensitive" } },
       { storageLocation: { contains: term, mode: "insensitive" } },
+      { brand: { contains: term, mode: "insensitive" } },
+      { modelName: { contains: term, mode: "insensitive" } },
+      { compatibility: { contains: term, mode: "insensitive" } },
       { genericName: { contains: term, mode: "insensitive" } },
       { strength: { contains: term, mode: "insensitive" } },
       { dosageForm: { contains: term, mode: "insensitive" } },
@@ -1643,6 +1686,10 @@ export async function getProductsByShopCursorPaginated({
         barcode: true,
         baseUnit: true,
         expiryDate: true,
+        brand: true,
+        modelName: true,
+        compatibility: true,
+        warrantyDays: true,
         genericName: true,
         strength: true,
         dosageForm: true,
@@ -1709,6 +1756,10 @@ export async function getProductsByShopCursorPaginated({
     barcode: (p as any).barcode ?? null,
     baseUnit: (p as any).baseUnit ?? "pcs",
     expiryDate: p.expiryDate ? p.expiryDate.toISOString().slice(0, 10) : null,
+    brand: (p as any).brand ?? null,
+    modelName: (p as any).modelName ?? null,
+    compatibility: (p as any).compatibility ?? null,
+    warrantyDays: (p as any).warrantyDays ?? null,
     genericName: (p as any).genericName ?? null,
     strength: (p as any).strength ?? null,
     dosageForm: (p as any).dosageForm ?? null,
@@ -2003,6 +2054,24 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
     data.expiryDate !== undefined
       ? normalizeDateOnlyInput(data.expiryDate)
       : undefined;
+  const brand =
+    data.brand !== undefined
+      ? normalizeNullableTextInput(data.brand, 120)
+      : undefined;
+  const modelName =
+    data.modelName !== undefined
+      ? normalizeNullableTextInput(data.modelName, 120)
+      : undefined;
+  const compatibility =
+    data.compatibility !== undefined
+      ? normalizeNullableTextInput(data.compatibility, 160)
+      : undefined;
+  const warrantyDays =
+    data.warrantyDays !== undefined
+      ? data.warrantyDays === null
+        ? null
+        : Math.max(0, Math.floor(Number(data.warrantyDays)))
+      : undefined;
   const genericName =
     data.genericName !== undefined
       ? normalizeNullableTextInput(data.genericName, 160)
@@ -2175,6 +2244,10 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   if (barcode !== undefined) payload.barcode = barcode;
   if (baseUnit !== undefined) payload.baseUnit = baseUnit;
   if (expiryDate !== undefined) payload.expiryDate = expiryDate;
+  if (brand !== undefined) payload.brand = brand;
+  if (modelName !== undefined) payload.modelName = modelName;
+  if (compatibility !== undefined) payload.compatibility = compatibility;
+  if (warrantyDays !== undefined) payload.warrantyDays = warrantyDays;
   if (genericName !== undefined) payload.genericName = genericName;
   if (strength !== undefined) payload.strength = strength;
   if (dosageForm !== undefined) payload.dosageForm = dosageForm;
@@ -2334,6 +2407,10 @@ export async function getActiveProductsByShop(shopId: string) {
       barcode: true,
       baseUnit: true,
       expiryDate: true,
+      brand: true,
+      modelName: true,
+      compatibility: true,
+      warrantyDays: true,
       genericName: true,
       strength: true,
       dosageForm: true,
@@ -2388,6 +2465,10 @@ export async function getActiveProductsByShop(shopId: string) {
     barcode: (p as any).barcode ?? null,
     baseUnit: (p as any).baseUnit ?? "pcs",
     expiryDate: p.expiryDate ? p.expiryDate.toISOString().slice(0, 10) : null,
+    brand: (p as any).brand ?? null,
+    modelName: (p as any).modelName ?? null,
+    compatibility: (p as any).compatibility ?? null,
+    warrantyDays: (p as any).warrantyDays ?? null,
     genericName: (p as any).genericName ?? null,
     strength: (p as any).strength ?? null,
     dosageForm: (p as any).dosageForm ?? null,

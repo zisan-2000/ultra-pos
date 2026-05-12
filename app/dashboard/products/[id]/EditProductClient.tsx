@@ -242,6 +242,7 @@ export default function EditProductClient({
   const businessType = (shop.businessType as BusinessType) || DEFAULT_BUSINESS_TYPE;
   const isSweetShop = businessType === "sweet_shop";
   const isPharmacy = businessType === "pharmacy";
+  const isMobileAccessories = businessType === "mobile_accessories";
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const voiceSessionRef = useRef<VoiceSession | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
@@ -309,7 +310,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     ),
     size: () => (
       <div className="space-y-2">
-        <label className="block text-sm font-semibold text-foreground">সাইজ / ভ্যারিয়েন্ট</label>
+        <label className="block text-sm font-semibold text-foreground">
+          {isMobileAccessories ? "টাইপ / ক্ষমতা / দৈর্ঘ্য" : "সাইজ / ভ্যারিয়েন্ট"}
+        </label>
         <input
           name="size"
           type="text"
@@ -317,8 +320,17 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
           onChange={(e) => setSizeValue(e.target.value)}
           required={isFieldRequired("size")}
           className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          placeholder="যেমন: L, XL, 100ml"
+          placeholder={
+            isMobileAccessories
+              ? "যেমন: 20W, 1m, Type-C, 10000mAh"
+              : "যেমন: L, XL, 100ml"
+          }
         />
+        {isMobileAccessories ? (
+          <p className="text-xs text-muted-foreground">
+            capacity, cable length, connector type বা quick size label এক লাইনে লিখুন।
+          </p>
+        ) : null}
       </div>
     ),
   };
@@ -328,6 +340,14 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   const [name, setName] = useState((product.name as string) || fallbackName);
   const [sellPrice, setSellPrice] = useState((product.sellPrice || "").toString());
   const [sizeValue, setSizeValue] = useState((product.size || "").toString());
+  const [brandValue, setBrandValue] = useState((product.brand || "").toString());
+  const [modelNameValue, setModelNameValue] = useState((product.modelName || "").toString());
+  const [compatibilityValue, setCompatibilityValue] = useState(
+    (product.compatibility || "").toString()
+  );
+  const [warrantyDaysValue, setWarrantyDaysValue] = useState(
+    product.warrantyDays == null ? "" : String(product.warrantyDays)
+  );
   const [variantModeEnabled, setVariantModeEnabled] = useState(
     Array.isArray(product.variants) && product.variants.length > 0
   );
@@ -506,6 +526,8 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       strip: "স্ট্রিপ",
       carton: "কার্টন",
       bottle: "বোতল",
+      set: "সেট",
+      pair: "জোড়া",
     }),
     []
   );
@@ -871,6 +893,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       if (item.packSize && isFieldVisible("size")) {
         setSizeValue(item.packSize);
       }
+      if (isMobileAccessories && item.brand) {
+        setBrandValue(item.brand);
+      }
 
       const primaryBarcode =
         item.barcodes?.find((barcodeItem) => barcodeItem.isPrimary)?.code ??
@@ -880,7 +905,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         setBarcode(normalizeCodeInput(primaryBarcode));
       }
     },
-    [isFieldVisible]
+    [isFieldVisible, isMobileAccessories]
   );
 
   async function handleCatalogSearch() {
@@ -1521,6 +1546,23 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     const expiryDate = isFieldVisible("expiry")
       ? ((form.get("expiryDate") as string) || null)
       : null;
+    const brand = isMobileAccessories
+      ? (((form.get("brand") as string) || brandValue || "").trim() || null)
+      : null;
+    const modelName = isMobileAccessories
+      ? (((form.get("modelName") as string) || modelNameValue || "").trim() || null)
+      : null;
+    const compatibility = isMobileAccessories
+      ? (((form.get("compatibility") as string) || compatibilityValue || "").trim() || null)
+      : null;
+    const warrantyDays = isMobileAccessories
+      ? (() => {
+          const raw = ((form.get("warrantyDays") as string) || warrantyDaysValue || "").trim();
+          if (!raw) return null;
+          const parsed = Number.parseInt(raw, 10);
+          return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+        })()
+      : null;
     const genericName = isPharmacy
       ? (((form.get("genericName") as string) || "").trim() || null)
       : null;
@@ -1636,6 +1678,10 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       storageLocation: resolvedStorageLocation,
       businessType,
       expiryDate,
+      brand,
+      modelName,
+      compatibility,
+      warrantyDays,
       genericName,
       strength,
       dosageForm,
@@ -2574,6 +2620,90 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                   placeholder="যেমন: Square, Beximco"
                   className="h-11 w-full rounded-xl border border-emerald-200 bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
                 />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isMobileAccessories ? (
+          <div className="rounded-2xl border border-sky-200/70 bg-sky-50/80 p-4 shadow-sm">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-sky-900">Accessory ডিটেইলস</p>
+                <p className="text-xs text-sky-700">
+                  brand, model, compatibility আর warranty search/report-এ কাজে লাগবে।
+                </p>
+              </div>
+              <span className="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-sky-700">
+                Mobile
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-sky-900">Brand</label>
+                <input
+                  name="brand"
+                  type="text"
+                  maxLength={120}
+                  value={brandValue}
+                  onChange={(e) => setBrandValue(e.target.value)}
+                  placeholder="যেমন: Baseus, Anker, Awei"
+                  className="h-11 w-full rounded-xl border border-sky-200 bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sky-300"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-sky-900">Model / Series</label>
+                <input
+                  name="modelName"
+                  type="text"
+                  maxLength={120}
+                  value={modelNameValue}
+                  onChange={(e) => setModelNameValue(e.target.value)}
+                  placeholder="যেমন: PD20W Mini, M10, P47"
+                  className="h-11 w-full rounded-xl border border-sky-200 bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sky-300"
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs font-semibold text-sky-900">Compatibility</label>
+                <input
+                  name="compatibility"
+                  type="text"
+                  maxLength={160}
+                  value={compatibilityValue}
+                  onChange={(e) => setCompatibilityValue(e.target.value)}
+                  placeholder="যেমন: iPhone 12-15, Type-C devices, Android"
+                  className="h-11 w-full rounded-xl border border-sky-200 bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sky-300"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-sky-900">Warranty (days)</label>
+                <input
+                  name="warrantyDays"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={warrantyDaysValue}
+                  onChange={(e) => setWarrantyDaysValue(e.target.value)}
+                  placeholder="0 / 7 / 30 / 180"
+                  className="h-11 w-full rounded-xl border border-sky-200 bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sky-300"
+                />
+              </div>
+              <div className="flex flex-wrap items-end gap-2">
+                {[
+                  { label: "No warranty", value: "0" },
+                  { label: "7 দিন", value: "7" },
+                  { label: "30 দিন", value: "30" },
+                  { label: "6 মাস", value: "180" },
+                ].map((preset) => (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => setWarrantyDaysValue(preset.value)}
+                    className="inline-flex h-9 items-center rounded-full border border-sky-200 bg-white px-3 text-[11px] font-semibold text-sky-700 hover:bg-sky-100"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>

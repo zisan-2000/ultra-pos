@@ -23,6 +23,10 @@ const productCreateSchema = z.object({
   barcode: z.string().optional().nullable(),
   baseUnit: z.string().optional().nullable(),
   expiryDate: z.union([z.string(), z.date()]).optional().nullable(),
+  brand: z.string().optional().nullable(),
+  modelName: z.string().optional().nullable(),
+  compatibility: z.string().optional().nullable(),
+  warrantyDays: z.number().int().nonnegative().optional().nullable(),
   genericName: z.string().optional().nullable(),
   strength: z.string().optional().nullable(),
   dosageForm: z.string().optional().nullable(),
@@ -319,6 +323,15 @@ function sanitizeCreate(item: IncomingProduct) {
   const barcode = normalizeCode(item.barcode);
   const baseUnit = normalizeBaseUnit(item.baseUnit, "pcs");
   const expiryDate = normalizeDateOnly(item.expiryDate);
+  const brand = normalizeNullableText(item.brand, 120);
+  const modelName = normalizeNullableText(item.modelName, 120);
+  const compatibility = normalizeNullableText(item.compatibility, 160);
+  const warrantyDays =
+    item.warrantyDays === undefined
+      ? undefined
+      : item.warrantyDays === null || item.warrantyDays === ""
+      ? null
+      : Math.max(0, Math.floor(Number(item.warrantyDays)));
   const genericName = normalizeNullableText(item.genericName, 160);
   const strength = normalizeNullableText(item.strength, 80);
   const dosageForm = normalizeNullableText(item.dosageForm, 80);
@@ -354,6 +367,10 @@ function sanitizeCreate(item: IncomingProduct) {
     barcode: barcode === undefined ? undefined : barcode,
     baseUnit: baseUnit || "pcs",
     expiryDate: expiryDate === undefined ? undefined : expiryDate,
+    brand: brand === undefined ? undefined : brand,
+    modelName: modelName === undefined ? undefined : modelName,
+    compatibility: compatibility === undefined ? undefined : compatibility,
+    warrantyDays: warrantyDays === undefined ? undefined : warrantyDays,
     genericName: genericName === undefined ? undefined : genericName,
     strength: strength === undefined ? undefined : strength,
     dosageForm: dosageForm === undefined ? undefined : dosageForm,
@@ -399,6 +416,17 @@ function sanitizeUpdate(item: IncomingProduct) {
   if (item.barcode !== undefined) payload.barcode = normalizeCode(item.barcode);
   if (item.baseUnit !== undefined) payload.baseUnit = normalizeBaseUnit(item.baseUnit, "pcs");
   if (item.expiryDate !== undefined) payload.expiryDate = normalizeDateOnly(item.expiryDate);
+  if (item.brand !== undefined) payload.brand = normalizeNullableText(item.brand, 120);
+  if (item.modelName !== undefined) payload.modelName = normalizeNullableText(item.modelName, 120);
+  if (item.compatibility !== undefined) {
+    payload.compatibility = normalizeNullableText(item.compatibility, 160);
+  }
+  if (item.warrantyDays !== undefined) {
+    payload.warrantyDays =
+      item.warrantyDays === null || item.warrantyDays === ""
+        ? null
+        : Math.max(0, Math.floor(Number(item.warrantyDays)));
+  }
   if (item.genericName !== undefined) payload.genericName = normalizeNullableText(item.genericName, 160);
   if (item.strength !== undefined) payload.strength = normalizeNullableText(item.strength, 80);
   if (item.dosageForm !== undefined) payload.dosageForm = normalizeNullableText(item.dosageForm, 80);

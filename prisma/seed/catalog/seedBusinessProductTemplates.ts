@@ -33,8 +33,14 @@ function toTemplateCreateInput(template: StarterBusinessProductTemplate) {
     businessType: template.businessType,
     name: template.name,
     brand: template.brand ?? null,
+    modelName: template.modelName ?? null,
     category: template.category ?? null,
     packSize: template.packSize ?? null,
+    compatibility: template.compatibility ?? null,
+    warrantyDays:
+      template.warrantyDays === undefined || template.warrantyDays === null
+        ? null
+        : Math.max(0, Math.floor(Number(template.warrantyDays))),
     defaultBuyPrice:
       template.defaultBuyPrice === undefined || template.defaultBuyPrice === null
         ? null

@@ -14,8 +14,11 @@ type TemplateInput = {
   businessType: string;
   name: string;
   brand?: string | null;
+  modelName?: string | null;
   category?: string | null;
   packSize?: string | null;
+  compatibility?: string | null;
+  warrantyDays?: number | null;
   defaultBuyPrice?: string | number | null;
   defaultSellPrice?: string | number | null;
   defaultOpeningStock?: string | number | null;
@@ -56,8 +59,11 @@ export type BusinessProductTemplateImportItem = {
   businessType?: string | null;
   name?: string | null;
   brand?: string | null;
+  modelName?: string | null;
   category?: string | null;
   packSize?: string | null;
+  compatibility?: string | null;
+  warrantyDays?: number | null;
   defaultBuyPrice?: string | number | null;
   defaultSellPrice?: string | number | null;
   defaultOpeningStock?: string | number | null;
@@ -88,8 +94,11 @@ type TemplateListRow = {
   businessType: string;
   name: string;
   brand: string | null;
+  modelName: string | null;
   category: string | null;
   packSize: string | null;
+  compatibility: string | null;
+  warrantyDays: number | null;
   defaultBuyPrice: string | null;
   defaultSellPrice: string | null;
   defaultOpeningStock: string | null;
@@ -298,8 +307,11 @@ function mapTemplateRow(row: {
   businessType: string;
   name: string;
   brand: string | null;
+  modelName: string | null;
   category: string | null;
   packSize: string | null;
+  compatibility: string | null;
+  warrantyDays: number | null;
   defaultBuyPrice: any;
   defaultSellPrice: any;
   defaultOpeningStock: any;
@@ -320,8 +332,12 @@ function mapTemplateRow(row: {
     businessType: row.businessType,
     name: row.name,
     brand: row.brand ?? null,
+    modelName: row.modelName ?? null,
     category: row.category,
     packSize: row.packSize ?? null,
+    compatibility: row.compatibility ?? null,
+    warrantyDays:
+      typeof row.warrantyDays === "number" ? row.warrantyDays : row.warrantyDays ?? null,
     defaultBuyPrice: row.defaultBuyPrice?.toString?.() ?? null,
     defaultSellPrice: row.defaultSellPrice?.toString?.() ?? null,
     defaultOpeningStock: row.defaultOpeningStock?.toString?.() ?? null,
@@ -366,8 +382,16 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
   const businessType = normalizeRequiredText(input.businessType, "Business type");
   const name = normalizeRequiredText(input.name, "Name");
   const brand = normalizeOptionalText(input.brand);
+  const modelName = normalizeOptionalText(input.modelName);
   const category = normalizeOptionalText(input.category);
   const packSize = normalizeOptionalText(input.packSize);
+  const compatibility = normalizeOptionalText(input.compatibility);
+  const warrantyDays =
+    input.warrantyDays === undefined
+      ? undefined
+      : input.warrantyDays === null
+      ? null
+      : Math.max(0, Math.floor(Number(input.warrantyDays)));
   const defaultBuyPrice = normalizeOptionalMoney(input.defaultBuyPrice);
   const defaultSellPrice = normalizeOptionalMoney(input.defaultSellPrice);
   const defaultOpeningStock = normalizeOptionalMoney(input.defaultOpeningStock);
@@ -389,8 +413,11 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
         businessType,
         name,
         brand: brand ?? null,
+        modelName: modelName ?? null,
         category: category ?? null,
         packSize: packSize ?? null,
+        compatibility: compatibility ?? null,
+        warrantyDays: warrantyDays ?? null,
         defaultBuyPrice: defaultBuyPrice === undefined ? null : defaultBuyPrice,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
         defaultOpeningStock:
@@ -409,8 +436,11 @@ export async function createBusinessProductTemplate(input: TemplateInput) {
         businessType,
         name,
         brand: brand ?? null,
+        modelName: modelName ?? null,
         category: category ?? null,
         packSize: packSize ?? null,
+        compatibility: compatibility ?? null,
+        warrantyDays: warrantyDays ?? null,
         defaultBuyPrice: defaultBuyPrice === undefined ? null : defaultBuyPrice,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
         defaultOpeningStock:
@@ -479,11 +509,23 @@ export async function updateBusinessProductTemplate(
   if (input.brand !== undefined) {
     data.brand = normalizeOptionalText(input.brand);
   }
+  if (input.modelName !== undefined) {
+    data.modelName = normalizeOptionalText(input.modelName);
+  }
   if (input.category !== undefined) {
     data.category = normalizeOptionalText(input.category);
   }
   if (input.packSize !== undefined) {
     data.packSize = normalizeOptionalText(input.packSize);
+  }
+  if (input.compatibility !== undefined) {
+    data.compatibility = normalizeOptionalText(input.compatibility);
+  }
+  if (input.warrantyDays !== undefined) {
+    data.warrantyDays =
+      input.warrantyDays === null
+        ? null
+        : Math.max(0, Math.floor(Number(input.warrantyDays)));
   }
   if (input.defaultBuyPrice !== undefined) {
     data.defaultBuyPrice = normalizeOptionalMoney(input.defaultBuyPrice);
@@ -562,8 +604,11 @@ export async function importBusinessProductTemplates(
     businessType: string;
     name: string;
     brand: string | null;
+    modelName: string | null;
     category: string | null;
     packSize: string | null;
+    compatibility: string | null;
+    warrantyDays: number | null;
     defaultBuyPrice: string | null;
     defaultSellPrice: string | null;
     defaultOpeningStock: string | null;
@@ -590,8 +635,16 @@ export async function importBusinessProductTemplates(
       );
       const name = normalizeRequiredText(String(item.name ?? ""), "Name");
       const brand = normalizeOptionalText(item.brand);
+      const modelName = normalizeOptionalText(item.modelName);
       const category = normalizeOptionalText(item.category);
       const packSize = normalizeOptionalText(item.packSize);
+      const compatibility = normalizeOptionalText(item.compatibility);
+      const warrantyDays =
+        item.warrantyDays === undefined
+          ? null
+          : item.warrantyDays === null
+          ? null
+          : Math.max(0, Math.floor(Number(item.warrantyDays)));
       const defaultBuyPrice = normalizeOptionalMoney(item.defaultBuyPrice);
       const defaultSellPrice = normalizeOptionalMoney(item.defaultSellPrice);
       const defaultOpeningStock = normalizeOptionalMoney(item.defaultOpeningStock);
@@ -609,8 +662,11 @@ export async function importBusinessProductTemplates(
         businessType,
         name,
         brand: brand ?? null,
+        modelName: modelName ?? null,
         category: category ?? null,
         packSize: packSize ?? null,
+        compatibility: compatibility ?? null,
+        warrantyDays,
         defaultBuyPrice: defaultBuyPrice === undefined ? null : defaultBuyPrice,
         defaultSellPrice: defaultSellPrice === undefined ? null : defaultSellPrice,
         defaultOpeningStock:
@@ -658,8 +714,11 @@ export async function importBusinessProductTemplates(
       businessType: item.businessType,
       name: item.name,
       brand: item.brand,
+      modelName: item.modelName,
       category: item.category,
       packSize: item.packSize,
+      compatibility: item.compatibility,
+      warrantyDays: item.warrantyDays,
       defaultBuyPrice: item.defaultBuyPrice,
       defaultSellPrice: item.defaultSellPrice,
       defaultOpeningStock: item.defaultOpeningStock,
@@ -890,7 +949,11 @@ export async function addBusinessProductTemplatesToShop(input: {
             name: template.name,
             category: template.category || "Uncategorized",
             barcode: productBarcode,
+            brand: (template as any).brand ?? null,
+            modelName: (template as any).modelName ?? null,
             size: packSize ?? null,
+            compatibility: (template as any).compatibility ?? null,
+            warrantyDays: (template as any).warrantyDays ?? null,
             buyPrice: resolvedBuyPrice,
             sellPrice: resolvedSellPrice,
             stockQty: resolvedOpeningStock,

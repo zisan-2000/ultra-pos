@@ -4,6 +4,7 @@ export type BusinessProfileKey =
   | "sweet_shop_mixed_service"
   | "food_cart_quick_service"
   | "retail_inventory"
+  | "mobile_accessories_retail"
   | "produce_inventory"
   | "fashion_variant"
   | "pharmacy_inventory"
@@ -64,6 +65,12 @@ const PROFILE_FEATURE_DEFAULTS: Record<BusinessProfileKey, FeatureBundleDefaults
     queueWorkflow: "restaurant",
   },
   retail_inventory: {
+    inventoryByDefault: true,
+    cogsByDefault: true,
+    barcodeByDefault: true,
+    queueWorkflow: null,
+  },
+  mobile_accessories_retail: {
     inventoryByDefault: true,
     cogsByDefault: true,
     barcodeByDefault: true,
@@ -156,6 +163,20 @@ const PROFILE_ASSISTS: Record<BusinessProfileKey, BusinessAssist> = {
     defaultCategory: "রিটেইল",
     categoryChips: ["রিটেইল", "দৈনন্দিন পণ্য", "পানীয়"],
     priceHints: ["50", "80", "120", "200"],
+  },
+  mobile_accessories_retail: {
+    defaultCategory: "মোবাইল এক্সেসরিজ",
+    fallbackName: "Type-C Charger",
+    quickNames: [
+      "Type-C Charger",
+      "Fast Charger",
+      "USB Cable",
+      "Power Bank",
+      "Neckband",
+      "Glass Protector",
+    ],
+    categoryChips: ["চার্জার", "কেবল", "কভার", "ইয়ারফোন", "পাওয়ার ব্যাংক"],
+    priceHints: ["80", "150", "250", "500"],
   },
   produce_inventory: {
     defaultCategory: "সবজি/ফল",
@@ -356,14 +377,11 @@ const SELECTABLE_SPECS = [
     key: "mobile_accessories",
     label: "মোবাইল এক্সেসরিজ দোকান",
     canonicalKey: "mobile_accessories",
-    profile: "retail_inventory",
+    profile: "mobile_accessories_retail",
     selectable: true,
-    templateCandidates: ["cosmetics_gift", "mini_grocery"],
+    templateCandidates: ["mobile_accessories"],
     assist: {
-      ...PROFILE_ASSISTS.retail_inventory,
-      defaultCategory: "মোবাইল এক্সেসরিজ",
-      categoryChips: ["চার্জার", "কেবল", "কভার"],
-      priceHints: ["80", "150", "250", "500"],
+      ...PROFILE_ASSISTS.mobile_accessories_retail,
     },
   },
   {

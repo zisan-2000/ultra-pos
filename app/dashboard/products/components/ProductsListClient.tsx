@@ -76,10 +76,15 @@ type Product = {
   barcode?: string | null;
   baseUnit?: string;
   expiryDate?: string | null;
+  brand?: string | null;
+  modelName?: string | null;
+  compatibility?: string | null;
+  warrantyDays?: number | null;
   genericName?: string | null;
   strength?: string | null;
   dosageForm?: string | null;
   manufacturer?: string | null;
+  size?: string | null;
   buyPrice?: string | null;
   sellPrice: string;
   stockQty: string;
@@ -101,8 +106,11 @@ type TemplateProduct = {
   id: string;
   name: string;
   brand?: string | null;
+  modelName?: string | null;
   category: string | null;
   packSize?: string | null;
+  compatibility?: string | null;
+  warrantyDays?: number | null;
   defaultBuyPrice?: string | null;
   defaultSellPrice: string | null;
   defaultOpeningStock?: string | null;
@@ -1385,7 +1393,7 @@ export default function ProductsListClient({
       if (status === "active" && !product.isActive) return false;
       if (status === "inactive" && product.isActive) return false;
       if (query.trim()) {
-        const haystack = `${product.name} ${product.category} ${product.genericName ?? ""} ${product.strength ?? ""} ${product.dosageForm ?? ""} ${product.manufacturer ?? ""} ${product.sku ?? ""} ${product.barcode ?? ""} ${product.storageLocation ?? ""} ${(product.variants ?? [])
+        const haystack = `${product.name} ${product.category} ${product.brand ?? ""} ${product.modelName ?? ""} ${product.compatibility ?? ""} ${product.size ?? ""} ${product.genericName ?? ""} ${product.strength ?? ""} ${product.dosageForm ?? ""} ${product.manufacturer ?? ""} ${product.sku ?? ""} ${product.barcode ?? ""} ${product.storageLocation ?? ""} ${(product.variants ?? [])
           .map(
             (variant) =>
               `${variant.label ?? ""} ${variant.sku ?? ""} ${variant.barcode ?? ""} ${variant.storageLocation ?? ""}`
@@ -1767,6 +1775,8 @@ export default function ProductsListClient({
             shopId: activeShopId,
             name: template.name,
             category: template.category || "বিভাগহীন",
+            brand: template.brand ?? null,
+            modelName: template.modelName ?? null,
             sku: null,
             barcode: resolvedBarcode,
             baseUnit: template.defaultBaseUnit || "pcs",
@@ -1784,6 +1794,8 @@ export default function ProductsListClient({
             isActive: hasValidPrice,
             trackStock: template.defaultTrackStock === true,
             size: template.packSize ?? null,
+            compatibility: template.compatibility ?? null,
+            warrantyDays: template.warrantyDays ?? null,
             variants,
             updatedAt: now,
             syncStatus: "new",
@@ -1807,6 +1819,8 @@ export default function ProductsListClient({
           id: item.id,
           name: item.name,
           category: item.category,
+          brand: item.brand ?? null,
+          modelName: item.modelName ?? null,
           sku: item.sku ?? null,
           barcode: item.barcode ?? null,
           baseUnit: item.baseUnit || "pcs",
@@ -1815,6 +1829,9 @@ export default function ProductsListClient({
           stockQty: item.stockQty,
           trackStock: item.trackStock ?? false,
           isActive: item.isActive,
+          compatibility: item.compatibility ?? null,
+          warrantyDays: item.warrantyDays ?? null,
+          size: item.size ?? null,
           variants: Array.isArray(item.variants) ? item.variants : [],
           createdAt: item.updatedAt.toString(),
         })),
@@ -1930,6 +1947,7 @@ export default function ProductsListClient({
           productSource: "catalog",
           name: item.name,
           category: item.category || "বিভাগহীন",
+          brand: item.brand ?? null,
           sku: null,
           barcode: resolvedBarcode,
           baseUnit: item.defaultBaseUnit || "pcs",
@@ -1961,6 +1979,8 @@ export default function ProductsListClient({
           id: item.id,
           name: item.name,
           category: item.category,
+          brand: item.brand ?? null,
+          modelName: item.modelName ?? null,
           sku: item.sku ?? null,
           barcode: item.barcode ?? null,
           baseUnit: item.baseUnit || "pcs",
@@ -1969,6 +1989,9 @@ export default function ProductsListClient({
           stockQty: item.stockQty,
           trackStock: item.trackStock ?? false,
           isActive: item.isActive,
+          compatibility: item.compatibility ?? null,
+          warrantyDays: item.warrantyDays ?? null,
+          size: item.size ?? null,
           variants: Array.isArray(item.variants) ? item.variants : [],
           createdAt: item.updatedAt.toString(),
         })),
@@ -3327,12 +3350,22 @@ export default function ProductsListClient({
                 {/* Product Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0 pr-3">
+                    {product.brand || product.modelName ? (
+                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+                        {[product.brand, product.modelName].filter(Boolean).join(" · ")}
+                      </p>
+                    ) : null}
                     <h3 className="text-base font-semibold text-foreground mb-1 line-clamp-2">
                       {product.name}
                     </h3>
                     <p className="text-sm text-muted-foreground">
                       {categoryLabel}
                     </p>
+                    {product.compatibility ? (
+                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                        Compatible: {product.compatibility}
+                      </p>
+                    ) : null}
                     {variantSummary ? (
                       <p className="mt-1 text-xs font-medium text-primary">
                         {variantSummary}
@@ -3391,11 +3424,25 @@ export default function ProductsListClient({
                   </div>
                 </div>
 
-                {locationSummary || product.reorderPoint || product.conversionSummary ? (
+                {locationSummary ||
+                product.reorderPoint ||
+                product.conversionSummary ||
+                product.size ||
+                product.warrantyDays && product.warrantyDays > 0 ? (
                   <div className="mb-4 flex flex-wrap gap-1.5">
                     {locationSummary ? (
                       <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                         লোকেশন {locationSummary}
+                      </span>
+                    ) : null}
+                    {product.size ? (
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {product.size}
+                      </span>
+                    ) : null}
+                    {product.warrantyDays && product.warrantyDays > 0 ? (
+                      <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft/40 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        Warranty {product.warrantyDays}d
                       </span>
                     ) : null}
                     {product.reorderPoint ? (

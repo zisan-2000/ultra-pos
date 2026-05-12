@@ -40,6 +40,11 @@ type PosProductSearchProps = {
     name: string;
     sku?: string | null;
     barcode?: string | null;
+    brand?: string | null;
+    modelName?: string | null;
+    compatibility?: string | null;
+    warrantyDays?: number | null;
+    size?: string | null;
     sellPrice: string;
     stockQty?: string | number;
     category?: string | null;
@@ -297,6 +302,10 @@ function buildSearchableVoiceFields(product: EnrichedProduct) {
   const fields: string[] = [
     product.name,
     product.category,
+    String(product.brand || ""),
+    String(product.modelName || ""),
+    String(product.compatibility || ""),
+    String(product.size || ""),
     String(product.sku || ""),
     String(product.barcode || ""),
   ];
@@ -628,12 +637,22 @@ const ProductButton = memo(function ProductButton({
           </span>
         )}
       </div>
+      {(product.brand || product.modelName) ? (
+        <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+          {[product.brand, product.modelName].filter(Boolean).join(" · ")}
+        </p>
+      ) : null}
       <p className="text-lg font-bold text-foreground mt-2">
         <span className="text-muted-foreground">৳</span> {product.sellPrice}
       </p>
       <p className="mt-2 text-[11px] font-medium tracking-[0.08em] text-muted-foreground">
         {formatCategoryLabel(product.category)}
       </p>
+      {product.compatibility ? (
+        <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
+          {product.compatibility}
+        </p>
+      ) : null}
       {product.storageLocation ? (
         <p className="mt-1 text-[11px] font-medium text-primary">
           📍 {product.storageLocation}
@@ -1210,6 +1229,10 @@ export const PosProductSearch = memo(function PosProductSearch({
       const fields: string[] = [
         p.name,
         p.category,
+        String(p.brand || ""),
+        String(p.modelName || ""),
+        String(p.compatibility || ""),
+        String(p.size || ""),
         String(p.sku || ""),
         String(p.barcode || ""),
         String(p.storageLocation || ""),
