@@ -1,7 +1,17 @@
 // app/about/page.tsx
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
+
+export const metadata: Metadata = {
+  title: "About SellFlick POS",
+  description:
+    "SellFlick POS সম্পর্কে জানুন। Official brand SellFlick POS, যেটি অনেকেই SellFlick, Sell Flick বা SellFlickPOS নামেও খোঁজেন।",
+  alternates: {
+    canonical: "/about",
+  },
+};
 
 export default function AboutPage() {
   return (
@@ -13,6 +23,18 @@ export default function AboutPage() {
         <h1 className="text-3xl font-bold text-foreground sm:text-4xl">
           A calmer way to run your shop
         </h1>
+        <div className="rounded-2xl border border-border bg-card px-5 py-4 text-sm leading-relaxed text-muted-foreground">
+          <p>
+            Official brand name:{" "}
+            <span className="font-semibold text-foreground">SellFlick POS</span>
+          </p>
+          <p className="mt-2">
+            Some people also search using{" "}
+            <span className="font-semibold text-foreground">SellFlick</span>,{" "}
+            <span className="font-semibold text-foreground">Sell Flick</span>, or{" "}
+            <span className="font-semibold text-foreground">SellFlickPOS</span>.
+          </p>
+        </div>
         <p className="text-base leading-relaxed text-muted-foreground">
           This system focuses on simple daily work: sales, stock, cash, and
           reports. It is designed to be fast on low-end devices, work well in

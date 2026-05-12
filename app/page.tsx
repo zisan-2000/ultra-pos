@@ -8,6 +8,7 @@ const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "SellFlick POS",
+  alternateName: ["SellFlick", "Sell Flick", "SellFlickPOS", "Sell Flick POS"],
   url: "https://sellflickpos.com/",
   logo: "https://sellflickpos.com/icons/icon-512x512.png?v=20260418",
   description:
@@ -18,6 +19,7 @@ const websiteJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "SellFlick POS",
+  alternateName: ["SellFlick", "Sell Flick", "SellFlickPOS", "Sell Flick POS"],
   url: "https://sellflickpos.com/",
   inLanguage: "bn-BD",
   publisher: {
@@ -58,6 +60,13 @@ export default function HomePage() {
 
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-primary/80">
             SellFlick POS
+          </p>
+
+          <p className="mx-auto max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
+            Official brand: <span className="font-semibold text-foreground">SellFlick POS</span>
+            <span className="mx-1">•</span>
+            অনেকে <span className="font-semibold text-foreground">Sell Flick</span> বা{" "}
+            <span className="font-semibold text-foreground">SellFlickPOS</span> লিখেও খুঁজেন
           </p>
 
           {/* main headline */}
