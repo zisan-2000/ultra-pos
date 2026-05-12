@@ -8,6 +8,7 @@ import { seedBusinessProductTemplates } from "./catalog/seedBusinessProductTempl
 import { seedShops } from "./pos/seedShops";
 import { seedProducts } from "./pos/seedProducts";
 import { seedHardwareDemo } from "./pos/seedHardwareDemo";
+import { seedPharmacyDemo } from "./pos/seedPharmacyDemo";
 
 const prisma = new PrismaClient();
 
@@ -50,6 +51,14 @@ async function main() {
   if (shops.hardware) {
     console.log("INFO: Seeding professional hardware demo data...");
     await seedHardwareDemo(prisma, shops.hardware.id, {
+      ownerUserId: ownerUser.id,
+      staffUserId: usersByRole.staff?.id ?? null,
+    });
+  }
+
+  if (shops.pharmacy) {
+    console.log("INFO: Seeding professional pharmacy demo data...");
+    await seedPharmacyDemo(prisma, shops.pharmacy.id, {
       ownerUserId: ownerUser.id,
       staffUserId: usersByRole.staff?.id ?? null,
     });

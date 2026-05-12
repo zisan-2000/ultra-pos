@@ -37,6 +37,13 @@ export async function seedShops(
       phone: "01700-777000",
       businessType: "hardware",
     },
+    {
+      key: "pharmacy",
+      name: "সেবা ফার্মেসি",
+      address: "সাতমাথা, বগুড়া",
+      phone: "01700-888000",
+      businessType: "pharmacy",
+    },
   ];
 
   const shops: ShopMap = {};
