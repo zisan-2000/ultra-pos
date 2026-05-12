@@ -249,6 +249,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   const router = useRouter();
   const online = useOnlineStatus();
   const businessType = (shop.businessType as BusinessType) || DEFAULT_BUSINESS_TYPE;
+  const isSweetShop = businessType === "sweet_shop";
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const voiceSessionRef = useRef<VoiceSession | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
@@ -446,6 +447,11 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
           required={isFieldRequired("expiry")}
           className="w-full h-11 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
+        <p className="text-xs text-muted-foreground">
+          {isSweetShop
+            ? "দই, প্যাকেট আইটেম বা দ্রুত নষ্ট হতে পারে এমন পণ্যে তারিখ দিন। fresh loose মিষ্টি হলে খালি রাখতে পারেন।"
+            : "চাইলে এই পণ্যের মেয়াদোত্তীর্ণের তারিখ সংরক্ষণ করুন।"}
+        </p>
       </div>
     ),
     size: () => (

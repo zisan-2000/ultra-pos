@@ -53,6 +53,14 @@ export const DEFAULT_UNIT_KEYWORD_RULES: UnitKeywordRule[] = [
   { keywords: ["কাপড়", "টি শার্ট", "শার্ট", "প্যান্ট"], unit: "pcs" },
 ];
 
+export const SWEET_SHOP_UNIT_KEYWORD_RULES: UnitKeywordRule[] = [
+  { keywords: ["রসগোল্লা", "কালোজাম", "চমচম", "সন্দেশ", "লাড্ডু", "জিলাপি", "মিষ্টি"], unit: "kg" },
+  { keywords: ["দই", "পায়েস", "পায়েস", "firni", "ফিরনি"], unit: "pcs" },
+  { keywords: ["সমুচা", "সিঙ্গারা", "সামোসা", "পুরি", "roll"], unit: "pcs" },
+  { keywords: ["বক্স", "box", "প্যাকেট", "packet", "নিমকি", "বিস্কুট"], unit: "box" },
+  ...DEFAULT_UNIT_KEYWORD_RULES,
+];
+
 export const HARDWARE_UNIT_KEYWORD_RULES: UnitKeywordRule[] = [
   { keywords: ["সিমেন্ট", "cement", "বালু", "sand"], unit: "bag" },
   { keywords: ["রড", "rod", "পেরেক", "nail", "তার", "wire"], unit: "kg" },
@@ -98,6 +106,23 @@ const profileFieldConfig: Record<BusinessProfileKey, BusinessFieldConfig> = {
     }),
     stock: { enabledByDefault: false, requiredWhenEnabled: true },
     unit: { enabled: false, options: [] },
+  },
+  sweet_shop_mixed_service: {
+    fields: buildFields({
+      name: { required: true },
+      sellPrice: { required: true },
+      buyPrice: {},
+      unit: { required: true },
+      expiry: {},
+      size: { hidden: true },
+    }),
+    stock: { enabledByDefault: false, requiredWhenEnabled: true },
+    unit: {
+      enabled: true,
+      options: ["kg", "gm", "pcs", "box", "packet", "liter"],
+      default: "kg",
+      keywordRules: SWEET_SHOP_UNIT_KEYWORD_RULES,
+    },
   },
   food_cart_quick_service: {
     fields: buildFields({

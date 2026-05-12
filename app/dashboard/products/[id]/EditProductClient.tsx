@@ -240,6 +240,7 @@ export default function EditProductClient({
   const router = useRouter();
   const online = useOnlineStatus();
   const businessType = (shop.businessType as BusinessType) || DEFAULT_BUSINESS_TYPE;
+  const isSweetShop = businessType === "sweet_shop";
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const voiceSessionRef = useRef<VoiceSession | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
@@ -298,6 +299,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
           className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           defaultValue={product.expiryDate || ""}
         />
+        <p className="text-sm text-muted-foreground">
+          {isSweetShop
+            ? "দই, প্যাকেট আইটেম বা দ্রুত নষ্ট হতে পারে এমন পণ্যে তারিখ দিন। fresh loose মিষ্টি হলে খালি রাখতে পারেন।"
+            : "চাইলে এই পণ্যের মেয়াদোত্তীর্ণের তারিখ সংরক্ষণ করুন।"}
+        </p>
       </div>
     ),
     size: () => (

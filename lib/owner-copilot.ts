@@ -171,7 +171,12 @@ function formatImpactLabel(
 
 function getTopSellerAction(businessType: string, productName: string) {
   if (
-    ["quick_counter", "food_service", "food_cart_quick_service"].includes(
+    [
+      "quick_counter",
+      "food_service",
+      "sweet_shop_mixed_service",
+      "food_cart_quick_service",
+    ].includes(
       getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)),
     )
   ) {
@@ -202,6 +207,7 @@ function isFoodType(businessType: string) {
   return [
     "quick_counter",
     "food_service",
+    "sweet_shop_mixed_service",
     "food_cart_quick_service",
     "produce_inventory",
   ].includes(getBusinessTypeProfileKey(normalizeBusinessTypeForRules(businessType)));

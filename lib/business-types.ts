@@ -1,6 +1,7 @@
 export type BusinessProfileKey =
   | "quick_counter"
   | "food_service"
+  | "sweet_shop_mixed_service"
   | "food_cart_quick_service"
   | "retail_inventory"
   | "produce_inventory"
@@ -49,6 +50,12 @@ const PROFILE_FEATURE_DEFAULTS: Record<BusinessProfileKey, FeatureBundleDefaults
     cogsByDefault: false,
     barcodeByDefault: false,
     queueWorkflow: "restaurant",
+  },
+  sweet_shop_mixed_service: {
+    inventoryByDefault: false,
+    cogsByDefault: false,
+    barcodeByDefault: false,
+    queueWorkflow: null,
   },
   food_cart_quick_service: {
     inventoryByDefault: false,
@@ -116,6 +123,20 @@ const PROFILE_ASSISTS: Record<BusinessProfileKey, BusinessAssist> = {
     defaultCategory: "খাবার",
     categoryChips: ["খাবার", "ড্রিংকস", "ডেজার্ট"],
     priceHints: ["50", "80", "120", "180"],
+  },
+  sweet_shop_mixed_service: {
+    defaultCategory: "মিষ্টি",
+    fallbackName: "রসগোল্লা",
+    quickNames: [
+      "রসগোল্লা",
+      "কালোজাম",
+      "চমচম",
+      "সন্দেশ",
+      "মিষ্টি দই",
+      "সমুচা",
+    ],
+    categoryChips: ["মিষ্টি", "দই", "নাস্তা", "বেকারি", "প্যাকেট আইটেম"],
+    priceHints: ["20", "40", "80", "160"],
   },
   food_cart_quick_service: {
     defaultCategory: "ফাস্ট ফুড",
@@ -193,14 +214,11 @@ const SELECTABLE_SPECS = [
     key: "sweet_shop",
     label: "মিষ্টির দোকান",
     canonicalKey: "sweet_shop",
-    profile: "food_service",
+    profile: "sweet_shop_mixed_service",
     selectable: true,
-    templateCandidates: ["tea_stall", "snacks_stationery"],
+    templateCandidates: ["sweet_shop", "tea_stall", "snacks_stationery"],
     assist: {
-      ...PROFILE_ASSISTS.food_service,
-      defaultCategory: "মিষ্টি",
-      categoryChips: ["মিষ্টি", "দই", "স্ন্যাক্স"],
-      priceHints: ["20", "40", "60", "120"],
+      ...PROFILE_ASSISTS.sweet_shop_mixed_service,
     },
   },
   {
