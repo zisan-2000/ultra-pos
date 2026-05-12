@@ -26,9 +26,52 @@ const notoBengali = Noto_Sans_Bengali({
 });
 
 export const metadata: Metadata = {
-  title: "SellFlick - স্মার্ট ব্যবসা ব্যবস্থাপনা",
+  metadataBase: new URL("https://sellflickpos.com"),
+  title: {
+    default: "SellFlick POS | বিক্রি, স্টক, বাকি ও হিসাব সফটওয়্যার",
+    template: "%s | SellFlick POS",
+  },
   description:
-    "দ্রুত, সহজ ও নির্ভরযোগ্য পিওএস সফটওয়্যার—সব ধরনের দোকান ও ব্যবসার জন্য বিক্রি, স্টক ও হিসাব একসাথে",
+    "বাংলাদেশের দোকান ও ব্যবসার জন্য সহজ POS সফটওয়্যার। বিক্রি, স্টক, ক্রয়, বাকি, ইনভয়েস, ব্যাচ, এক্সপায়ারি ও হিসাব একসাথে চালান SellFlick POS দিয়ে।",
+  applicationName: "SellFlick POS",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: "https://sellflickpos.com/",
+    siteName: "SellFlick POS",
+    title: "SellFlick POS | বিক্রি, স্টক, বাকি ও হিসাব সফটওয়্যার",
+    description:
+      "বাংলাদেশের দোকান ও ব্যবসার জন্য সহজ POS সফটওয়্যার। বিক্রি, স্টক, ক্রয়, বাকি, ইনভয়েস, ব্যাচ, এক্সপায়ারি ও হিসাব একসাথে চালান SellFlick POS দিয়ে।",
+    locale: "bn_BD",
+    images: [
+      {
+        url: "/icons/icon-512x512.png?v=20260418",
+        width: 512,
+        height: 512,
+        alt: "SellFlick POS",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SellFlick POS | বিক্রি, স্টক, বাকি ও হিসাব সফটওয়্যার",
+    description:
+      "বাংলাদেশের দোকান ও ব্যবসার জন্য সহজ POS সফটওয়্যার। বিক্রি, স্টক, ক্রয়, বাকি, ইনভয়েস, ব্যাচ, এক্সপায়ারি ও হিসাব একসাথে চালান SellFlick POS দিয়ে।",
+    images: ["/icons/icon-512x512.png?v=20260418"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [

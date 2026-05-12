@@ -4,9 +4,40 @@ import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
 
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "SellFlick POS",
+  url: "https://sellflickpos.com/",
+  logo: "https://sellflickpos.com/icons/icon-512x512.png?v=20260418",
+  description:
+    "বাংলাদেশের দোকান ও ব্যবসার জন্য POS, inventory, purchase, due, invoice এবং হিসাব সফটওয়্যার।",
+};
+
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "SellFlick POS",
+  url: "https://sellflickpos.com/",
+  inLanguage: "bn-BD",
+  publisher: {
+    "@type": "Organization",
+    name: "SellFlick POS",
+  },
+};
+
 export default function HomePage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-linear-to-br from-primary-soft/40 via-background to-warning-soft/30">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+      />
+
       {/* soft background mood */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
         <div className="absolute -top-32 right-[-10%] h-[420px] w-[420px] rounded-full bg-primary/15 blur-[120px]" />
@@ -25,29 +56,28 @@ export default function HomePage() {
             শান্তভাবে ব্যবসা চালানোর একটি উপায়
           </div>
 
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-primary/80">
+            SellFlick POS
+          </p>
+
           {/* main headline */}
           <h1 className="text-4xl font-medium leading-tight text-foreground sm:text-5xl lg:text-6xl">
-            ব্যবসা এমন হওয়া উচিত,
-            <span className="block text-primary">
-              যা আপনাকে ক্লান্ত না করে
-            </span>
+            বিক্রি, স্টক ও হিসাব
+            <span className="block text-primary">একসাথে চালানোর POS</span>
           </h1>
 
-          {/* emotional paragraph */}
           <p className="mx-auto max-w-2xl text-lg leading-relaxed text-muted-foreground sm:text-xl">
-            সারাদিনের দৌড়ঝাঁপের পর হিসাব নিয়ে চিন্তা না করেই যদি নিশ্চিন্তে
-            দোকান বন্ধ করা যেত—
-            <br />
-            <span className="text-foreground/80 font-medium">
-              এই POS ঠিক সেই জায়গাটুকুই সামলায়।
+            হার্ডওয়্যার, ফার্মেসি, মুদি, মিষ্টির দোকান, ফুড কার্টসহ ছোট ও মাঝারি
+            ব্যবসার জন্য
+            <span className="block text-primary">
+              দ্রুত, সহজ ও নির্ভরযোগ্য ব্যবসা ব্যবস্থাপনা
             </span>
           </p>
 
           {/* deeper emotional copy */}
           <p className="mx-auto max-w-xl text-muted-foreground leading-relaxed">
-            এখানে কিছু জোর করে শেখানো নেই। আছে শুধু এমন একটা সিস্টেম— যা ধীরে
-            ধীরে আপনার কাজ বুঝে নেয়, আর আপনাকে সময় দেয় নিজের ব্যবসার দিকে
-            তাকানোর।
+            এখানে কিছু জোর করে শেখানো নেই। আছে এমন একটি সিস্টেম, যা বিক্রি,
+            ক্রয়, বাকি, ইনভয়েস, স্টক, ব্যাচ ও এক্সপায়ারি এক জায়গায় গুছিয়ে দেয়।
           </p>
 
           {/* actions */}
