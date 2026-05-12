@@ -194,7 +194,7 @@ const profileFieldConfig: Record<BusinessProfileKey, BusinessFieldConfig> = {
     stock: { enabledByDefault: true, requiredWhenEnabled: true },
     unit: {
       enabled: true,
-      options: ["pcs", "strip", "ml"],
+      options: ["pcs", "strip", "box", "bottle", "packet", "ml"],
       default: "strip",
       keywordRules: DEFAULT_UNIT_KEYWORD_RULES,
     },

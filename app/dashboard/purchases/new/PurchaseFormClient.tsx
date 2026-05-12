@@ -21,6 +21,10 @@ type ProductUnitConversionOption = {
 type ProductOption = {
   id: string;
   name: string;
+  genericName?: string | null;
+  strength?: string | null;
+  dosageForm?: string | null;
+  manufacturer?: string | null;
   baseUnit: string;
   buyPrice?: string | null;
   stockQty?: string | null;
@@ -43,11 +47,13 @@ type PurchaseItemDraft = {
   serialInput: string;
   serialTab: "bulk" | "one";
   batchNo: string;
+  batchExpiryDate: string;
 };
 
 type Props = {
   shopId: string;
   shopName: string;
+  businessType?: string | null;
   products: ProductOption[];
   suppliers: { id: string; name: string }[];
 };
@@ -95,6 +101,7 @@ const blankItem = (): PurchaseItemDraft => ({
   serialInput: "",
   serialTab: "bulk",
   batchNo: "",
+  batchExpiryDate: "",
 });
 
 function formatMoney(value: number) {
@@ -132,6 +139,7 @@ function parseSerialTokens(raw: string) {
 export default function PurchaseFormClient({
   shopId,
   shopName,
+  businessType,
   products,
   suppliers,
 }: Props) {
@@ -158,6 +166,7 @@ export default function PurchaseFormClient({
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
+  const isPharmacy = businessType === "pharmacy";
 
   const productMap = useMemo(
     () => new Map(products.map((p) => [p.id, p])),
@@ -344,6 +353,7 @@ export default function PurchaseFormClient({
               serialNumbers: [],
               serialInput: "",
               batchNo: "",
+              batchExpiryDate: "",
               unitCost: item.unitCost || suggestedCost,
             }
           : item
@@ -371,6 +381,7 @@ export default function PurchaseFormClient({
               serialNumbers: [],
               serialInput: "",
               batchNo: "",
+              batchExpiryDate: "",
               unitCost: item.unitCost || suggestedCost,
             }
           : item
@@ -416,6 +427,9 @@ export default function PurchaseFormClient({
       }
       if (product?.trackBatch && !item.batchNo.trim()) {
         return `"${product.name}" batch / lot tracked। batch নম্বর দিন।`;
+      }
+      if (isPharmacy && product?.trackBatch && !item.batchExpiryDate) {
+        return `"${product.name}" ফার্মেসি batch। expiry date দিন।`;
       }
       const qty = Number(item.qty);
       const unitCost = Number(item.unitCost);
@@ -496,6 +510,7 @@ export default function PurchaseFormClient({
               unitConversionId: item.unitConversionId || null,
               serialNumbers: item.serialNumbers.length > 0 ? item.serialNumbers : null,
               batchNo: item.batchNo.trim() || null,
+              batchExpiryDate: item.batchExpiryDate || null,
             })),
             supplierId: supplierId || null,
             supplierName: supplierId ? null : supplierName || null,
@@ -943,11 +958,25 @@ export default function PurchaseFormClient({
 
                     {/* Batch number input — shown when product has trackBatch */}
                     {productMap.get(item.productId)?.trackBatch && (
-                      <div className="mt-3 rounded-xl border border-warning/30 bg-warning-soft/60 p-3 space-y-2">
+                      <div className="mt-3 rounded-xl border border-warning/30 bg-warning-soft/60 p-3 space-y-3">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] font-semibold text-warning">
-                            Batch / Lot নম্বর <span className="text-danger">*</span>
-                          </span>
+                          <div>
+                            <span className="text-[11px] font-semibold text-warning">
+                              Batch / Lot {isPharmacy ? "+ Expiry" : "নম্বর"} <span className="text-danger">*</span>
+                            </span>
+                            {isPharmacy && product ? (
+                              <p className="mt-0.5 text-[10px] text-warning/80">
+                                {[
+                                  product.genericName,
+                                  product.strength,
+                                  product.dosageForm,
+                                  product.manufacturer,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ") || "এই medicine-এর batch ও মেয়াদ দিন"}
+                              </p>
+                            ) : null}
+                          </div>
                           {item.productId ? (
                             <Link
                               href={`/dashboard/products/batches?shopId=${shopId}&productId=${item.productId}${item.batchNo.trim() ? `&query=${encodeURIComponent(item.batchNo.trim())}` : ""}`}
@@ -957,23 +986,53 @@ export default function PurchaseFormClient({
                             </Link>
                           ) : null}
                         </div>
-                        <input
-                          type="text"
-                          value={item.batchNo}
-                          onChange={(e) =>
-                            setItems((prev) =>
-                              prev.map((i) =>
-                                i.id === item.id
-                                  ? { ...i, batchNo: e.target.value }
-                                  : i
-                              )
-                            )
-                          }
-                          placeholder="যেমন: LOT-2026-A, BATCH-001"
-                          className="w-full h-9 rounded-lg border border-warning/20 bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-warning/30"
-                        />
+                        <div className={`grid gap-2 ${isPharmacy ? "sm:grid-cols-[1fr_180px]" : ""}`}>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-warning/90">
+                              Batch/Lot No
+                            </label>
+                            <input
+                              type="text"
+                              value={item.batchNo}
+                              onChange={(e) =>
+                                setItems((prev) =>
+                                  prev.map((i) =>
+                                    i.id === item.id
+                                      ? { ...i, batchNo: e.target.value }
+                                      : i
+                                  )
+                                )
+                              }
+                              placeholder="যেমন: BEX-2506-A"
+                              className="h-10 w-full rounded-lg border border-warning/20 bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-warning/30"
+                            />
+                          </div>
+                          {isPharmacy ? (
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-semibold text-warning/90">
+                                Expiry Date
+                              </label>
+                              <input
+                                type="date"
+                                value={item.batchExpiryDate}
+                                onChange={(e) =>
+                                  setItems((prev) =>
+                                    prev.map((i) =>
+                                      i.id === item.id
+                                        ? { ...i, batchExpiryDate: e.target.value }
+                                        : i
+                                    )
+                                  )
+                                }
+                                className="h-10 w-full rounded-lg border border-warning/20 bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-warning/30"
+                              />
+                            </div>
+                          ) : null}
+                        </div>
                         <p className="text-[10px] text-warning/80">
-                          এই চালানের lot code লিখুন। পরে recall, supplier claim, আর FIFO trace এই code দিয়েই হবে।
+                          {isPharmacy
+                            ? "এই batch expiry অনুযায়ী আগে মেয়াদ শেষ হবে এমন stock আগে বিক্রি হবে।"
+                            : "এই চালানের lot code লিখুন। পরে recall, supplier claim, আর FIFO trace এই code দিয়েই হবে।"}
                         </p>
                       </div>
                     )}

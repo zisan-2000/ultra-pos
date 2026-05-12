@@ -75,6 +75,10 @@ type Product = {
   sku?: string | null;
   barcode?: string | null;
   baseUnit?: string;
+  genericName?: string | null;
+  strength?: string | null;
+  dosageForm?: string | null;
+  manufacturer?: string | null;
   buyPrice?: string | null;
   sellPrice: string;
   stockQty: string;
@@ -1380,7 +1384,7 @@ export default function ProductsListClient({
       if (status === "active" && !product.isActive) return false;
       if (status === "inactive" && product.isActive) return false;
       if (query.trim()) {
-        const haystack = `${product.name} ${product.category} ${product.sku ?? ""} ${product.barcode ?? ""} ${product.storageLocation ?? ""} ${(product.variants ?? [])
+        const haystack = `${product.name} ${product.category} ${product.genericName ?? ""} ${product.strength ?? ""} ${product.dosageForm ?? ""} ${product.manufacturer ?? ""} ${product.sku ?? ""} ${product.barcode ?? ""} ${product.storageLocation ?? ""} ${(product.variants ?? [])
           .map(
             (variant) =>
               `${variant.label ?? ""} ${variant.sku ?? ""} ${variant.barcode ?? ""} ${variant.storageLocation ?? ""}`

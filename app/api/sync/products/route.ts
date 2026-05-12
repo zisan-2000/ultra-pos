@@ -23,6 +23,10 @@ const productCreateSchema = z.object({
   barcode: z.string().optional().nullable(),
   baseUnit: z.string().optional().nullable(),
   expiryDate: z.union([z.string(), z.date()]).optional().nullable(),
+  genericName: z.string().optional().nullable(),
+  strength: z.string().optional().nullable(),
+  dosageForm: z.string().optional().nullable(),
+  manufacturer: z.string().optional().nullable(),
   size: z.string().optional().nullable(),
   variants: z
     .array(
@@ -315,6 +319,10 @@ function sanitizeCreate(item: IncomingProduct) {
   const barcode = normalizeCode(item.barcode);
   const baseUnit = normalizeBaseUnit(item.baseUnit, "pcs");
   const expiryDate = normalizeDateOnly(item.expiryDate);
+  const genericName = normalizeNullableText(item.genericName, 160);
+  const strength = normalizeNullableText(item.strength, 80);
+  const dosageForm = normalizeNullableText(item.dosageForm, 80);
+  const manufacturer = normalizeNullableText(item.manufacturer, 160);
   const size = normalizeNullableText(item.size, 80);
   const variants = sanitizeVariants(item.variants);
   const unitConversions = sanitizeUnitConversions(item.unitConversions);
@@ -346,6 +354,10 @@ function sanitizeCreate(item: IncomingProduct) {
     barcode: barcode === undefined ? undefined : barcode,
     baseUnit: baseUnit || "pcs",
     expiryDate: expiryDate === undefined ? undefined : expiryDate,
+    genericName: genericName === undefined ? undefined : genericName,
+    strength: strength === undefined ? undefined : strength,
+    dosageForm: dosageForm === undefined ? undefined : dosageForm,
+    manufacturer: manufacturer === undefined ? undefined : manufacturer,
     size: size === undefined ? undefined : size,
     buyPrice: buyPrice === undefined ? undefined : buyPrice, // undefined omits field, null sets null
     sellPrice,
@@ -387,6 +399,10 @@ function sanitizeUpdate(item: IncomingProduct) {
   if (item.barcode !== undefined) payload.barcode = normalizeCode(item.barcode);
   if (item.baseUnit !== undefined) payload.baseUnit = normalizeBaseUnit(item.baseUnit, "pcs");
   if (item.expiryDate !== undefined) payload.expiryDate = normalizeDateOnly(item.expiryDate);
+  if (item.genericName !== undefined) payload.genericName = normalizeNullableText(item.genericName, 160);
+  if (item.strength !== undefined) payload.strength = normalizeNullableText(item.strength, 80);
+  if (item.dosageForm !== undefined) payload.dosageForm = normalizeNullableText(item.dosageForm, 80);
+  if (item.manufacturer !== undefined) payload.manufacturer = normalizeNullableText(item.manufacturer, 160);
   if (item.size !== undefined) payload.size = normalizeNullableText(item.size, 80);
   if (item.isActive !== undefined) payload.isActive = Boolean(item.isActive);
   if (item.trackStock !== undefined) payload.trackStock = Boolean(item.trackStock);

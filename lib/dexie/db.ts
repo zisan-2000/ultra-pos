@@ -29,6 +29,10 @@ export type LocalProduct = {
   storageLocation?: string | null;
   businessType?: string;
   expiryDate?: string | null;
+  genericName?: string | null;
+  strength?: string | null;
+  dosageForm?: string | null;
+  manufacturer?: string | null;
   size?: string | null;
   unitConversions?: Array<{
     id?: string;

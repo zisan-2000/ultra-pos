@@ -63,6 +63,7 @@ export default async function BatchLookupPage({ searchParams }: Props) {
     select: {
       id: true,
       batchNo: true,
+      expiryDate: true,
       totalQty: true,
       remainingQty: true,
       isActive: true,
@@ -103,6 +104,7 @@ export default async function BatchLookupPage({ searchParams }: Props) {
   const rows = batches.map((b) => ({
     id: b.id,
     batchNo: b.batchNo,
+    expiryDate: b.expiryDate ? b.expiryDate.toISOString().slice(0, 10) : null,
     totalQty: b.totalQty.toString(),
     remainingQty: b.remainingQty.toString(),
     isActive: b.isActive,
@@ -157,6 +159,12 @@ export default async function BatchLookupPage({ searchParams }: Props) {
             className="inline-flex h-9 items-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
           >
             নতুন ক্রয় (Stock In)
+          </Link>
+          <Link
+            href={`/dashboard/products/expiry?shopId=${selectedShopId}`}
+            className="inline-flex h-9 items-center rounded-full border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-700 hover:bg-amber-100"
+          >
+            Expiry রিপোর্ট
           </Link>
         </div>
       </div>

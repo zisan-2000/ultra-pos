@@ -763,6 +763,10 @@ model Product {
   barcode    String?  @db.VarChar(80)
   baseUnit   String   @default("pcs") @map("base_unit") @db.VarChar(40)
   expiryDate DateTime? @map("expiry_date") @db.Date
+  genericName String? @map("generic_name") @db.VarChar(160)
+  strength   String? @db.VarChar(80)
+  dosageForm String? @map("dosage_form") @db.VarChar(80)
+  manufacturer String? @db.VarChar(160)
   size       String?  @db.VarChar(80)
   buyPrice   Decimal? @map("buy_price") @db.Decimal(12, 2)
   sellPrice  Decimal  @map("sell_price") @db.Decimal(12, 2)
@@ -800,6 +804,8 @@ model Product {
   @@index([shopId, isActive, stockQty], map: "idx_products_low_stock")
   @@index([shopId, sku], map: "idx_products_shop_sku")
   @@index([shopId, barcode], map: "idx_products_shop_barcode")
+  @@index([shopId, genericName], map: "idx_products_shop_generic_name")
+  @@index([shopId, manufacturer], map: "idx_products_shop_manufacturer")
   @@unique([shopId, sku], map: "uq_products_shop_sku")
   @@unique([shopId, barcode], map: "uq_products_shop_barcode")
   @@map("products")
@@ -989,6 +995,8 @@ model PurchaseItem {
   purchaseUnitLabel String? @map("purchase_unit_label") @db.VarChar(80)
   baseUnitQuantity Decimal? @map("base_unit_quantity") @db.Decimal(12, 4)
   unitConversionId String? @map("unit_conversion_id") @db.Uuid
+  batchNo   String?  @map("batch_no") @db.VarChar(120)
+  batchExpiryDate DateTime? @map("batch_expiry_date") @db.Date
   unitCost   Decimal  @map("unit_cost") @db.Decimal(12, 2)
   lineTotal  Decimal  @map("line_total") @db.Decimal(12, 2)
   landedCostAllocated Decimal @default(0) @map("landed_cost_allocated") @db.Decimal(12, 2)
@@ -1518,6 +1526,7 @@ model Batch {
   productId      String   @map("product_id") @db.Uuid
   variantId      String?  @map("variant_id") @db.Uuid
   batchNo        String   @map("batch_no") @db.VarChar(120)
+  expiryDate     DateTime? @map("expiry_date") @db.Date
   purchaseItemId String?  @map("purchase_item_id") @db.Uuid
   totalQty       Decimal  @map("total_qty") @db.Decimal(12, 2)
   remainingQty   Decimal  @map("remaining_qty") @db.Decimal(12, 2)
@@ -1533,6 +1542,7 @@ model Batch {
 
   @@unique([shopId, productId, batchNo], map: "uq_batches_shop_product_batchno")
   @@index([shopId, productId, remainingQty], map: "idx_batches_shop_product_remaining")
+  @@index([shopId, expiryDate, remainingQty], map: "idx_batches_shop_expiry_remaining")
   @@index([purchaseItemId], map: "idx_batches_purchase_item")
   @@map("batches")
 }

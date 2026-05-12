@@ -8,6 +8,7 @@ import { downloadFile } from "@/lib/utils/download";
 type BatchRow = {
   id: string;
   batchNo: string;
+  expiryDate?: string | null;
   totalQty: string;
   remainingQty: string;
   isActive: boolean;
@@ -28,6 +29,39 @@ type BatchRow = {
     createdAt: string;
   }>;
 };
+
+function getExpiryInfo(expiryDate?: string | null) {
+  if (!expiryDate) {
+    return {
+      label: "Expiry নেই",
+      className: "border-border bg-muted text-muted-foreground",
+      textClass: "text-muted-foreground",
+    };
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(`${expiryDate}T00:00:00`);
+  const days = Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
+  if (days < 0) {
+    return {
+      label: `${expiryDate} · expired`,
+      className: "border-red-200 bg-red-50 text-red-700",
+      textClass: "text-red-700",
+    };
+  }
+  if (days <= 30) {
+    return {
+      label: `${expiryDate} · ${days} দিন`,
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+      textClass: "text-amber-700",
+    };
+  }
+  return {
+    label: `${expiryDate} · ${days} দিন`,
+    className: "border-green-200 bg-green-50 text-green-700",
+    textClass: "text-green-700",
+  };
+}
 
 export default function BatchLookupClient({
   rows,
@@ -60,7 +94,8 @@ export default function BatchLookupClient({
       const matchQuery =
         !q ||
         r.batchNo.toLowerCase().includes(q) ||
-        r.productName.toLowerCase().includes(q);
+        r.productName.toLowerCase().includes(q) ||
+        (r.expiryDate ?? "").includes(q);
       return matchStatus && matchProduct && matchQuery;
     });
   }, [productFilter, query, rows, statusFilter]);
@@ -100,6 +135,7 @@ export default function BatchLookupClient({
             productName: row.productName,
             variantLabel: row.variantLabel || "",
             purchaseDate: row.purchaseDate || "",
+            expiryDate: row.expiryDate || "",
             totalQty: row.totalQty,
             remainingQty: row.remainingQty,
             netOutQty: netOutQty.toFixed(2),
@@ -123,6 +159,7 @@ export default function BatchLookupClient({
           productName: row.productName,
           variantLabel: row.variantLabel || "",
           purchaseDate: row.purchaseDate || "",
+          expiryDate: row.expiryDate || "",
           totalQty: row.totalQty,
           remainingQty: row.remainingQty,
           netOutQty: netOutQty.toFixed(2),
@@ -143,6 +180,7 @@ export default function BatchLookupClient({
         "productName",
         "variantLabel",
         "purchaseDate",
+        "expiryDate",
         "totalQty",
         "remainingQty",
         "netOutQty",
@@ -260,6 +298,7 @@ export default function BatchLookupClient({
                   <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">কাস্টমারের কাছে</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">ইনভয়েস</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">ক্রয় তারিখ</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Expiry</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">অবস্থা</th>
                   <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">ট্রেস</th>
                 </tr>
@@ -284,6 +323,7 @@ export default function BatchLookupClient({
                     .map((allocation) => allocation.invoiceNo || `Sale ${allocation.saleId.slice(0, 6)}`)
                     .join(", ");
                   const isExpanded = expandedBatchId === r.id;
+                  const expiryInfo = getExpiryInfo(r.expiryDate);
                   return (
                     <Fragment key={r.id}>
                       <tr className="border-b border-border/50 hover:bg-muted/20 transition-colors">
@@ -308,6 +348,11 @@ export default function BatchLookupClient({
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{r.purchaseDate ?? "—"}</td>
                         <td className="px-4 py-3">
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${expiryInfo.className}`}>
+                            {expiryInfo.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
                           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                             r.isActive
                               ? "bg-green-50 text-green-700 border-green-200"
@@ -328,7 +373,7 @@ export default function BatchLookupClient({
                       </tr>
                       {isExpanded ? (
                         <tr className="border-b border-border/50 bg-muted/10">
-                          <td colSpan={9} className="px-4 py-4">
+                          <td colSpan={10} className="px-4 py-4">
                             <div className="space-y-3">
                               <div className="flex flex-wrap gap-2 text-[11px] font-medium text-muted-foreground">
                                 <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
@@ -414,6 +459,7 @@ export default function BatchLookupClient({
                 return sum + Math.max(0, allocated - returned);
               }, 0);
               const isExpanded = expandedBatchId === r.id;
+              const expiryInfo = getExpiryInfo(r.expiryDate);
               return (
                 <div key={r.id} className="p-4 space-y-1.5">
                   <div className="flex items-start justify-between gap-2">
@@ -440,6 +486,9 @@ export default function BatchLookupClient({
                   {r.purchaseDate && (
                     <p className="text-xs text-muted-foreground">ক্রয়: {r.purchaseDate}</p>
                   )}
+                  <p className="text-xs">
+                    Expiry: <span className={`font-semibold ${expiryInfo.textClass}`}>{expiryInfo.label}</span>
+                  </p>
                   <button
                     type="button"
                     onClick={() => setExpandedBatchId((current) => current === r.id ? null : r.id)}

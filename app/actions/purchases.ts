@@ -24,6 +24,7 @@ type PurchaseItemInput = {
   unitConversionId?: string | null;
   serialNumbers?: string[] | null;
   batchNo?: string | null;
+  batchExpiryDate?: string | null;
 };
 
 type CreatePurchaseInput = {
@@ -70,6 +71,19 @@ function normalizePurchaseDate(raw?: string | null) {
   const day = trimmed || getDhakaDateString();
   const { start } = parseDhakaDateOnlyRange(day, day, true);
   return start ?? new Date(`${day}T00:00:00.000Z`);
+}
+
+function normalizeDateOnlyInput(raw?: string | null) {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    throw new Error("Expiry date must be YYYY-MM-DD");
+  }
+  const date = new Date(`${trimmed}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Invalid expiry date");
+  }
+  return date;
 }
 
 function roundMoney(value: number) {
@@ -233,6 +247,11 @@ export async function createPurchase(input: CreatePurchaseInput) {
   requirePermission(user, "create_purchase");
   await assertShopAccess(input.shopId, user);
   await assertInventoryModuleEnabled(input.shopId);
+  const shop = await prisma.shop.findUnique({
+    where: { id: input.shopId },
+    select: { businessType: true },
+  });
+  const isPharmacyShop = shop?.businessType === "pharmacy";
 
   if (!Array.isArray(input.items) || input.items.length === 0) {
     throw new Error("At least one item is required");
@@ -411,6 +430,10 @@ export async function createPurchase(input: CreatePurchaseInput) {
     if (product.trackBatch && !batchNo) {
       throw new Error(`"${product.name}" batch / lot tracked। ক্রয়ের সময় batch নম্বর দিন`);
     }
+    const batchExpiryDate = normalizeDateOnlyInput(item.batchExpiryDate);
+    if (isPharmacyShop && product.trackBatch && !batchExpiryDate) {
+      throw new Error(`"${product.name}" ফার্মেসি batch। ক্রয়ের সময় expiry date দিন`);
+    }
     subtotalAmount += lineTotal;
     return {
       product,
@@ -423,6 +446,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
       purchaseUnitLabel: selectedConversion?.label ?? product.baseUnit,
       unitConversionId: selectedConversion?.id ?? null,
       batchNo,
+      batchExpiryDate,
       unitCost,
       lineTotal,
     };
@@ -488,6 +512,8 @@ export async function createPurchase(input: CreatePurchaseInput) {
           purchaseUnitLabel: row.purchaseUnitLabel,
           baseUnitQuantity: row.baseUnitQuantity.toFixed(4),
           unitConversionId: row.unitConversionId,
+          batchNo: row.batchNo || null,
+          batchExpiryDate: row.batchExpiryDate,
           unitCost: row.unitCost.toFixed(2),
           lineTotal: row.lineTotal.toFixed(2),
           landedCostAllocated: row.landedCostAllocated.toFixed(2),
@@ -583,6 +609,30 @@ export async function createPurchase(input: CreatePurchaseInput) {
             }। variant-wise product-এ আলাদা batch code দিন।`
           );
         }
+        const existingBatchForExpiry = await tx.batch.findUnique({
+          where: {
+            shopId_productId_batchNo: {
+              shopId: input.shopId,
+              productId: product.id,
+              batchNo,
+            },
+          },
+          select: {
+            expiryDate: true,
+          },
+        });
+        if (
+          existingBatchForExpiry?.expiryDate &&
+          row.batchExpiryDate &&
+          existingBatchForExpiry.expiryDate.toISOString().slice(0, 10) !==
+            row.batchExpiryDate.toISOString().slice(0, 10)
+        ) {
+          throw new Error(
+            `"${product.name}" batch "${batchNo}"-এর expiry আগে ${existingBatchForExpiry.expiryDate
+              .toISOString()
+              .slice(0, 10)} ছিল। একই batch code-এ আলাদা expiry দেওয়া যাবে না।`
+          );
+        }
 
         await tx.batch.upsert({
           where: {
@@ -597,6 +647,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
             productId: product.id,
             variantId: row.variantId ?? null,
             batchNo,
+            expiryDate: row.batchExpiryDate,
             purchaseItemId,
             totalQty: row.baseQty,
             remainingQty: row.baseQty,
@@ -604,6 +655,10 @@ export async function createPurchase(input: CreatePurchaseInput) {
           update: {
             totalQty: { increment: row.baseQty },
             remainingQty: { increment: row.baseQty },
+            expiryDate:
+              existingBatchForExpiry?.expiryDate || !row.batchExpiryDate
+                ? undefined
+                : row.batchExpiryDate,
             isActive: true,
           },
         });

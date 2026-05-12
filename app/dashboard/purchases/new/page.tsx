@@ -147,12 +147,18 @@ export default async function PurchaseNewPage({
       <PurchaseFormClient
         shopId={selectedShopId}
         shopName={selectedShop.name}
+        businessType={selectedShop.businessType ?? null}
         products={products.map((p) => ({
           id: p.id,
           name: p.name,
+          genericName: (p as any).genericName ?? null,
+          strength: (p as any).strength ?? null,
+          dosageForm: (p as any).dosageForm ?? null,
+          manufacturer: (p as any).manufacturer ?? null,
           baseUnit: p.baseUnit || "pcs",
           buyPrice: p.buyPrice?.toString?.() ?? null,
           stockQty: p.stockQty?.toString?.() ?? null,
+          storageLocation: (p as any).storageLocation ?? null,
           trackStock: p.trackStock,
           trackSerialNumbers: Boolean((p as any).trackSerialNumbers),
           trackBatch: Boolean((p as any).trackBatch),
@@ -163,6 +169,7 @@ export default async function PurchaseNewPage({
               label: v.label,
               buyPrice: v.buyPrice?.toString?.() ?? null,
               stockQty: v.stockQty?.toString?.() ?? "0",
+              storageLocation: v.storageLocation ?? null,
             })),
           unitConversions: (p.unitConversions ?? [])
             .filter((conversion: any) => conversion.isActive !== false)

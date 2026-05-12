@@ -45,6 +45,10 @@ type CreateProductInput = {
   storageLocation?: string | null;
   businessType?: string;
   expiryDate?: string | null;
+  genericName?: string | null;
+  strength?: string | null;
+  dosageForm?: string | null;
+  manufacturer?: string | null;
   size?: string | null;
   variants?: ProductVariantInput[] | null;
   unitConversions?: ProductUnitConversionInput[] | null;
@@ -77,6 +81,10 @@ type UpdateProductInput = {
   storageLocation?: string | null;
   businessType?: string;
   expiryDate?: string | null;
+  genericName?: string | null;
+  strength?: string | null;
+  dosageForm?: string | null;
+  manufacturer?: string | null;
   size?: string | null;
   variants?: ProductVariantInput[] | null;
   unitConversions?: ProductUnitConversionInput[] | null;
@@ -112,6 +120,10 @@ type ProductListRow = {
   barcode?: string | null;
   baseUnit?: string;
   expiryDate?: string | null;
+  genericName?: string | null;
+  strength?: string | null;
+  dosageForm?: string | null;
+  manufacturer?: string | null;
   size?: string | null;
   buyPrice?: string | null;
   sellPrice: string;
@@ -1065,6 +1077,10 @@ export async function createProduct(input: CreateProductInput) {
   const barcode = normalizeProductCodeInput(input.barcode);
   const baseUnit = normalizeBaseUnitInput(input.baseUnit, { defaultValue: "pcs" });
   const expiryDate = normalizeDateOnlyInput(input.expiryDate);
+  const genericName = normalizeNullableTextInput(input.genericName, 160);
+  const strength = normalizeNullableTextInput(input.strength, 80);
+  const dosageForm = normalizeNullableTextInput(input.dosageForm, 80);
+  const manufacturer = normalizeNullableTextInput(input.manufacturer, 160);
   const size = normalizeNullableTextInput(input.size, 80);
   const storageLocation = normalizeNullableTextInput(input.storageLocation, 120);
   const variants = normalizeVariantInputs(input.variants, {
@@ -1107,6 +1123,10 @@ export async function createProduct(input: CreateProductInput) {
     barcode: barcode === undefined ? undefined : barcode,
     baseUnit: baseUnit ?? "pcs",
     expiryDate: expiryDate === undefined ? undefined : expiryDate,
+    genericName: genericName === undefined ? undefined : genericName,
+    strength: strength === undefined ? undefined : strength,
+    dosageForm: dosageForm === undefined ? undefined : dosageForm,
+    manufacturer: manufacturer === undefined ? undefined : manufacturer,
     size: size === undefined ? undefined : size,
     buyPrice: buyPrice === null ? null : buyPrice ?? undefined,
     sellPrice,
@@ -1324,6 +1344,10 @@ export async function getProductsByShop(shopId: string) {
       barcode: true,
       baseUnit: true,
       expiryDate: true,
+      genericName: true,
+      strength: true,
+      dosageForm: true,
+      manufacturer: true,
       size: true,
       buyPrice: true,
       sellPrice: true,
@@ -1398,6 +1422,10 @@ export async function getProductsByShopPaginated({
       { sku: { contains: term, mode: "insensitive" } },
       { barcode: { contains: term, mode: "insensitive" } },
       { storageLocation: { contains: term, mode: "insensitive" } },
+      { genericName: { contains: term, mode: "insensitive" } },
+      { strength: { contains: term, mode: "insensitive" } },
+      { dosageForm: { contains: term, mode: "insensitive" } },
+      { manufacturer: { contains: term, mode: "insensitive" } },
       {
         variants: {
           some: {
@@ -1448,6 +1476,10 @@ export async function getProductsByShopPaginated({
       barcode: true,
       baseUnit: true,
       expiryDate: true,
+      genericName: true,
+      strength: true,
+      dosageForm: true,
+      manufacturer: true,
       size: true,
       buyPrice: true,
       sellPrice: true,
@@ -1476,6 +1508,10 @@ export async function getProductsByShopPaginated({
     barcode: (product as any).barcode ?? null,
     baseUnit: (product as any).baseUnit ?? "pcs",
     expiryDate: product.expiryDate ? product.expiryDate.toISOString().slice(0, 10) : null,
+    genericName: (product as any).genericName ?? null,
+    strength: (product as any).strength ?? null,
+    dosageForm: (product as any).dosageForm ?? null,
+    manufacturer: (product as any).manufacturer ?? null,
     size: (product as any).size ?? null,
     buyPrice:
       product.buyPrice === null ? null : product.buyPrice?.toString() ?? null,
@@ -1542,6 +1578,10 @@ export async function getProductsByShopCursorPaginated({
       { sku: { contains: term, mode: "insensitive" } },
       { barcode: { contains: term, mode: "insensitive" } },
       { storageLocation: { contains: term, mode: "insensitive" } },
+      { genericName: { contains: term, mode: "insensitive" } },
+      { strength: { contains: term, mode: "insensitive" } },
+      { dosageForm: { contains: term, mode: "insensitive" } },
+      { manufacturer: { contains: term, mode: "insensitive" } },
       {
         variants: {
           some: {
@@ -1603,6 +1643,10 @@ export async function getProductsByShopCursorPaginated({
         barcode: true,
         baseUnit: true,
         expiryDate: true,
+        genericName: true,
+        strength: true,
+        dosageForm: true,
+        manufacturer: true,
         size: true,
         buyPrice: true,
         sellPrice: true,
@@ -1665,6 +1709,10 @@ export async function getProductsByShopCursorPaginated({
     barcode: (p as any).barcode ?? null,
     baseUnit: (p as any).baseUnit ?? "pcs",
     expiryDate: p.expiryDate ? p.expiryDate.toISOString().slice(0, 10) : null,
+    genericName: (p as any).genericName ?? null,
+    strength: (p as any).strength ?? null,
+    dosageForm: (p as any).dosageForm ?? null,
+    manufacturer: (p as any).manufacturer ?? null,
     size: (p as any).size ?? null,
     buyPrice: p.buyPrice?.toString?.() ?? (p as any).buyPrice ?? null,
     sellPrice: p.sellPrice?.toString?.() ?? (p as any).sellPrice ?? "0",
@@ -1955,6 +2003,22 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
     data.expiryDate !== undefined
       ? normalizeDateOnlyInput(data.expiryDate)
       : undefined;
+  const genericName =
+    data.genericName !== undefined
+      ? normalizeNullableTextInput(data.genericName, 160)
+      : undefined;
+  const strength =
+    data.strength !== undefined
+      ? normalizeNullableTextInput(data.strength, 80)
+      : undefined;
+  const dosageForm =
+    data.dosageForm !== undefined
+      ? normalizeNullableTextInput(data.dosageForm, 80)
+      : undefined;
+  const manufacturer =
+    data.manufacturer !== undefined
+      ? normalizeNullableTextInput(data.manufacturer, 160)
+      : undefined;
   const size =
     data.size !== undefined ? normalizeNullableTextInput(data.size, 80) : undefined;
   const storageLocation =
@@ -2111,6 +2175,10 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   if (barcode !== undefined) payload.barcode = barcode;
   if (baseUnit !== undefined) payload.baseUnit = baseUnit;
   if (expiryDate !== undefined) payload.expiryDate = expiryDate;
+  if (genericName !== undefined) payload.genericName = genericName;
+  if (strength !== undefined) payload.strength = strength;
+  if (dosageForm !== undefined) payload.dosageForm = dosageForm;
+  if (manufacturer !== undefined) payload.manufacturer = manufacturer;
   if (size !== undefined) payload.size = size;
   if (storageLocation !== undefined) payload.storageLocation = storageLocation;
   if (data.isActive !== undefined) payload.isActive = data.isActive;
@@ -2266,6 +2334,10 @@ export async function getActiveProductsByShop(shopId: string) {
       barcode: true,
       baseUnit: true,
       expiryDate: true,
+      genericName: true,
+      strength: true,
+      dosageForm: true,
+      manufacturer: true,
       size: true,
       sellPrice: true,
       stockQty: true,
@@ -2316,6 +2388,10 @@ export async function getActiveProductsByShop(shopId: string) {
     barcode: (p as any).barcode ?? null,
     baseUnit: (p as any).baseUnit ?? "pcs",
     expiryDate: p.expiryDate ? p.expiryDate.toISOString().slice(0, 10) : null,
+    genericName: (p as any).genericName ?? null,
+    strength: (p as any).strength ?? null,
+    dosageForm: (p as any).dosageForm ?? null,
+    manufacturer: (p as any).manufacturer ?? null,
     size: (p as any).size ?? null,
     sellPrice: p.sellPrice.toString(),
     stockQty: p.stockQty?.toString() ?? "0",
@@ -2354,3 +2430,5 @@ export async function getActiveProductsByShop(shopId: string) {
     conversionSummary: buildConversionSummary((p as any).unitConversions, (p as any).baseUnit),
   }));
 }
+
+

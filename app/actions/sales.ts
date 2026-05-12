@@ -1912,7 +1912,11 @@ export async function createSale(input: CreateSaleInput) {
           variantId,
           remainingQty: { gt: 0 },
         },
-        orderBy: { createdAt: "asc" },
+        orderBy: [
+          { expiryDate: "asc" },
+          { createdAt: "asc" },
+          { id: "asc" },
+        ],
         select: { id: true, remainingQty: true },
       });
 

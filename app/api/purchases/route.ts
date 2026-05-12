@@ -11,6 +11,7 @@ const itemSchema = z.object({
   unitConversionId: z.string().optional().nullable(),
   serialNumbers: z.array(z.string().min(1).max(120)).optional().nullable(),
   batchNo: z.string().max(120).optional().nullable(),
+  batchExpiryDate: z.string().optional().nullable(),
 });
 
 const bodySchema = z.object({

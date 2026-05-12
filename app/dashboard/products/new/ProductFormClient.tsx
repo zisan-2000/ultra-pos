@@ -250,6 +250,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   const online = useOnlineStatus();
   const businessType = (shop.businessType as BusinessType) || DEFAULT_BUSINESS_TYPE;
   const isSweetShop = businessType === "sweet_shop";
+  const isPharmacy = businessType === "pharmacy";
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const voiceSessionRef = useRef<VoiceSession | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
@@ -401,6 +402,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       ft: "ফুট",
       strip: "স্ট্রিপ",
       carton: "কার্টন",
+      bottle: "বোতল",
     }),
     []
   );
@@ -1510,6 +1512,18 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
     const expiryDate = isFieldVisible("expiry")
       ? ((form.get("expiryDate") as string) || null)
       : null;
+    const genericName = isPharmacy
+      ? (((form.get("genericName") as string) || "").trim() || null)
+      : null;
+    const strength = isPharmacy
+      ? (((form.get("strength") as string) || "").trim() || null)
+      : null;
+    const dosageForm = isPharmacy
+      ? (((form.get("dosageForm") as string) || "").trim() || null)
+      : null;
+    const manufacturer = isPharmacy
+      ? (((form.get("manufacturer") as string) || "").trim() || null)
+      : null;
 
     const size = isFieldVisible("size")
       ? (((form.get("size") as string) || sizeValue || "").toString().trim() || null)
@@ -1603,6 +1617,10 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       storageLocation: resolvedStorageLocation,
       businessType,
       expiryDate,
+      genericName,
+      strength,
+      dosageForm,
+      manufacturer,
       size,
       variants: resolvedVariants,
       unitConversions: resolvedUnitConversions,
@@ -2556,6 +2574,64 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
             </p>
           </div>
 
+          {isPharmacy ? (
+            <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-4 shadow-sm">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-emerald-900">মেডিসিন ডিটেইলস</p>
+                  <p className="text-xs text-emerald-700">
+                    বিল, সার্চ আর expiry report-এ medicine চিনতে এই তথ্য ব্যবহার হবে।
+                  </p>
+                </div>
+                <span className="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-emerald-700">
+                  Pharmacy
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-emerald-900">Generic নাম</label>
+                  <input
+                    name="genericName"
+                    type="text"
+                    maxLength={160}
+                    placeholder="যেমন: Paracetamol"
+                    className="h-11 w-full rounded-xl border border-emerald-200 bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-emerald-900">Strength</label>
+                  <input
+                    name="strength"
+                    type="text"
+                    maxLength={80}
+                    placeholder="যেমন: 500mg, 20mg/5ml"
+                    className="h-11 w-full rounded-xl border border-emerald-200 bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-emerald-900">Dose form</label>
+                  <input
+                    name="dosageForm"
+                    type="text"
+                    maxLength={80}
+                    placeholder="Tablet, Syrup, Capsule, Injection"
+                    className="h-11 w-full rounded-xl border border-emerald-200 bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-emerald-900">Manufacturer</label>
+                  <input
+                    name="manufacturer"
+                    type="text"
+                    maxLength={160}
+                    placeholder="যেমন: Square, Beximco"
+                    className="h-11 w-full rounded-xl border border-emerald-200 bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {/* Unit (conditional) */}
           {isFieldVisible("unit") && (
             <div className="space-y-2">
@@ -3137,3 +3213,4 @@ export default function ProductFormClient(props: Props) {
     </Suspense>
   );
 }
+
