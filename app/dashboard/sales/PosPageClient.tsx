@@ -16,16 +16,13 @@ import { useRouter } from "next/navigation";
 import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
 import { PosMiniCartItem } from "./components/pos-mini-cart-item";
+import { PosHeaderBar } from "./components/pos-header-bar";
+import { FeatureTip } from "@/components/ui/feature-tip";
+import { PosSerialPickerModal } from "./components/pos-serial-picker-modal";
+import { PosQuickCustomerDialog } from "./components/pos-quick-customer-dialog";
+import { usePosSerials } from "./hooks/use-pos-serials";
 import { useCart } from "@/hooks/use-cart";
 import { useShallow } from "zustand/react/shallow";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -33,22 +30,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import RefreshIconButton from "@/components/ui/refresh-icon-button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StepIndicator } from "@/components/ui/step-indicator";
+import { ShoppingCart } from "lucide-react";
 
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { toast } from "sonner";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
-import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { getPollingProfile } from "@/lib/polling/config";
 import { useSmartPolling } from "@/lib/polling/use-smart-polling";
 import { usePageVisibility } from "@/lib/use-page-visibility";
+import { subscribeProductEvent } from "@/lib/products/product-events";
+import { queueAdd } from "@/lib/sync/queue";
 import {
   emitDueCustomersEvent,
   subscribeDueCustomersEvent,
 } from "@/lib/due/customer-events";
-import { subscribeProductEvent } from "@/lib/products/product-events";
 import useRealTimeReports from "@/hooks/useRealTimeReports";
 import { emitSaleUpdate } from "@/lib/events/reportEvents";
 import { computeSaleDiscount, type SaleDiscountType } from "@/lib/sales/discount";
@@ -181,7 +180,6 @@ export function PosPageClient({
     setShop,
     items: cartItems,
     currentShopId: cartShopId,
-    setSerialNumbers,
     updateQty,
   } = useCart(
     useShallow((s) => ({
@@ -189,116 +187,19 @@ export function PosPageClient({
       setShop: s.setShop,
       items: s.items,
       currentShopId: s.currentShopId,
-      setSerialNumbers: s.setSerialNumbers,
       updateQty: s.updateQty,
     }))
   );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Serial picker state
-  const [serialPicker, setSerialPicker] = useState<{
-    itemKey: string;
-    productId: string;
-    productName: string;
-    variantId: string | null;
-    qty: number;
-  } | null>(null);
-  const [availableSerials, setAvailableSerials] = useState<
-    { id: string; serialNo: string }[]
-  >([]);
-  const [serialStockQty, setSerialStockQty] = useState<number | null>(null);
-  const [serialInStockCount, setSerialInStockCount] = useState<number | null>(null);
-  const [serialHasMismatch, setSerialHasMismatch] = useState(false);
-  const [serialBlockingReason, setSerialBlockingReason] = useState<string | null>(null);
-  const [serialPickerInput, setSerialPickerInput] = useState("");
-  const [selectedSerials, setSelectedSerials] = useState<string[]>([]);
-  const [serialsLoading, setSerialsLoading] = useState(false);
+  const serials = usePosSerials(shopId);
+  const {
+    serialPicker,
+    openSerialPicker,
+    serialTargetQty,
+  } = serials;
 
-  const openSerialPicker = useCallback(
-    async (
-      itemKey: string,
-      productId: string,
-      productName: string,
-      variantId: string | null,
-      qty: number
-    ) => {
-      const currentItem = useCart
-        .getState()
-        .items.find((row) => row.itemKey === itemKey && row.shopId === shopId);
-      const currentQty = Math.max(1, Math.round(Number(currentItem?.qty ?? qty)));
-      const existingSerials = (currentItem?.serialNumbers ?? [])
-        .map((serial) => String(serial || "").trim().toUpperCase())
-        .filter(Boolean);
-
-      setSerialPicker({ itemKey, productId, productName, variantId, qty: currentQty });
-      setSelectedSerials(Array.from(new Set(existingSerials)));
-      setSerialPickerInput("");
-      setSerialStockQty(null);
-      setSerialInStockCount(null);
-      setSerialHasMismatch(false);
-      setSerialBlockingReason(null);
-      setSerialsLoading(true);
-      try {
-        const url = `/api/serials/available?shopId=${shopId}&productId=${productId}${variantId ? `&variantId=${variantId}` : ""}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        const serials = Array.isArray(data?.serials) ? data.serials : [];
-        setAvailableSerials(serials);
-        setSerialStockQty(
-          Number.isFinite(Number(data?.stockQty)) ? Number(data.stockQty) : null
-        );
-        setSerialInStockCount(
-          Number.isFinite(Number(data?.serialInStockCount))
-            ? Number(data.serialInStockCount)
-            : serials.length
-        );
-        setSerialHasMismatch(Boolean(data?.hasMismatch));
-        setSerialBlockingReason(
-          typeof data?.blockingReason === "string" && data.blockingReason.trim()
-            ? data.blockingReason.trim()
-            : null
-        );
-      } catch {
-        setAvailableSerials([]);
-        setSerialStockQty(null);
-        setSerialInStockCount(null);
-        setSerialHasMismatch(false);
-        setSerialBlockingReason(null);
-      } finally {
-        setSerialsLoading(false);
-      }
-    },
-    [shopId]
-  );
-
-  const confirmSerialPicker = useCallback(() => {
-    if (!serialPicker) return;
-    if (serialHasMismatch) return;
-    const normalized = Array.from(
-      new Set(
-        selectedSerials
-          .map((serial) => String(serial || "").trim().toUpperCase())
-          .filter(Boolean)
-      )
-    );
-    setSerialNumbers(serialPicker.itemKey, normalized);
-    if (normalized.length > 0 && normalized.length !== serialPicker.qty) {
-      updateQty(serialPicker.itemKey, normalized.length);
-    }
-    setSerialPicker(null);
-  }, [serialHasMismatch, serialPicker, selectedSerials, setSerialNumbers, updateQty]);
-
-  const addManualSerial = useCallback((value: string) => {
-    const sn = value.trim().toUpperCase();
-    if (!sn) return;
-    setSelectedSerials((prev) => (prev.includes(sn) ? prev : [...prev, sn]));
-    setSerialPickerInput("");
-  }, []);
-  const serialTargetQty = Math.max(
-    serialPicker?.qty ?? 0,
-    selectedSerials.length
-  );
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
   const [barExpanded, setBarExpanded] = useState(false);
   const [barFlash, setBarFlash] = useState(false);
@@ -345,12 +246,6 @@ export function PosPageClient({
   const [discountValue, setDiscountValue] = useState<string>("");
   const [note, setNote] = useState("");
   const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
-  const [savingCustomer, setSavingCustomer] = useState(false);
-  const [quickCustomer, setQuickCustomer] = useState({
-    name: "",
-    phone: "",
-    address: "",
-  });
   const [success, setSuccess] = useState<{
     saleId?: string;
     invoiceNo?: string | null;
@@ -1140,112 +1035,6 @@ export function PosPageClient({
     [sortCustomers]
   );
 
-  async function handleQuickCustomerSave() {
-    if (!canCreateCustomer) {
-      toast.error("গ্রাহক যোগ করার অনুমতি নেই।");
-      return;
-    }
-
-    const name = quickCustomer.name.trim();
-    const phone = quickCustomer.phone.trim();
-    const address = quickCustomer.address.trim();
-
-    if (!name) {
-      toast.warning("গ্রাহকের নাম লিখুন।");
-      return;
-    }
-
-    if (savingCustomer) return;
-    setSavingCustomer(true);
-
-    try {
-      if (!online) {
-        const now = Date.now();
-        const payload = {
-          id: crypto.randomUUID(),
-          shopId,
-          name,
-          phone: phone || null,
-          address: address || null,
-          totalDue: "0",
-          lastPaymentAt: null,
-          updatedAt: now,
-          syncStatus: "new" as const,
-        };
-
-        await db.transaction("rw", db.dueCustomers, db.queue, async () => {
-          await db.dueCustomers.put(payload);
-          await queueAdd("due_customer", "create", payload);
-        });
-
-        upsertCustomerList(payload);
-        emitDueCustomersEvent({ shopId, at: Date.now(), source: "local" });
-        setCustomerId(payload.id);
-        setQuickCustomer({ name: "", phone: "", address: "" });
-        setQuickCustomerOpen(false);
-        toast.success("অফলাইন: গ্রাহক যোগ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
-        return;
-      }
-
-      const res = await fetch("/api/due/customers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shopId,
-          name,
-          phone: phone || undefined,
-          address: address || undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Quick customer create failed");
-      }
-
-      const json = (await res.json()) as { id?: string };
-      const createdId = json.id;
-
-      if (!createdId) {
-        throw new Error("Customer id missing");
-      }
-
-      const payload = {
-        id: createdId,
-        shopId,
-        name,
-        phone: phone || null,
-        address: address || null,
-        totalDue: 0,
-        lastPaymentAt: null,
-        updatedAt: Date.now(),
-        syncStatus: "synced" as const,
-      };
-
-      try {
-        await db.dueCustomers.put(payload);
-      } catch (err) {
-        handlePermissionError(err);
-        console.warn("Quick customer cache write failed", err);
-      }
-
-      upsertCustomerList(payload);
-      setCustomerId(createdId);
-      setQuickCustomer({ name: "", phone: "", address: "" });
-      setQuickCustomerOpen(false);
-      emitDueCustomersEvent({ shopId, at: Date.now(), source: "create" });
-      queryClient.invalidateQueries({
-        queryKey: dueCustomerQueryKey,
-        refetchType: "active",
-      });
-      toast.success("গ্রাহক যোগ হয়েছে এবং নির্বাচন করা হয়েছে।");
-    } catch (error) {
-      console.error("Quick customer create failed:", error);
-      toast.error("গ্রাহক যোগ করা যায়নি। আবার চেষ্টা করুন।");
-    } finally {
-      setSavingCustomer(false);
-    }
-  }
-
   const scrollToCart = () => {
     setBarExpanded(false);
     if (cartPanelRef.current) {
@@ -1411,71 +1200,56 @@ export function PosPageClient({
     };
   }, [shopId, success]);
 
+  const posStep =
+    paymentSheetOpen ? "payment" : items.length > 0 ? "cart" : "search";
+  const posSteps = [
+    { id: "search", label: "পণ্য বেছুন" },
+    { id: "cart", label: "কার্ট" },
+    { id: "payment", label: "পেমেন্ট" },
+  ];
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-28">
+    <>
+      <StepIndicator steps={posSteps} current={posStep} className="lg:hidden px-1 py-2 mb-2" />
+      {items.length > 0 && !paymentSheetOpen && (
+        <button
+          type="button"
+          onClick={() => cartPanelRef.current?.scrollIntoView({ behavior: "smooth" })}
+          className="fixed z-30 lg:hidden flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold shadow-lg"
+          style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px))", right: "1rem" }}
+        >
+          <ShoppingCart className="h-4 w-4" />
+          কার্ট ({itemCount})
+        </button>
+      )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-28">
       {/* Left: Products */}
       <div className="lg:col-span-2 flex flex-col gap-6">
-        <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_28px_rgba(15,23,42,0.08)] animate-fade-in">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/30 via-card to-card" />
-          <div className="pointer-events-none absolute -top-12 right-0 h-24 w-24 rounded-full bg-primary/15 blur-3xl" />
-          <div className="relative space-y-2 p-3 sm:p-4">
-            <div className="flex items-start justify-between gap-2 sm:items-center">
-              <div className="min-w-0 space-y-1">
-                <h1 className="text-2xl font-bold text-foreground tracking-tight leading-tight sm:text-3xl">
-                  নতুন বিক্রি
-                </h1>
-                <p
-                  className="truncate text-xs text-muted-foreground"
-                  title={`দোকান: ${shopName}`}
-                >
-                  দোকান: <span className="font-semibold">{shopName}</span>
-                </p>
-              </div>
-              <RefreshIconButton
-                onClick={handleProductRefresh}
-                loading={productsRefreshing}
-                label="রিফ্রেশ"
-                showLabelOnMobile
-                className="h-8 shrink-0 px-3 text-xs sm:h-7 sm:px-2.5"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-              {pendingCount > 0 ? (
-                <span className="inline-flex h-7 items-center rounded-full border border-warning/30 bg-warning-soft px-3 text-warning">
-                  পেন্ডিং {pendingCount} টি
-                </span>
-              ) : null}
-              {!canCreateSale ? (
-                <span className="inline-flex h-7 items-center rounded-full border border-danger/30 bg-danger-soft px-3 text-danger">
-                  বিক্রি করা নিষ্ক্রিয়
-                </span>
-              ) : null}
-              {canCreateSale && !canUseDueSale ? (
-                <span className="inline-flex h-7 items-center rounded-full border border-warning/30 bg-warning-soft px-3 text-warning">
-                  বাকির বিক্রি নিষ্ক্রিয়
-                </span>
-              ) : null}
-              {syncing ? (
-                <span className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary-soft px-3 text-primary">
-                  সিঙ্ক হচ্ছে...
-                </span>
-              ) : null}
-              {lastSyncLabel ? (
-                <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
-                  শেষ সিঙ্ক: {lastSyncLabel}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        <PosHeaderBar
+          shopName={shopName}
+          syncing={syncing}
+          pendingCount={pendingCount}
+          lastSyncLabel={lastSyncLabel}
+          online={online}
+          canCreateSale={canCreateSale}
+          canUseDueSale={canUseDueSale}
+          productsRefreshing={productsRefreshing}
+          onRefresh={handleProductRefresh}
+        />
 
-        <div className="flex-1">
+        <div className="relative flex-1">
           <PosProductSearch
             products={productOptions}
             shopId={shopId}
             canUseBarcodeScan={canUseBarcodeScan}
             topProductIds={topProductIds}
             onSerialRequired={openSerialPicker}
+          />
+          <FeatureTip
+            id="pos-search-guide"
+            title="পণ্য খুঁজুন"
+            description="নাম লিখুন বা barcode স্ক্যান করুন — পণ্য কার্টে যোগ হবে।"
+            className="right-0 top-2"
           />
         </div>
       </div>
@@ -1494,7 +1268,12 @@ export function PosPageClient({
 
         <div className="rounded-2xl border border-border bg-muted/40 p-3 space-y-3">
           {items.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border bg-card/60 py-8 text-center text-sm text-muted-foreground">কিছু যোগ করা হয়নি</p>
+            <EmptyState
+              icon={<ShoppingCart className="h-7 w-7" />}
+              title="কার্ট খালি আছে"
+              description="বাম দিক থেকে পণ্য বেছে নিন অথবা বারকোড স্যান করুন"
+              className="py-8 border-border/60"
+            />
           ) : (
             cartList
           )}
@@ -1601,10 +1380,16 @@ export function PosPageClient({
           ) : null}
 
           {/* Payment Method */}
-          <div className="space-y-2">
+          <div className="relative space-y-2">
             <label className="text-base font-medium text-foreground">
               পেমেন্ট পদ্ধতি
             </label>
+            <FeatureTip
+              id="pos-payment-guide"
+              title="পেমেন্ট পদ্ধতি"
+              description="নগদ, bKash, বাকি — যেভাবে টাকা নেবেন সেটা বাছাই করুন।"
+              className="right-0 top-0"
+            />
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {paymentOptions.map((method) => (
                 <button
@@ -1626,7 +1411,13 @@ export function PosPageClient({
 
           {/* Customer Selection for Due */}
           {isDue && canUseDueSale && (
-            <div className="rounded-xl border border-warning/30 bg-warning-soft/40 p-3 space-y-2">
+            <div className="relative rounded-xl border border-warning/30 bg-warning-soft/40 p-3 space-y-2">
+              <FeatureTip
+                id="pos-due-guide"
+                title="বাকির গ্রাহক"
+                description="বাকিতে বিক্রির জন্য গ্রাহক নির্বাচন করতে হবে। না থাকলে + নতুন গ্রাহক দিয়ে যোগ করুন।"
+                className="right-3 top-3"
+              />
               <div className="flex items-center justify-between gap-3">
                 <label className="text-base font-medium text-foreground">
                   গ্রাহক নির্বাচন করুন
@@ -2207,257 +1998,21 @@ export function PosPageClient({
         </div>
       )}
 
-      <Dialog
+      <PosQuickCustomerDialog
         open={quickCustomerOpen}
-        onOpenChange={(open) => {
-          setQuickCustomerOpen(open);
-          if (!open && !savingCustomer) {
-            setQuickCustomer({ name: "", phone: "", address: "" });
-          }
-        }}
-      >
-        <DialogContent className="w-[calc(100vw-1rem)] max-w-md border-border/70 sm:w-[calc(100vw-2rem)]">
-          <DialogHeader>
-            <DialogTitle>বাকির জন্য নতুন গ্রাহক</DialogTitle>
-            <DialogDescription>
-              এই পেজ ছাড়াই গ্রাহক যোগ করুন। save হলে তাকে সঙ্গে সঙ্গে নির্বাচন করা হবে।
-            </DialogDescription>
-          </DialogHeader>
+        onClose={() => setQuickCustomerOpen(false)}
+        shopId={shopId}
+        online={online}
+        canCreateCustomer={canCreateCustomer}
+        onCustomerCreated={upsertCustomerList}
+        onSelectCustomer={setCustomerId}
+        onInvalidateQuery={() => queryClient.invalidateQueries({ queryKey: dueCustomerQueryKey, refetchType: "active" })}
+      />
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-foreground">
-                গ্রাহকের নাম *
-              </label>
-              <input
-                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="যেমন: করিম সাহেব"
-                value={quickCustomer.name}
-                onChange={(e) =>
-                  setQuickCustomer((prev) => ({
-                    ...prev,
-                    name: e.target.value,
-                  }))
-                }
-                disabled={savingCustomer}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-foreground">
-                ফোন নম্বর
-              </label>
-              <input
-                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="যেমন: 01700000000"
-                value={quickCustomer.phone}
-                onChange={(e) =>
-                  setQuickCustomer((prev) => ({
-                    ...prev,
-                    phone: e.target.value,
-                  }))
-                }
-                disabled={savingCustomer}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-foreground">
-                ঠিকানা
-              </label>
-              <input
-                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="যেমন: বাজার রোড"
-                value={quickCustomer.address}
-                onChange={(e) =>
-                  setQuickCustomer((prev) => ({
-                    ...prev,
-                    address: e.target.value,
-                  }))
-                }
-                disabled={savingCustomer}
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <button
-              type="button"
-              onClick={() => setQuickCustomerOpen(false)}
-              disabled={savingCustomer}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              বন্ধ
-            </button>
-            <button
-              type="button"
-              onClick={handleQuickCustomerSave}
-              disabled={!quickCustomer.name.trim() || savingCustomer}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-primary/30 bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {savingCustomer
-                ? "সংরক্ষণ হচ্ছে..."
-                : "গ্রাহক যোগ করে নির্বাচন করুন"}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Serial Number Picker Modal */}
-      <Dialog
-        open={!!serialPicker}
-        onOpenChange={(open) => {
-          if (!open) setSerialPicker(null);
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Serial Number দিন</DialogTitle>
-            <DialogDescription>
-              <span className="font-semibold text-foreground">
-                {serialPicker?.productName}
-              </span>{" "}
-              — {serialPicker?.qty}টি unit এর serial number লিখুন বা নির্বাচন করুন
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div
-              className={`text-center text-sm font-semibold rounded-lg py-1.5 ${
-                !serialHasMismatch && selectedSerials.length === serialTargetQty
-                  ? "bg-green-50 text-green-700"
-                  : "bg-orange-50 text-orange-700"
-              }`}
-            >
-              {selectedSerials.length} / {serialTargetQty} serial নির্বাচিত
-            </div>
-
-            {serialBlockingReason ? (
-              <div className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs font-semibold text-danger">
-                {serialBlockingReason}
-              </div>
-            ) : null}
-
-            {/* Manual input */}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={serialPickerInput}
-                onChange={(e) => setSerialPickerInput(e.target.value.toUpperCase())}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addManualSerial(serialPickerInput);
-                  }
-                }}
-                placeholder="Serial scan বা type করুন, Enter চাপুন"
-                className="flex-1 h-10 rounded-lg border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-              <button
-                type="button"
-                onClick={() => addManualSerial(serialPickerInput)}
-                className="h-10 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90"
-              >
-                যোগ
-              </button>
-            </div>
-
-            {/* Selected serials chips */}
-            {selectedSerials.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {selectedSerials.map((sn) => (
-                  <span
-                    key={sn}
-                    className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5"
-                  >
-                    {sn}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedSerials((prev) => prev.filter((s) => s !== sn))
-                      }
-                      className="text-blue-500 hover:text-red-600"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Available IN_STOCK serials */}
-            {serialsLoading ? (
-              <p className="text-xs text-muted-foreground text-center py-2">লোড হচ্ছে...</p>
-            ) : availableSerials.length > 0 ? (
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-muted-foreground">
-                  স্টকে থাকা serial ({availableSerials.length}টি):
-                </p>
-                {serialHasMismatch ? (
-                  <p className="text-[11px] text-warning">
-                    স্টক mismatch: stock {serialStockQty ?? "?"}, IN_STOCK serial{" "}
-                    {serialInStockCount ?? availableSerials.length}
-                  </p>
-                ) : null}
-                <div className="max-h-36 overflow-y-auto flex flex-wrap gap-1">
-                  {availableSerials.map((s) => {
-                    const selected = selectedSerials.includes(s.serialNo);
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => {
-                          if (selected) {
-                            setSelectedSerials((prev) =>
-                              prev.filter((x) => x !== s.serialNo)
-                            );
-                          } else {
-                            setSelectedSerials((prev) => [...prev, s.serialNo]);
-                          }
-                        }}
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                          selected
-                            ? "bg-blue-600 text-white"
-                            : "bg-muted text-muted-foreground hover:bg-blue-50 hover:text-blue-700 border border-border"
-                        }`}
-                      >
-                        {s.serialNo}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground text-center py-1">
-                {serialBlockingReason
-                  ? "Mismatch থাকায় serial list দেখানো হয়নি। আগে reconcile করুন।"
-                  : "স্টকে কোনো registered serial নেই — manually type করুন"}
-              </p>
-            )}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <button
-              type="button"
-              onClick={() => setSerialPicker(null)}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground hover:bg-muted"
-            >
-              এড়িয়ে যান
-            </button>
-            <button
-              type="button"
-              onClick={confirmSerialPicker}
-              disabled={
-                serialHasMismatch ||
-                selectedSerials.length !== serialTargetQty
-              }
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90"
-            >
-              নিশ্চিত করুন
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PosSerialPickerModal
+        {...serials}
+      />
     </div>
+    </>
   );
 }

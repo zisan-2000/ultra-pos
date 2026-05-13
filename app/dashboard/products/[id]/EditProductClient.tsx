@@ -4,6 +4,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
 import { Switch } from "@/components/ui/switch";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
@@ -44,6 +45,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { productFormSchema, type ProductFormValues } from "@/lib/validators/product";
+import { FormError } from "@/components/ui/form-error";
 
 type Props = {
   product: any;
@@ -339,6 +344,20 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
   );
   const [name, setName] = useState((product.name as string) || fallbackName);
   const [sellPrice, setSellPrice] = useState((product.sellPrice || "").toString());
+  const rhf = useForm<ProductFormValues>({
+    resolver: zodResolver(productFormSchema),
+    defaultValues: {
+      name: (product.name as string) || fallbackName,
+      sellPrice: (product.sellPrice || "").toString(),
+      buyPrice: (product.buyPrice || "").toString(),
+      stockQty: (product.stockQty || "").toString(),
+      reorderPoint: (product.reorderPoint || "").toString(),
+      warrantyDaysValue: product.warrantyDays == null ? "" : String(product.warrantyDays),
+      sku: (product.sku || "").toString(),
+      barcode: (product.barcode || "").toString(),
+    },
+    mode: "onBlur",
+  });
   const [sizeValue, setSizeValue] = useState((product.size || "").toString());
   const [brandValue, setBrandValue] = useState((product.brand || "").toString());
   const [modelNameValue, setModelNameValue] = useState((product.modelName || "").toString());
@@ -843,12 +862,15 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
     if (isFieldVisible("name")) {
       setName(finalName);
+      rhf.setValue("name", finalName, { shouldValidate: true });
     } else if (!name) {
       setName(fallbackName || finalName);
+      rhf.setValue("name", fallbackName || finalName, { shouldValidate: true });
     }
 
     if (parsed.price) {
       setSellPrice(parsed.price);
+      rhf.setValue("sellPrice", parsed.price, { shouldValidate: true });
     }
 
     if (isFieldVisible("unit")) {
@@ -871,9 +893,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       setCatalogLinkRemoved(false);
       setSelectedCatalogItem(item);
       setName(item.name);
+      rhf.setValue("name", item.name, { shouldValidate: true });
 
       if (item.latestPrice && Number(item.latestPrice) > 0) {
         setSellPrice(item.latestPrice);
+        rhf.setValue("sellPrice", item.latestPrice, { shouldValidate: true });
       }
 
       if (item.defaultBaseUnit) {
@@ -902,7 +926,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         item.barcodes?.[0]?.code ??
         "";
       if (primaryBarcode) {
-        setBarcode(normalizeCodeInput(primaryBarcode));
+        const normalized = normalizeCodeInput(primaryBarcode);
+        setBarcode(normalized);
+        rhf.setValue("barcode", normalized, { shouldValidate: true });
       }
     },
     [isFieldVisible, isMobileAccessories]
@@ -953,6 +979,7 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         if (match) {
           applyCatalogItem(match);
           setBarcode(normalized);
+          rhf.setValue("barcode", normalized, { shouldValidate: true });
           setBarcodeLookupMessage(
             options?.source === "camera"
               ? "Scanned barcode থেকে catalog item auto-fill হয়েছে।"
@@ -1176,8 +1203,10 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
     const parsed = parseProductText(spoken);
     const finalName = parsed.name || spoken;
     setNameWithSmartDefaults(finalName);
+    rhf.setValue("name", finalName, { shouldValidate: true });
     if (parsed.price) {
       setSellPrice(parsed.price);
+      rhf.setValue("sellPrice", parsed.price, { shouldValidate: true });
     }
   }
 
@@ -1253,7 +1282,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
   function applyTemplate(item: TemplateItem) {
     setNameWithSmartDefaults(item.name);
-    if (item.price) setSellPrice(item.price);
+    rhf.setValue("name", item.name, { shouldValidate: true });
+    if (item.price) {
+      setSellPrice(item.price);
+      rhf.setValue("sellPrice", item.price, { shouldValidate: true });
+    }
     if (item.unit && isFieldVisible("unit")) {
       setUnitOptions((prev) => (prev.includes(item.unit!) ? prev : [...prev, item.unit!]));
       setSelectedUnit(item.unit);
@@ -1305,9 +1338,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
       if (scanTarget === "barcode") {
         setBarcode(normalizedCode);
+        rhf.setValue("barcode", normalizedCode, { shouldValidate: true });
         void lookupCatalogByBarcode(normalizedCode, { source });
       } else {
         setSku(normalizedCode);
+        rhf.setValue("sku", normalizedCode, { shouldValidate: true });
       }
 
       lastProcessedScanRef.current = { code: normalizedCode, at: Date.now() };
@@ -1515,6 +1550,8 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
   async function handleSubmit(e: any) {
     e.preventDefault();
+    const isValid = await rhf.trigger();
+    if (!isValid) return;
     setSubmitted(true);
 
     const form = new FormData(e.target);
@@ -1723,7 +1760,14 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
-      
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "পণ্য তালিকা", href: `/dashboard/products?shopId=${shopId}` },
+          { label: "পণ্য সম্পাদনা" },
+        ]}
+        className="mb-2"
+      />
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-card to-card" />
         <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
@@ -1899,13 +1943,18 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         {/* Product Name */}
         {isFieldVisible("name") && (
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-foreground">পণ্যের নাম *</label>
+            <label htmlFor="product-name" className="block text-sm font-semibold text-foreground">পণ্যের নাম *</label>
             <div className="relative">
               <input
+                id="product-name"
                 name="name"
                 value={name}
-                onChange={(e) => setNameWithSmartDefaults(e.target.value)}
-                className="w-full h-12 rounded-xl border border-border bg-card px-4 pr-16 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                onChange={(e) => {
+                  setNameWithSmartDefaults(e.target.value);
+                  rhf.setValue("name", e.target.value, { shouldValidate: true });
+                }}
+                onBlur={() => { rhf.trigger("name"); }}
+                className={`w-full h-12 rounded-xl border bg-card px-4 pr-16 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 ${rhf.formState.errors.name ? "border-danger focus:ring-danger/30" : rhf.formState.touchedFields.name && name.trim() ? "border-success focus:ring-success/30" : "border-border"}`}
                 placeholder="যেমন: চা, ডিম, বিস্কুট..."
                 required={isFieldRequired("name")}
                 autoComplete="off"
@@ -1946,23 +1995,30 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                 ))}
               </div>
             )}
+            <FormError message={rhf.formState.errors.name?.message} />
           </div>
         )}
 
         {/* Sell Price */}
         <div className="space-y-2">
-          <label className="block text-sm font-semibold text-foreground">বিক্রয় মূল্য (৳) *</label>
+          <label htmlFor="product-sell-price" className="block text-sm font-semibold text-foreground">বিক্রয় মূল্য (৳) *</label>
           <input
+            id="product-sell-price"
             name="sellPrice"
             type="number"
             step="0.01"
             min="0"
             value={sellPrice}
-            onChange={(e) => setSellPrice(e.target.value)}
-            className="w-full h-11 rounded-xl border border-border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            onChange={(e) => {
+              setSellPrice(e.target.value);
+              rhf.setValue("sellPrice", e.target.value, { shouldValidate: true });
+            }}
+            onBlur={() => { rhf.trigger("sellPrice"); }}
+            className={`w-full h-11 rounded-xl border bg-card px-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 ${rhf.formState.errors.sellPrice ? "border-danger focus:ring-danger/30" : rhf.formState.touchedFields.sellPrice && sellPrice ? "border-success focus:ring-success/30" : "border-border"}`}
             placeholder="যেমন: ১০, ২৫.৫০"
             required={isFieldRequired("sellPrice")}
           />
+          <FormError message={rhf.formState.errors.sellPrice?.message} />
           {priceSuggestions.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {priceSuggestions.map((p) => (
@@ -2410,10 +2466,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             </summary>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <label className="block text-sm font-semibold text-foreground">
+                <label htmlFor="product-sku" className="block text-sm font-semibold text-foreground">
                   SKU (ঐচ্ছিক)
                 </label>
                 <input
+                  id="product-sku"
                   name="sku"
                   type="text"
                   value={sku}
@@ -2448,10 +2505,11 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-semibold text-foreground">
+                <label htmlFor="product-barcode" className="block text-sm font-semibold text-foreground">
                   Barcode (ঐচ্ছিক)
                 </label>
                 <input
+                  id="product-barcode"
                   name="barcode"
                   type="text"
                   value={barcode}
@@ -2578,8 +2636,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-emerald-900">Generic নাম</label>
+                <label htmlFor="product-generic-name" className="text-xs font-semibold text-emerald-900">Generic নাম</label>
                 <input
+                  id="product-generic-name"
                   name="genericName"
                   type="text"
                   maxLength={160}
@@ -2589,8 +2648,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-emerald-900">Strength</label>
+                <label htmlFor="product-strength" className="text-xs font-semibold text-emerald-900">Strength</label>
                 <input
+                  id="product-strength"
                   name="strength"
                   type="text"
                   maxLength={80}
@@ -2640,8 +2700,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-sky-900">Brand</label>
+                <label htmlFor="product-brand" className="text-xs font-semibold text-sky-900">Brand</label>
                 <input
+                  id="product-brand"
                   name="brand"
                   type="text"
                   maxLength={120}
@@ -2652,8 +2713,9 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-sky-900">Model / Series</label>
+                <label htmlFor="product-model-name" className="text-xs font-semibold text-sky-900">Model / Series</label>
                 <input
+                  id="product-model-name"
                   name="modelName"
                   type="text"
                   maxLength={120}
@@ -3127,7 +3189,8 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
         <div className="flex flex-col gap-3 sm:flex-row">
           <button
             type="submit"
-            className="flex-1 h-14 sm:h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            disabled={rhf.formState.isSubmitting || !rhf.formState.isValid}
+            className="flex-1 h-14 sm:h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50 disabled:pointer-events-none"
           >
             ✓ পণ্য আপডেট করুন
           </button>

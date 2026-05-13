@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { LayoutGrid, List } from "lucide-react";
+import { AlertTriangle, CheckCircle2, LayoutGrid, List, XCircle } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { getStockToneClasses } from "@/lib/stock-level";
 import ConfirmDialog from "@/components/confirm-dialog";
@@ -586,6 +586,13 @@ function areSlotIdsEqual(
   return true;
 }
 
+function StockBadge({ tracksStock, stock }: { tracksStock: boolean; stock: number }) {
+  if (!tracksStock) return <span>N/A</span>;
+  if (stock <= 0) return <><XCircle className="h-3 w-3 shrink-0" />স্টক নেই</>;
+  if (stock <= 5) return <><AlertTriangle className="h-3 w-3 shrink-0" />{`কম · ${stock.toFixed(0)}`}</>;
+  return <><CheckCircle2 className="h-3 w-3 shrink-0" />{stock.toFixed(0)}</>;
+}
+
 const ProductButton = memo(function ProductButton({
   product,
   onAdd,
@@ -627,9 +634,9 @@ const ProductButton = memo(function ProductButton({
           {product.name}
         </h3>
         <span
-          className={`inline-flex items-center justify-center px-2.5 py-1 min-w-[44px] rounded-full text-[11px] font-semibold shadow-sm ${stockStyle}`}
+          className={`inline-flex items-center gap-1 px-2.5 py-1 min-w-[44px] rounded-full text-[11px] font-semibold shadow-sm ${stockStyle}`}
         >
-          {tracksStock ? displayStock.toFixed(0) : "N/A"}
+          <StockBadge tracksStock={tracksStock} stock={displayStock} />
         </span>
         {isRecentlyAdded && (
           <span className="absolute -top-1 -right-1 bg-success text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
@@ -2827,9 +2834,9 @@ const ProductListButton = memo(function ProductListButton({
           ) : null}
         </div>
         <span
-          className={`inline-flex h-6 items-center justify-center rounded-full px-2 text-[11px] font-semibold shadow-sm ${stockStyle}`}
+          className={`inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-semibold shadow-sm ${stockStyle}`}
         >
-          {tracksStock ? displayStock.toFixed(0) : "N/A"}
+          <StockBadge tracksStock={tracksStock} stock={displayStock} />
         </span>
         <p className="shrink-0 text-sm font-bold text-foreground">
           <span className="text-muted-foreground">৳</span> {product.sellPrice}

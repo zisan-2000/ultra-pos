@@ -21,6 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { FormError } from "@/components/ui/form-error";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { db, type LocalProduct } from "@/lib/dexie/db";
@@ -55,6 +57,9 @@ import {
   type VoiceSession,
 } from "@/lib/voice-recognition";
 import { DEFAULT_BUSINESS_TYPE, getBusinessAssist } from "@/lib/business-types";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { productFormSchema, type ProductFormValues } from "@/lib/validators/product";
 
 type Props = {
   shop: { id: string; name: string; businessType?: string | null };
@@ -276,6 +281,11 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   const fallbackName = businessAssist?.fallbackName || "";
   const [name, setName] = useState(fallbackName);
   const [sellPrice, setSellPrice] = useState("");
+  const rhf = useForm<ProductFormValues>({
+    resolver: zodResolver(productFormSchema),
+    defaultValues: { name: fallbackName, sellPrice: "", buyPrice: "", stockQty: "", reorderPoint: "", warrantyDaysValue: "", sku: "", barcode: "" },
+    mode: "onBlur",
+  });
   const [sizeValue, setSizeValue] = useState("");
   const [brandValue, setBrandValue] = useState("");
   const [modelNameValue, setModelNameValue] = useState("");
@@ -336,6 +346,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
         const result = await suggestProductSku(shop.id, trimmedName);
         if (result?.sku) {
           setSku(result.sku);
+          rhf.setValue("sku", result.sku, { shouldValidate: false });
         }
       } catch {
         // SKU suggestion failure should not block product form usage.
@@ -355,6 +366,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       const result = await generateProductBarcode(shop.id, trimmedName);
       if (result?.barcode) {
         setBarcode(result.barcode);
+        rhf.setValue("barcode", result.barcode, { shouldValidate: false });
       }
     } catch {
       // Barcode generation failure should not block product form usage.
@@ -830,8 +842,10 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
 
     if (isFieldVisible("name")) {
       setName(finalName);
+      rhf.setValue("name", finalName, { shouldValidate: true });
     } else if (!name) {
       setName(fallbackName || finalName);
+      rhf.setValue("name", fallbackName || finalName, { shouldValidate: true });
     }
 
     if (parsed.price) {
@@ -856,9 +870,11 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   const applyCatalogItem = useCallback((item: CatalogSearchItem) => {
     setSelectedCatalogItem(item);
     setName(item.name);
+    rhf.setValue("name", item.name, { shouldValidate: true });
 
     if (item.latestPrice && Number(item.latestPrice) > 0) {
       setSellPrice(item.latestPrice);
+      rhf.setValue("sellPrice", item.latestPrice, { shouldValidate: true });
     }
 
     if (item.defaultBaseUnit) {
@@ -887,6 +903,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       "";
     if (primaryBarcode) {
       setBarcode(normalizeCodeInput(primaryBarcode));
+      rhf.setValue("barcode", normalizeCodeInput(primaryBarcode), { shouldValidate: false });
     }
     if (isMobileAccessories && item.brand) {
       setBrandValue(item.brand);
@@ -1503,6 +1520,8 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
 
   async function handleSubmit(e: any) {
     e.preventDefault();
+    const isValid = await rhf.trigger();
+    if (!isValid) return;
     setSubmitted(true);
     const form = new FormData(e.target);
 
@@ -1727,6 +1746,14 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
   }
   return (
     <div className="max-w-2xl mx-auto space-y-4">
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "পণ্য তালিকা", href: `/dashboard/products?shopId=${shop.id}` },
+          { label: "নতুন পণ্য" },
+        ]}
+        className="mb-2"
+      />
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgba(15,23,42,0.08)] animate-fade-in">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-card to-card" />
         <div className="pointer-events-none absolute -top-16 right-0 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
@@ -1931,17 +1958,22 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
           {isFieldVisible("name") && (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <label className="block text-base font-medium text-foreground">
+                <label htmlFor="product-name" className="block text-base font-medium text-foreground">
                   পণ্যের নাম *
                 </label>
                 <span className="text-xs text-muted-foreground">ভয়েস/সাজেশন</span>
               </div>
               <div className="relative">
                 <input
+                  id="product-name"
                   name="name"
                   value={name}
-                  onChange={(e) => setNameWithSmartDefaults(e.target.value)}
-                  className="w-full h-12 border border-border rounded-xl px-4 pr-16 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  onChange={(e) => {
+                    setNameWithSmartDefaults(e.target.value);
+                    rhf.setValue("name", e.target.value, { shouldValidate: true });
+                  }}
+                  onBlur={() => { rhf.trigger("name"); }}
+                  className={`w-full h-12 border rounded-xl px-4 pr-16 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 ${rhf.formState.errors.name ? "border-danger focus:ring-danger/30" : rhf.formState.touchedFields.name && name.trim() ? "border-success focus:ring-success/30" : "border-border"}`}
                   placeholder="যেমন: চা, ডিম, বিস্কুট..."
                   required={isFieldRequired("name")}
                   autoComplete="off"
@@ -1960,6 +1992,7 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
                   {listening ? "🔴" : "🎤"}
                 </button>
               </div>
+              <FormError message={rhf.formState.errors.name?.message} />
               <p className="text-xs text-muted-foreground">
                 {listening
                   ? "শুনছি... নাম ও দাম বলুন"
@@ -1988,20 +2021,27 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
 
           {/* Sell Price */}
           <div className="space-y-2">
-            <label className="block text-base font-medium text-foreground">
+            <label htmlFor="product-sell-price" className="block text-base font-medium text-foreground">
               বিক্রয় মূল্য (৳) *
             </label>
             <input
+              id="product-sell-price"
               name="sellPrice"
               type="number"
               step="0.01"
               min="0"
               value={sellPrice}
-              onChange={(e) => setSellPrice(e.target.value)}
-              className="w-full h-12 border border-border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              onChange={(e) => {
+                setSellPrice(e.target.value);
+                rhf.setValue("sellPrice", e.target.value, { shouldValidate: true });
+              }}
+                  onBlur={() => { rhf.trigger("sellPrice"); }}
+
+              className={`w-full h-12 border rounded-xl px-4 text-base bg-card shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 ${rhf.formState.errors.sellPrice ? "border-danger focus:ring-danger/30" : rhf.formState.touchedFields.sellPrice && sellPrice ? "border-success focus:ring-success/30" : "border-border"}`}
               placeholder="যেমন: ১০, ২৫.৫০"
               required={isFieldRequired("sellPrice")}
             />
+            <FormError message={rhf.formState.errors.sellPrice?.message} />
             {priceSuggestions.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {priceSuggestions.map((p) => (
@@ -2446,10 +2486,11 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
               </summary>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-foreground">
+                  <label htmlFor="product-sku" className="block text-sm font-semibold text-foreground">
                     SKU (ঐচ্ছিক)
                   </label>
                   <input
+                    id="product-sku"
                     name="sku"
                     type="text"
                     value={sku}
@@ -2484,10 +2525,11 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-foreground">
+                  <label htmlFor="product-barcode" className="block text-sm font-semibold text-foreground">
                     Barcode (ঐচ্ছিক)
                   </label>
                   <input
+                    id="product-barcode"
                     name="barcode"
                     type="text"
                     value={barcode}
@@ -2631,8 +2673,9 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-emerald-900">Generic নাম</label>
+                  <label htmlFor="product-generic-name" className="text-xs font-semibold text-emerald-900">Generic নাম</label>
                   <input
+                    id="product-generic-name"
                     name="genericName"
                     type="text"
                     maxLength={160}
@@ -2641,8 +2684,9 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-emerald-900">Strength</label>
+                  <label htmlFor="product-strength" className="text-xs font-semibold text-emerald-900">Strength</label>
                   <input
+                    id="product-strength"
                     name="strength"
                     type="text"
                     maxLength={80}
@@ -2689,8 +2733,9 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-sky-900">Brand</label>
+                  <label htmlFor="product-brand" className="text-xs font-semibold text-sky-900">Brand</label>
                   <input
+                    id="product-brand"
                     name="brand"
                     type="text"
                     maxLength={120}
@@ -2701,8 +2746,9 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-sky-900">Model / Series</label>
+                  <label htmlFor="product-model-name" className="text-xs font-semibold text-sky-900">Model / Series</label>
                   <input
+                    id="product-model-name"
                     name="modelName"
                     type="text"
                     maxLength={120}
@@ -3247,7 +3293,8 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="submit"
-              className="flex-1 h-14 sm:h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              disabled={rhf.formState.isSubmitting || !rhf.formState.isValid}
+              className="flex-1 h-14 sm:h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_12px_22px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50 disabled:pointer-events-none"
             >
               + দ্রুত পণ্য যুক্ত করুন
             </button>

@@ -20,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import LogoutButton from "@/components/LogoutButton";
 import StopImpersonationButton from "@/components/impersonation/StopImpersonationButton";
 import { ThemeToggle } from "@/components/theme-toggle";
 import OwnerSummaryVoice from "@/components/voice/OwnerSummaryVoice";
@@ -29,23 +28,17 @@ import { useCurrentShop } from "@/hooks/use-current-shop";
 import { resolveInventoryModuleEnabled } from "@/lib/accounting/cogs-types";
 import { isOfflineCapableRoute } from "@/lib/offline/offline-capable-routes";
 import { getOfflineRouteFallbackHref } from "@/lib/offline/route-readiness";
-import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import {
   BarChart3,
   BookOpen,
-  ChevronDown,
   CreditCard,
   HandCoins,
   LayoutDashboard,
-  LayoutGrid,
   LifeBuoy,
-  List,
-  LogOut,
   Menu,
   NotebookText,
   Package,
   PackagePlus,
-  Plus,
   Receipt,
   Settings,
   ShieldCheck,
@@ -68,6 +61,10 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SupportHeaderButton } from "@/components/SupportHeaderButton";
+import { useSidebarCollapsed } from "@/app/dashboard/hooks/use-sidebar-collapsed";
+import { BottomMobileNav } from "@/app/dashboard/components/chrome/BottomMobileNav";
+import { DashboardFab } from "@/app/dashboard/components/chrome/DashboardFab";
+import { SidebarUserMenu } from "@/app/dashboard/components/chrome/SidebarUserMenu";
 
 type Shop = {
   id: string;
@@ -212,9 +209,7 @@ export function DashboardShell({
   const router = useRouter();
   const { shopId, setShop } = useCurrentShop();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarNavLayout, setSidebarNavLayout] = useState<"grid" | "list">("grid");
-  const [mounted, setMounted] = useState(false);
+  const { sidebarCollapsed, mounted, toggleSidebarCollapsed } = useSidebarCollapsed();
   const [isNavigating, startTransition] = useTransition();
   const [showNavSkeleton, setShowNavSkeleton] = useState(false);
   const [rbacUser] = useState<RbacUser>(initialUser);
@@ -295,10 +290,6 @@ export function DashboardShell({
   }, [safeShopId]);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
     if (!isNavigating) {
       setShowNavSkeleton(false);
       return;
@@ -318,57 +309,6 @@ export function DashboardShell({
   useEffect(() => {
     if (!drawerOpen) setUserMenuOpen(false);
   }, [drawerOpen]);
-
-  useEffect(() => {
-    if (!userMenuOpen) return;
-
-    const onPointerDown = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as Node | null;
-      if (!target) return;
-      if (!userMenuRef.current) return;
-      if (!userMenuRef.current.contains(target)) setUserMenuOpen(false);
-    };
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setUserMenuOpen(false);
-    };
-
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("touchstart", onPointerDown, { passive: true });
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("touchstart", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [userMenuOpen]);
-
-  useEffect(() => {
-    if (!mounted) return;
-    try {
-      const raw = safeLocalStorageGet("dashboard.sidebarCollapsed");
-      if (raw === "1") setSidebarCollapsed(true);
-      if (raw === "0") setSidebarCollapsed(false);
-      const storedLayout = safeLocalStorageGet("dashboard.sidebarNavLayout");
-      if (storedLayout === "list" || storedLayout === "grid") {
-        setSidebarNavLayout(storedLayout);
-      }
-    } catch {
-      // ignore
-    }
-  }, [mounted]);
-
-  const toggleSidebarCollapsed = () => {
-    setSidebarCollapsed((prev) => {
-      const next = !prev;
-      try {
-        safeLocalStorageSet("dashboard.sidebarCollapsed", next ? "1" : "0");
-      } catch {
-        // ignore
-      }
-      return next;
-    });
-  };
 
   const isSuperAdmin = rbacUser?.roles?.includes("super_admin") ?? false;
   const isAdmin = rbacUser?.roles?.includes("admin") ?? false;
@@ -445,14 +385,6 @@ export function DashboardShell({
     });
   };
 
-  const setNavLayout = (next: "grid" | "list") => {
-    setSidebarNavLayout(next);
-    try {
-      safeLocalStorageSet("dashboard.sidebarNavLayout", next);
-    } catch {
-      // ignore
-    }
-  };
 
 
 
@@ -490,28 +422,16 @@ export function DashboardShell({
     [hasInventory, currentQueueTokenEnabled]
   );
 
-  const usingGridNav = !sidebarCollapsed && sidebarNavLayout === "grid";
   const navGroupClass = sidebarCollapsed
     ? "flex flex-col gap-1"
-    : usingGridNav
-      ? "grid grid-cols-2 gap-2"
-      : "flex flex-col gap-1.5";
+    : "flex flex-col gap-1.5";
 
-  const navItemClass = (active: boolean) => {
-    if (sidebarCollapsed || sidebarNavLayout === "list") {
-      return `group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
-        active
-          ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
-          : "text-sidebar-foreground hover:bg-sidebar-accent"
-      } ${sidebarCollapsed ? "lg:justify-center" : ""}`;
-    }
-
-    return `group relative flex flex-col items-start gap-2 rounded-2xl border border-sidebar-border/60 bg-gradient-to-br from-sidebar/80 via-sidebar to-sidebar-accent/40 px-3.5 py-3.5 text-[13px] font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar shadow-[0_8px_18px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_22px_rgba(15,23,42,0.1)] card-lift ${
+  const navItemClass = (active: boolean) =>
+    `group relative flex items-center gap-3 rounded-xl border-l-4 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
       active
-        ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring shadow-[0_12px_26px_rgba(15,23,42,0.16)]"
-        : "text-sidebar-foreground hover:bg-sidebar-accent/80 hover:border-sidebar-border"
-    }`;
-  };
+        ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-ring"
+        : "text-sidebar-foreground hover:bg-sidebar-accent"
+    } ${sidebarCollapsed ? "lg:justify-center" : ""}`;
 
   const navIconTone: Record<
     string,
@@ -538,17 +458,10 @@ export function DashboardShell({
       ring: "ring-sidebar-border",
       icon: "text-sidebar-accent-foreground",
     };
-    if (sidebarCollapsed || sidebarNavLayout === "list") {
-      return `inline-flex h-9 w-9 items-center justify-center rounded-lg ${
-        active
-          ? "bg-sidebar-primary/20"
-          : `${tone.accent} group-hover:bg-sidebar-accent`
-      }`;
-    }
-    return `inline-flex h-10 w-10 items-center justify-center rounded-full ring-1 ${
+    return `inline-flex h-9 w-9 items-center justify-center rounded-lg ${
       active
-        ? "bg-sidebar-primary/15 ring-sidebar-ring"
-        : `${tone.accent} ${tone.ring} group-hover:bg-sidebar-accent`
+        ? "bg-sidebar-primary/20"
+        : `${tone.accent} group-hover:bg-sidebar-accent`
     }`;
   };
 
@@ -560,9 +473,7 @@ export function DashboardShell({
 
   const navLabelClass = sidebarCollapsed
     ? "lg:hidden truncate"
-    : sidebarNavLayout === "list"
-      ? "truncate text-sm font-medium leading-snug"
-      : "truncate text-[13px] leading-snug";
+    : "truncate text-sm font-medium leading-snug";
 
   const handleShopChange = (id: string) => {
     if (!id || id === safeShopId) return;
@@ -714,49 +625,13 @@ export function DashboardShell({
             </div>
 
             <nav className="flex-1 min-h-0 px-2 py-3 overflow-y-auto">
-              {mounted && !sidebarCollapsed ? (
-                <div className="mb-2 flex items-center justify-between px-2">
-                  <span className="text-[11px] font-semibold text-sidebar-accent-foreground uppercase tracking-wider">
-                    প্রধান মেনু
-                  </span>
-                  <div className="inline-flex items-center rounded-lg border border-sidebar-border bg-sidebar-accent/60 p-0.5 gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setNavLayout("grid")}
-                      aria-pressed={sidebarNavLayout === "grid"}
-                      aria-label="Grid view"
-                      title="Grid"
-                      className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-                        sidebarNavLayout === "grid"
-                          ? "bg-sidebar text-sidebar-foreground shadow-sm"
-                          : "text-sidebar-accent-foreground hover:text-sidebar-foreground"
-                      }`}
-                    >
-                      <LayoutGrid className="h-3 w-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNavLayout("list")}
-                      aria-pressed={sidebarNavLayout === "list"}
-                      aria-label="List view"
-                      title="List"
-                      className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-                        sidebarNavLayout === "list"
-                          ? "bg-sidebar text-sidebar-foreground shadow-sm"
-                          : "text-sidebar-accent-foreground hover:text-sidebar-foreground"
-                      }`}
-                    >
-                      <List className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              ) : !sidebarCollapsed ? (
+              {!sidebarCollapsed && (
                 <div className="mb-2 px-2">
                   <span className="text-[11px] font-semibold text-sidebar-accent-foreground uppercase tracking-wider">
                     প্রধান মেনু
                   </span>
                 </div>
-              ) : null}
+              )}
 
               <div className={navGroupClass}>
                 {visibleNavItems
@@ -777,6 +652,7 @@ export function DashboardShell({
                         key={item.href}
                         href={scopedHref}
                         prefetch={false}
+                        aria-current={active ? "page" : undefined}
                         onClick={(event) => {
                           // Prevent multi-clicks on rapid consecutive clicks
                           if (event.detail > 1) return;
@@ -821,6 +697,7 @@ export function DashboardShell({
                       <Link
                         href={buildShopHref(userCreationLogHref)}
                         prefetch={false}
+                        aria-current={isActive(userCreationLogHref) ? "page" : undefined}
                         onClick={(event) => {
                           setDrawerOpen(false);
                           handleNavClick(event, userCreationLogHref);
@@ -857,6 +734,7 @@ export function DashboardShell({
                       <Link
                         href={buildShopHref(featureAccessHref)}
                         prefetch={false}
+                        aria-current={isActive(featureAccessHref) ? "page" : undefined}
                         onClick={(event) => {
                           setDrawerOpen(false);
                           handleNavClick(event, featureAccessHref);
@@ -893,6 +771,7 @@ export function DashboardShell({
                       <Link
                         href={buildShopHref(supportAdminHref)}
                         prefetch={false}
+                        aria-current={isActive(supportAdminHref) ? "page" : undefined}
                         onClick={(event) => {
                           setDrawerOpen(false);
                           handleNavClick(event, supportAdminHref);
@@ -929,6 +808,7 @@ export function DashboardShell({
                       <Link
                         href={buildShopHref("/dashboard/admin/rbac")}
                         prefetch={false}
+                        aria-current={isActive("/dashboard/admin/rbac") ? "page" : undefined}
                         onClick={(event) => {
                           setDrawerOpen(false);
                           handleNavClick(event, "/dashboard/admin/rbac");
@@ -980,6 +860,7 @@ export function DashboardShell({
                     <Link
                       href={buildShopHref("/dashboard/admin/business-types")}
                       prefetch={false}
+                      aria-current={isActive("/dashboard/admin/business-types") ? "page" : undefined}
                       onClick={(event) => {
                         setDrawerOpen(false);
                         handleNavClick(
@@ -1021,6 +902,7 @@ export function DashboardShell({
                         "/dashboard/admin/business-product-library"
                       )}
                       prefetch={false}
+                      aria-current={isActive("/dashboard/admin/business-product-library") ? "page" : undefined}
                       onClick={(event) => {
                         setDrawerOpen(false);
                         handleNavClick(
@@ -1064,6 +946,7 @@ export function DashboardShell({
                     <Link
                       href={buildShopHref("/dashboard/admin/catalog")}
                       prefetch={false}
+                      aria-current={isActive("/dashboard/admin/catalog") ? "page" : undefined}
                       onClick={(event) => {
                         setDrawerOpen(false);
                         handleNavClick(event, "/dashboard/admin/catalog");
@@ -1098,6 +981,7 @@ export function DashboardShell({
                     <Link
                       href={buildShopHref("/dashboard/admin/billing")}
                       prefetch={false}
+                      aria-current={isActive("/dashboard/admin/billing") ? "page" : undefined}
                       onClick={(event) => {
                         setDrawerOpen(false);
                         handleNavClick(event, "/dashboard/admin/billing");
@@ -1134,6 +1018,7 @@ export function DashboardShell({
                     <Link
                       href={buildShopHref(systemSettingsHref)}
                       prefetch={false}
+                      aria-current={pathname === systemSettingsHref ? "page" : undefined}
                       onClick={(event) => {
                         setDrawerOpen(false);
                         handleNavClick(event, systemSettingsHref);
@@ -1168,109 +1053,22 @@ export function DashboardShell({
             </nav>
 
             <div className={`border-t border-sidebar-border px-3 py-3 ${sidebarCollapsed ? "lg:px-2" : ""}`}>
-              <div ref={userMenuRef} className="relative">
-
-                {/* User trigger button */}
-                <button
-                  type="button"
-                  onClick={() => setUserMenuOpen((p) => !p)}
-                  className={`w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar ${
-                    sidebarCollapsed ? "lg:justify-center" : ""
-                  }`}
-                  aria-label="Open user menu"
-                  aria-expanded={userMenuOpen}
-                >
-                  {/* Avatar */}
-                  <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-xs font-bold shadow-sm">
-                    {userInitials}
-                    <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-success border-2 border-sidebar" />
-                  </span>
-
-                  {/* Name + role */}
-                  <span className={sidebarCollapsed ? "hidden" : "min-w-0 flex-1"}>
-                    <span className="block truncate text-[13px] font-semibold text-sidebar-foreground leading-tight">
-                      {userDisplayName}
-                    </span>
-                    {primaryRoleLabel ? (
-                      <span className="block truncate text-[11px] text-sidebar-accent-foreground leading-tight mt-0.5">
-                        {primaryRoleLabel}
-                      </span>
-                    ) : userEmail ? (
-                      <span className="block truncate text-[11px] text-sidebar-accent-foreground leading-tight mt-0.5">
-                        {userEmail}
-                      </span>
-                    ) : null}
-                  </span>
-
-                  {/* Chevron */}
-                  <ChevronDown
-                    className={`hidden ${sidebarCollapsed ? "" : "lg:block"} h-3.5 w-3.5 shrink-0 text-sidebar-accent-foreground transition-transform ${
-                      userMenuOpen ? "rotate-180" : "rotate-0"
-                    }`}
-                  />
-                </button>
-
-                {/* Popup menu */}
-                {userMenuOpen && (
-                  <div
-                    className={`absolute bottom-[calc(100%+8px)] z-50 overflow-hidden rounded-2xl border border-border bg-card shadow-[0_20px_48px_rgba(15,23,42,0.18)] ${
-                      sidebarCollapsed ? "left-0 w-64" : "left-0 right-0"
-                    }`}
-                  >
-                    {/* User info header */}
-                    <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
-                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-sm font-bold">
-                        {userInitials}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-foreground">{userDisplayName}</p>
-                        {userEmail ? (
-                          <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
-                        ) : null}
-                      </div>
-                      {primaryRoleLabel ? (
-                        <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground shrink-0">
-                          {primaryRoleLabel}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div className="p-1.5 space-y-0.5">
-                      <Link
-                        href={buildShopHref(profileHref)}
-                        onClick={(event) => {
-                          setUserMenuOpen(false);
-                          setDrawerOpen(false);
-                          handleNavClick(event, profileHref);
-                        }}
-                        prefetch={false}
-                        onMouseEnter={() => handleNavPrefetch(profileHref)}
-                        onTouchStart={() => handleNavPrefetch(profileHref)}
-                        className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                      >
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <span>প্রোফাইল</span>
-                      </Link>
-
-                      {rbacUser?.isImpersonating ? (
-                        <div className="mx-1 my-1 rounded-xl border border-warning/30 bg-warning-soft/50 px-3 py-2.5">
-                          <p className="text-xs font-semibold text-warning">ইমপার্সোনেশন চালু</p>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground">
-                            অন্য user-এর permission view করছেন।
-                          </p>
-                          <div className="mt-2">
-                            <StopImpersonationButton compact />
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="border-t border-border/60 p-1.5">
-                      <LogoutButton variant="menu" />
-                    </div>
-                  </div>
-                )}
-              </div>
+              <SidebarUserMenu
+                userMenuOpen={userMenuOpen}
+                setUserMenuOpen={setUserMenuOpen}
+                userMenuRef={userMenuRef}
+                sidebarCollapsed={sidebarCollapsed}
+                userInitials={userInitials}
+                userDisplayName={userDisplayName}
+                userEmail={userEmail}
+                primaryRoleLabel={primaryRoleLabel}
+                rbacUser={rbacUser}
+                profileHref={profileHref}
+                buildShopHref={buildShopHref}
+                onNavClick={handleNavClick}
+                onNavPrefetch={handleNavPrefetch}
+                onCloseDrawer={() => setDrawerOpen(false)}
+              />
             </div>
           </div>
         </aside>
@@ -1462,7 +1260,7 @@ export function DashboardShell({
           </header>
 
           <main
-            className="relative flex-1 pb-28 lg:pb-10 overflow-y-auto print:pb-0 print:overflow-visible"
+            className="relative flex-1 overflow-y-auto main-content-pb"
             aria-busy={isNavigating}
           >
             {showNavSkeleton && (
@@ -1484,99 +1282,26 @@ export function DashboardShell({
       </div>
 
       {/* Bottom nav for mobile */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 lg:hidden px-3 pb-3 print:hidden">
-        <div
-          className={`relative grid ${bottomGridClass} rounded-t-2xl bg-card/90 backdrop-blur-sm border border-border shadow-[0_-4px_18px_rgba(15,23,42,0.12)] px-3 pt-4 pb-3`}
-        >
-          {mobileNavItems.map((item) => {
-            const targetHref =
-              item.href === "/dashboard" ? effectiveDashboardHref : item.href;
-            const scopedHref = buildShopHref(targetHref);
-            const Icon = item.Icon;
-            const isActiveItem = isActive(targetHref);
-            const tone = bottomNavTone[item.href] ?? {
-              icon: "bg-muted/40 text-muted-foreground",
-              iconActive: "bg-primary/15 text-primary",
-              itemActive: "text-primary bg-primary-soft",
-            };
-
-            return (
-              <Link
-                key={item.href}
-                href={scopedHref}
-                prefetch={false}
-                onClick={(event) => handleNavClick(event, targetHref)}
-                onMouseEnter={() => handleNavPrefetch(scopedHref)}
-                onTouchStart={() => handleNavPrefetch(scopedHref)}
-                aria-current={isActiveItem ? "page" : undefined}
-                className={`group flex flex-col items-center justify-center py-2 text-[11px] font-semibold gap-1 rounded-2xl transition-colors ${
-                  isActiveItem
-                    ? tone.itemActive
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <span
-                  className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl transition-transform group-active:scale-95 ${
-                    isActiveItem ? tone.iconActive : tone.icon
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                </span>
-                <span className="leading-none">{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
-
-      {/* ✅ Floating primary action: now self-explanatory (problem #3) */}
+      <BottomMobileNav
+        mobileNavItems={mobileNavItems}
+        bottomGridClass={bottomGridClass}
+        effectiveDashboardHref={effectiveDashboardHref}
+        bottomNavTone={bottomNavTone}
+        isActive={isActive}
+        onNavClick={handleNavClick}
+        onNavPrefetch={handleNavPrefetch}
+        buildShopHref={buildShopHref}
+      />
 
       {/* Smart Floating Action Button */}
-      {fabConfig && safeShopId && !drawerOpen ? (
-        <Link
-          href={`${fabConfig.href}?shopId=${safeShopId}`}
-          prefetch={false}
-          onClick={(event) =>
-            handleNavClick(event, `${fabConfig.href}?shopId=${safeShopId}`)
-          }
-          onMouseEnter={() =>
-            handleNavPrefetch(`${fabConfig.href}?shopId=${safeShopId}`)
-          }
-          onTouchStart={() =>
-            handleNavPrefetch(`${fabConfig.href}?shopId=${safeShopId}`)
-          }
-          aria-label={fabConfig.label}
-          title={fabConfig.label}
-          className={`
-      fixed bottom-[104px]
- left-1/2 -translate-x-1/2 z-40 lg:hidden
-      flex items-center justify-center
-      rounded-full
-      bg-[#0D9488] text-[#ECFEFF] hover:bg-[#0B877B]
-      shadow-[0_10px_24px_rgba(13,148,136,0.35)]
-      active:scale-[0.97]
-      print:hidden
-      transition-all duration-200
-      ${showFabLabel ? "px-5 py-3 gap-2" : "h-14 w-14"}
-    `}
-        >
-          {/* Icon */}
-          <span
-            className={`flex items-center justify-center rounded-full bg-[#ECFEFF]/20 ${
-              showFabLabel ? "h-8 w-8" : "h-10 w-10 bg-transparent"
-            }`}
-          >
-            <Plus className="h-5 w-5 stroke-[2.5]" />
-          </span>
-
-          {/* Label (Dashboard only) */}
-          {showFabLabel && (
-            <span className="text-sm font-semibold whitespace-nowrap">
-              {fabConfig.label}
-            </span>
-          )}
-        </Link>
-      ) : null}
+      <DashboardFab
+        fabConfig={fabConfig}
+        safeShopId={safeShopId}
+        drawerOpen={drawerOpen}
+        showFabLabel={showFabLabel}
+        onNavClick={handleNavClick}
+        onNavPrefetch={handleNavPrefetch}
+      />
     </div>
   );
 }

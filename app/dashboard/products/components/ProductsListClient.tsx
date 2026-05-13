@@ -47,6 +47,9 @@ import {
   mapVoiceErrorBangla,
 } from "@/lib/voice-recognition";
 import { matchesProductSearchQuery } from "@/lib/product-search";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Package } from "lucide-react";
 
 type Shop = { id: string; name: string };
 type ProductVariant = {
@@ -3283,32 +3286,48 @@ export default function ProductsListClient({
 
 
       {/* Products List - Scrolls normally */}
+      {isRefreshing ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-[90px] rounded-2xl" />
+          ))}
+        </div>
+      ) : null}
       <div
         className={
-          visibleProducts.length === 0
+          isRefreshing
+            ? "hidden"
+            : visibleProducts.length === 0
             ? "space-y-3"
             : "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         }
       >
         {visibleProducts.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-card/70 px-6 py-14 text-center shadow-sm">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-primary/15 bg-primary-soft/60 text-4xl shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-              📦
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              কোনো পণ্য পাওয়া যায়নি
-            </h3>
-            <p className="mx-auto max-w-md text-sm leading-6 text-muted-foreground">
-              {query || status !== "all"
-                ? "ফিল্টার পরিবর্তন করে আবার চেষ্টা করুন"
-                : "নতুন পণ্য যোগ করতে + বাটনে ক্লিক করুন"}
-            </p>
+          <div className="space-y-4">
+            <EmptyState
+              icon={<Package className="h-8 w-8" />}
+              title={
+                query || status !== "all"
+                  ? "কোনো ফলাফল পাওয়া যায়নি"
+                  : "এখনো কোনো পণ্য নেই"
+              }
+              description={
+                query || status !== "all"
+                  ? "ফিল্টার বা খোঁজার শব্দ পরিবর্তন করে আবার চেষ্টা করুন"
+                  : "প্রথম পণ্য যোগ করলে এখানে দেখাবে"
+              }
+              action={
+                !(query || status !== "all")
+                  ? { label: "নতুন পণ্য যোগ করুন", href: "/dashboard/products/new" }
+                  : undefined
+              }
+            />
             {canOfferCatalogFallback ? (
-              <div className="mx-auto mt-5 max-w-lg rounded-2xl border border-primary/20 bg-primary-soft/35 px-4 py-3 space-y-2">
+              <div className="mx-auto max-w-lg rounded-2xl border border-primary/20 bg-primary-soft/35 px-4 py-3 space-y-2">
                 <p className="text-xs leading-5 text-muted-foreground">
                   {queryLooksLikeCode
                     ? "এই বারকোড বা SKU দোকানে নেই। ক্যাটালগে খুঁজে import করা যেতে পারে।"
-                    : "এই খোঁজার local result নেই। ক্যাটালগের বিকল্প নাম বা বারকোড দিয়েও খুঁজে দেখতে পারেন।"}
+                    : "এই খোঁজার local result নেই। ক্যাটালগের বিকল্প নাম বা বারকোড দিয়েও খুঁজে দেখতে পারেন।"}
                 </p>
                 <button
                   type="button"

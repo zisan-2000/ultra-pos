@@ -8,6 +8,7 @@ import ServiceWorkerRegister from "@/components/service-worker-register";
 import PWAInstallPrompt from "@/components/pwa-install-prompt";
 import CssHealthGuard from "@/components/css-health-guard";
 import SonnerToaster from "@/components/sonner-toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -98,11 +99,13 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <QueryProvider>
-          <ServiceWorkerRegister />
-          <CssHealthGuard />
-          <PWAInstallPrompt />
-          <SonnerToaster />
-          {children}
+          <TooltipProvider delayDuration={300}>
+            <ServiceWorkerRegister />
+            <CssHealthGuard />
+            <PWAInstallPrompt />
+            <SonnerToaster />
+            {children}
+          </TooltipProvider>
         </QueryProvider>
       </body>
     </html>

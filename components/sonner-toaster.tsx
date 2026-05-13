@@ -31,7 +31,7 @@ export default function SonnerToaster() {
 
   return (
     <Toaster
-      position="top-center"
+      position="top-right"
       richColors
       closeButton
       duration={2600}

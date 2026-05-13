@@ -16,6 +16,9 @@ import { useSmartPolling } from "@/lib/polling/use-smart-polling";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { getDhakaDateString } from "@/lib/reporting-range";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ShoppingBag, WifiOff, MoreVertical, FileText, Undo2, Pencil, Ban } from "lucide-react";
 
 type SaleSummary = {
   id: string;
@@ -112,6 +115,7 @@ export default function SalesListClient({
   const [items, setItems] = useState<SaleSummary[]>(sales);
   const [manualRefreshing, setManualRefreshing] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const serverSnapshotRef = useRef(sales);
   const refreshInFlightRef = useRef(false);
 
@@ -341,6 +345,14 @@ export default function SalesListClient({
     return groups;
   }, [renderedItems]);
 
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const handler = () => setOpenMenu(null);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenu]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -370,20 +382,18 @@ export default function SalesListClient({
         </div>
       </div>
 
-      {renderedItems.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/70 bg-card/60 px-6 py-12 text-center shadow-sm">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-primary/15 bg-primary-soft/60 text-3xl shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-            🧾
-          </div>
-          <p className="text-lg font-semibold text-foreground">
-            {online ? "এই তারিখে কোনো বিক্রি নেই" : "অফলাইনে বিক্রির তালিকা দেখছেন"}
-          </p>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-            {online
-              ? "তারিখ বা ফিল্টার বদলে আবার দেখুন।"
-              : "সর্বশেষ সিঙ্ককৃত বিক্রিগুলো পাওয়া গেলে এখানে দেখাবে।"}
-          </p>
+      {manualRefreshing ? (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-[72px] rounded-2xl" />
+          ))}
         </div>
+      ) : renderedItems.length === 0 ? (
+        <EmptyState
+          icon={online ? <ShoppingBag className="h-8 w-8" /> : <WifiOff className="h-8 w-8" />}
+          title={online ? "এই তারিখে কোনো বিক্রি নেই" : "অফলাইনে বিক্রির তালিকা দেখছেন"}
+          description={online ? "তারিখ বা ফিল্টার বদলে আবার দেখুন" : "সর্বশেষ সিঙ্ককৃত বিক্রিগুলো পাওয়া গেলে এখানে দেখাবে।"}
+        />
       ) : (
         Object.keys(grouped)
           .sort((a, b) => (a > b ? -1 : 1))
@@ -528,11 +538,46 @@ export default function SalesListClient({
                       {statusText}
                     </span>
                   </div>
-                  {timeStr ? (
-                    <span className="text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
+                  <div className="flex items-center gap-2 shrink-0">
+                    {timeStr ? (
+                      <span className="text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
                       ⏱ {timeStr}
-                    </span>
-                  ) : null}
+                      </span>
+                    ) : null}
+                    <div className="relative">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === s.id ? null : s.id); }} className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors">
+                        <MoreVertical className="h-4 w-4" />
+                      </button>
+                      {openMenu === s.id && (
+                        <div className="absolute right-0 top-full mt-1 z-50 min-w-[190px] rounded-xl border border-border bg-card shadow-lg py-1" onMouseDown={(e) => e.stopPropagation()}>
+                          {online && s.invoiceNo ? (
+                            <a href={`/dashboard/sales/${s.id}/invoice`} className="flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-muted transition-colors" onClick={() => setOpenMenu(null)}>
+                              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                              ইনভয়েস দেখুন
+                            </a>
+                          ) : null}
+                          {online && !isVoided && canReturnSale ? (
+                            <a href={`/dashboard/sales/${s.id}/return`} className="flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-muted transition-colors" onClick={() => setOpenMenu(null)}>
+                              <Undo2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                              রিটার্ন / এক্সচেঞ্জ
+                            </a>
+                          ) : null}
+                          {online && isDueSale && !isVoided && canEditDueSale ? (
+                            <a href={`/dashboard/sales/${s.id}/edit`} className="flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-muted transition-colors" onClick={() => setOpenMenu(null)}>
+                              <Pencil className="h-4 w-4 text-muted-foreground shrink-0" />
+                              বাকির বিল সম্পাদনা
+                            </a>
+                          ) : null}
+                          {online && canVoidSale ? (
+                            <button type="button" onClick={() => { setOpenMenu(null); (document.getElementById(formId) as HTMLFormElement | null)?.requestSubmit(); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-danger hover:bg-danger-soft transition-colors">
+                              <Ban className="h-4 w-4 shrink-0" />
+                              বিক্রি বাতিল করুন
+                            </button>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <p className="text-[12px] text-muted-foreground flex flex-wrap items-center gap-2 sm:text-sm">

@@ -56,7 +56,7 @@ export default async function OwnerDashboardPage({
     // If permission missing, silently skip payables
   }
 
-  const [summary, supportContact, subscription, latestInvoice, actionableInvoice, needsCogs] =
+  const [summary, supportContact, subscription, latestInvoice, actionableInvoice, needsCogs, productCount, salesCount] =
     await Promise.all([
       getTodaySummaryForShop(selectedShopId, user),
       getSupportContact(),
@@ -120,6 +120,8 @@ export default async function OwnerDashboardPage({
           })
         : Promise.resolve(null),
       shopNeedsCogs(selectedShopId),
+      prisma.product.count({ where: { shopId: selectedShopId, isActive: true } }),
+      prisma.sale.count({ where: { shopId: selectedShopId } }),
     ]);
 
   const paymentRequest = actionableInvoice?.paymentRequests?.[0] ?? null;
@@ -154,6 +156,8 @@ export default async function OwnerDashboardPage({
         summary,
         needsCogs,
         payables,
+        productCount,
+        salesCount,
         ...(canViewBilling
           ? {
               billing: {

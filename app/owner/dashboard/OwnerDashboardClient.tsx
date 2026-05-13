@@ -25,6 +25,9 @@ import {
 } from "@/lib/utils/bangla-money";
 import OfflineAwareLink from "@/components/offline-aware-link";
 import RefreshIconButton from "@/components/ui/refresh-icon-button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Summary = {
   sales?: { total?: number; count?: number } | number;
@@ -61,6 +64,8 @@ type OwnerDashboardData = {
   payables?: { totalDue: number; dueCount: number; supplierCount: number };
   billing?: BillingInfo;
   supportContact?: SupportContact;
+  productCount?: number;
+  salesCount?: number;
 };
 
 type Props = {
@@ -218,6 +223,17 @@ export default function OwnerDashboardClient({
     setTimeout(() => setManualRefreshing(false), 1800);
   }, [triggerRefresh]);
 
+  const [checklistDismissed, setChecklistDismissed] = useState(() =>
+    typeof window !== "undefined"
+      ? safeLocalStorageGet(`onboarding-dismissed:${userId}`) === "1"
+      : false
+  );
+
+  const dismissChecklist = useCallback(() => {
+    safeLocalStorageSet(`onboarding-dismissed:${userId}`, "1");
+    setChecklistDismissed(true);
+  }, [userId]);
+
   const salesTotal = Number(getSummaryTotal(data.summary?.sales));
   const expenseTotal = Number(getSummaryTotal(data.summary?.expenses));
   const cogsTotal =
@@ -231,6 +247,27 @@ export default function OwnerDashboardClient({
   const cashBalance = Number(
     data.summary?.cash?.balance ?? data.summary?.balance ?? 0
   );
+  const hasProducts = (data.productCount ?? 0) > 0;
+  const hasSales = (data.salesCount ?? 0) > 0;
+  const setupItems = [
+    {
+      id: "product",
+      label: "প্রথম পণ্য যোগ করুন",
+      description: "যা বিক্রি করবেন তা তালিকায় যোগ করুন",
+      href: "/dashboard/products/new",
+      completed: hasProducts,
+    },
+    {
+      id: "sale",
+      label: "প্রথম বিক্রি করুন",
+      description: "POS ব্যবহার করে বিক্রি শুরু করুন",
+      href: "/dashboard/sales/new",
+      completed: hasSales,
+    },
+  ];
+  const setupComplete = setupItems.every((i) => i.completed);
+  const showSetupChecklist = !setupComplete && !checklistDismissed;
+
   const billing = data.billing ?? defaultBilling;
   const supportContact = data.supportContact ?? defaultSupport;
   const showBillingWarning =
@@ -279,6 +316,64 @@ export default function OwnerDashboardClient({
           আজকের সারসংক্ষেপ
         </h1>
       </div>
+
+      {showSetupChecklist && (
+        <div className="rounded-2xl border border-primary/20 bg-card p-4 shadow-[0_8px_20px_rgba(15,23,42,0.06)]">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-sm font-bold text-foreground">শুরু করুন</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {setupItems.filter((i) => i.completed).length}/{setupItems.length} সম্পন্ন
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissChecklist}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-lg hover:bg-muted"
+            >
+              এড়িয়ে যান
+            </button>
+          </div>
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-3">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-500"
+              style={{
+                width: `${(setupItems.filter((i) => i.completed).length / setupItems.length) * 100}%`,
+              }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            {setupItems.map((item) => (
+              <a
+                key={item.id}
+                href={item.completed ? "#" : item.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl p-2.5 transition-colors",
+                  item.completed
+                    ? "opacity-60 cursor-default"
+                    : "hover:bg-muted cursor-pointer"
+                )}
+                onClick={item.completed ? (e) => e.preventDefault() : undefined}
+              >
+                <div
+                  className={cn(
+                    "h-6 w-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                    item.completed
+                      ? "bg-primary border-primary"
+                      : "border-border bg-background"
+                  )}
+                >
+                  {item.completed && <Check className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={2.5} />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{item.label}</p>
+                  <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showBillingWarning && (
         <div
@@ -484,7 +579,14 @@ export default function OwnerDashboardClient({
             </span>
           ) : null}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {manualRefreshing ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-28 rounded-2xl" />
+            ))}
+          </div>
+        ) : null}
+        <div className={manualRefreshing ? "hidden" : "grid grid-cols-1 md:grid-cols-2 gap-4"}>
           <Card
             cardKey="sales"
             title="আজকের বিক্রি"
