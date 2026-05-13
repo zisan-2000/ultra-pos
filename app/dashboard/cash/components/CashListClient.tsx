@@ -22,6 +22,7 @@ import {
   getDhakaDateString,
 } from "@/lib/reporting-range";
 import { REPORT_MAX_RANGE_DAYS } from "@/lib/reporting-config";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type CashEntry = {
   id: string;
@@ -704,7 +705,13 @@ export function CashListClient({
       ) : null}
 
       {/* Grouped list */}
-      {hasItems ? (
+      {manualRefreshing ? (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-[72px] rounded-2xl" />
+          ))}
+        </div>
+      ) : hasItems ? (
         <div className="space-y-4">
           {Object.keys(grouped)
             .sort((a, b) => (a > b ? -1 : 1))

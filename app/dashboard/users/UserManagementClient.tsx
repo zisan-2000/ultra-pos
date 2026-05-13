@@ -24,6 +24,7 @@ import {
 import { db } from "@/lib/dexie/db";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type User = {
   id: string;
@@ -491,7 +492,13 @@ export default function UserManagementPage({
           </div>
         )}
 
-        {users.length === 0 ? (
+        {loading ? (
+          <div className="space-y-3 mt-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-[80px] rounded-xl" />
+            ))}
+          </div>
+        ) : users.length === 0 ? (
           <p className="text-muted-foreground text-sm">কোনো ব্যবহারকারী নেই</p>
         ) : filteredUsers.length === 0 ? (
           <div className="border border-border rounded-lg p-4 text-sm text-muted-foreground">

@@ -45,6 +45,7 @@ import {
   type LocalDueCustomer,
   type LocalDueLedger,
 } from "@/lib/dexie/db";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Customer = {
   id: string;
@@ -1348,7 +1349,13 @@ export default function DuePageClient({
                   বাকি, ফোন ও শেষ পেমেন্ট এক নজরে দেখুন।
                 </p>
               </div>
-              {customers.length === 0 ? (
+              {manualRefreshing ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-[120px] rounded-2xl" />
+                  ))}
+                </div>
+              ) : customers.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border/70 bg-muted/40 p-6 text-center">
                   <p className="text-sm text-muted-foreground">
                     এখনও কোনো গ্রাহক নেই।
