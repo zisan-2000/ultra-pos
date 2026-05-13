@@ -23,6 +23,11 @@ export const PosCartItem = memo(function PosCartItem({
   const [priceInput, setPriceInput] = useState(() => String(item.unitPrice));
   const [qtyInput, setQtyInput] = useState(() => String(item.qty));
 
+  // Swipe-to-remove state
+  const touchStartXRef = useRef(0);
+  const [swipeX, setSwipeX] = useState(0);
+  const [snapping, setSnapping] = useState(false);
+
   useEffect(() => { setPriceInput(String(item.unitPrice)); }, [item.unitPrice]);
   useEffect(() => { setQtyInput(String(item.qty)); }, [item.qty]);
 
@@ -67,125 +72,177 @@ export const PosCartItem = memo(function PosCartItem({
     runOncePerFrame(() => remove(item.itemKey));
   }, [remove, item.itemKey, runOncePerFrame]);
 
+  // Swipe handlers — left-swipe only, threshold 64px to confirm remove
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    setSnapping(false);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const delta = e.touches[0].clientX - touchStartXRef.current;
+    if (delta < 0) {
+      setSwipeX(Math.max(-88, delta));
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (swipeX <= -64) {
+      handleRemove();
+    } else {
+      setSnapping(true);
+      setSwipeX(0);
+    }
+  }, [swipeX, handleRemove]);
+
   const showUnit = item.baseUnit && item.baseUnit !== "pcs";
   const isDiscounted = item.originalPrice > item.unitPrice;
   const serialized = item.trackSerialNumbers === true;
+  const swipeProgress = Math.min(1, Math.abs(swipeX) / 64);
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-3 shadow-sm text-foreground space-y-2.5">
-      {/* Row 1: Name + Unit badge + Remove */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-1 min-w-0 items-start gap-1.5">
-          <h3 className="text-sm font-semibold leading-snug">{item.name}</h3>
-          {showUnit && (
-            <span className="shrink-0 mt-0.5 inline-flex items-center rounded-md border border-primary/20 bg-primary/8 px-1.5 py-0.5 text-[10px] font-semibold text-primary/70 leading-none">
-              {item.baseUnit}
-            </span>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={handleRemove}
-          aria-label="Remove item"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-danger/30 bg-danger-soft text-danger text-xs font-semibold"
+    <div className="relative overflow-hidden rounded-2xl">
+      {/* Red background — revealed as card slides left */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 flex items-center justify-end rounded-2xl bg-danger/10 pr-5"
+        style={{ opacity: swipeX < -4 ? swipeProgress : 0 }}
+      >
+        <div
+          className={`flex flex-col items-center gap-0.5 transition-colors ${
+            swipeProgress >= 1 ? "text-danger" : "text-danger/50"
+          }`}
         >
-          ✕
-        </button>
+          <span className="text-xl">🗑</span>
+          <span className="text-[10px] font-semibold">সরান</span>
+        </div>
       </div>
 
-      {/* Row 2: Price input + Qty controls */}
-      <div className="flex items-center gap-2">
-        {/* Price input */}
-        <div className="flex flex-col items-start gap-0.5">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-muted-foreground">৳</span>
+      {/* Swipeable card */}
+      <div
+        className="rounded-2xl border border-border bg-card p-3 shadow-sm text-foreground space-y-2.5"
+        style={{
+          transform: `translateX(${swipeX}px)`,
+          transition: snapping ? "transform 0.25s ease-out" : "none",
+          willChange: "transform",
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Row 1: Name + Unit badge + Remove */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-1 min-w-0 items-start gap-1.5">
+            <h3 className="text-sm font-semibold leading-snug">{item.name}</h3>
+            {showUnit && (
+              <span className="shrink-0 mt-0.5 inline-flex items-center rounded-md border border-primary/20 bg-primary/8 px-1.5 py-0.5 text-[10px] font-semibold text-primary/70 leading-none">
+                {item.baseUnit}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleRemove}
+            aria-label="Remove item"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-danger/30 bg-danger-soft text-danger text-xs font-semibold"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Row 2: Price input + Qty controls */}
+        <div className="flex items-center gap-2">
+          {/* Price input */}
+          <div className="flex flex-col items-start gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-muted-foreground">৳</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={priceInput}
+                onChange={(e) => setPriceInput(e.target.value)}
+                onBlur={commitPrice}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { commitPrice(); (e.target as HTMLInputElement).blur(); }
+                }}
+                onFocus={(e) => e.target.select()}
+                className="h-8 w-16 sm:w-20 rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold text-foreground outline-none transition focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+              />
+            </div>
+            {isDiscounted && (
+              <span className="pl-4 text-[10px] text-muted-foreground/60 line-through leading-none">
+                ৳{item.originalPrice}
+              </span>
+            )}
+          </div>
+
+          {/* Qty controls */}
+          <div className="flex flex-1 items-center justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={handleDecrease}
+              disabled={serialized}
+              className="flex h-8 w-9 items-center justify-center rounded-lg border border-border bg-muted/60 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              −
+            </button>
             <input
               type="text"
               inputMode="decimal"
-              value={priceInput}
-              onChange={(e) => setPriceInput(e.target.value)}
-              onBlur={commitPrice}
+              value={qtyInput}
+              onChange={(e) => setQtyInput(e.target.value)}
+              onBlur={serialized ? undefined : commitQty}
               onKeyDown={(e) => {
-                if (e.key === "Enter") { commitPrice(); (e.target as HTMLInputElement).blur(); }
+                if (!serialized && e.key === "Enter") { commitQty(); (e.target as HTMLInputElement).blur(); }
               }}
               onFocus={(e) => e.target.select()}
-              className="h-8 w-16 sm:w-20 rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold text-foreground outline-none transition focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+              readOnly={serialized}
+              className="h-8 w-14 rounded-lg border border-border bg-background px-1 text-center text-sm font-semibold text-foreground outline-none transition focus:border-primary/40 focus:ring-1 focus:ring-primary/20 read-only:bg-muted/40"
             />
-          </div>
-          {isDiscounted && (
-            <span className="pl-4 text-[10px] text-muted-foreground/60 line-through leading-none">
-              ৳{item.originalPrice}
-            </span>
-          )}
-        </div>
-
-        {/* Qty controls */}
-        <div className="flex flex-1 items-center justify-end gap-1.5">
-          <button
-            type="button"
-            onClick={handleDecrease}
-            disabled={serialized}
-            className="flex h-8 w-9 items-center justify-center rounded-lg border border-border bg-muted/60 text-sm font-semibold hover:bg-muted"
-          >
-            −
-          </button>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={qtyInput}
-            onChange={(e) => setQtyInput(e.target.value)}
-            onBlur={serialized ? undefined : commitQty}
-            onKeyDown={(e) => {
-              if (!serialized && e.key === "Enter") { commitQty(); (e.target as HTMLInputElement).blur(); }
-            }}
-            onFocus={(e) => e.target.select()}
-            readOnly={serialized}
-            className="h-8 w-14 rounded-lg border border-border bg-background px-1 text-center text-sm font-semibold text-foreground outline-none transition focus:border-primary/40 focus:ring-1 focus:ring-primary/20 read-only:bg-muted/40"
-          />
-          <button
-            type="button"
-            onClick={handleIncrease}
-            disabled={serialized}
-            className="flex h-8 w-9 items-center justify-center rounded-lg border border-border bg-muted/60 text-sm font-semibold hover:bg-muted"
-          >
-            +
-          </button>
-        </div>
-      </div>
-
-      {/* Row 3: Line total */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        {isDiscounted ? (
-          <span className="inline-flex items-center rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] font-semibold text-success leading-none">
-            -৳{(item.originalPrice - item.unitPrice).toFixed(2)} ছাড়
-          </span>
-        ) : (
-          <span />
-        )}
-        <span>
-          {item.unitPrice} × {item.qty}{showUnit ? ` ${item.baseUnit}` : ""} ={" "}
-          <span className="ml-1 text-sm font-bold text-foreground">{item.total} ৳</span>
-        </span>
-      </div>
-
-      {/* Serial numbers badge */}
-      {item.serialNumbers && item.serialNumbers.length > 0 && (
-        <div className="flex flex-wrap gap-1 pt-0.5">
-          {item.serialNumbers.map((sn) => (
-            <span
-              key={sn}
-              className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-semibold px-2 py-0.5"
+            <button
+              type="button"
+              onClick={handleIncrease}
+              disabled={serialized}
+              className="flex h-8 w-9 items-center justify-center rounded-lg border border-border bg-muted/60 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
-              SN: {sn}
-            </span>
-          ))}
+              +
+            </button>
+          </div>
         </div>
-      )}
-      {serialized ? (
-        <p className="text-[10px] font-medium text-muted-foreground">
-          Qty serial picker থেকেই নিয়ন্ত্রণ করুন।
-        </p>
-      ) : null}
+
+        {/* Row 3: Line total */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          {isDiscounted ? (
+            <span className="inline-flex items-center rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] font-semibold text-success leading-none">
+              -৳{(item.originalPrice - item.unitPrice).toFixed(2)} ছাড়
+            </span>
+          ) : (
+            <span />
+          )}
+          <span>
+            {item.unitPrice} × {item.qty}{showUnit ? ` ${item.baseUnit}` : ""} ={" "}
+            <span className="ml-1 text-sm font-bold text-foreground">{item.total} ৳</span>
+          </span>
+        </div>
+
+        {/* Serial numbers badge */}
+        {item.serialNumbers && item.serialNumbers.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-0.5">
+            {item.serialNumbers.map((sn) => (
+              <span
+                key={sn}
+                className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-semibold px-2 py-0.5"
+              >
+                SN: {sn}
+              </span>
+            ))}
+          </div>
+        )}
+        {serialized ? (
+          <p className="text-[10px] font-medium text-muted-foreground">
+            Qty serial picker থেকেই নিয়ন্ত্রণ করুন।
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 });

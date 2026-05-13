@@ -1279,6 +1279,12 @@ export function PosPageClient({
           )}
         </div>
 
+        {items.length > 0 && (
+          <p className="text-center text-[11px] text-muted-foreground/60 sm:hidden">
+            ← বাম দিকে সোয়াইপ করে আইটেম সরান
+          </p>
+        )}
+
         {/* Summary Section */}
         <div className="border-t border-border/70 pt-5 space-y-4">
           <div className="rounded-2xl border border-border bg-muted/60 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
@@ -1318,7 +1324,7 @@ export function PosPageClient({
             <div className="rounded-xl border border-success/25 bg-success-soft/40 p-3 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <label className="text-base font-medium text-foreground">Discount</label>
+                  <label htmlFor="pos-discount" className="text-base font-medium text-foreground">Discount</label>
                   <p className="text-xs text-muted-foreground">
                     পুরো bill-এ amount বা percent discount দিন।
                   </p>
@@ -1357,6 +1363,7 @@ export function PosPageClient({
               </div>
               <div className="space-y-2">
                 <input
+                  id="pos-discount"
                   type="number"
                   min="0"
                   max={discountType === "percent" ? 100 : safeTotalAmount}
@@ -1485,10 +1492,11 @@ export function PosPageClient({
           {/* Partial payment - only for due */}
           {isDue && canUseDueSale && (
             <div className="rounded-xl border border-warning/30 bg-warning-soft/40 p-3 space-y-2">
-              <label className="text-base font-medium text-foreground">
+              <label htmlFor="pos-partial-payment" className="text-base font-medium text-foreground">
                 এখন পরিশোধ (আংশিক হলে)
               </label>
               <input
+                id="pos-partial-payment"
                 type="number"
                 min="0"
                 max={payableTotal}
@@ -1508,11 +1516,12 @@ export function PosPageClient({
           {/* Due days input */}
           {isDue && canUseDueSale && (
             <div className="rounded-xl border border-warning/30 bg-warning-soft/40 p-3 space-y-2">
-              <label className="text-base font-medium text-foreground">
+              <label htmlFor="pos-due-days" className="text-base font-medium text-foreground">
                 পরিশোধের সময়সীমা
               </label>
               <div className="flex items-center gap-2">
                 <input
+                  id="pos-due-days"
                   type="number"
                   min="1"
                   max="365"
@@ -1542,10 +1551,10 @@ export function PosPageClient({
 
           {/* Note */}
           <div className="space-y-2">
-            <label className="text-base font-medium text-foreground">
+            <label htmlFor="pos-note" className="text-base font-medium text-foreground">
               নোট (ঐচ্ছিক)
             </label>
-            <textarea
+            <textarea id="pos-note"
               className="min-h-[96px] w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               rows={3}
               placeholder="অতিরিক্ত তথ্য লিখুন..."
@@ -1629,7 +1638,7 @@ export function PosPageClient({
                     onPointerDown={() => suspendScannerBeforeCheckout()}
                     onClick={(e) => { e.stopPropagation(); handleSellFromBar(); }}
                     disabled={isSubmitting || !canCreateSale}
-                    className="shrink-0 h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold flex items-center gap-1 shadow-[0_6px_14px_rgba(22,163,74,0.28)] disabled:opacity-60"
+                    className="shrink-0 h-9 px-4 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold flex items-center gap-1 shadow-[0_6px_14px_rgba(22,163,74,0.28)] disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? (
                       <>
@@ -1804,7 +1813,7 @@ export function PosPageClient({
                       onPointerDown={() => suspendScannerBeforeCheckout()}
                       onClick={handleSellFromBar}
                       disabled={isSubmitting || !canCreateSale}
-                      className="flex-[1.5] h-10 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold flex items-center justify-center gap-1 shadow-[0_8px_16px_rgba(22,163,74,0.28)] disabled:opacity-60"
+                      className="flex-[1.5] h-10 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold flex items-center justify-center gap-1 shadow-[0_8px_16px_rgba(22,163,74,0.28)] disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {isSubmitting ? (
                         <>

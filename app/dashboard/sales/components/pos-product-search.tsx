@@ -2012,6 +2012,7 @@ export const PosProductSearch = memo(function PosProductSearch({
       <div className="flex gap-2 items-center">
         <div className="relative flex-1">
           <input
+            aria-label="পণ্য খুঁজুন"
             className="w-full h-10 rounded-xl border border-border bg-card/80 pl-10 pr-36 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 sm:pr-44"
             placeholder="পণ্য খুঁজুন (নাম/কোড)..."
             value={query}
