@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { SaleSuccessToast } from "@/components/ui/sale-success-toast";
 import { useRouter } from "next/navigation";
 import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
@@ -248,6 +249,8 @@ export function PosPageClient({
   const [success, setSuccess] = useState<{
     saleId?: string;
     invoiceNo?: string | null;
+    amount: number;
+    paymentMethod: string;
   } | null>(null);
   const [productsRefreshing, setProductsRefreshing] = useState(false);
   const online = useOnlineStatus();
@@ -790,8 +793,7 @@ export function PosPageClient({
         setDiscountValue("");
         setNote("");
         setCustomerId("");
-        setSuccess({ saleId: res?.saleId, invoiceNo: res?.invoiceNo ?? null });
-        toast.success("বিল সম্পন্ন হয়েছে।");
+        setSuccess({ saleId: res?.saleId, invoiceNo: res?.invoiceNo ?? null, amount: totalVal, paymentMethod });
         const updateId = reportSale(totalVal);
         if (updateId) {
           setTimeout(() => {
@@ -943,6 +945,8 @@ export function PosPageClient({
     setSuccess({
       saleId: salePayload.id,
       invoiceNo: salePayload.invoiceNo ?? null,
+      amount: totalVal,
+      paymentMethod,
     });
 
     toast.success(
@@ -1145,46 +1149,16 @@ export function PosPageClient({
 
     const toastId = toast.custom(
       (id) => (
-        <div className="w-[min(92vw,24rem)] rounded-2xl border border-success/30 bg-success px-4 py-3 text-primary-foreground shadow-[0_18px_40px_rgba(22,163,74,0.28)]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-bold">বিক্রি সম্পন্ন</p>
-              <p className="mt-1 text-xs text-primary-foreground/85">
-                নতুন বিল সফলভাবে সংরক্ষণ হয়েছে।
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => toast.dismiss(id)}
-              className="text-xs font-semibold text-primary-foreground/80 transition hover:text-primary-foreground"
-            >
-              বন্ধ
-            </button>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Link
-              href={`/dashboard/sales?shopId=${shopId}`}
-              onClick={() => toast.dismiss(id)}
-              className="inline-flex h-8 items-center rounded-full border border-primary-foreground/30 px-3 text-xs font-semibold text-primary-foreground transition hover:bg-primary-foreground/10"
-            >
-              বিক্রি দেখুন
-            </Link>
-            {success.saleId && success.invoiceNo ? (
-              <Link
-                href={`/dashboard/sales/${success.saleId}/invoice`}
-                onClick={() => toast.dismiss(id)}
-                className="inline-flex h-8 items-center rounded-full border border-primary-foreground/30 px-3 text-xs font-semibold text-primary-foreground transition hover:bg-primary-foreground/10"
-              >
-                ইনভয়েস দেখুন
-              </Link>
-            ) : null}
-          </div>
-        </div>
+        <SaleSuccessToast
+          id={id}
+          saleId={success.saleId}
+          invoiceNo={success.invoiceNo}
+          amount={success.amount}
+          paymentMethod={success.paymentMethod}
+          shopId={shopId}
+        />
       ),
-      {
-        duration: 5000,
-      }
+      { duration: 5000 }
     );
 
     setSuccess(null);
@@ -1194,9 +1168,6 @@ export function PosPageClient({
     } catch {
       // ignore vibration failures
     }
-    return () => {
-      toast.dismiss(toastId);
-    };
   }, [shopId, success]);
 
   return (
