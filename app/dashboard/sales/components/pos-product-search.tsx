@@ -622,54 +622,62 @@ const ProductButton = memo(function ProductButton({
     <button
       key={product.id}
       type="button"
-      className={`relative w-full h-full min-h-[150px] text-left rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 shadow-[0_8px_20px_rgba(15,23,42,0.08)] hover:border-primary/40 hover:shadow-[0_12px_26px_rgba(15,23,42,0.12)] transition-all p-3.5 pressable active:scale-[0.98] active:translate-y-[1px] ${
+      className={`relative w-full h-full min-h-[150px] text-left rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 shadow-[0_8px_20px_rgba(15,23,42,0.08)] hover:border-primary/40 hover:shadow-[0_12px_26px_rgba(15,23,42,0.12)] transition-all p-3.5 pressable active:scale-[0.98] active:translate-y-[1px] flex flex-col ${
         isRecentlyAdded ? "ring-2 ring-success/30" : ""
       } ${tracksStock && displayStock <= 0 ? "opacity-80" : ""} ${
         isCooldown ? "opacity-95 shadow-inner border-success/30" : ""
       }`}
       onClick={() => onAdd(product)}
     >
-      <div className="flex items-start justify-between gap-2 relative">
-        <h3 className="flex-1 font-semibold text-foreground text-sm sm:text-base leading-snug line-clamp-2">
-          {product.name}
-        </h3>
-        <span
-          className={`inline-flex items-center gap-1 px-2.5 py-1 min-w-[44px] rounded-full text-[11px] font-semibold shadow-sm ${stockStyle}`}
-        >
-          <StockBadge tracksStock={tracksStock} stock={displayStock} />
-        </span>
-        {isRecentlyAdded && (
-          <span className="absolute -top-1 -right-1 bg-success text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
-            +1
+      {/* ── Top: name + price (primary info) ── */}
+      <div className="flex-1">
+        <div className="relative mb-2">
+          {/* Stock badge — absolute top-right so name gets full width */}
+          <span
+            className={`absolute top-0 right-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold shadow-sm ${stockStyle}`}
+          >
+            <StockBadge tracksStock={tracksStock} stock={displayStock} />
           </span>
-        )}
+          {isRecentlyAdded && (
+            <span className="absolute -top-1 -right-1 z-10 bg-success text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
+              +1
+            </span>
+          )}
+          <h3 className="pr-12 font-semibold text-foreground text-sm sm:text-base leading-snug line-clamp-3">
+            {product.name}
+          </h3>
+        </div>
+        <p className="text-lg font-bold text-foreground">
+          <span className="text-muted-foreground">৳</span> {product.sellPrice}
+        </p>
       </div>
-      {(product.brand || product.modelName) ? (
-        <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-          {[product.brand, product.modelName].filter(Boolean).join(" · ")}
+
+      {/* ── Bottom: metadata (anchored to card bottom) ── */}
+      <div className="mt-2 space-y-0.5">
+        {(product.brand || product.modelName) ? (
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+            {[product.brand, product.modelName].filter(Boolean).join(" · ")}
+          </p>
+        ) : null}
+        <p className="text-[11px] font-medium tracking-[0.08em] text-muted-foreground">
+          {formatCategoryLabel(product.category)}
         </p>
-      ) : null}
-      <p className="text-lg font-bold text-foreground mt-2">
-        <span className="text-muted-foreground">৳</span> {product.sellPrice}
-      </p>
-      <p className="mt-2 text-[11px] font-medium tracking-[0.08em] text-muted-foreground">
-        {formatCategoryLabel(product.category)}
-      </p>
-      {product.compatibility ? (
-        <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
-          {product.compatibility}
-        </p>
-      ) : null}
-      {product.storageLocation ? (
-        <p className="mt-1 text-[11px] font-medium text-primary">
-          📍 {product.storageLocation}
-        </p>
-      ) : null}
-      {hasVariants ? (
-        <p className="mt-1 text-[11px] font-semibold text-primary">
-          {variantCount}টি সাইজ →
-        </p>
-      ) : null}
+        {product.compatibility ? (
+          <p className="line-clamp-1 text-[11px] text-muted-foreground">
+            {product.compatibility}
+          </p>
+        ) : null}
+        {product.storageLocation ? (
+          <p className="text-[11px] font-medium text-primary">
+            📍 {product.storageLocation}
+          </p>
+        ) : null}
+        {hasVariants ? (
+          <p className="text-[11px] font-semibold text-primary">
+            {variantCount}টি সাইজ →
+          </p>
+        ) : null}
+      </div>
     </button>
   );
 });
@@ -1945,15 +1953,6 @@ export const PosProductSearch = memo(function PosProductSearch({
     setListening(false);
   };
   const voiceErrorText = voiceError ? `(${voiceError})` : "";
-  const voiceHint = listening
-    ? voiceMode === "bn"
-      ? "শুনছে... বাংলায় পণ্যের নাম বলুন।"
-      : "Listening... say the product name in English."
-    : voiceReady
-    ? voiceMode === "bn"
-      ? "বাংলা mode-এ পণ্যের নাম বলুন।"
-      : "English mode-এ product name বলুন।"
-    : "ব্রাউজার মাইক্রোফোন সমর্থন দিচ্ছে না";
 
   const renderProductButton = (product: EnrichedProduct) => (
     <ProductButton
@@ -2627,7 +2626,6 @@ export const PosProductSearch = memo(function PosProductSearch({
                 {getActiveVariants(variantPicker.product).map((variant) => {
                   const tracksStock = variantPicker.product.trackStock === true;
                   const unit = variantPicker.product.baseUnit || "";
-                  const vStock = Number(variant.stockQty ?? 0);
                   const availableStock = getAvailableStockForSelection(
                     variantPicker.product,
                     cartItems,

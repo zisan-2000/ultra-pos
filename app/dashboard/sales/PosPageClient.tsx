@@ -31,7 +31,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty-state";
-import { StepIndicator } from "@/components/ui/step-indicator";
 import { ShoppingCart } from "lucide-react";
 
 import { useOnlineStatus } from "@/lib/sync/net-status";
@@ -1200,17 +1199,8 @@ export function PosPageClient({
     };
   }, [shopId, success]);
 
-  const posStep =
-    paymentSheetOpen ? "payment" : items.length > 0 ? "cart" : "search";
-  const posSteps = [
-    { id: "search", label: "পণ্য বেছুন" },
-    { id: "cart", label: "কার্ট" },
-    { id: "payment", label: "পেমেন্ট" },
-  ];
-
   return (
     <>
-      <StepIndicator steps={posSteps} current={posStep} className="lg:hidden px-1 py-2 mb-2" />
       {items.length > 0 && !paymentSheetOpen && (
         <button
           type="button"
