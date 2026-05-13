@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
 import { getPurchaseReturnContext } from "@/app/actions/purchases";
 import PurchaseReturnClient from "./PurchaseReturnClient";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type PurchaseReturnPageProps = {
   params: Promise<{ purchaseId: string }>;
@@ -91,6 +92,15 @@ export default async function PurchaseReturnPage({
 
   return (
     <div className="space-y-4 sm:space-y-5">
+
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "ক্রয়", href: `/dashboard/purchases?shopId=${effectiveShopId}` },
+          { label: "সাপ্লায়ার রিটার্ন" },
+        ]}
+        className="mb-2"
+      />
 
       {/* ── Hero card ── */}
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">

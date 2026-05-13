@@ -9,6 +9,7 @@ import PurchasePaymentClient from "./purchase-payment-client";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
 import { resolveInventoryModuleEnabled } from "@/lib/accounting/cogs";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type PurchasePayPageProps = {
   searchParams?: Promise<{
@@ -125,6 +126,15 @@ export default async function PurchasePayPage({
 
   return (
     <div className="space-y-4 sm:space-y-5">
+
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "ক্রয়", href: `/dashboard/purchases?shopId=${selectedShopId}` },
+          { label: "পেমেন্ট" },
+        ]}
+        className="mb-2"
+      />
 
       {/* ── Hero card ── */}
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">

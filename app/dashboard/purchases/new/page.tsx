@@ -9,6 +9,7 @@ import PurchaseFormClient from "./PurchaseFormClient";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
 import { resolveInventoryModuleEnabled } from "@/lib/accounting/cogs";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type PurchaseNewPageProps = {
   searchParams?: Promise<{ shopId?: string }>;
@@ -120,6 +121,14 @@ export default async function PurchaseNewPage({
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "ক্রয়", href: `/dashboard/purchases?shopId=${selectedShopId}` },
+          { label: "নতুন ক্রয়" },
+        ]}
+        className="mb-2"
+      />
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/50 via-card to-card" />
         <div className="pointer-events-none absolute -top-12 right-0 h-32 w-32 rounded-full bg-primary/20 blur-3xl" />

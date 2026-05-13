@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSaleReturnDraft } from "@/app/actions/sales";
 import ReturnSaleClient from "./ReturnSaleClient";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type PageProps = {
   params: Promise<{ saleId: string }>;
@@ -41,6 +42,14 @@ export default async function SaleReturnPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6 bn-typography">
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "বিক্রয়", href: `/dashboard/sales?shopId=${draft.sale.shopId}` },
+          { label: "রিটার্ন / এক্সচেঞ্জ" },
+        ]}
+        className="mb-2"
+      />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold text-foreground">বিক্রি রিটার্ন / এক্সচেঞ্জ</h1>

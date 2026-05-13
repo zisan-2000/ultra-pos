@@ -6,6 +6,7 @@ import { assertShopAccess } from "@/lib/shop-access";
 import { getShopsByUser } from "@/app/actions/shops";
 import { getStockAdjustmentsByShop } from "@/app/actions/stock-adjustments";
 import AdjustmentHistoryClient from "./AdjustmentHistoryClient";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type Props = {
   searchParams?: Promise<{ shopId?: string }>;
@@ -50,6 +51,14 @@ export default async function StockAdjustmentsPage({ searchParams }: Props) {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
+        <Breadcrumb
+          items={[
+            { label: "হোম", href: "/dashboard" },
+            { label: "পণ্য", href: `/dashboard/products?shopId=${selectedShopId}` },
+            { label: "স্টক সমন্বয়" },
+          ]}
+          className="mb-4"
+        />
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">স্টক সমন্বয় ইতিহাস</h1>

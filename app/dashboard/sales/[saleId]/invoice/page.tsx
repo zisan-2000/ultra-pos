@@ -10,6 +10,7 @@ import {
 } from "@/lib/sales-invoice-print";
 import { canManageSaleReturn } from "@/lib/sales-return";
 import PrintInvoiceButton from "./PrintInvoiceButton";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type PageProps = {
   params: Promise<{ saleId: string }>;
@@ -121,6 +122,16 @@ export default async function SalesInvoicePage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
+      <div className="print:hidden">
+        <Breadcrumb
+          items={[
+            { label: "হোম", href: "/dashboard" },
+            { label: "বিক্রয়", href: `/dashboard/sales?shopId=${data.shopId}` },
+            { label: "ইনভয়েস" },
+          ]}
+          className="mb-2"
+        />
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <div className="flex items-center gap-2">
           <Link

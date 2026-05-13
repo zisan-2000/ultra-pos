@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getPurchaseWithPayments } from "@/app/actions/purchases";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type PurchaseDetailPageProps = {
   params: Promise<{ purchaseId: string }>;
@@ -100,6 +101,15 @@ export default async function PurchaseDetailPage({
 
   return (
     <div className="space-y-4 sm:space-y-5">
+
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "ক্রয়", href: `/dashboard/purchases?shopId=${shopId}` },
+          { label: "ক্রয় বিস্তারিত" },
+        ]}
+        className="mb-2"
+      />
 
       {/* ── Hero card ── */}
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">

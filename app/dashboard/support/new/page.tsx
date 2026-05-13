@@ -5,6 +5,7 @@ import { getShopsByUser } from "@/app/actions/shops";
 import { createSupportTicket } from "@/app/actions/support-tickets";
 import { redirect } from "next/navigation";
 import { NewTicketFormClient } from "./NewTicketFormClient";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type Props = {
   searchParams?: Promise<{ shopId?: string }>;
@@ -53,6 +54,14 @@ export default async function NewTicketPage({ searchParams }: Props) {
 
   return (
     <div className="max-w-2xl mx-auto">
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "সাপোর্ট", href: `/dashboard/support?shopId=${shop.id}` },
+          { label: "নতুন টিকেট" },
+        ]}
+        className="mb-2"
+      />
       <NewTicketFormClient
         shops={shops}
         defaultShopId={shop.id}

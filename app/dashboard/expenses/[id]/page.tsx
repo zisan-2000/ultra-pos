@@ -7,6 +7,7 @@ import { getDhakaDateString } from "@/lib/dhaka-date";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -72,6 +73,14 @@ export default async function EditExpensePage({ params }: PageProps) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "খরচ", href: `/dashboard/expenses?shopId=${expenseShopId}` },
+          { label: "খরচ সম্পাদনা" },
+        ]}
+        className="mb-2"
+      />
       <ExpenseFormClient
         shopId={expenseShopId}
         shopName={shop.name}

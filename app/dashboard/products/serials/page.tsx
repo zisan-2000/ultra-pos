@@ -6,6 +6,7 @@ import { assertShopAccess } from "@/lib/shop-access";
 import { getShopsByUser } from "@/app/actions/shops";
 import { prisma } from "@/lib/prisma";
 import SerialLookupClient from "./SerialLookupClient";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type Props = {
   searchParams?: Promise<{
@@ -126,6 +127,14 @@ export default async function SerialLookupPage({ searchParams }: Props) {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "পণ্য", href: `/dashboard/products?shopId=${selectedShopId}` },
+          { label: "সিরিয়াল নম্বর" },
+        ]}
+        className="mb-2"
+      />
       {/* Header */}
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">

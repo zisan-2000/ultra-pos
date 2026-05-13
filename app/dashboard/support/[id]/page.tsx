@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth-session";
 import { getSupportTicketById, replySupportTicket } from "@/app/actions/support-tickets";
 import { TicketDetailClient } from "./TicketDetailClient";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -26,6 +27,14 @@ export default async function TicketDetailPage({ params }: Props) {
 
   return (
     <div className="max-w-3xl mx-auto">
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "সাপোর্ট", href: `/dashboard/support?shopId=${ticket.shopId}` },
+          { label: "টিকেট বিস্তারিত" },
+        ]}
+        className="mb-3"
+      />
       <TicketDetailClient
         ticket={ticket}
         replies={replies}

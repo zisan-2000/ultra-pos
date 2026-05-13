@@ -5,6 +5,7 @@ import { hasPermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
 import { getShopsByUser } from "@/app/actions/shops";
 import { prisma } from "@/lib/prisma";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type Props = {
   searchParams?: Promise<{ shopId?: string; range?: string; productId?: string }>;
@@ -193,6 +194,14 @@ export default async function ProductExpiryPage({ searchParams }: Props) {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "পণ্য", href: `/dashboard/products?shopId=${selectedShopId}` },
+          { label: "মেয়াদ উত্তীর্ণ" },
+        ]}
+        className="mb-2"
+      />
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">ফার্মেসি রিপোর্ট</p>
         <h1 className="text-2xl font-bold text-foreground leading-tight">Expiry Dashboard</h1>

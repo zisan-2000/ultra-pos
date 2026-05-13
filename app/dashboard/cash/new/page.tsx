@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type NewCashProps = {
   searchParams?: Promise<{ shopId?: string | string[] } | undefined>;
@@ -63,6 +64,14 @@ export default async function NewCashPage({ searchParams }: NewCashProps) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "ক্যাশ", href: `/dashboard/cash?shopId=${shopId}` },
+          { label: "নতুন এন্ট্রি" },
+        ]}
+        className="mb-2"
+      />
       <CashFormClient
         shopId={shopId}
         shopName={shop.name}

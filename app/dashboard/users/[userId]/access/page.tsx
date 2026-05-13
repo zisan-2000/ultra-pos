@@ -7,6 +7,7 @@ import {
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission, hasRole, isSuperAdmin } from "@/lib/rbac";
 import AccessControlClient from "./AccessControlClient";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type PageProps = { params: Promise<{ userId: string }> };
 
@@ -46,5 +47,18 @@ export default async function StaffAccessPage({ params }: PageProps) {
     getStaffPermissionOptions(userId),
   ]);
 
-  return <AccessControlClient user={user} permissions={options.permissions} />;
+  return (
+    <>
+      <div className="mb-2">
+        <Breadcrumb
+          items={[
+            { label: "হোম", href: "/dashboard" },
+            { label: "ব্যবহারকারী", href: "/dashboard/users" },
+            { label: "এক্সেস কন্ট্রোল" },
+          ]}
+        />
+      </div>
+      <AccessControlClient user={user} permissions={options.permissions} />
+    </>
+  );
 }

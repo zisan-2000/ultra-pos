@@ -2606,18 +2606,14 @@ export const PosProductSearch = memo(function PosProductSearch({
                 </div>
               </div>
               {variantPicker.product.trackStock === true ? (
-                <div className="mb-2 shrink-0 rounded-xl border border-border/70 bg-card px-2.5 py-1.5 text-[11px]">
+                <div className="mb-2 shrink-0 rounded-lg border border-border/60 bg-muted/40 px-2 py-1 text-[10px]">
                   {variantPickerQuantityWarning ? (
                     <p className="font-semibold text-danger">{variantPickerQuantityWarning}</p>
                   ) : (
                     <p className="text-muted-foreground">
                       {variantPickerHasAnyAvailable
-                        ? `এই quantity-তে যেসব variant-এর enough stock আছে, সেগুলোই বাছাই করা যাবে। সর্বোচ্চ ${
-                            Number.isFinite(variantPickerMaxAvailable)
-                              ? variantPickerMaxAvailable.toFixed(2)
-                              : "∞"
-                          } ${variantPicker.product.baseUnit || "টি"} পর্যন্ত যোগ করা যাবে।`
-                        : "সব variant-এর available stock শেষ।"}
+                        ? `সর্বোচ্চ ${Number.isFinite(variantPickerMaxAvailable) ? variantPickerMaxAvailable.toFixed(2) : "∞"} ${variantPicker.product.baseUnit || "টি"} যোগ করা যাবে।`
+                        : "সব variant-এর stock শেষ।"}
                     </p>
                   )}
                 </div>
@@ -2660,17 +2656,18 @@ export const PosProductSearch = memo(function PosProductSearch({
                         );
                         setVariantPicker(null);
                       }}
-                      className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
+                      className={`w-full rounded-xl border px-3 py-2 text-left transition ${
                         outOfStock || insufficientForSelectedQty
                           ? "border-border/50 bg-muted/40 cursor-not-allowed"
                           : "border-border bg-card hover:border-primary/35 hover:bg-primary-soft/15"
                       }`}
                     >
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <span className={`min-w-0 break-words pr-1 text-sm font-semibold ${outOfStock || insufficientForSelectedQty ? "text-muted-foreground" : "text-foreground"}`}>
+                      {/* Single row: label + badges + price */}
+                      <div className="flex items-center gap-2">
+                        <span className={`flex-1 min-w-0 truncate text-sm font-semibold ${outOfStock || insufficientForSelectedQty ? "text-muted-foreground" : "text-foreground"}`}>
                           {variant.label}
                         </span>
-                        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+                        <div className="flex shrink-0 items-center gap-1.5">
                           {tracksStock && insufficientForSelectedQty ? (
                             <span className="inline-flex items-center rounded-full border border-warning/25 bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning">
                               সর্বোচ্চ {availableStock.toFixed(2)}
@@ -2683,25 +2680,15 @@ export const PosProductSearch = memo(function PosProductSearch({
                           )}
                           {!outOfStock && !insufficientForSelectedQty && (
                             <span className="text-sm font-bold text-foreground">
-                              <span className="text-muted-foreground">৳</span>{" "}
-                              {variant.sellPrice}
+                              <span className="text-muted-foreground">৳</span>{variant.sellPrice}
                             </span>
                           )}
                         </div>
                       </div>
-                      {variant.sku || variant.barcode ? (
-                        <p className="mt-1 break-all text-[11px] text-muted-foreground">
-                          {variant.sku ? `SKU: ${variant.sku}` : ""}{" "}
-                          {variant.barcode ? `বারকোড: ${variant.barcode}` : ""}
-                        </p>
-                      ) : null}
-                      {variant.storageLocation ? (
-                        <p className="mt-1 text-[11px] font-medium text-primary">
-                          📍 {variant.storageLocation}
-                        </p>
-                      ) : variantPicker.product.storageLocation ? (
-                        <p className="mt-1 text-[11px] font-medium text-primary">
-                          📍 {variantPicker.product.storageLocation}
+                      {/* Storage location only — SKU/barcode removed (not useful at point-of-selection) */}
+                      {(variant.storageLocation || variantPicker.product.storageLocation) ? (
+                        <p className="mt-0.5 text-[11px] font-medium text-primary">
+                          📍 {variant.storageLocation || variantPicker.product.storageLocation}
                         </p>
                       ) : null}
                     </button>

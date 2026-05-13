@@ -7,6 +7,7 @@ import CashFormClient from "../new/CashFormClient";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -69,6 +70,14 @@ export default async function EditCashPage({ params }: PageProps) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "ক্যাশ", href: `/dashboard/cash?shopId=${entryShopId}` },
+          { label: "এন্ট্রি সম্পাদনা" },
+        ]}
+        className="mb-2"
+      />
       <CashFormClient
         shopId={entryShopId}
         shopName={shop.name}

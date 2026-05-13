@@ -7,6 +7,7 @@ import {
 import { getActiveProductsByShop } from "@/app/actions/products";
 import { getCustomersByShop } from "@/app/actions/customers";
 import DueSaleReissueClient from "./DueSaleReissueClient";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type PageProps = {
   params: Promise<{ saleId: string }>;
@@ -94,12 +95,23 @@ export default async function DueSaleEditPage({ params }: PageProps) {
   }
 
   return (
+    <>
+      <div className="mb-2">
+        <Breadcrumb
+          items={[
+            { label: "হোম", href: "/dashboard" },
+            { label: "বিক্রয়", href: `/dashboard/sales?shopId=${draft.sale.shopId}` },
+            { label: "বিক্রি সম্পাদনা" },
+          ]}
+        />
+      </div>
     <DueSaleReissueClient
       draft={draft}
       products={products}
       customers={customers}
       submitReissue={submitReissue}
     />
+    </>
   );
 }
 

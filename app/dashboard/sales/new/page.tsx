@@ -8,6 +8,7 @@ import Link from "next/link";
 import { PosPageClient } from "../PosPageClient";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type NewSalePageProps = {
   searchParams?: Promise<{ shopId?: string } | undefined>;
@@ -146,27 +147,38 @@ export default async function NewSalePage({ searchParams }: NewSalePageProps) {
   }
 
   return (
-    <PosPageClient
-      key={selectedShopId}
-      products={products as any}
-      customers={[] as any}
-      shopName={selectedShop.name}
-      shopId={selectedShopId}
-      canCreateSale={canCreateSale}
-      canCreateDueSale={canCreateDueSale}
-      canViewCustomers={canViewCustomers}
-      canCreateCustomer={canCreateCustomer}
-      canViewDuePage={canViewDuePage}
-      canUseBarcodeScan={canUseBarcodeScan}
-      canUseSaleDiscount={canUseSaleDiscount}
-      canUseSaleTax={canUseSaleTax}
-      saleTaxLabel={saleTaxLabel}
-      saleTaxRate={saleTaxRate}
-      canIssueSalesInvoice={canIssueSalesInvoice}
-      salesInvoicePrefix={(selectedShop as any).salesInvoicePrefix ?? null}
-      nextSalesInvoiceSeq={Number((selectedShop as any).nextSalesInvoiceSeq ?? 1)}
-      submitSale={submitSale}
-      topProductIds={topProductIds}
-    />
+    <>
+      <div className="mb-2">
+        <Breadcrumb
+          items={[
+            { label: "হোম", href: "/dashboard" },
+            { label: "বিক্রয়", href: `/dashboard/sales?shopId=${selectedShopId}` },
+            { label: "নতুন বিক্রি" },
+          ]}
+        />
+      </div>
+      <PosPageClient
+        key={selectedShopId}
+        products={products as any}
+        customers={[] as any}
+        shopName={selectedShop.name}
+        shopId={selectedShopId}
+        canCreateSale={canCreateSale}
+        canCreateDueSale={canCreateDueSale}
+        canViewCustomers={canViewCustomers}
+        canCreateCustomer={canCreateCustomer}
+        canViewDuePage={canViewDuePage}
+        canUseBarcodeScan={canUseBarcodeScan}
+        canUseSaleDiscount={canUseSaleDiscount}
+        canUseSaleTax={canUseSaleTax}
+        saleTaxLabel={saleTaxLabel}
+        saleTaxRate={saleTaxRate}
+        canIssueSalesInvoice={canIssueSalesInvoice}
+        salesInvoicePrefix={(selectedShop as any).salesInvoicePrefix ?? null}
+        nextSalesInvoiceSeq={Number((selectedShop as any).nextSalesInvoiceSeq ?? 1)}
+        submitSale={submitSale}
+        topProductIds={topProductIds}
+      />
+    </>
   );
 }

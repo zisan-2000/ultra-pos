@@ -9,6 +9,7 @@ import { getDhakaDateString } from "@/lib/dhaka-date";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
 import { resolveInventoryModuleEnabled } from "@/lib/accounting/cogs";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type SupplierStatementPageProps = {
   searchParams?: Promise<{
@@ -110,6 +111,15 @@ export default async function SupplierStatementPage({
 
   return (
     <div className="space-y-4 sm:space-y-5">
+
+      <Breadcrumb
+        items={[
+          { label: "হোম", href: "/dashboard" },
+          { label: "সাপ্লায়ার", href: `/dashboard/suppliers?shopId=${selectedShopId}` },
+          { label: "স্টেটমেন্ট" },
+        ]}
+        className="mb-2"
+      />
 
       {/* ── Hero card ── */}
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_rgba(15,23,42,0.08)]">

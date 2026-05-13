@@ -9,6 +9,7 @@ import {
   resolveQueueWorkflowProfile,
 } from "@/lib/queue-workflow";
 import PrintQueueTokenButton from "./PrintQueueTokenButton";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 type PageProps = {
   params: Promise<{ tokenId: string }>;
@@ -110,6 +111,16 @@ export default async function QueueTokenPrintPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4 sm:p-6">
+      <div className="print:hidden">
+        <Breadcrumb
+          items={[
+            { label: "হোম", href: "/dashboard" },
+            { label: "কিউ", href: `/dashboard/queue?shopId=${data.shopId}` },
+            { label: "টোকেন প্রিন্ট" },
+          ]}
+          className="mb-2"
+        />
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <Link
           href={`/dashboard/queue?shopId=${data.shopId}`}
