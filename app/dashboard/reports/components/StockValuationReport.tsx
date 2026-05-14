@@ -6,6 +6,8 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import { ReportEmptyState } from "./ReportEmptyState";
+import { RefreshingPill } from "./Shimmer";
 
 type ValuationRow = {
   id: string;
@@ -178,6 +180,7 @@ export default function StockValuationReport({ shopId }: Props) {
               Top {REPORT_ROW_LIMIT}
             </span>
           </div>
+          <RefreshingPill visible={loading && data.rows.length > 0} />
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div className="rounded-2xl border border-border bg-card/90 p-3">
@@ -217,10 +220,28 @@ export default function StockValuationReport({ shopId }: Props) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] md:hidden">
-        {showEmpty ? (
-          <p className="text-sm text-muted-foreground">স্টক ভ্যালুয়েশন দেখানোর মতো tracked stock নেই।</p>
-        ) : (
+      {showEmpty ? (
+        <div className="rounded-2xl border border-border bg-card">
+          <ReportEmptyState
+            icon="🧮"
+            title="স্টক ভ্যালুয়েশন দেখানোর মতো tracked stock নেই"
+            description="স্টক থাকা tracked পণ্য না থাকলে valuation report খালি থাকে। পণ্য যোগ করুন, stock-in করুন, অথবা product list খুলে দেখুন।"
+            actions={[
+              {
+                label: "পণ্য তালিকা খুলুন",
+                href: `/dashboard/products?shopId=${shopId}`,
+              },
+              {
+                label: "পণ্য ক্রয় করুন",
+                href: `/dashboard/purchases/new?shopId=${shopId}`,
+                variant: "secondary",
+              },
+            ]}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] md:hidden">
           <div className="space-y-3">
             {topRow ? (
               <div className="rounded-2xl border border-border bg-muted/40 p-3 text-sm">
@@ -272,58 +293,59 @@ export default function StockValuationReport({ shopId }: Props) {
               </div>
             ))}
           </div>
-        )}
-      </div>
+          </div>
 
-      <div className="hidden overflow-x-auto rounded-2xl border border-border md:block">
-        <table className="w-full text-sm">
-          <thead className="bg-muted">
-            <tr>
-              <th className="p-3 text-left text-foreground">পণ্য</th>
-              <th className="p-3 text-left text-foreground">ক্যাটাগরি</th>
-              <th className="p-3 text-right text-foreground">স্টক</th>
-              <th className="p-3 text-left text-foreground">লোকেশন</th>
-              <th className="p-3 text-right text-foreground">Restock</th>
-              <th className="p-3 text-right text-foreground">Buy Price</th>
-              <th className="p-3 text-right text-foreground">Cost Value</th>
-              <th className="p-3 text-right text-foreground">Retail Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.rows.length === 0 ? (
-              <tr>
-                <td className="p-3 text-center text-muted-foreground" colSpan={8}>
-                  {showEmpty ? "স্টক ভ্যালুয়েশন দেখানোর মতো tracked stock নেই" : "লোড হচ্ছে..."}
-                </td>
-              </tr>
-            ) : (
-              data.rows.map((row) => (
-                <tr key={row.id} className="border-t hover:bg-muted/30 transition-colors">
-                  <td className="p-3 text-foreground">
-                    <div className="flex flex-col gap-1">
-                      <span className="font-semibold">{row.name}</span>
-                      <span className="text-[11px] text-muted-foreground">
-                        {row.kind === "variant" ? "ভ্যারিয়েন্ট" : "সাধারণ"}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="p-3 text-muted-foreground">{row.category}</td>
-                  <td className="p-3 text-right text-foreground">
-                    {Number(row.qty).toFixed(2)} {row.unit}
-                  </td>
-                  <td className="p-3 text-muted-foreground">{row.storageLocation || "—"}</td>
-                  <td className="p-3 text-right text-muted-foreground">
-                    {row.reorderPoint ?? "—"}
-                  </td>
-                  <td className="p-3 text-right text-foreground">{money(row.buyPrice)}</td>
-                  <td className="p-3 text-right font-semibold text-foreground">{money(row.costValue)}</td>
-                  <td className="p-3 text-right text-muted-foreground">{money(row.retailValue)}</td>
+          <div className="hidden overflow-x-auto rounded-2xl border border-border md:block">
+            <table className="w-full text-sm">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="p-3 text-left text-foreground">পণ্য</th>
+                  <th className="p-3 text-left text-foreground">ক্যাটাগরি</th>
+                  <th className="p-3 text-right text-foreground">স্টক</th>
+                  <th className="p-3 text-left text-foreground">লোকেশন</th>
+                  <th className="p-3 text-right text-foreground">Restock</th>
+                  <th className="p-3 text-right text-foreground">Buy Price</th>
+                  <th className="p-3 text-right text-foreground">Cost Value</th>
+                  <th className="p-3 text-right text-foreground">Retail Value</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {data.rows.length === 0 ? (
+                  <tr>
+                    <td className="p-3 text-center text-muted-foreground" colSpan={8}>
+                      লোড হচ্ছে...
+                    </td>
+                  </tr>
+                ) : (
+                  data.rows.map((row) => (
+                    <tr key={row.id} className="border-t hover:bg-muted/30 transition-colors">
+                      <td className="p-3 text-foreground">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-semibold">{row.name}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {row.kind === "variant" ? "ভ্যারিয়েন্ট" : "সাধারণ"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-3 text-muted-foreground">{row.category}</td>
+                      <td className="p-3 text-right text-foreground">
+                        {Number(row.qty).toFixed(2)} {row.unit}
+                      </td>
+                      <td className="p-3 text-muted-foreground">{row.storageLocation || "—"}</td>
+                      <td className="p-3 text-right text-muted-foreground">
+                        {row.reorderPoint ?? "—"}
+                      </td>
+                      <td className="p-3 text-right text-foreground">{money(row.buyPrice)}</td>
+                      <td className="p-3 text-right font-semibold text-foreground">{money(row.costValue)}</td>
+                      <td className="p-3 text-right text-muted-foreground">{money(row.retailValue)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

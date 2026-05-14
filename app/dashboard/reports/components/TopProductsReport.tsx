@@ -8,6 +8,8 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import { ReportEmptyState } from "./ReportEmptyState";
+import { RefreshingPill } from "./Shimmer";
 
 type TopProduct = { name: string; qty: number; revenue: number };
 type Props = { shopId: string; from?: string; to?: string };
@@ -144,6 +146,7 @@ export default function TopProductsReport({ shopId, from, to }: Props) {
               Top {REPORT_ROW_LIMIT}
             </span>
           </div>
+          <RefreshingPill visible={loading && data.length > 0} />
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <div className="rounded-2xl border border-border bg-card/90 p-3">
@@ -188,88 +191,106 @@ export default function TopProductsReport({ shopId, from, to }: Props) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border overflow-x-auto hidden md:block">
-        <table className="w-full text-sm">
-          <thead className="bg-muted">
-            <tr>
-              <th className="p-3 text-left text-foreground">র্যাঙ্ক</th>
-              <th className="p-3 text-left text-foreground">পণ্য</th>
-              <th className="p-3 text-right text-foreground">বিক্রিত সংখ্যা</th>
-              <th className="p-3 text-right text-foreground">মোট বিক্রি টাকা</th>
-            </tr>
-          </thead>
+      {showEmpty ? (
+        <div className="rounded-2xl border border-border bg-card">
+          <ReportEmptyState
+            icon="🏆"
+            title="Top products দেখানোর মতো sale data নেই"
+            description="নির্বাচিত সময়ে কোনো sale item record পাওয়া যায়নি। নতুন বিক্রি করুন বা সময়সীমা বদলে দেখুন।"
+            actions={[
+              {
+                label: "নতুন বিক্রি করুন",
+                href: `/dashboard/sales/new?shopId=${shopId}`,
+              },
+            ]}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="rounded-2xl border border-border overflow-x-auto hidden md:block">
+            <table className="w-full text-sm">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="p-3 text-left text-foreground">র্যাঙ্ক</th>
+                  <th className="p-3 text-left text-foreground">পণ্য</th>
+                  <th className="p-3 text-right text-foreground">বিক্রিত সংখ্যা</th>
+                  <th className="p-3 text-right text-foreground">মোট বিক্রি টাকা</th>
+                </tr>
+              </thead>
 
-          <tbody>
+              <tbody>
+                {data.length === 0 ? (
+                  <tr>
+                    <td className="p-3 text-center text-muted-foreground" colSpan={4}>
+                      লোড হচ্ছে...
+                    </td>
+                  </tr>
+                ) : (
+                  data.map((item, idx) => (
+                    <tr
+                      key={idx}
+                      className="border-t hover:bg-muted transition-colors"
+                    >
+                      <td className="p-3 text-foreground">
+                        <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-primary/10 px-2 text-xs font-semibold text-primary">
+                          #{idx + 1}
+                        </span>
+                      </td>
+                      <td className="p-3 text-foreground">{item.name}</td>
+                      <td className="p-3 text-right text-foreground">{item.qty}</td>
+                      <td className="p-3 text-right text-foreground tabular-nums">
+                        {formatMoney(Number(item.revenue || 0))}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="space-y-3 md:hidden">
             {data.length === 0 ? (
-              <tr>
-                <td className="p-3 text-center text-muted-foreground" colSpan={4}>
-                  {showEmpty ? "কোনো তথ্য পাওয়া যায়নি" : "লোড হচ্ছে..."}
-                </td>
-              </tr>
+              <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+                  লোড হচ্ছে...
+              </p>
             ) : (
               data.map((item, idx) => (
-                <tr
+                <div
                   key={idx}
-                  className="border-t hover:bg-muted transition-colors"
+                  className="relative overflow-hidden bg-card border border-border/70 rounded-2xl p-4 shadow-[0_10px_20px_rgba(15,23,42,0.06)]"
                 >
-                  <td className="p-3 text-foreground">
-                    <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-primary/10 px-2 text-xs font-semibold text-primary">
-                      #{idx + 1}
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/35 via-transparent to-transparent" />
+                  <div className="relative flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary text-lg">
+                        🏆
+                      </span>
+                      <div>
+                        <p className="text-xs text-muted-foreground">#{idx + 1}</p>
+                        <h3 className="text-base font-semibold text-foreground mt-1">
+                          {item.name}
+                        </h3>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">বিক্রিত</p>
+                      <p className="text-lg font-semibold text-foreground">
+                        {item.qty}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="relative mt-3 flex items-center justify-between text-sm text-muted-foreground">
+                    <span>আয়</span>
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {formatMoney(Number(item.revenue || 0))}
                     </span>
-                  </td>
-                  <td className="p-3 text-foreground">{item.name}</td>
-                  <td className="p-3 text-right text-foreground">{item.qty}</td>
-                  <td className="p-3 text-right text-foreground tabular-nums">
-                    {formatMoney(Number(item.revenue || 0))}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="space-y-3 md:hidden">
-        {data.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {showEmpty ? "কোনো তথ্য পাওয়া যায়নি" : "লোড হচ্ছে..."}
-          </p>
-        ) : (
-          data.map((item, idx) => (
-            <div
-              key={idx}
-              className="relative overflow-hidden bg-card border border-border/70 rounded-2xl p-4 shadow-[0_10px_20px_rgba(15,23,42,0.06)]"
-            >
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/35 via-transparent to-transparent" />
-              <div className="relative flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary text-lg">
-                    🏆
-                  </span>
-                  <div>
-                    <p className="text-xs text-muted-foreground">#{idx + 1}</p>
-                    <h3 className="text-base font-semibold text-foreground mt-1">
-                      {item.name}
-                    </h3>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">বিক্রিত</p>
-                  <p className="text-lg font-semibold text-foreground">
-                    {item.qty}
-                  </p>
-                </div>
-              </div>
-              <div className="relative mt-3 flex items-center justify-between text-sm text-muted-foreground">
-                <span>আয়</span>
-                <span className="font-semibold text-foreground tabular-nums">
-                  {formatMoney(Number(item.revenue || 0))}
-                </span>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -3,12 +3,20 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo } from "react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
-import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import {
+  SalesTrendChart,
+  PaymentMethodDonut,
+  type DailyRow,
+  type PaymentSlice,
+} from "./charts/ReportCharts";
+import { RefreshingPill, TableShimmer } from "./Shimmer";
+import { ReportEmptyState } from "./ReportEmptyState";
+import { LoadMoreButton } from "./LoadMoreButton";
 
 type Props = { shopId: string; from?: string; to?: string };
 
@@ -66,26 +74,31 @@ function getPaymentCfg(method?: string | null) {
   return PAYMENT_CONFIG[(method || "cash").toLowerCase()] ?? { label: method ?? "ক্যাশ", cls: "bg-muted text-foreground border-border", bar: "bg-muted-foreground" };
 }
 
+// Hex colors for the donut chart — keep in sync with PAYMENT_CONFIG visually.
+const PAYMENT_SLICE_COLORS: Record<string, string> = {
+  cash: "#10b981",
+  bkash: "#ec4899",
+  nagad: "#f97316",
+  card: "#8b5cf6",
+  bank_transfer: "#8b5cf6",
+  due: "#f59e0b",
+};
+
+function paymentSliceColor(method: string) {
+  return PAYMENT_SLICE_COLORS[method.toLowerCase()] ?? "#94a3b8";
+}
+
 function getBillTitle(row: SalesRow) {
   return row.invoiceNo?.trim() || "সরাসরি বিক্রি";
 }
 
 export default function SalesReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
-  const [page, setPage] = useState(1);
-  const [cursorList, setCursorList] = useState<ReportCursor[]>([]);
-  const currentCursor = page > 1 ? cursorList[page - 2] ?? null : null;
 
   const buildCacheKey = useCallback(
     (f?: string, t?: string) => `reports:sales:${shopId}:${f || "all"}:${t || "all"}:${REPORT_ROW_LIMIT}`,
     [shopId]
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    scheduleStateUpdate(() => { if (cancelled) return; setPage(1); setCursorList([]); });
-    return () => { cancelled = true; };
-  }, [shopId, from, to]);
 
   const readCached = useCallback((f?: string, t?: string) => {
     try {
@@ -139,35 +152,51 @@ export default function SalesReport({ shopId, from, to }: Props) {
     staleTime: 15_000,
   });
 
-  const initialSalesData = useMemo(() => {
-    if (online || page !== 1) return { rows: [], hasMore: false, nextCursor: null };
+  const initialSalesPage = useMemo(() => {
+    if (online) return undefined;
     const cached = readCached(from, to);
-    return cached ? { rows: cached, hasMore: false, nextCursor: null } : { rows: [], hasMore: false, nextCursor: null };
-  }, [online, page, readCached, from, to]);
+    return {
+      pages: [
+        cached
+          ? { rows: cached, hasMore: false, nextCursor: null }
+          : { rows: [], hasMore: false, nextCursor: null },
+      ],
+      pageParams: [null as ReportCursor | null],
+    };
+  }, [online, readCached, from, to]);
 
-  const salesQuery = useQuery({
-    queryKey: ["reports", "sales", shopId, from ?? "all", to ?? "all", page, currentCursor?.at ?? "start", currentCursor?.id ?? "start"],
-    queryFn: () => fetchSales(from, to, currentCursor, page === 1),
+  const salesQuery = useInfiniteQuery({
+    queryKey: ["reports", "sales", shopId, from ?? "all", to ?? "all"],
+    queryFn: ({ pageParam }) => fetchSales(from, to, pageParam, pageParam == null),
     enabled: online,
-    initialData: initialSalesData,
+    initialPageParam: null as ReportCursor | null,
+    ...(initialSalesPage ? { initialData: initialSalesPage } : {}),
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? lastPage.nextCursor ?? undefined : undefined,
     staleTime: 0,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     refetchOnMount: "always",
   });
 
-  const items: SalesRow[] = salesQuery.data?.rows ?? initialSalesData.rows ?? [];
-  const hasMore = salesQuery.data?.hasMore ?? false;
-  const nextCursor = salesQuery.data?.nextCursor ?? null;
   const loading = salesQuery.isFetching && online;
-  const showEmpty = items.length === 0 && (!online || salesQuery.isFetchedAfterMount) && !loading;
-
-  useEffect(() => {
-    if (online || page <= 1) return;
-    let cancelled = false;
-    scheduleStateUpdate(() => { if (cancelled) return; setPage(1); setCursorList([]); });
-    return () => { cancelled = true; };
-  }, [online, page]);
+  const hasMore = Boolean(salesQuery.hasNextPage);
+  const items: SalesRow[] = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: SalesRow[] = [];
+    for (const page of salesQuery.data?.pages ?? []) {
+      for (const row of page.rows as SalesRow[]) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        merged.push(row);
+      }
+    }
+    return merged;
+  }, [salesQuery.data]);
+  const showEmpty =
+    items.length === 0 &&
+    (!online || salesQuery.isFetchedAfterMount) &&
+    !loading;
 
   const summaryData = summaryQuery.data;
   const totalAmount   = Number(summaryData?.sales?.totalAmount ?? 0);
@@ -189,14 +218,41 @@ export default function SalesReport({ shopId, from, to }: Props) {
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [items]);
 
+  // Daily totals from visible rows, used for the trend bar chart.
+  // Falls back to "this page only" data — we surface that as caption text.
+  const dailyTrend = useMemo<DailyRow[]>(() => {
+    const buckets = new Map<string, number>();
+    for (const s of items) {
+      if (s.status === "VOIDED") continue;
+      const date = new Date(s.saleDate);
+      if (Number.isNaN(date.getTime())) continue;
+      const ymd = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      buckets.set(ymd, (buckets.get(ymd) ?? 0) + Number(s.totalAmount || 0));
+    }
+    return Array.from(buckets.entries())
+      .map(([date, total]) => ({ date, total }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [items]);
+
+  const paymentSlices = useMemo<PaymentSlice[]>(
+    () =>
+      paymentBreakdown.map((m) => {
+        const cfg = getPaymentCfg(m.key);
+        return {
+          key: m.key,
+          label: cfg.label,
+          total: m.total,
+          color: paymentSliceColor(m.key),
+        };
+      }),
+    [paymentBreakdown]
+  );
+
   const shownTotal = useMemo(() => items.reduce((s, r) => s + Number(r.totalAmount || 0), 0), [items]);
 
-  const handlePrev = () => setPage((p) => Math.max(1, p - 1));
-  const handleNext = () => {
-    const c = cursorList[page - 1] ?? nextCursor;
-    if (!c) return;
-    setCursorList((prev) => { const n = [...prev]; n[page - 1] = c; return n; });
-    setPage((p) => p + 1);
+  const handleLoadMore = () => {
+    if (!salesQuery.hasNextPage || salesQuery.isFetchingNextPage) return;
+    salesQuery.fetchNextPage();
   };
 
   const buildHref = () => {
@@ -247,35 +303,17 @@ export default function SalesReport({ shopId, from, to }: Props) {
         </div>
       </div>
 
-      {/* ── Payment Method Breakdown ─────────────────────────── */}
-      {paymentBreakdown.length > 0 && (
-        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-foreground">পেমেন্ট পদ্ধতি</p>
-            <p className="text-xs text-muted-foreground">এই তালিকার {items.length} টি বিল থেকে</p>
-          </div>
-          <div className="space-y-2">
-            {paymentBreakdown.map((m) => {
-              const cfg = getPaymentCfg(m.key);
-              const pct = shownTotal > 0 ? (m.total / shownTotal) * 100 : 0;
-              return (
-                <div key={m.key} className="flex items-center gap-3">
-                  <span className={`inline-flex w-16 shrink-0 items-center justify-center rounded-full border px-2 py-0.5 text-xs font-semibold ${cfg.cls}`}>
-                    {cfg.label}
-                  </span>
-                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                    <div className={`h-full rounded-full ${cfg.bar}`} style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="w-24 shrink-0 text-right text-xs font-semibold text-foreground tabular-nums">
-                    {formatMoney(m.total)}
-                  </span>
-                  <span className="w-10 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-                    {pct.toFixed(0)}%
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+      {/* ── Visualisations ───────────────────────────────────── */}
+      {items.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <SalesTrendChart
+            data={dailyTrend}
+            loading={loading && items.length === 0}
+            caption="এই তালিকার বিলগুলো অনুযায়ী"
+          />
+          {paymentSlices.length > 0 ? (
+            <PaymentMethodDonut data={paymentSlices} loading={loading && items.length === 0} />
+          ) : null}
         </div>
       )}
 
@@ -285,12 +323,12 @@ export default function SalesReport({ shopId, from, to }: Props) {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
           <div>
             <p className="text-sm font-semibold text-foreground">বিলের তালিকা</p>
-            <p className="text-xs text-muted-foreground">সর্বশেষ {REPORT_ROW_LIMIT} টি বিল</p>
+            <p className="text-xs text-muted-foreground">
+              সর্বশেষ বিলগুলো দেখানো হচ্ছে, দরকার হলে আরও লোড করুন
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            {loading && (
-              <span className="text-xs text-muted-foreground animate-pulse">আপডেট হচ্ছে...</span>
-            )}
+            <RefreshingPill visible={loading} />
             <Link
               href={buildHref()}
               className="inline-flex h-7 items-center rounded-full border border-primary/25 bg-primary-soft px-3 text-xs font-semibold text-primary hover:bg-primary/15 transition"
@@ -301,21 +339,24 @@ export default function SalesReport({ shopId, from, to }: Props) {
         </div>
 
         {showEmpty ? (
-          <div className="px-4 py-12 text-center">
-            <p className="text-sm text-muted-foreground">এই সময়ে কোনো বিক্রি নেই</p>
-          </div>
+          <ReportEmptyState
+            icon="🧾"
+            title="এই সময়ে কোনো বিক্রি নেই"
+            description="নির্বাচিত সময়ে এখনো কোনো completed bill নেই। নতুন sale করুন বা সময়সীমা বদলে দেখুন।"
+            actions={[
+              {
+                label: "নতুন বিক্রি করুন",
+                href: `/dashboard/sales/new?shopId=${shopId}`,
+              },
+              {
+                label: "সব বিক্রি খুলুন",
+                href: buildHref(),
+                variant: "secondary",
+              },
+            ]}
+          />
         ) : items.length === 0 && loading ? (
-          <div className="divide-y divide-border">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                <div className="h-4 w-24 rounded bg-muted" />
-                <div className="flex-1 h-4 w-20 rounded bg-muted" />
-                <div className="h-6 w-14 rounded-full bg-muted" />
-                <div className="h-4 w-16 rounded bg-muted" />
-                <div className="h-4 w-20 rounded bg-muted ml-auto" />
-              </div>
-            ))}
-          </div>
+          <TableShimmer rows={5} cols={5} />
         ) : (
           <>
             {/* Desktop table */}
@@ -399,7 +440,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
                 <tfoot>
                   <tr className="border-t border-border bg-muted/20">
                     <td colSpan={5} className="px-4 py-2.5 text-xs font-semibold text-muted-foreground">
-                      এই পাতার মোট ({items.length} টি বিল)
+                      এখন দেখানো মোট ({items.length} টি বিল)
                     </td>
                     <td className="px-4 py-2.5 text-right font-bold text-foreground tabular-nums">
                       {formatMoney(shownTotal)}
@@ -462,36 +503,22 @@ export default function SalesReport({ shopId, from, to }: Props) {
               })}
               {/* Mobile footer */}
               <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
-                <p className="text-xs text-muted-foreground">{items.length} টি বিল · এই পাতার মোট</p>
+                <p className="text-xs text-muted-foreground">{items.length} টি বিল · এখন দেখানো মোট</p>
                 <p className="text-sm font-bold text-foreground tabular-nums">{formatMoney(shownTotal)}</p>
               </div>
             </div>
           </>
         )}
 
-        {/* Pagination */}
-        {(page > 1 || hasMore) && (
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border bg-muted/10">
-            <button
-              type="button"
-              onClick={handlePrev}
-              disabled={page <= 1 || loading || !online}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              ← আগের পাতা
-            </button>
-            <span className="text-xs font-semibold text-muted-foreground">
-              পাতা {page}
-            </span>
-            <button
-              type="button"
-              onClick={handleNext}
-              disabled={!hasMore || !nextCursor || loading || !online}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              পরের পাতা →
-            </button>
-          </div>
+        {(items.length > 0 || hasMore) && (
+          <LoadMoreButton
+            hasMore={hasMore}
+            loading={salesQuery.isFetchingNextPage}
+            disabled={!online}
+            onLoadMore={handleLoadMore}
+            loadedCount={items.length}
+            label="আরও বিল দেখুন"
+          />
         )}
       </div>
     </div>

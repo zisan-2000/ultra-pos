@@ -12,6 +12,7 @@ import {
 import { shopNeedsCogs } from "@/lib/accounting/cogs";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
+import { computePreviousRange } from "@/lib/reporting-range";
 import ReportsClient from "./components/ReportsClient";
 
 type ReportsPageProps = {
@@ -98,14 +99,48 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     ? dhakaDate
     : (resolvedSearch?.to ?? dhakaDate);
 
-  const [salesSummary, expenseSummary, cashSummary, profitSummary, needsCogs] =
-    await Promise.all([
-      getSalesSummary(selectedShopId, rangeFrom, rangeTo),
-      getExpenseSummary(selectedShopId, rangeFrom, rangeTo),
-      getCashSummary(selectedShopId, rangeFrom, rangeTo),
-      getProfitSummary(selectedShopId, rangeFrom, rangeTo),
-      shopNeedsCogs(selectedShopId),
-    ]);
+  const previousRange = computePreviousRange(rangeFrom, rangeTo);
+
+  const [
+    salesSummary,
+    expenseSummary,
+    cashSummary,
+    profitSummary,
+    needsCogs,
+    prevSalesSummary,
+    prevExpenseSummary,
+    prevCashSummary,
+    prevProfitSummary,
+  ] = await Promise.all([
+    getSalesSummary(selectedShopId, rangeFrom, rangeTo),
+    getExpenseSummary(selectedShopId, rangeFrom, rangeTo),
+    getCashSummary(selectedShopId, rangeFrom, rangeTo),
+    getProfitSummary(selectedShopId, rangeFrom, rangeTo),
+    shopNeedsCogs(selectedShopId),
+    previousRange
+      ? getSalesSummary(selectedShopId, previousRange.from, previousRange.to).catch(() => null)
+      : Promise.resolve(null),
+    previousRange
+      ? getExpenseSummary(selectedShopId, previousRange.from, previousRange.to).catch(() => null)
+      : Promise.resolve(null),
+    previousRange
+      ? getCashSummary(selectedShopId, previousRange.from, previousRange.to).catch(() => null)
+      : Promise.resolve(null),
+    previousRange
+      ? getProfitSummary(selectedShopId, previousRange.from, previousRange.to).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+
+  const previousSummary =
+    prevSalesSummary && prevExpenseSummary && prevCashSummary && prevProfitSummary
+      ? {
+          sales: prevSalesSummary,
+          expense: prevExpenseSummary,
+          cash: prevCashSummary,
+          profit: prevProfitSummary,
+        }
+      : null;
+
   return (
     <div className="section-gap">
       <ReportsClient
@@ -120,6 +155,8 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           cash: cashSummary,
           profit: profitSummary,
         }}
+        previousSummary={previousSummary}
+        previousRange={previousRange}
       />
     </div>
   );

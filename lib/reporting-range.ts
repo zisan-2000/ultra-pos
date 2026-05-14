@@ -98,3 +98,46 @@ export function getDateRangeSpanDays(from?: string, to?: string) {
   const delta = end.getTime() - start.getTime();
   return Math.floor(delta / (24 * 60 * 60 * 1000)) + 1;
 }
+
+/**
+ * Given a current date range, returns the immediately-preceding range of equal length.
+ * Used for period-over-period comparison.
+ *
+ * Examples:
+ *   today (2026-05-14 → 2026-05-14)        → 2026-05-13 → 2026-05-13
+ *   week  (2026-05-08 → 2026-05-14, 7 days) → 2026-05-01 → 2026-05-07
+ *   month (2026-05-01 → 2026-05-14, 14 days)→ 2026-04-17 → 2026-04-30
+ *
+ * Returns null if the input range is invalid.
+ */
+export function computePreviousRange(from?: string, to?: string) {
+  const span = getDateRangeSpanDays(from, to);
+  if (!span || span <= 0 || !from || !to) return null;
+  const prevTo = addDays(from, -1);
+  const prevFrom = addDays(prevTo, -(span - 1));
+  return { from: prevFrom, to: prevTo };
+}
+
+/**
+ * Calculate percentage delta between current and previous numeric values.
+ * Returns null when previous is zero/missing (no meaningful comparison),
+ * otherwise a signed percentage (e.g. +12.5, -8.3, 0).
+ */
+export function computeDeltaPct(current: number, previous: number): number | null {
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return null;
+  if (previous === 0) {
+    if (current === 0) return 0;
+    return null;
+  }
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+/**
+ * Convert a numeric delta into a direction discriminant.
+ * Treats < 0.5% absolute change as "flat" to avoid visual noise.
+ */
+export function deltaDirection(pct: number | null): "up" | "down" | "flat" {
+  if (pct === null || !Number.isFinite(pct)) return "flat";
+  if (Math.abs(pct) < 0.5) return "flat";
+  return pct > 0 ? "up" : "down";
+}

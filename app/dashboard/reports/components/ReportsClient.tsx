@@ -12,13 +12,13 @@ import {
 import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ShopSelectorClient from "../ShopSelectorClient";
-import { StatCard } from "./StatCard";
+import { SummaryCards, SummaryCardsSkeleton, type DrillTab } from "./SummaryCards";
+import { ReportsExportDialog } from "./ReportsExportDialog";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import RefreshIconButton from "@/components/ui/refresh-icon-button";
 import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/ui/action-toast";
@@ -39,10 +39,12 @@ import { usePageVisibility } from "@/lib/use-page-visibility";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { generateCSV } from "@/lib/utils/csv";
 import { downloadFile } from "@/lib/utils/download";
-import {
-  amountToBanglaWords,
-  formatBanglaMoney,
-} from "@/lib/utils/bangla-money";
+import { buildDataset } from "@/lib/exports/dataset-builder";
+import type {
+  ExportDataset,
+  ExportFormat,
+  ExportMeta,
+} from "@/lib/exports/types";
 
 type Summary = {
   sales: {
@@ -70,6 +72,9 @@ type Props = {
   needsCogs?: boolean;
   summary: Summary;
   summaryRange: { from: string; to: string };
+  /** Same-shape summary for the immediately-preceding period, used to compute deltas. */
+  previousSummary?: Summary | null;
+  previousRange?: { from: string; to: string } | null;
 };
 
 function ReportSkeleton() {
@@ -82,126 +87,6 @@ function ReportSkeleton() {
   );
 }
 
-function SummaryCards({
-  summary,
-  needsCogs = false,
-  className = "grid grid-cols-1 sm:grid-cols-2 gap-3",
-}: {
-  summary: Summary;
-  needsCogs?: boolean;
-  className?: string;
-}) {
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
-
-  return (
-    <div className={className}>
-      <StatCard
-        title="মোট বিক্রি"
-        value={formatBanglaMoney(summary.sales.totalAmount)}
-        amountInWords={amountToBanglaWords(summary.sales.totalAmount)}
-        expanded={expandedKey === "sales"}
-        onToggleWords={() =>
-          setExpandedKey((current) => (current === "sales" ? null : "sales"))
-        }
-        wordsId="reports-summary-words-sales"
-        subtitle={`মোট বিল: ${summary.sales.completedCount ?? 0}${
-          typeof summary.sales.voidedCount === "number"
-            ? ` · বাতিল: ${summary.sales.voidedCount}`
-            : ""
-        }${
-          Number(summary.sales.discountAmount ?? 0) > 0
-            ? ` · ছাড়: ${Number(summary.sales.discountAmount ?? 0).toFixed(2)} ৳`
-            : ""
-        }${
-          Number(summary.sales.taxAmount ?? 0) > 0
-            ? ` · VAT/Tax: ${Number(summary.sales.taxAmount ?? 0).toFixed(2)} ৳`
-            : ""
-        }`}
-        icon="🧾"
-        tone="success"
-      />
-      <StatCard
-        title="খরচ"
-        value={formatBanglaMoney(summary.expense.totalAmount)}
-        amountInWords={amountToBanglaWords(summary.expense.totalAmount)}
-        expanded={expandedKey === "expense"}
-        onToggleWords={() =>
-          setExpandedKey((current) => (current === "expense" ? null : "expense"))
-        }
-        wordsId="reports-summary-words-expense"
-        subtitle={`মোট খরচ: ${summary.expense.count ?? 0}`}
-        icon="💸"
-        tone="danger"
-      />
-      {needsCogs ? (
-        <StatCard
-          title="COGS"
-          value={formatBanglaMoney(summary.profit.cogs ?? 0)}
-          amountInWords={amountToBanglaWords(summary.profit.cogs ?? 0)}
-          expanded={expandedKey === "cogs"}
-          onToggleWords={() =>
-            setExpandedKey((current) => (current === "cogs" ? null : "cogs"))
-          }
-          wordsId="reports-summary-words-cogs"
-          subtitle="বিক্রিত পণ্যের খরচ"
-          icon="📦"
-          tone="warning"
-        />
-      ) : null}
-      <StatCard
-        title="ক্যাশ ব্যালান্স"
-        value={formatBanglaMoney(summary.cash.balance)}
-        amountInWords={amountToBanglaWords(summary.cash.balance)}
-        expanded={expandedKey === "cash"}
-        onToggleWords={() =>
-          setExpandedKey((current) => (current === "cash" ? null : "cash"))
-        }
-        wordsId="reports-summary-words-cash"
-        subtitle={`ইন: ${summary.cash.totalIn.toFixed(2)} ৳ | আউট: ${summary.cash.totalOut.toFixed(2)} ৳`}
-        icon="💵"
-        tone="warning"
-      />
-      <StatCard
-        title="লাভ"
-        value={formatBanglaMoney(summary.profit.profit)}
-        amountInWords={amountToBanglaWords(summary.profit.profit)}
-        expanded={expandedKey === "profit"}
-        onToggleWords={() =>
-          setExpandedKey((current) => (current === "profit" ? null : "profit"))
-        }
-        wordsId="reports-summary-words-profit"
-        subtitle={`বিক্রি: ${summary.profit.salesTotal.toFixed(
-          2
-        )} ৳ | খরচ: ${summary.profit.expenseTotal.toFixed(2)} ৳`}
-        icon="📈"
-        tone="primary"
-      />
-    </div>
-  );
-}
-
-function SummaryCardsSkeleton({
-  needsCogs = false,
-  className = "grid grid-cols-1 sm:grid-cols-2 gap-3",
-}: {
-  needsCogs?: boolean;
-  className?: string;
-}) {
-  return (
-    <div className={className}>
-      {Array.from({ length: needsCogs ? 5 : 4 }).map((_, idx) => (
-        <div
-          key={idx}
-          className="animate-pulse rounded-2xl border border-border bg-card p-4 space-y-3"
-        >
-          <div className="h-4 w-24 rounded bg-muted" />
-          <div className="h-6 w-32 rounded bg-muted" />
-          <div className="h-3 w-36 rounded bg-muted" />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 const SalesReport = dynamic(() => import("./SalesReport"), {
   loading: () => <ReportSkeleton />,
@@ -327,6 +212,34 @@ const SUMMARY_PREFETCH_PRESETS: Array<Exclude<RangePreset, "custom">> = [
 
 type ExportCursor = { at: string; id: string };
 
+const EXPORT_HISTORY_LIMIT = 5;
+const buildExportHistoryKey = (shopId: string) =>
+  `reports:export-history:${shopId}`;
+
+const EXPORT_TARGET_LABELS: Record<string, string> = {
+  summary: "সারাংশ",
+  sales: "বিক্রি",
+  expenses: "খরচ",
+  cash: "ক্যাশ",
+  payment: "পেমেন্ট পদ্ধতি",
+  profit: "লাভ-ক্ষতি",
+  products: "টপ পণ্য",
+  stock: "লো স্টক",
+  valuation: "স্টক মূল্য",
+};
+
+const EXPORT_FILENAME_STEMS: Record<string, string> = {
+  summary: "summary",
+  sales: "sales",
+  expenses: "expenses",
+  cash: "cashbook",
+  payment: "payment-method",
+  profit: "profit-trend",
+  products: "top-products",
+  stock: "low-stock",
+  valuation: "stock-valuation",
+};
+
 type ExportTarget =
   | "summary"
   | "sales"
@@ -371,6 +284,8 @@ export default function ReportsClient({
   needsCogs = false,
   summary,
   summaryRange,
+  previousSummary = null,
+  previousRange = null,
 }: Props) {
   const online = useOnlineStatus();
   const isVisible = usePageVisibility();
@@ -389,6 +304,39 @@ export default function ReportsClient({
   const [exportOpen, setExportOpen] = useState(false);
   const [exportingKey, setExportingKey] = useState<ExportKey | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [exportProgress, setExportProgress] = useState<
+    Partial<Record<ExportTarget, "pending" | "in-progress" | "done" | "error">>
+  >({});
+  const [exportHistory, setExportHistory] = useState<
+    Array<{ at: number; label: string; filename: string; rows: number }>
+  >([]);
+
+  // Hydrate export history from localStorage on mount (per-shop).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = safeLocalStorageGet(buildExportHistoryKey(shopId));
+    if (!raw) {
+      setExportHistory([]);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        setExportHistory(
+          parsed
+            .filter(
+              (item) =>
+                item &&
+                typeof item.filename === "string" &&
+                typeof item.at === "number"
+            )
+            .slice(0, EXPORT_HISTORY_LIMIT)
+        );
+      }
+    } catch {
+      setExportHistory([]);
+    }
+  }, [shopId]);
   const lastSummaryFreshAtRef = useRef(0);
   const summaryFreshInFlightRef = useRef<Promise<void> | null>(null);
   const lastRangeKeyRef = useRef<string | null>(null);
@@ -486,6 +434,27 @@ export default function ReportsClient({
     [shopId, summaryRange.from, summaryRange.to]
   );
   const isServerRange = rangeKey === serverRangeKey;
+
+  // Period-over-period comparison is only valid when the client range
+  // matches the server-provided range. When the user switches preset
+  // client-side, the previous-period server fetch becomes stale and we
+  // hide deltas until they navigate back or reload.
+  const comparisonSummary = isServerRange ? previousSummary : null;
+  const comparisonLabel = useMemo(() => {
+    if (!isServerRange || !previousRange) return null;
+    const span = getDateRangeSpanDays(previousRange.from, previousRange.to);
+    if (!span) return null;
+    if (span === 1) return "আগের দিনের তুলনায়";
+    return `আগের ${span.toLocaleString("bn-BD")} দিনের তুলনায়`;
+  }, [isServerRange, previousRange]);
+
+  const handleSelectTab = useCallback(
+    (tab: DrillTab) => {
+      setActive(tab as (typeof NAV)[number]["key"]);
+    },
+    []
+  );
+
   const presetLabel = useMemo(
     () => PRESETS.find((item) => item.key === preset)?.label ?? "",
     [preset]
@@ -494,6 +463,17 @@ export default function ReportsClient({
     () => NAV.find((item) => item.key === active)?.label ?? "রিপোর্ট",
     [active]
   );
+
+  const handleClearExportHistory = useCallback(() => {
+    setExportHistory([]);
+    if (typeof window !== "undefined") {
+      try {
+        safeLocalStorageSet(buildExportHistoryKey(shopId), "[]");
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, [shopId]);
   const mobilePrimaryReports = useMemo(
     () =>
       MOBILE_PRIMARY_REPORT_KEYS.map((key) =>
@@ -599,11 +579,107 @@ export default function ReportsClient({
   });
 
   const liveSummary = summaryQuery.data ?? initialSummaryData;
+
+  // Best-effort row counts surfaced in the export dialog. We only know counts
+  // for the three reports whose summary already carries a count — for the
+  // others we show "—" rather than blocking the user with a pre-fetch.
+  const exportRowCounts = useMemo<
+    Partial<Record<ExportTarget, number | null>>
+  >(() => {
+    const salesCount =
+      (liveSummary?.sales.completedCount ?? 0) +
+      (liveSummary?.sales.voidedCount ?? 0);
+    return {
+      summary: 1,
+      sales: liveSummary ? salesCount : null,
+      expenses: liveSummary ? (liveSummary.expense.count ?? 0) : null,
+      cash: null,
+      payment: null,
+      profit: null,
+      products: null,
+      stock: null,
+      valuation: null,
+    };
+  }, [liveSummary]);
   const hasSummary = Boolean(liveSummary);
   const summaryLoading = summaryQuery.isFetching && online && hasSummary;
   const summarySnapshot = hasSummary
     ? `৳ ${Math.round(liveSummary!.sales.totalAmount).toLocaleString("bn-BD")} বিক্রি · লাভ ৳ ${Math.round(liveSummary!.profit.profit).toLocaleString("bn-BD")}`
     : "রিপোর্ট লোড হচ্ছে...";
+
+  // Hero metric switches with the active tab so the headline number always
+  // matches what the user is currently looking at. Falls back to total sales
+  // for tabs that don't have a single canonical headline value.
+  const heroMetric = useMemo<{
+    label: string;
+    value: string;
+    hint: string;
+  }>(() => {
+    const fmt = (n: number) =>
+      `৳ ${Math.round(n).toLocaleString("bn-BD")}`;
+    if (!hasSummary) {
+      return {
+        label: "রিপোর্ট",
+        value: "—",
+        hint: shopName,
+      };
+    }
+    const s = liveSummary!;
+    switch (active) {
+      case "expenses":
+        return {
+          label: "মোট খরচ",
+          value: fmt(s.expense.totalAmount),
+          hint: `${s.expense.count ?? 0} টি এন্ট্রি`,
+        };
+      case "cash":
+        return {
+          label: "ক্যাশ ব্যালেন্স",
+          value: fmt(s.cash.balance),
+          hint: `ইন ${fmt(s.cash.totalIn)} · আউট ${fmt(s.cash.totalOut)}`,
+        };
+      case "profit":
+        return {
+          label: "নিট লাভ",
+          value: fmt(s.profit.profit),
+          hint: `বিক্রি ${fmt(s.profit.salesTotal)} · খরচ ${fmt(s.profit.expenseTotal)}`,
+        };
+      case "valuation":
+        // Stock valuation has its own KPIs in the sub-report; show total sales
+        // in the hero so range context still makes sense.
+        return {
+          label: "মোট বিক্রি (এই সময়ে)",
+          value: fmt(s.sales.totalAmount),
+          hint: shopName,
+        };
+      case "stock":
+        return {
+          label: "লো স্টক",
+          value: "নিচে দেখুন",
+          hint: `সীমার নিচের পণ্যগুলো`,
+        };
+      case "products":
+        return {
+          label: "মোট বিক্রি",
+          value: fmt(s.sales.totalAmount),
+          hint: `${s.sales.completedCount ?? 0} টি বিল`,
+        };
+      case "payment":
+        return {
+          label: "মোট বিক্রি",
+          value: fmt(s.sales.totalAmount),
+          hint: "পদ্ধতিভিত্তিক ভাগ নিচে",
+        };
+      case "sales":
+      case "summary":
+      default:
+        return {
+          label: "মোট বিক্রি",
+          value: fmt(s.sales.totalAmount),
+          hint: `${s.sales.completedCount ?? 0} টি বিল · ${shopName}`,
+        };
+    }
+  }, [active, hasSummary, liveSummary, shopName]);
 
   const refreshSummaryFresh = useCallback(async (force = false) => {
     if (!online) return;
@@ -1253,217 +1329,112 @@ export default function ReportsClient({
     []
   );
 
-  const exportSingle = useCallback(
-    async (target: ExportTarget) => {
-      switch (target) {
-        case "summary": {
-          const summaryData = await fetchSummary(range.from, range.to, true);
-          const salesCount =
-            summaryData.sales.count ?? summaryData.sales.completedCount ?? 0;
-          const summaryCsv = generateCSV(
-            [
-              "range_from",
-              "range_to",
-              "sales_total",
-              "sales_count",
-              "sales_voided",
-              "sales_tax",
-              "expense_total",
-              "expense_count",
-              "cash_in",
-              "cash_out",
-              "cash_balance",
-              "profit",
-              "cogs",
-            ],
-            [
-              {
-                range_from: range.from ?? "all",
-                range_to: range.to ?? "all",
-                sales_total: summaryData.sales.totalAmount ?? 0,
-                sales_count: salesCount,
-                sales_voided: summaryData.sales.voidedCount ?? 0,
-                sales_tax: summaryData.sales.taxAmount ?? 0,
-                expense_total: summaryData.expense.totalAmount ?? 0,
-                expense_count: summaryData.expense.count ?? 0,
-                cash_in: summaryData.cash.totalIn ?? 0,
-                cash_out: summaryData.cash.totalOut ?? 0,
-                cash_balance: summaryData.cash.balance ?? 0,
-                profit: summaryData.profit.profit ?? 0,
-                cogs: summaryData.profit.cogs ?? 0,
-              },
-            ]
-          );
-          downloadFile(`summary-${exportSuffix}.csv`, summaryCsv);
-          return;
-        }
-        case "sales": {
-          const rows = await fetchAllRows(
-            "/api/reports/sales",
-            range.from,
-            range.to
-          );
-          const csv = generateCSV(
-            ["id", "saleDate", "totalAmount", "paymentMethod", "note"],
-            rows
-          );
-          downloadFile(`sales-${exportSuffix}.csv`, csv);
-          return;
-        }
-        case "expenses": {
-          const rows = await fetchAllRows(
-            "/api/reports/expenses",
-            range.from,
-            range.to
-          );
-          const csv = generateCSV(
-            ["id", "expenseDate", "amount", "category"],
-            rows
-          );
-          downloadFile(`expenses-${exportSuffix}.csv`, csv);
-          return;
-        }
-        case "cash": {
-          const rows = await fetchAllRows(
-            "/api/reports/cash",
-            range.from,
-            range.to
-          );
-          const csv = generateCSV(
-            ["id", "createdAt", "entryType", "amount", "reason"],
-            rows
-          );
-          downloadFile(`cashbook-${exportSuffix}.csv`, csv);
-          return;
-        }
-        case "payment": {
-          const params = new URLSearchParams({ shopId, fresh: "1" });
-          if (range.from) params.append("from", range.from);
-          if (range.to) params.append("to", range.to);
-          const rows = await fetchReportData(
-            "/api/reports/payment-method",
-            params
-          );
-          const csv = generateCSV(["name", "value", "count"], rows);
-          downloadFile(`payment-method-${exportSuffix}.csv`, csv);
-          return;
-        }
-        case "profit": {
-          const params = new URLSearchParams({ shopId, fresh: "1" });
-          if (range.from) params.append("from", range.from);
-          if (range.to) params.append("to", range.to);
-          const rows = await fetchReportData("/api/reports/profit-trend", params);
-          const normalized = Array.isArray(rows)
-            ? rows.map((row: any) => ({
-                date: row.date,
-                sales: row.sales ?? 0,
-                cogs: row.cogs ?? 0,
-                operating_expense:
-                  row.operatingExpense ??
-                  Math.max(Number(row.expense ?? 0) - Number(row.cogs ?? 0), 0),
-                gross_profit:
-                  row.grossProfit ??
-                  Number(row.sales ?? 0) - Number(row.cogs ?? 0),
-                net_profit:
-                  row.netProfit ??
-                  Number(row.sales ?? 0) - Number(row.expense ?? 0),
-                net_margin_pct:
-                  row.netMarginPct ??
-                  (Number(row.sales ?? 0)
-                    ? (((Number(row.netProfit ?? 0) ||
-                        (Number(row.sales ?? 0) - Number(row.expense ?? 0))) /
-                        Number(row.sales ?? 0)) *
-                        100)
-                    : 0),
-              }))
-            : [];
-          const csv = generateCSV(
-            [
-              "date",
-              "sales",
-              "cogs",
-              "operating_expense",
-              "gross_profit",
-              "net_profit",
-              "net_margin_pct",
-            ],
-            normalized
-          );
-          downloadFile(`profit-trend-${exportSuffix}.csv`, csv);
-          return;
-        }
-        case "products": {
-          const params = new URLSearchParams({
-            shopId,
-            limit: String(REPORT_ROW_LIMIT),
-            fresh: "1",
-          });
-          if (range.from) params.append("from", range.from);
-          if (range.to) params.append("to", range.to);
-          const rows = await fetchReportData("/api/reports/top-products", params);
-          const csv = generateCSV(["name", "qty", "revenue"], rows);
-          downloadFile(`top-products-${exportSuffix}.csv`, csv);
-          return;
-        }
-        case "stock": {
-          const params = new URLSearchParams({
-            shopId,
-            limit: String(REPORT_ROW_LIMIT),
-            threshold: String(lowStockThreshold),
-            fresh: "1",
-          });
-          const rows = await fetchReportData("/api/reports/low-stock", params);
-          const csv = generateCSV(["id", "name", "stockQty"], rows);
-          downloadFile("low-stock-all.csv", csv);
-          return;
-        }
-        case "valuation": {
-          const params = new URLSearchParams({
-            shopId,
-            limit: String(REPORT_ROW_LIMIT),
-          });
-          const payload = await fetchReportData("/api/reports/stock-valuation", params);
-          const rows = Array.isArray(payload?.rows) ? payload.rows : [];
-          const csv = generateCSV(
-            [
-              "id",
-              "productId",
-              "kind",
-              "name",
-              "category",
-              "unit",
-              "qty",
-              "storageLocation",
-              "reorderPoint",
-              "conversionSummary",
-              "buyPrice",
-              "sellPrice",
-              "costValue",
-              "retailValue",
-            ],
-            rows
-          );
-          downloadFile(`stock-valuation-${exportSuffix}.csv`, csv);
-          return;
-        }
-        default:
-          return;
-      }
-    },
+  const buildExportMeta = useCallback((): ExportMeta => {
+    return {
+      shopName,
+      rangeLabel: rangeLabel ?? null,
+      rangeFrom: range.from ?? null,
+      rangeTo: range.to ?? null,
+      generatedAt: new Date(),
+    };
+  }, [shopName, rangeLabel, range.from, range.to]);
+
+  const buildDatasetForTarget = useCallback(
+    (target: ExportTarget) =>
+      buildDataset(target, {
+        shopId,
+        range,
+        lowStockThreshold,
+        rangeLabel: rangeLabel ?? null,
+        fetchAllRows,
+        fetchReportData,
+        fetchSummary,
+      }),
     [
-      exportSuffix,
+      shopId,
+      range,
+      lowStockThreshold,
+      rangeLabel,
       fetchAllRows,
       fetchReportData,
       fetchSummary,
-      lowStockThreshold,
-      range.from,
-      range.to,
-      shopId,
     ]
   );
 
+  const exportSingle = useCallback(
+    async (
+      target: ExportTarget,
+      opts?: { prefix?: string; format?: ExportFormat }
+    ): Promise<{ filename: string; rows: number }> => {
+      const prefix = opts?.prefix?.trim() || "";
+      const format: ExportFormat = opts?.format ?? "csv";
+      const withPrefix = (name: string) => (prefix ? `${prefix}_${name}` : name);
+
+      const dataset = await buildDatasetForTarget(target);
+      const meta = buildExportMeta();
+
+      const baseName = EXPORT_FILENAME_STEMS[target] ?? target;
+      const ext = format === "xlsx" ? "xlsx" : format === "pdf" ? "pdf" : "csv";
+      const filename = withPrefix(`${baseName}-${exportSuffix}.${ext}`);
+
+      if (format === "csv") {
+        const headers = dataset.columns.map((c) => c.key);
+        const rows = dataset.rows.map((row) => {
+          const obj: Record<string, unknown> = {};
+          for (const col of dataset.columns) {
+            obj[col.key] = col.getValue ? col.getValue(row) : row[col.key];
+          }
+          return obj;
+        });
+        const csv = generateCSV(headers, rows);
+        downloadFile(filename, csv);
+        return { filename, rows: dataset.rows.length };
+      }
+
+      if (format === "xlsx") {
+        const { exportDatasetToExcel } = await import(
+          "@/lib/exports/excel-export"
+        );
+        return exportDatasetToExcel(dataset, meta, filename);
+      }
+
+      // format === "pdf"
+      const { exportDatasetToPdf } = await import("@/lib/exports/pdf-export");
+      return exportDatasetToPdf(dataset, meta, filename);
+    },
+    [buildDatasetForTarget, buildExportMeta, exportSuffix]
+  );
+
+  const exportAllCombined = useCallback(
+    async (
+      targets: ExportTarget[],
+      opts: { prefix?: string; format: Exclude<ExportFormat, "csv"> }
+    ): Promise<{ filename: string; rows: number }> => {
+      const prefix = opts.prefix?.trim() || "";
+      const withPrefix = (name: string) => (prefix ? `${prefix}_${name}` : name);
+      const ext = opts.format;
+      const filename = withPrefix(`all-reports-${exportSuffix}.${ext}`);
+
+      const datasets: ExportDataset[] = [];
+      for (const target of targets) {
+        datasets.push(await buildDatasetForTarget(target));
+      }
+
+      const meta = buildExportMeta();
+      if (opts.format === "xlsx") {
+        const { exportDatasetsToExcel } = await import(
+          "@/lib/exports/excel-export"
+        );
+        return exportDatasetsToExcel(datasets, meta, filename);
+      }
+      const { exportDatasetsToPdf } = await import("@/lib/exports/pdf-export");
+      return exportDatasetsToPdf(datasets, meta, filename);
+    },
+    [buildDatasetForTarget, buildExportMeta, exportSuffix]
+  );
+
   const handleExport = useCallback(
-    async (key: ExportKey) => {
+    async (key: ExportKey, filenamePrefix = "", format: ExportFormat = "csv") => {
       if (!online) {
         showErrorToast({
           title: "অফলাইনে রিপোর্ট ডাউনলোড করা যাবে না",
@@ -1473,63 +1444,155 @@ export default function ReportsClient({
       }
       setExportingKey(key);
       setExportError(null);
+
+      const formatLabel =
+        format === "xlsx" ? "Excel" : format === "pdf" ? "PDF" : "CSV";
       const toastId = showInfoToast({
-        title: "রিপোর্ট ডাউনলোড হচ্ছে",
+        title: `${formatLabel} ডাউনলোড হচ্ছে`,
         subtitle: "অপেক্ষা করুন...",
         duration: 60_000,
       });
 
+      const targets: ExportTarget[] =
+        key === "all"
+          ? [
+              "summary",
+              "sales",
+              "expenses",
+              "cash",
+              "payment",
+              "profit",
+              "products",
+              "stock",
+              "valuation",
+            ]
+          : key === "active"
+            ? [
+                active === "summary"
+                  ? "summary"
+                  : (active as Exclude<ReportKey, "summary">),
+              ]
+            : [key];
+
+      const initialProgress: Partial<
+        Record<ExportTarget, "pending" | "in-progress" | "done" | "error">
+      > = {};
+      for (const t of targets) initialProgress[t] = "pending";
+      setExportProgress(initialProgress);
+
+      const completed: Array<{
+        at: number;
+        label: string;
+        filename: string;
+        rows: number;
+      }> = [];
+
       try {
-        if (key === "all") {
-          const targets: ExportTarget[] = [
-            "summary",
-            "sales",
-            "expenses",
-            "cash",
-            "payment",
-            "profit",
-            "products",
-            "stock",
-            "valuation",
-          ];
-          for (const target of targets) {
-            await exportSingle(target);
+        if (
+          key === "all" &&
+          (format === "xlsx" || format === "pdf")
+        ) {
+          // Combined file: one workbook / one PDF for all targets.
+          for (const t of targets) {
+            setExportProgress((prev) => ({ ...prev, [t]: "in-progress" }));
           }
-        } else if (key === "active") {
-          const target =
-            active === "summary"
-              ? "summary"
-              : (active as Exclude<ReportKey, "summary">);
-          await exportSingle(target);
+          try {
+            const result = await exportAllCombined(targets, {
+              prefix: filenamePrefix,
+              format,
+            });
+            for (const t of targets) {
+              setExportProgress((prev) => ({ ...prev, [t]: "done" }));
+            }
+            completed.push({
+              at: Date.now(),
+              label:
+                format === "xlsx" ? "সব রিপোর্ট (Excel)" : "সব রিপোর্ট (PDF)",
+              filename: result.filename,
+              rows: result.rows,
+            });
+          } catch (innerErr) {
+            for (const t of targets) {
+              setExportProgress((prev) =>
+                prev[t] === "done" ? prev : { ...prev, [t]: "error" }
+              );
+            }
+            throw innerErr;
+          }
         } else {
-          await exportSingle(key);
+          for (const target of targets) {
+            setExportProgress((prev) => ({ ...prev, [target]: "in-progress" }));
+            try {
+              const result = await exportSingle(target, {
+                prefix: filenamePrefix,
+                format,
+              });
+              setExportProgress((prev) => ({ ...prev, [target]: "done" }));
+              completed.push({
+                at: Date.now(),
+                label: EXPORT_TARGET_LABELS[target] ?? target,
+                filename: result.filename,
+                rows: result.rows,
+              });
+            } catch (innerErr) {
+              setExportProgress((prev) => ({ ...prev, [target]: "error" }));
+              throw innerErr;
+            }
+          }
+        }
+
+        if (completed.length > 0) {
+          setExportHistory((prev) => {
+            const next = [...completed.reverse(), ...prev].slice(
+              0,
+              EXPORT_HISTORY_LIMIT
+            );
+            try {
+              safeLocalStorageSet(
+                buildExportHistoryKey(shopId),
+                JSON.stringify(next)
+              );
+            } catch {
+              // ignore storage errors
+            }
+            return next;
+          });
         }
 
         showSuccessToast({
           id: toastId,
-          title: "CSV ডাউনলোড হয়েছে",
+          title:
+            targets.length > 1 && format === "csv"
+              ? `${targets.length} টি রিপোর্ট ডাউনলোড হয়েছে`
+              : `${formatLabel} ডাউনলোড হয়েছে`,
         });
         setExportOpen(false);
       } catch (err) {
         handlePermissionError(err);
-        setExportError("CSV ডাউনলোড করা যায়নি");
+        setExportError(`${formatLabel} ডাউনলোড করা যায়নি`);
         showErrorToast({
           id: toastId,
-          title: "CSV ডাউনলোড করা যায়নি",
+          title: `${formatLabel} ডাউনলোড করা যায়নি`,
           subtitle: "আবার চেষ্টা করুন",
         });
       } finally {
         setExportingKey(null);
       }
     },
-    [active, exportSingle, online]
+    [active, exportSingle, exportAllCombined, online, shopId]
   );
 
   const renderReport = () => {
     switch (active) {
       case "summary":
         return hasSummary ? (
-          <SummaryCards summary={liveSummary!} needsCogs={needsCogs} />
+          <SummaryCards
+            summary={liveSummary!}
+            previousSummary={comparisonSummary}
+            comparisonLabel={comparisonLabel}
+            needsCogs={needsCogs}
+            onSelectTab={handleSelectTab}
+          />
         ) : (
           <SummaryCardsSkeleton needsCogs={needsCogs} />
         );
@@ -1575,6 +1638,25 @@ export default function ReportsClient({
 
   return (
     <div className="space-y-6 pb-24">
+      <ReportsExportDialog
+        open={exportOpen}
+        onOpenChange={(next) => {
+          setExportOpen(next);
+          if (!next) setExportError(null);
+        }}
+        online={online}
+        rangeLabel={rangeLabel}
+        activeTabKey={active as ExportTarget}
+        activeTabLabel={activeReportLabel}
+        needsCogs={needsCogs}
+        rowCounts={exportRowCounts}
+        exportingKey={exportingKey}
+        exportProgress={exportProgress}
+        exportError={exportError}
+        exportHistory={exportHistory}
+        onClearHistory={handleClearExportHistory}
+        onExport={(key, prefix, format) => handleExport(key, prefix, format)}
+      />
       {!online && (
         <div className="rounded-xl border border-warning/30 bg-warning-soft text-warning text-xs font-semibold px-3 py-2 shadow-sm">
           অফলাইন: আগের রিপোর্ট ডাটা দেখানো হচ্ছে।
@@ -1588,88 +1670,32 @@ export default function ReportsClient({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                রিপোর্ট ও বিশ্লেষণ
+                {heroMetric.label}
               </p>
               <p className="text-3xl font-bold tabular-nums leading-tight text-foreground sm:text-4xl">
-                ৳ {hasSummary ? Math.round(liveSummary!.sales.totalAmount).toLocaleString("bn-BD") : "—"}
+                {heroMetric.value}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {shopName}
+              <p className="text-xs text-muted-foreground truncate">
+                {heroMetric.hint}
               </p>
             </div>
-            <Dialog
-              open={exportOpen}
-              onOpenChange={(open) => {
-                setExportOpen(open);
-                if (!open) setExportError(null);
-              }}
-            >
-              <DialogTrigger asChild>
-                <button
-                  type="button"
-                  disabled={!online || exportingKey !== null}
-                  className="inline-flex h-9 shrink-0 items-center rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {exportingKey ? "এক্সপোর্ট হচ্ছে..." : "↓ CSV"}
-                </button>
-              </DialogTrigger>
-              <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-md overflow-y-auto border-border/70 p-0 sm:w-[calc(100vw-2rem)]">
-                <DialogHeader className="px-6 pt-6">
-                  <DialogTitle>CSV এক্সপোর্ট</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 px-6 pb-6">
-                  <div className="rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-xs text-muted-foreground space-y-1">
-                    <p>রেঞ্জ: {rangeLabel ?? "সব সময়"}</p>
-                    <p>
-                      বর্তমান ট্যাব:{" "}
-                      {NAV.find((item) => item.key === active)?.label ??
-                        "সারাংশ"}
-                    </p>
-                    <p>টপ পণ্য ও লো স্টক সবসময় সামগ্রিক ডেটা দেখায়।</p>
-                    <p>বড় রিপোর্টে কিছু সময় লাগতে পারে।</p>
-                  </div>
-                  <div className="space-y-2">
-                    {[
-                      { key: "active", label: "বর্তমান ট্যাব" },
-                      { key: "summary", label: "সারাংশ" },
-                      { key: "sales", label: "বিক্রি" },
-                      { key: "expenses", label: "খরচ" },
-                      { key: "cash", label: "ক্যাশ" },
-                      { key: "payment", label: "পেমেন্ট" },
-                      { key: "profit", label: "লাভ" },
-                      { key: "products", label: "টপ পণ্য" },
-                      { key: "stock", label: "লো স্টক" },
-                      { key: "all", label: "সব রিপোর্ট" },
-                    ].map((option) => (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => handleExport(option.key as ExportKey)}
-                        disabled={exportingKey !== null}
-                        className="w-full flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted transition disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        <span>{option.label}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {exportingKey === option.key
-                            ? "ডাউনলোড হচ্ছে..."
-                            : "ডাউনলোড"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  {exportError ? (
-                    <div className="rounded-lg border border-danger/40 bg-danger-soft/60 px-3 py-2 text-xs text-danger">
-                      {exportError}
-                    </div>
-                  ) : null}
-                  {!online ? (
-                    <div className="rounded-lg border border-warning/40 bg-warning-soft/60 px-3 py-2 text-xs text-warning">
-                      অফলাইনে CSV এক্সপোর্ট করা যাবে না।
-                    </div>
-                  ) : null}
-                </div>
-              </DialogContent>
-            </Dialog>
+            <div className="flex shrink-0 items-center gap-2">
+              <RefreshIconButton
+                onClick={handleManualRefresh}
+                loading={summaryLoading}
+                label="রিফ্রেশ"
+                showLabelOnDesktop={false}
+                className="h-9 w-9 px-0 justify-center"
+              />
+              <button
+                type="button"
+                onClick={() => setExportOpen(true)}
+                disabled={!online || exportingKey !== null}
+                className="inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary-soft text-primary border border-primary/30 px-4 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {exportingKey ? "এক্সপোর্ট হচ্ছে..." : "↓ এক্সপোর্ট"}
+              </button>
+            </div>
           </div>
 
           {/* Shop selector */}
@@ -1677,14 +1703,16 @@ export default function ReportsClient({
 
           {/* Chips */}
           <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3 text-xs font-semibold">
-            <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
-              {presetLabel}
+            {/* Date range — primary pill, always shows preset + actual dates */}
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary text-primary-foreground px-3.5 shadow-sm">
+              <span aria-hidden="true" className="text-sm leading-none">📅</span>
+              <span className="font-bold">{presetLabel}</span>
+              {rangeLabel ? (
+                <span className="font-normal opacity-85 truncate max-w-[160px] sm:max-w-[240px]">
+                  · {rangeLabel}
+                </span>
+              ) : null}
             </span>
-            {rangeLabel && (preset === "7d" || preset === "month" || preset === "custom") ? (
-              <span className="inline-flex h-7 max-w-[180px] items-center truncate rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
-                {rangeLabel}
-              </span>
-            ) : null}
             <span
               className={`inline-flex h-7 max-w-[240px] items-center truncate rounded-full border px-3 transition-all duration-300 ${
                 summaryLoading
@@ -1821,22 +1849,6 @@ export default function ReportsClient({
               ) : null}
             </div>
           )}
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-semibold text-muted-foreground">
-                লাইভ ডেটা
-              </span>
-              <RefreshIconButton
-                onClick={handleManualRefresh}
-                loading={summaryLoading}
-                label="রিফ্রেশ"
-                className="h-8 px-2.5 text-xs"
-              />
-            </div>
-            <div className="rounded-xl border border-primary/30 bg-primary-soft px-3 py-2 text-xs font-semibold text-primary shadow-sm">
-              {summarySnapshot}
-            </div>
-          </div>
         </div>
       </div>
       <Dialog open={mobileReportPickerOpen} onOpenChange={setMobileReportPickerOpen}>
@@ -1904,19 +1916,11 @@ export default function ReportsClient({
         </div>
 
         <div className="rounded-2xl bg-card border border-border shadow-sm px-4 py-3 space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground">সময়</p>
-              {rangeLabel ? (
-                <p className="mt-1 text-[11px] text-muted-foreground">{rangeLabel}</p>
-              ) : null}
-            </div>
-            <RefreshIconButton
-              onClick={handleManualRefresh}
-              loading={summaryLoading}
-              label="রিফ্রেশ"
-              className="h-8 px-2.5 text-xs"
-            />
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground">সময়</p>
+            {rangeLabel ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">{rangeLabel}</p>
+            ) : null}
           </div>
           <div className="relative">
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar rounded-full bg-muted/70 p-1 pr-12 pb-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
@@ -1963,11 +1967,14 @@ export default function ReportsClient({
               ) : null}
             </div>
           )}
-          <div className="rounded-xl border border-primary/20 bg-primary-soft px-3 py-2 text-xs font-semibold text-primary">
-            {summarySnapshot}
-          </div>
           {summaryLoading && (
-            <span className="text-xs text-muted-foreground">রিফ্রেশ হচ্ছে...</span>
+            <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse"
+              />
+              রিফ্রেশ হচ্ছে...
+            </span>
           )}
         </div>
       </div>
@@ -1978,7 +1985,10 @@ export default function ReportsClient({
             {hasSummary ? (
               <SummaryCards
                 summary={liveSummary!}
+                previousSummary={comparisonSummary}
+                comparisonLabel={comparisonLabel}
                 needsCogs={needsCogs}
+                onSelectTab={handleSelectTab}
                 className="grid grid-cols-1 md:grid-cols-2 gap-3"
               />
             ) : (

@@ -7,6 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import { ReportEmptyState } from "./ReportEmptyState";
+import { RefreshingPill } from "./Shimmer";
 
 type PaymentRow = { name: string; value: number; count?: number };
 type Props = { shopId: string; from?: string; to?: string };
@@ -142,14 +144,28 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
             <span className="inline-flex h-7 items-center rounded-full border border-border bg-card/80 px-3 text-muted-foreground">
               মোট: {showTotalPlaceholder ? "লোড হচ্ছে..." : `৳ ${totalAmount.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </span>
+            <RefreshingPill visible={loading && data.length > 0} />
           </div>
         </div>
       </div>
 
       <div className="rounded-2xl border border-border/70 bg-card/80 p-2 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
-        {data.length === 0 ? (
+        {showEmpty ? (
+          <ReportEmptyState
+            icon="💳"
+            title="পেমেন্ট মাধ্যমের ডাটা নেই"
+            description="নির্বাচিত সময়ে কোনো recorded sale নেই, তাই payment split দেখানো যাচ্ছে না।"
+            actions={[
+              {
+                label: "নতুন বিক্রি করুন",
+                href: `/dashboard/sales/new?shopId=${shopId}`,
+              },
+            ]}
+            size="compact"
+          />
+        ) : data.length === 0 ? (
           <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            {showEmpty ? "কোনো পেমেন্ট ডাটা নেই" : "লোড হচ্ছে..."}
+            লোড হচ্ছে...
           </p>
         ) : (
           <>

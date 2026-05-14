@@ -6,7 +6,9 @@ import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
-
+import { ProfitTrendChart, type ProfitTrendRow } from "./charts/ReportCharts";
+import { RefreshingPill, TableShimmer } from "./Shimmer";
+import { ReportEmptyState } from "./ReportEmptyState";
 type ProfitRow = {
   date: string;
   sales: number;
@@ -110,7 +112,10 @@ export default function ProfitTrendReport({ shopId, from, to, needsCogs = false 
     ...(initialRows !== undefined ? { initialData: initialRows } : {}),
   });
 
-  const data: NormalizedProfitRow[] = profitQuery.data ?? initialRows ?? [];
+  const data: NormalizedProfitRow[] = useMemo(
+    () => profitQuery.data ?? initialRows ?? [],
+    [profitQuery.data, initialRows]
+  );
   const loading = profitQuery.isFetching && online;
   const showEmpty = data.length === 0 && (!online || profitQuery.isFetchedAfterMount) && !loading;
 
@@ -128,6 +133,19 @@ export default function ProfitTrendReport({ shopId, from, to, needsCogs = false 
 
   const isProfit = totals.netProfit >= 0;
   const colSpan = needsCogs ? 7 : 5;
+
+  const chartData = useMemo<ProfitTrendRow[]>(
+    () =>
+      data.map((row) => ({
+        date: row.date,
+        sales: row.sales,
+        // For the line chart we surface "মোট খরচ" (operating + cogs) so the
+        // shape matches the per-day table the user sees just below.
+        expense: row.operatingExpense + row.cogs,
+        netProfit: row.netProfit,
+      })),
+    [data]
+  );
 
   return (
     <div className="space-y-4">
@@ -179,6 +197,11 @@ export default function ProfitTrendReport({ shopId, from, to, needsCogs = false 
         </div>
       </div>
 
+      {/* ── Trend Chart ──────────────────────────────────────── */}
+      {(data.length >= 2 || (loading && data.length === 0)) && (
+        <ProfitTrendChart data={chartData} loading={loading && data.length === 0} />
+      )}
+
       {/* ── Per-Day Table ────────────────────────────────────── */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden">
         {/* Header */}
@@ -187,27 +210,28 @@ export default function ProfitTrendReport({ shopId, from, to, needsCogs = false 
             <p className="text-sm font-semibold text-foreground">দিনভিত্তিক লাভ</p>
             <p className="text-xs text-muted-foreground">প্রতিদিনের বিক্রি থেকে খরচ বাদে লাভ</p>
           </div>
-          {loading && data.length > 0 && (
-            <span className="text-xs text-muted-foreground animate-pulse">আপডেট হচ্ছে...</span>
-          )}
+          <RefreshingPill visible={loading && data.length > 0} />
         </div>
 
         {showEmpty ? (
-          <div className="px-4 py-12 text-center">
-            <p className="text-sm text-muted-foreground">এই সময়ে কোনো তথ্য নেই</p>
-          </div>
+          <ReportEmptyState
+            icon="📈"
+            title="এই সময়ে লাভের তথ্য নেই"
+            description="লাভ-ক্ষতির হিসাব দেখাতে sale আর expense data দরকার। নতুন বিক্রি বা খরচ যোগ করুন, অথবা সময়সীমা বদলে দেখুন।"
+            actions={[
+              {
+                label: "নতুন বিক্রি করুন",
+                href: `/dashboard/sales/new?shopId=${shopId}`,
+              },
+              {
+                label: "নতুন খরচ যোগ করুন",
+                href: `/dashboard/expenses/new?shopId=${shopId}`,
+                variant: "secondary",
+              },
+            ]}
+          />
         ) : data.length === 0 && loading ? (
-          <div className="divide-y divide-border">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                <div className="h-4 w-20 rounded bg-muted" />
-                <div className="flex-1 h-4 rounded bg-muted" />
-                <div className="h-4 w-20 rounded bg-muted" />
-                <div className="h-4 w-20 rounded bg-muted" />
-                <div className="h-6 w-14 rounded-full bg-muted ml-auto" />
-              </div>
-            ))}
-          </div>
+          <TableShimmer rows={5} cols={5} />
         ) : (
           <>
             {/* Desktop table */}

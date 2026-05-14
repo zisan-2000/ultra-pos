@@ -3,12 +3,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { REPORT_ROW_LIMIT } from "@/lib/reporting-config";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
-
+import { CashFlowChart, type CashFlowRow } from "./charts/ReportCharts";
+import { RefreshingPill, TableShimmer } from "./Shimmer";
+import { ReportEmptyState } from "./ReportEmptyState";
+import { LoadMoreButton } from "./LoadMoreButton";
 type Props = { shopId: string; from?: string; to?: string };
 
 type CashRow = {
@@ -20,11 +23,6 @@ type CashRow = {
 };
 
 type ReportCursor = { at: string; id: string };
-
-function scheduleStateUpdate(fn: () => void) {
-  if (typeof queueMicrotask === "function") { queueMicrotask(fn); return; }
-  Promise.resolve().then(fn);
-}
 
 function formatMoney(value: number) {
   return `৳ ${Math.abs(value).toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -38,20 +36,11 @@ function formatDateTime(iso: string) {
 
 export default function CashbookReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
-  const [page, setPage] = useState(1);
-  const [cursorList, setCursorList] = useState<ReportCursor[]>([]);
-  const currentCursor = page > 1 ? cursorList[page - 2] ?? null : null;
 
   const buildCacheKey = useCallback(
     (f?: string, t?: string) => `reports:cash:${shopId}:${f || "all"}:${t || "all"}:${REPORT_ROW_LIMIT}`,
     [shopId]
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    scheduleStateUpdate(() => { if (cancelled) return; setPage(1); setCursorList([]); });
-    return () => { cancelled = true; };
-  }, [shopId, from, to]);
 
   const readCached = useCallback((f?: string, t?: string) => {
     try {
@@ -87,41 +76,47 @@ export default function CashbookReport({ shopId, from, to }: Props) {
   }, [shopId, buildCacheKey, readCached]);
 
   const initialCashData = useMemo(() => {
-    if (online || page !== 1) return { rows: [], hasMore: false, nextCursor: null };
+    if (online) return undefined;
     const cached = readCached(from, to);
-    return cached ? { rows: cached, hasMore: false, nextCursor: null } : { rows: [], hasMore: false, nextCursor: null };
-  }, [online, page, readCached, from, to]);
+    return {
+      pages: [
+        cached
+          ? { rows: cached, hasMore: false, nextCursor: null }
+          : { rows: [], hasMore: false, nextCursor: null },
+      ],
+      pageParams: [null as ReportCursor | null],
+    };
+  }, [online, readCached, from, to]);
 
-  const cashQuery = useQuery({
-    queryKey: ["reports", "cash", shopId, from ?? "all", to ?? "all", page, currentCursor?.at ?? "start", currentCursor?.id ?? "start"],
-    queryFn: () => fetchCash(from, to, currentCursor, page === 1),
+  const cashQuery = useInfiniteQuery({
+    queryKey: ["reports", "cash", shopId, from ?? "all", to ?? "all"],
+    queryFn: ({ pageParam }) => fetchCash(from, to, pageParam, pageParam == null),
     enabled: online,
-    initialData: initialCashData,
+    initialPageParam: null as ReportCursor | null,
+    ...(initialCashData ? { initialData: initialCashData } : {}),
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? lastPage.nextCursor ?? undefined : undefined,
     staleTime: 0,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     refetchOnMount: "always",
   });
 
-  const rows: CashRow[] = cashQuery.data?.rows ?? initialCashData.rows ?? [];
-  const hasMore = cashQuery.data?.hasMore ?? false;
-  const nextCursor = cashQuery.data?.nextCursor ?? null;
+  const rows: CashRow[] = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: CashRow[] = [];
+    for (const page of cashQuery.data?.pages ?? []) {
+      for (const row of page.rows as CashRow[]) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        merged.push(row);
+      }
+    }
+    return merged;
+  }, [cashQuery.data]);
+  const hasMore = Boolean(cashQuery.hasNextPage);
   const loading = cashQuery.isFetching && online;
   const showEmpty = rows.length === 0 && (!online || cashQuery.isFetchedAfterMount) && !loading;
-
-  useEffect(() => {
-    if (online || page <= 1) return;
-    let cancelled = false;
-    scheduleStateUpdate(() => { if (cancelled) return; setPage(1); setCursorList([]); });
-    return () => { cancelled = true; };
-  }, [online, page]);
-
-  useEffect(() => {
-    if (page <= 1 || currentCursor) return;
-    let cancelled = false;
-    scheduleStateUpdate(() => { if (cancelled) return; setPage(1); });
-    return () => { cancelled = true; };
-  }, [page, currentCursor]);
 
   const totals = useMemo(() => {
     const inbound  = rows.filter((r) => (r.entryType || "").toUpperCase() === "IN").reduce((s, r) => s + Number(r.amount || 0), 0);
@@ -129,12 +124,27 @@ export default function CashbookReport({ shopId, from, to }: Props) {
     return { inbound, outbound, net: inbound - outbound };
   }, [rows]);
 
-  const handlePrev = () => setPage((p) => Math.max(1, p - 1));
-  const handleNext = () => {
-    const c = cursorList[page - 1] ?? nextCursor;
-    if (!c) return;
-    setCursorList((prev) => { const n = [...prev]; n[page - 1] = c; return n; });
-    setPage((p) => p + 1);
+  // Bucket visible cash entries into daily in/out totals for the area chart.
+  const dailyFlow = useMemo<CashFlowRow[]>(() => {
+    const map = new Map<string, { in: number; out: number }>();
+    for (const r of rows) {
+      const ts = new Date(r.createdAt);
+      if (Number.isNaN(ts.getTime())) continue;
+      const ymd = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, "0")}-${String(ts.getDate()).padStart(2, "0")}`;
+      const bucket = map.get(ymd) ?? { in: 0, out: 0 };
+      const amt = Number(r.amount || 0);
+      if ((r.entryType || "").toUpperCase() === "IN") bucket.in += amt;
+      else bucket.out += amt;
+      map.set(ymd, bucket);
+    }
+    return Array.from(map.entries())
+      .map(([date, v]) => ({ date, in: v.in, out: v.out, net: v.in - v.out }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [rows]);
+
+  const handleLoadMore = () => {
+    if (!cashQuery.hasNextPage || cashQuery.isFetchingNextPage) return;
+    cashQuery.fetchNextPage();
   };
 
   const buildHref = () => {
@@ -190,18 +200,23 @@ export default function CashbookReport({ shopId, from, to }: Props) {
         </div>
       </div>
 
+      {/* ── Cash Flow Chart ──────────────────────────────────── */}
+      {(dailyFlow.length >= 2 || (loading && rows.length === 0)) && (
+        <CashFlowChart data={dailyFlow} loading={loading && rows.length === 0} />
+      )}
+
       {/* ── Cash Entry List ──────────────────────────────────── */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
           <div>
             <p className="text-sm font-semibold text-foreground">ক্যাশ এন্ট্রি</p>
-            <p className="text-xs text-muted-foreground">সর্বশেষ {REPORT_ROW_LIMIT} টি এন্ট্রি</p>
+            <p className="text-xs text-muted-foreground">
+              সর্বশেষ ক্যাশ এন্ট্রিগুলো দেখানো হচ্ছে, দরকার হলে আরও লোড করুন
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            {loading && (
-              <span className="text-xs text-muted-foreground animate-pulse">আপডেট হচ্ছে...</span>
-            )}
+            <RefreshingPill visible={loading} />
             <Link
               href={buildHref()}
               className="inline-flex h-7 items-center rounded-full border border-primary/25 bg-primary-soft px-3 text-xs font-semibold text-primary hover:bg-primary/15 transition"
@@ -212,20 +227,24 @@ export default function CashbookReport({ shopId, from, to }: Props) {
         </div>
 
         {showEmpty ? (
-          <div className="px-4 py-12 text-center">
-            <p className="text-sm text-muted-foreground">এই সময়ে কোনো ক্যাশ এন্ট্রি নেই</p>
-          </div>
+          <ReportEmptyState
+            icon="💵"
+            title="এই সময়ে কোনো ক্যাশ এন্ট্রি নেই"
+            description="নির্বাচিত সময়ে কোনো cash in/out record পাওয়া যায়নি। নতুন এন্ট্রি যোগ করুন বা full cashbook খুলে দেখুন।"
+            actions={[
+              {
+                label: "নতুন ক্যাশ এন্ট্রি",
+                href: `/dashboard/cash/new?shopId=${shopId}`,
+              },
+              {
+                label: "সব ক্যাশ খুলুন",
+                href: buildHref(),
+                variant: "secondary",
+              },
+            ]}
+          />
         ) : rows.length === 0 && loading ? (
-          <div className="divide-y divide-border">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                <div className="h-4 w-28 rounded bg-muted" />
-                <div className="flex-1 h-4 rounded bg-muted" />
-                <div className="h-6 w-12 rounded-full bg-muted" />
-                <div className="h-4 w-20 rounded bg-muted ml-auto" />
-              </div>
-            ))}
-          </div>
+          <TableShimmer rows={5} cols={4} />
         ) : (
           <>
             {/* Desktop table */}
@@ -271,7 +290,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
                 <tfoot>
                   <tr className="border-t border-border bg-muted/20">
                     <td colSpan={3} className="px-4 py-2.5 text-xs font-semibold text-muted-foreground">
-                      এই পাতার নিট ({rows.length} টি এন্ট্রি)
+                      এখন দেখানো নিট ({rows.length} টি এন্ট্রি)
                     </td>
                     <td className={`px-4 py-2.5 text-right font-bold tabular-nums ${totals.net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                       {totals.net >= 0 ? "+" : "-"}{formatMoney(totals.net)}
@@ -310,7 +329,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
               })}
               {/* Mobile footer */}
               <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
-                <p className="text-xs text-muted-foreground">{rows.length} এন্ট্রি · এই পাতার নিট</p>
+                <p className="text-xs text-muted-foreground">{rows.length} এন্ট্রি · এখন দেখানো নিট</p>
                 <p className={`text-sm font-bold tabular-nums ${totals.net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                   {totals.net >= 0 ? "+" : "-"}{formatMoney(totals.net)}
                 </p>
@@ -319,27 +338,15 @@ export default function CashbookReport({ shopId, from, to }: Props) {
           </>
         )}
 
-        {/* Pagination */}
-        {(page > 1 || hasMore) && (
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border bg-muted/10">
-            <button
-              type="button"
-              onClick={handlePrev}
-              disabled={page <= 1 || loading || !online}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              ← আগের পাতা
-            </button>
-            <span className="text-xs font-semibold text-muted-foreground">পাতা {page}</span>
-            <button
-              type="button"
-              onClick={handleNext}
-              disabled={!hasMore || !nextCursor || loading || !online}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              পরের পাতা →
-            </button>
-          </div>
+        {(rows.length > 0 || hasMore) && (
+          <LoadMoreButton
+            hasMore={hasMore}
+            loading={cashQuery.isFetchingNextPage}
+            disabled={!online}
+            onLoadMore={handleLoadMore}
+            loadedCount={rows.length}
+            label="আরও এন্ট্রি দেখুন"
+          />
         )}
       </div>
     </div>
