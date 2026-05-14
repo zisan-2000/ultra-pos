@@ -117,14 +117,37 @@ async function allocateSalesInvoiceNumber(
   shopId: string,
   issuedAt: Date
 ) {
+  const maxRows = await tx.$queryRaw<{ nextSeq: unknown }[]>(
+    Prisma.sql`
+      SELECT COALESCE(
+        MAX(CAST(SUBSTRING("invoice_no" FROM '([0-9]+)$') AS integer)) + 1,
+        1
+      )::int AS "nextSeq"
+      FROM "sales"
+      WHERE "shop_id" = CAST(${shopId} AS uuid)
+        AND "invoice_no" IS NOT NULL
+    `
+  );
+  const desiredNextSeq = Math.max(1, Math.floor(Number(maxRows[0]?.nextSeq ?? 1)));
+
   const rows = await tx.$queryRaw<{ prefix: string | null; seq: unknown }[]>(
     Prisma.sql`
-      UPDATE "shops"
-      SET "next_sales_invoice_seq" = COALESCE("next_sales_invoice_seq", 1) + 1
-      WHERE "id" = CAST(${shopId} AS uuid)
-      RETURNING
-        "sales_invoice_prefix" AS prefix,
-        ("next_sales_invoice_seq" - 1)::int AS seq
+      WITH "base" AS (
+        SELECT
+          "id",
+          "sales_invoice_prefix" AS prefix,
+          GREATEST(COALESCE("next_sales_invoice_seq", 1), ${desiredNextSeq})::int AS seq
+        FROM "shops"
+        WHERE "id" = CAST(${shopId} AS uuid)
+      ),
+      "bumped" AS (
+        UPDATE "shops" AS s
+        SET "next_sales_invoice_seq" = "base".seq + 1
+        FROM "base"
+        WHERE s."id" = "base"."id"
+        RETURNING "base".prefix AS prefix, "base".seq AS seq
+      )
+      SELECT prefix, seq FROM "bumped"
     `
   );
   const row = rows[0];

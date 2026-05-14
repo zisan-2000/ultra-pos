@@ -12,7 +12,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { SaleSuccessToast } from "@/components/ui/sale-success-toast";
+import { showSuccessToast } from "@/components/ui/action-toast";
 import { useRouter } from "next/navigation";
 import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
@@ -251,6 +251,8 @@ export function PosPageClient({
     invoiceNo?: string | null;
     amount: number;
     paymentMethod: string;
+    itemCount: number;
+    customerName: string | null;
   } | null>(null);
   const [productsRefreshing, setProductsRefreshing] = useState(false);
   const online = useOnlineStatus();
@@ -757,6 +759,11 @@ export function PosPageClient({
     setIsSubmitting(true);
 
     const totalVal = payableTotal;
+    const itemCount = items.reduce((s, i) => s + i.qty, 0);
+    const customerName =
+      paymentMethod === "due"
+        ? customerList.find((c) => c.id === customerId)?.name ?? null
+        : null;
     const paidNowNumber = isDue
       ? Math.min(Math.max(Number(paidNow || 0), 0), totalVal)
       : 0;
@@ -793,7 +800,7 @@ export function PosPageClient({
         setDiscountValue("");
         setNote("");
         setCustomerId("");
-        setSuccess({ saleId: res?.saleId, invoiceNo: res?.invoiceNo ?? null, amount: totalVal, paymentMethod });
+        setSuccess({ saleId: res?.saleId, invoiceNo: res?.invoiceNo ?? null, amount: totalVal, paymentMethod, itemCount, customerName });
         const updateId = reportSale(totalVal);
         if (updateId) {
           setTimeout(() => {
@@ -947,6 +954,8 @@ export function PosPageClient({
       invoiceNo: salePayload.invoiceNo ?? null,
       amount: totalVal,
       paymentMethod,
+      itemCount,
+      customerName,
     });
 
     toast.success(
@@ -1147,19 +1156,43 @@ export function PosPageClient({
   useEffect(() => {
     if (!success) return;
 
-    const toastId = toast.custom(
-      (id) => (
-        <SaleSuccessToast
-          id={id}
-          saleId={success.saleId}
-          invoiceNo={success.invoiceNo}
-          amount={success.amount}
-          paymentMethod={success.paymentMethod}
-          shopId={shopId}
-        />
-      ),
-      { duration: 5000 }
-    );
+    const meta: string[] = [];
+    if (success.itemCount > 0) {
+      meta.push(`${success.itemCount} আইটেম`);
+    }
+    if (success.customerName) {
+      meta.push(success.customerName);
+    }
+
+    const actions: { label: string; href?: string; variant?: "primary" | "secondary" }[] = [];
+    if (success.saleId && success.invoiceNo) {
+      actions.push({
+        label: "ইনভয়েস দেখুন →",
+        href: `/dashboard/sales/${success.saleId}/invoice?shopId=${shopId}`,
+        variant: "primary",
+      });
+    }
+    if (success.saleId) {
+      actions.push({
+        label: "তালিকায় যান",
+        href: `/dashboard/sales?shopId=${shopId}`,
+        variant: "secondary",
+      });
+    }
+
+    showSuccessToast({
+      title: "বিক্রি সম্পন্ন",
+      amount: success.amount,
+      badge: (["cash", "bkash", "nagad", "card", "due"].includes(success.paymentMethod)
+        ? (success.paymentMethod as "cash" | "bkash" | "nagad" | "card" | "due")
+        : undefined),
+      subtitle: success.invoiceNo
+        ? `ইনভয়েস #${success.invoiceNo}`
+        : "বিল সফলভাবে সংরক্ষিত",
+      meta: meta.length > 0 ? meta : undefined,
+      actions: actions.length > 0 ? actions : undefined,
+      duration: 5000,
+    });
 
     setSuccess(null);
 
