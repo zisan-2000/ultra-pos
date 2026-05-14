@@ -8,6 +8,8 @@ import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { ReportEmptyState } from "./ReportEmptyState";
 import { RefreshingPill } from "./Shimmer";
+import { ReportControls, SortableHeader } from "./ReportControls";
+import { useNamespacedReportState } from "./report-url-state";
 
 type ValuationRow = {
   id: string;
@@ -39,12 +41,26 @@ type Payload = {
 
 type Props = { shopId: string };
 
+const VALUATION_FILTER_DEFAULTS: Record<"q" | "kind" | "sort" | "dir", string> = {
+  q: "",
+  kind: "all",
+  sort: "cost",
+  dir: "desc",
+};
+
 function money(value: number) {
   return `${Number(value || 0).toFixed(2)} ৳`;
 }
 
 export default function StockValuationReport({ shopId }: Props) {
   const online = useOnlineStatus();
+  const {
+    values: filters,
+    setValue: setFilter,
+    reset: resetFilters,
+    activeCount,
+  } = useNamespacedReportState("valuation", VALUATION_FILTER_DEFAULTS);
+  const sortDirection = filters.dir === "asc" ? "asc" : "desc";
 
   const buildCacheKey = useCallback(
     () => `reports:stock-valuation:${shopId}:${REPORT_ROW_LIMIT}`,
@@ -143,7 +159,7 @@ export default function StockValuationReport({ shopId }: Props) {
     refetchOnMount: "always",
   });
 
-  const data = query.data ?? initialData ?? {
+  const rawData = query.data ?? initialData ?? {
     summary: {
       trackedItems: 0,
       totalQty: 0,
@@ -153,11 +169,59 @@ export default function StockValuationReport({ shopId }: Props) {
     },
     rows: [],
   };
+  const rows = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    const dir = sortDirection === "asc" ? 1 : -1;
+    return rawData.rows
+      .filter((row) => {
+        if (filters.kind !== "all" && row.kind !== filters.kind) return false;
+        if (!q) return true;
+        return [
+          row.name,
+          row.category,
+          row.storageLocation ?? "",
+          row.conversionSummary ?? "",
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(q);
+      })
+      .sort((a, b) => {
+        if (filters.sort === "retail") return (a.retailValue - b.retailValue) * dir;
+        if (filters.sort === "qty") return (a.qty - b.qty) * dir;
+        if (filters.sort === "name") return a.name.localeCompare(b.name) * dir;
+        return (a.costValue - b.costValue) * dir;
+      });
+  }, [filters.kind, filters.q, filters.sort, rawData.rows, sortDirection]);
+  const data: Payload = {
+    summary: {
+      trackedItems: rows.length,
+      totalQty: Number(rows.reduce((sum, row) => sum + Number(row.qty || 0), 0).toFixed(2)),
+      costValue: Number(rows.reduce((sum, row) => sum + Number(row.costValue || 0), 0).toFixed(2)),
+      retailValue: Number(rows.reduce((sum, row) => sum + Number(row.retailValue || 0), 0).toFixed(2)),
+      estimatedGrossValue: Number(
+        rows
+          .reduce(
+            (sum, row) => sum + Number(row.retailValue || 0) - Number(row.costValue || 0),
+            0
+          )
+          .toFixed(2)
+      ),
+    },
+    rows,
+  };
 
   const loading = query.isFetching && online;
   const hasFetched = query.isFetchedAfterMount;
   const showEmpty = data.rows.length === 0 && (!online || hasFetched) && !loading;
   const topRow = data.rows[0] ?? null;
+  const changeSort = (field: "cost" | "retail" | "qty" | "name") => {
+    if (filters.sort === field) {
+      setFilter("dir", sortDirection === "asc" ? "desc" : "asc");
+      return;
+    }
+    setFilter("sort", field);
+  };
 
   return (
     <div className="space-y-4">
@@ -241,6 +305,38 @@ export default function StockValuationReport({ shopId }: Props) {
         </div>
       ) : (
         <>
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            <ReportControls
+              searchValue={filters.q}
+              searchPlaceholder="পণ্য, ক্যাটাগরি বা লোকেশন খুঁজুন..."
+              onSearchChange={(value) => setFilter("q", value)}
+              filters={[
+                {
+                  label: "ধরন",
+                  value: filters.kind,
+                  onChange: (value) => setFilter("kind", value),
+                  options: [
+                    { label: "সব ধরন", value: "all" },
+                    { label: "সাধারণ পণ্য", value: "product" },
+                    { label: "ভ্যারিয়েন্ট", value: "variant" },
+                  ],
+                },
+              ]}
+              sortValue={filters.sort}
+              sortDirection={sortDirection}
+              sortOptions={[
+                { label: "Cost value", value: "cost" },
+                { label: "Retail value", value: "retail" },
+                { label: "Stock qty", value: "qty" },
+                { label: "নাম", value: "name" },
+              ]}
+              onSortChange={(value) => setFilter("sort", value)}
+              onSortDirectionChange={(value) => setFilter("dir", value)}
+              onClear={resetFilters}
+              activeCount={activeCount}
+            />
+          </div>
+
           <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] md:hidden">
           <div className="space-y-3">
             {topRow ? (
@@ -299,14 +395,45 @@ export default function StockValuationReport({ shopId }: Props) {
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
-                  <th className="p-3 text-left text-foreground">পণ্য</th>
+                  <th className="p-3 text-left text-foreground">
+                    <SortableHeader
+                      label="পণ্য"
+                      active={filters.sort === "name"}
+                      direction={sortDirection}
+                      onClick={() => changeSort("name")}
+                    />
+                  </th>
                   <th className="p-3 text-left text-foreground">ক্যাটাগরি</th>
-                  <th className="p-3 text-right text-foreground">স্টক</th>
+                  <th className="p-3 text-right text-foreground">
+                    <SortableHeader
+                      label="স্টক"
+                      active={filters.sort === "qty"}
+                      direction={sortDirection}
+                      align="right"
+                      onClick={() => changeSort("qty")}
+                    />
+                  </th>
                   <th className="p-3 text-left text-foreground">লোকেশন</th>
                   <th className="p-3 text-right text-foreground">Restock</th>
                   <th className="p-3 text-right text-foreground">Buy Price</th>
-                  <th className="p-3 text-right text-foreground">Cost Value</th>
-                  <th className="p-3 text-right text-foreground">Retail Value</th>
+                  <th className="p-3 text-right text-foreground">
+                    <SortableHeader
+                      label="Cost Value"
+                      active={filters.sort === "cost"}
+                      direction={sortDirection}
+                      align="right"
+                      onClick={() => changeSort("cost")}
+                    />
+                  </th>
+                  <th className="p-3 text-right text-foreground">
+                    <SortableHeader
+                      label="Retail Value"
+                      active={filters.sort === "retail"}
+                      direction={sortDirection}
+                      align="right"
+                      onClick={() => changeSort("retail")}
+                    />
+                  </th>
                 </tr>
               </thead>
               <tbody>

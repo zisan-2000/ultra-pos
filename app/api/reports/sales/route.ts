@@ -31,12 +31,18 @@ export async function GET(req: Request) {
 
   const cursorAt = searchParams.get("cursorAt");
   const cursorId = searchParams.get("cursorId");
+  const cursorValue = searchParams.get("cursorValue");
   const cursorDate =
     cursorAt && cursorId ? new Date(cursorAt) : null;
   const cursor =
-    cursorDate && !Number.isNaN(cursorDate.getTime()) && cursorId
-      ? { at: cursorDate, id: cursorId }
+    cursorId && cursorDate && !Number.isNaN(cursorDate.getTime())
+      ? { at: cursorDate, id: cursorId, value: cursorValue }
       : null;
+  const sort = searchParams.get("sort") === "amount" ? "amount" : "date";
+  const dir = searchParams.get("dir") === "asc" ? "asc" : "desc";
+  const status = searchParams.get("status");
+  const saleStatus =
+    status === "paid" || status === "due" ? status : "all";
 
   const { rows, nextCursor, hasMore } = await getSalesWithFilterPaginated({
     shopId,
@@ -44,6 +50,11 @@ export async function GET(req: Request) {
     to,
     limit,
     cursor,
+    search: searchParams.get("q"),
+    paymentMethod: searchParams.get("payment"),
+    saleStatus,
+    sortBy: sort,
+    sortDir: dir,
   });
 
   return jsonWithEtag(req, { rows, nextCursor, hasMore }, {

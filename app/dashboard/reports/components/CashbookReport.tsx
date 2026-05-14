@@ -12,6 +12,8 @@ import { CashFlowChart, type CashFlowRow } from "./charts/ReportCharts";
 import { RefreshingPill, TableShimmer } from "./Shimmer";
 import { ReportEmptyState } from "./ReportEmptyState";
 import { LoadMoreButton } from "./LoadMoreButton";
+import { ReportControls, SortableHeader } from "./ReportControls";
+import { useNamespacedReportState } from "./report-url-state";
 type Props = { shopId: string; from?: string; to?: string };
 
 type CashRow = {
@@ -22,7 +24,7 @@ type CashRow = {
   createdAt: string;
 };
 
-type ReportCursor = { at: string; id: string };
+type ReportCursor = { at: string; id: string; value?: string | null };
 
 function formatMoney(value: number) {
   return `৳ ${Math.abs(value).toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -34,12 +36,29 @@ function formatDateTime(iso: string) {
   });
 }
 
+const CASH_FILTER_DEFAULTS: Record<"q" | "type" | "sort" | "dir", string> = {
+  q: "",
+  type: "all",
+  sort: "date",
+  dir: "desc",
+};
+
 export default function CashbookReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
+  const {
+    values: filters,
+    setValue: setFilter,
+    reset: resetFilters,
+    activeCount,
+  } = useNamespacedReportState("cash", CASH_FILTER_DEFAULTS);
+  const sortBy = filters.sort === "amount" ? "amount" : "date";
+  const sortDirection = filters.dir === "asc" ? "asc" : "desc";
+  const filterSignature = `${filters.q}|${filters.type}|${sortBy}|${sortDirection}`;
 
   const buildCacheKey = useCallback(
-    (f?: string, t?: string) => `reports:cash:${shopId}:${f || "all"}:${t || "all"}:${REPORT_ROW_LIMIT}`,
-    [shopId]
+    (f?: string, t?: string) =>
+      `reports:cash:${shopId}:${f || "all"}:${t || "all"}:${REPORT_ROW_LIMIT}:${filterSignature}`,
+    [filterSignature, shopId]
   );
 
   const readCached = useCallback((f?: string, t?: string) => {
@@ -55,7 +74,15 @@ export default function CashbookReport({ shopId, from, to }: Props) {
     const params = new URLSearchParams({ shopId, limit: `${REPORT_ROW_LIMIT}` });
     if (f) params.append("from", f);
     if (t) params.append("to", t);
-    if (cursor) { params.append("cursorAt", cursor.at); params.append("cursorId", cursor.id); }
+    if (filters.q.trim()) params.append("q", filters.q.trim());
+    if (filters.type !== "all") params.append("type", filters.type);
+    params.append("sort", sortBy);
+    params.append("dir", sortDirection);
+    if (cursor) {
+      params.append("cursorAt", cursor.at);
+      params.append("cursorId", cursor.id);
+      if (cursor.value != null) params.append("cursorValue", cursor.value);
+    }
     const res = await fetch(`/api/reports/cash?${params}`, { cache: "no-store" });
     if (res.status === 304) {
       const cached = readCached(f, t);
@@ -73,7 +100,7 @@ export default function CashbookReport({ shopId, from, to }: Props) {
       try { safeLocalStorageSet(buildCacheKey(f, t), JSON.stringify(rows)); } catch { /* ignore */ }
     }
     return { rows, hasMore: Boolean(data.hasMore), nextCursor: data.nextCursor ?? null };
-  }, [shopId, buildCacheKey, readCached]);
+  }, [shopId, filters.q, filters.type, sortBy, sortDirection, buildCacheKey, readCached]);
 
   const initialCashData = useMemo(() => {
     if (online) return undefined;
@@ -89,7 +116,17 @@ export default function CashbookReport({ shopId, from, to }: Props) {
   }, [online, readCached, from, to]);
 
   const cashQuery = useInfiniteQuery({
-    queryKey: ["reports", "cash", shopId, from ?? "all", to ?? "all"],
+    queryKey: [
+      "reports",
+      "cash",
+      shopId,
+      from ?? "all",
+      to ?? "all",
+      filters.q,
+      filters.type,
+      sortBy,
+      sortDirection,
+    ],
     queryFn: ({ pageParam }) => fetchCash(from, to, pageParam, pageParam == null),
     enabled: online,
     initialPageParam: null as ReportCursor | null,
@@ -145,6 +182,14 @@ export default function CashbookReport({ shopId, from, to }: Props) {
   const handleLoadMore = () => {
     if (!cashQuery.hasNextPage || cashQuery.isFetchingNextPage) return;
     cashQuery.fetchNextPage();
+  };
+
+  const changeSort = (field: "date" | "amount") => {
+    if (sortBy === field) {
+      setFilter("dir", sortDirection === "asc" ? "desc" : "asc");
+      return;
+    }
+    setFilter("sort", field);
   };
 
   const buildHref = () => {
@@ -226,6 +271,34 @@ export default function CashbookReport({ shopId, from, to }: Props) {
           </div>
         </div>
 
+        <ReportControls
+          searchValue={filters.q}
+          searchPlaceholder="কারণ বা নোট খুঁজুন..."
+          onSearchChange={(value) => setFilter("q", value)}
+          filters={[
+            {
+              label: "ধরন",
+              value: filters.type,
+              onChange: (value) => setFilter("type", value),
+              options: [
+                { label: "সব ধরন", value: "all" },
+                { label: "আয়", value: "IN" },
+                { label: "ব্যয়", value: "OUT" },
+              ],
+            },
+          ]}
+          sortValue={sortBy}
+          sortDirection={sortDirection}
+          sortOptions={[
+            { label: "তারিখ অনুযায়ী", value: "date" },
+            { label: "টাকা অনুযায়ী", value: "amount" },
+          ]}
+          onSortChange={(value) => setFilter("sort", value)}
+          onSortDirectionChange={(value) => setFilter("dir", value)}
+          onClear={resetFilters}
+          activeCount={activeCount}
+        />
+
         {showEmpty ? (
           <ReportEmptyState
             icon="💵"
@@ -252,10 +325,25 @@ export default function CashbookReport({ shopId, from, to }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/20">
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">তারিখ · সময়</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">
+                      <SortableHeader
+                        label="তারিখ · সময়"
+                        active={sortBy === "date"}
+                        direction={sortDirection}
+                        onClick={() => changeSort("date")}
+                      />
+                    </th>
                     <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">কারণ</th>
                     <th className="px-4 py-2.5 text-center text-xs font-semibold text-muted-foreground">ধরন</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">পরিমাণ</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">
+                      <SortableHeader
+                        label="পরিমাণ"
+                        active={sortBy === "amount"}
+                        direction={sortDirection}
+                        align="right"
+                        onClick={() => changeSort("amount")}
+                      />
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">

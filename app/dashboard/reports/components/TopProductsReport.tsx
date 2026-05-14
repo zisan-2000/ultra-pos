@@ -10,9 +10,17 @@ import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { ReportEmptyState } from "./ReportEmptyState";
 import { RefreshingPill } from "./Shimmer";
+import { ReportControls, SortableHeader } from "./ReportControls";
+import { useNamespacedReportState } from "./report-url-state";
 
 type TopProduct = { name: string; qty: number; revenue: number };
 type Props = { shopId: string; from?: string; to?: string };
+
+const TOP_PRODUCTS_FILTER_DEFAULTS: Record<"q" | "sort" | "dir", string> = {
+  q: "",
+  sort: "revenue",
+  dir: "desc",
+};
 
 function formatMoney(value: number) {
   return `৳ ${value.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -20,6 +28,13 @@ function formatMoney(value: number) {
 
 export default function TopProductsReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
+  const {
+    values: filters,
+    setValue: setFilter,
+    reset: resetFilters,
+    activeCount,
+  } = useNamespacedReportState("products", TOP_PRODUCTS_FILTER_DEFAULTS);
+  const sortDirection = filters.dir === "asc" ? "asc" : "desc";
 
   const buildCacheKey = useCallback(
     (rangeFrom?: string, rangeTo?: string) =>
@@ -105,7 +120,19 @@ export default function TopProductsReport({ shopId, from, to }: Props) {
   });
 
   const rawData: TopProduct[] = topProductsQuery.data ?? initialRows;
-  const data: TopProduct[] = rawData;
+  const data: TopProduct[] = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    const rows = q
+      ? rawData.filter((row) => row.name.toLowerCase().includes(q))
+      : [...rawData];
+    const dir = sortDirection === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      if (filters.sort === "qty") return (Number(a.qty || 0) - Number(b.qty || 0)) * dir;
+      if (filters.sort === "name") return a.name.localeCompare(b.name) * dir;
+      return (Number(a.revenue || 0) - Number(b.revenue || 0)) * dir;
+    });
+    return rows;
+  }, [filters.q, filters.sort, rawData, sortDirection]);
   const loading = topProductsQuery.isFetching && online;
   const hasFetched = topProductsQuery.isFetchedAfterMount;
   const showEmpty = data.length === 0 && (!online || hasFetched) && !loading;
@@ -122,6 +149,13 @@ export default function TopProductsReport({ shopId, from, to }: Props) {
     [data]
   );
   const topProduct = data[0] ?? null;
+  const changeSort = (field: "revenue" | "qty" | "name") => {
+    if (filters.sort === field) {
+      setFilter("dir", sortDirection === "asc" ? "desc" : "asc");
+      return;
+    }
+    setFilter("sort", field);
+  };
 
   return (
     <div className="space-y-4">
@@ -207,14 +241,56 @@ export default function TopProductsReport({ shopId, from, to }: Props) {
         </div>
       ) : (
         <>
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            <ReportControls
+              searchValue={filters.q}
+              searchPlaceholder="পণ্য খুঁজুন..."
+              onSearchChange={(value) => setFilter("q", value)}
+              sortValue={filters.sort}
+              sortDirection={sortDirection}
+              sortOptions={[
+                { label: "বিক্রি টাকা অনুযায়ী", value: "revenue" },
+                { label: "সংখ্যা অনুযায়ী", value: "qty" },
+                { label: "নাম অনুযায়ী", value: "name" },
+              ]}
+              onSortChange={(value) => setFilter("sort", value)}
+              onSortDirectionChange={(value) => setFilter("dir", value)}
+              onClear={resetFilters}
+              activeCount={activeCount}
+            />
+          </div>
+
           <div className="rounded-2xl border border-border overflow-x-auto hidden md:block">
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
                   <th className="p-3 text-left text-foreground">র্যাঙ্ক</th>
-                  <th className="p-3 text-left text-foreground">পণ্য</th>
-                  <th className="p-3 text-right text-foreground">বিক্রিত সংখ্যা</th>
-                  <th className="p-3 text-right text-foreground">মোট বিক্রি টাকা</th>
+                  <th className="p-3 text-left text-foreground">
+                    <SortableHeader
+                      label="পণ্য"
+                      active={filters.sort === "name"}
+                      direction={sortDirection}
+                      onClick={() => changeSort("name")}
+                    />
+                  </th>
+                  <th className="p-3 text-right text-foreground">
+                    <SortableHeader
+                      label="বিক্রিত সংখ্যা"
+                      active={filters.sort === "qty"}
+                      direction={sortDirection}
+                      align="right"
+                      onClick={() => changeSort("qty")}
+                    />
+                  </th>
+                  <th className="p-3 text-right text-foreground">
+                    <SortableHeader
+                      label="মোট বিক্রি টাকা"
+                      active={filters.sort === "revenue"}
+                      direction={sortDirection}
+                      align="right"
+                      onClick={() => changeSort("revenue")}
+                    />
+                  </th>
                 </tr>
               </thead>
 

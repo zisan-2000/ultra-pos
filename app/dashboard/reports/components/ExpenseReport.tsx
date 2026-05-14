@@ -11,8 +11,10 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { RefreshingPill, TableShimmer } from "./Shimmer";
 import { ReportEmptyState } from "./ReportEmptyState";
 import { LoadMoreButton } from "./LoadMoreButton";
+import { ReportControls, SortableHeader } from "./ReportControls";
+import { useNamespacedReportState } from "./report-url-state";
 type Props = { shopId: string; from?: string; to?: string };
-type ReportCursor = { at: string; id: string };
+type ReportCursor = { at: string; id: string; value?: string | null };
 
 type SummaryPayload = {
   expense: { totalAmount: number; count?: number };
@@ -54,12 +56,29 @@ function categoryLabel(raw?: string | null) {
   return raw?.trim() || "অনির্ধারিত";
 }
 
+const EXPENSE_FILTER_DEFAULTS: Record<"q" | "category" | "sort" | "dir", string> = {
+  q: "",
+  category: "all",
+  sort: "date",
+  dir: "desc",
+};
+
 export default function ExpenseReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
+  const {
+    values: filters,
+    setValue: setFilter,
+    reset: resetFilters,
+    activeCount,
+  } = useNamespacedReportState("expense", EXPENSE_FILTER_DEFAULTS);
+  const sortBy = filters.sort === "amount" ? "amount" : "date";
+  const sortDirection = filters.dir === "asc" ? "asc" : "desc";
+  const filterSignature = `${filters.q}|${filters.category}|${sortBy}|${sortDirection}`;
 
   const buildCacheKey = useCallback(
-    (f?: string, t?: string) => `reports:expenses:${shopId}:${f || "all"}:${t || "all"}:${REPORT_ROW_LIMIT}`,
-    [shopId]
+    (f?: string, t?: string) =>
+      `reports:expenses:${shopId}:${f || "all"}:${t || "all"}:${REPORT_ROW_LIMIT}:${filterSignature}`,
+    [filterSignature, shopId]
   );
 
   const readCached = useCallback((f?: string, t?: string) => {
@@ -75,7 +94,15 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
     const params = new URLSearchParams({ shopId, limit: `${REPORT_ROW_LIMIT}` });
     if (f) params.append("from", f);
     if (t) params.append("to", t);
-    if (cursor) { params.append("cursorAt", cursor.at); params.append("cursorId", cursor.id); }
+    if (filters.q.trim()) params.append("q", filters.q.trim());
+    if (filters.category !== "all") params.append("category", filters.category);
+    params.append("sort", sortBy);
+    params.append("dir", sortDirection);
+    if (cursor) {
+      params.append("cursorAt", cursor.at);
+      params.append("cursorId", cursor.id);
+      if (cursor.value != null) params.append("cursorValue", cursor.value);
+    }
     else params.append("fresh", "1");
     const res = await fetch(`/api/reports/expenses?${params}`, { cache: "no-store" });
     if (res.status === 304) {
@@ -94,7 +121,7 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
       try { safeLocalStorageSet(buildCacheKey(f, t), JSON.stringify(rows)); } catch { /* ignore */ }
     }
     return { rows, hasMore: Boolean(data.hasMore), nextCursor: data.nextCursor ?? null };
-  }, [shopId, buildCacheKey, readCached]);
+  }, [shopId, filters.q, filters.category, sortBy, sortDirection, buildCacheKey, readCached]);
 
   const fetchSummary = useCallback(async () => {
     const params = new URLSearchParams({ shopId });
@@ -129,7 +156,17 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
   }, [online, readCached, from, to]);
 
   const expenseQuery = useInfiniteQuery({
-    queryKey: ["reports", "expenses", shopId, from ?? "all", to ?? "all"],
+    queryKey: [
+      "reports",
+      "expenses",
+      shopId,
+      from ?? "all",
+      to ?? "all",
+      filters.q,
+      filters.category,
+      sortBy,
+      sortDirection,
+    ],
     queryFn: ({ pageParam }) => fetchExpenses(from, to, pageParam, pageParam == null),
     enabled: online,
     initialPageParam: null as ReportCursor | null,
@@ -179,6 +216,14 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
   const handleLoadMore = () => {
     if (!expenseQuery.hasNextPage || expenseQuery.isFetchingNextPage) return;
     expenseQuery.fetchNextPage();
+  };
+
+  const changeSort = (field: "date" | "amount") => {
+    if (sortBy === field) {
+      setFilter("dir", sortDirection === "asc" ? "desc" : "asc");
+      return;
+    }
+    setFilter("sort", field);
   };
 
   const buildHref = () => {
@@ -275,6 +320,36 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
           </div>
         </div>
 
+        <ReportControls
+          searchValue={filters.q}
+          searchPlaceholder="খাত বা নোট খুঁজুন..."
+          onSearchChange={(value) => setFilter("q", value)}
+          filters={[
+            {
+              label: "খাত",
+              value: filters.category,
+              onChange: (value) => setFilter("category", value),
+              options: [
+                { label: "সব খাত", value: "all" },
+                ...categoryBreakdown.map((cat) => ({
+                  label: cat.label,
+                  value: cat.label,
+                })),
+              ],
+            },
+          ]}
+          sortValue={sortBy}
+          sortDirection={sortDirection}
+          sortOptions={[
+            { label: "তারিখ অনুযায়ী", value: "date" },
+            { label: "টাকা অনুযায়ী", value: "amount" },
+          ]}
+          onSortChange={(value) => setFilter("sort", value)}
+          onSortDirectionChange={(value) => setFilter("dir", value)}
+          onClear={resetFilters}
+          activeCount={activeCount}
+        />
+
         {showEmpty ? (
           <ReportEmptyState
             icon="🧾"
@@ -301,9 +376,24 @@ export default function ExpenseReport({ shopId, from, to }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/20">
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">খাত · তারিখ</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">
+                      <SortableHeader
+                        label="খাত · তারিখ"
+                        active={sortBy === "date"}
+                        direction={sortDirection}
+                        onClick={() => changeSort("date")}
+                      />
+                    </th>
                     <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">নোট</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">টাকা</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">
+                      <SortableHeader
+                        label="টাকা"
+                        active={sortBy === "amount"}
+                        direction={sortDirection}
+                        align="right"
+                        onClick={() => changeSort("amount")}
+                      />
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">

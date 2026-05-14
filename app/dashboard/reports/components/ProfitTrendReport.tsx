@@ -9,6 +9,8 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { ProfitTrendChart, type ProfitTrendRow } from "./charts/ReportCharts";
 import { RefreshingPill, TableShimmer } from "./Shimmer";
 import { ReportEmptyState } from "./ReportEmptyState";
+import { ReportControls, SortableHeader } from "./ReportControls";
+import { useNamespacedReportState } from "./report-url-state";
 type ProfitRow = {
   date: string;
   sales: number;
@@ -40,6 +42,12 @@ type Props = {
   needsCogs?: boolean;
 };
 
+const PROFIT_FILTER_DEFAULTS: Record<"status" | "sort" | "dir", string> = {
+  status: "all",
+  sort: "date",
+  dir: "asc",
+};
+
 function formatMoney(value: number) {
   return `৳ ${value.toLocaleString("bn-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -66,6 +74,13 @@ function normalizeProfitRow(row: ProfitRow): NormalizedProfitRow {
 
 export default function ProfitTrendReport({ shopId, from, to, needsCogs = false }: Props) {
   const online = useOnlineStatus();
+  const {
+    values: filters,
+    setValue: setFilter,
+    reset: resetFilters,
+    activeCount,
+  } = useNamespacedReportState("profit", PROFIT_FILTER_DEFAULTS);
+  const sortDirection = filters.dir === "desc" ? "desc" : "asc";
 
   const buildCacheKey = useCallback(
     (f?: string, t?: string) => `reports:profit:${shopId}:${f || "all"}:${t || "all"}`,
@@ -112,10 +127,25 @@ export default function ProfitTrendReport({ shopId, from, to, needsCogs = false 
     ...(initialRows !== undefined ? { initialData: initialRows } : {}),
   });
 
-  const data: NormalizedProfitRow[] = useMemo(
+  const rawData: NormalizedProfitRow[] = useMemo(
     () => profitQuery.data ?? initialRows ?? [],
     [profitQuery.data, initialRows]
   );
+  const data: NormalizedProfitRow[] = useMemo(() => {
+    const dir = sortDirection === "asc" ? 1 : -1;
+    return rawData
+      .filter((row) => {
+        if (filters.status === "profit") return row.netProfit >= 0;
+        if (filters.status === "loss") return row.netProfit < 0;
+        return true;
+      })
+      .sort((a, b) => {
+        if (filters.sort === "sales") return (a.sales - b.sales) * dir;
+        if (filters.sort === "expense") return (a.operatingExpense + a.cogs - (b.operatingExpense + b.cogs)) * dir;
+        if (filters.sort === "net") return (a.netProfit - b.netProfit) * dir;
+        return a.date.localeCompare(b.date) * dir;
+      });
+  }, [filters.sort, filters.status, rawData, sortDirection]);
   const loading = profitQuery.isFetching && online;
   const showEmpty = data.length === 0 && (!online || profitQuery.isFetchedAfterMount) && !loading;
 
@@ -133,6 +163,13 @@ export default function ProfitTrendReport({ shopId, from, to, needsCogs = false 
 
   const isProfit = totals.netProfit >= 0;
   const colSpan = needsCogs ? 7 : 5;
+  const changeSort = (field: "date" | "sales" | "expense" | "net") => {
+    if (filters.sort === field) {
+      setFilter("dir", sortDirection === "asc" ? "desc" : "asc");
+      return;
+    }
+    setFilter("sort", field);
+  };
 
   const chartData = useMemo<ProfitTrendRow[]>(
     () =>
@@ -213,6 +250,33 @@ export default function ProfitTrendReport({ shopId, from, to, needsCogs = false 
           <RefreshingPill visible={loading && data.length > 0} />
         </div>
 
+        <ReportControls
+          filters={[
+            {
+              label: "ফলাফল",
+              value: filters.status,
+              onChange: (value) => setFilter("status", value),
+              options: [
+                { label: "সব দিন", value: "all" },
+                { label: "লাভের দিন", value: "profit" },
+                { label: "ক্ষতির দিন", value: "loss" },
+              ],
+            },
+          ]}
+          sortValue={filters.sort}
+          sortDirection={sortDirection}
+          sortOptions={[
+            { label: "তারিখ", value: "date" },
+            { label: "বিক্রি", value: "sales" },
+            { label: "খরচ", value: "expense" },
+            { label: "চূড়ান্ত লাভ", value: "net" },
+          ]}
+          onSortChange={(value) => setFilter("sort", value)}
+          onSortDirectionChange={(value) => setFilter("dir", value)}
+          onClear={resetFilters}
+          activeCount={activeCount}
+        />
+
         {showEmpty ? (
           <ReportEmptyState
             icon="📈"
@@ -239,12 +303,43 @@ export default function ProfitTrendReport({ shopId, from, to, needsCogs = false 
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/20">
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">তারিখ</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">মোট বিক্রি</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">
+                      <SortableHeader
+                        label="তারিখ"
+                        active={filters.sort === "date"}
+                        direction={sortDirection}
+                        onClick={() => changeSort("date")}
+                      />
+                    </th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">
+                      <SortableHeader
+                        label="মোট বিক্রি"
+                        active={filters.sort === "sales"}
+                        direction={sortDirection}
+                        align="right"
+                        onClick={() => changeSort("sales")}
+                      />
+                    </th>
                     {needsCogs && <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">পণ্যের খরচ</th>}
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">অন্যান্য খরচ</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">
+                      <SortableHeader
+                        label="অন্যান্য খরচ"
+                        active={filters.sort === "expense"}
+                        direction={sortDirection}
+                        align="right"
+                        onClick={() => changeSort("expense")}
+                      />
+                    </th>
                     {needsCogs && <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">প্রাথমিক লাভ</th>}
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">চূড়ান্ত লাভ</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">
+                      <SortableHeader
+                        label="চূড়ান্ত লাভ"
+                        active={filters.sort === "net"}
+                        direction={sortDirection}
+                        align="right"
+                        onClick={() => changeSort("net")}
+                      />
+                    </th>
                     <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">হার</th>
                   </tr>
                 </thead>

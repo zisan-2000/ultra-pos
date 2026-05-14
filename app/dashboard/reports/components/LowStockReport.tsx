@@ -11,6 +11,8 @@ import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { ReportEmptyState } from "./ReportEmptyState";
 import { RefreshingPill } from "./Shimmer";
+import { ReportControls, SortableHeader } from "./ReportControls";
+import { useNamespacedReportState } from "./report-url-state";
 
 type StockRow = { id?: string; name: string; stockQty: number };
 
@@ -20,12 +22,25 @@ type Props = {
   onThresholdChange?: (value: number) => void;
 };
 
+const LOW_STOCK_FILTER_DEFAULTS: Record<"q" | "sort" | "dir", string> = {
+  q: "",
+  sort: "stock",
+  dir: "asc",
+};
+
 export default function LowStockReport({
   shopId,
   threshold: thresholdProp,
   onThresholdChange,
 }: Props) {
   const online = useOnlineStatus();
+  const {
+    values: filters,
+    setValue: setFilter,
+    reset: resetFilters,
+    activeCount,
+  } = useNamespacedReportState("stock", LOW_STOCK_FILTER_DEFAULTS);
+  const sortDirection = filters.dir === "desc" ? "desc" : "asc";
   const [thresholdState, setThresholdState] = useState(20);
   const threshold =
     typeof thresholdProp === "number" ? thresholdProp : thresholdState;
@@ -118,7 +133,18 @@ export default function LowStockReport({
   });
 
   const rawItems: StockRow[] = lowStockQuery.data ?? initialRows;
-  const items: StockRow[] = rawItems;
+  const items: StockRow[] = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    const rows = q
+      ? rawItems.filter((row) => row.name.toLowerCase().includes(q))
+      : [...rawItems];
+    const dir = sortDirection === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      if (filters.sort === "name") return a.name.localeCompare(b.name) * dir;
+      return (Number(a.stockQty || 0) - Number(b.stockQty || 0)) * dir;
+    });
+    return rows;
+  }, [filters.q, filters.sort, rawItems, sortDirection]);
   const loading = lowStockQuery.isFetching && online;
   const hasFetched = lowStockQuery.isFetchedAfterMount;
   const showEmpty = items.length === 0 && (!online || hasFetched) && !loading;
@@ -141,6 +167,13 @@ export default function LowStockReport({
     if (qty <= 0) return "শেষ";
     if (qty <= 5) return "জরুরি";
     return "কম";
+  };
+  const changeSort = (field: "stock" | "name") => {
+    if (filters.sort === field) {
+      setFilter("dir", sortDirection === "asc" ? "desc" : "asc");
+      return;
+    }
+    setFilter("sort", field);
   };
 
   return (
@@ -248,13 +281,46 @@ export default function LowStockReport({
         </div>
       ) : (
         <>
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            <ReportControls
+              searchValue={filters.q}
+              searchPlaceholder="পণ্য খুঁজুন..."
+              onSearchChange={(value) => setFilter("q", value)}
+              sortValue={filters.sort}
+              sortDirection={sortDirection}
+              sortOptions={[
+                { label: "স্টক অনুযায়ী", value: "stock" },
+                { label: "নাম অনুযায়ী", value: "name" },
+              ]}
+              onSortChange={(value) => setFilter("sort", value)}
+              onSortDirectionChange={(value) => setFilter("dir", value)}
+              onClear={resetFilters}
+              activeCount={activeCount}
+            />
+          </div>
+
           <div className="rounded-2xl border border-border overflow-x-auto hidden md:block">
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
                   <th className="p-3 text-left text-foreground">র্যাঙ্ক</th>
-                  <th className="p-3 text-left text-foreground">পণ্য</th>
-                  <th className="p-3 text-right text-foreground">স্টক পরিমাণ</th>
+                  <th className="p-3 text-left text-foreground">
+                    <SortableHeader
+                      label="পণ্য"
+                      active={filters.sort === "name"}
+                      direction={sortDirection}
+                      onClick={() => changeSort("name")}
+                    />
+                  </th>
+                  <th className="p-3 text-right text-foreground">
+                    <SortableHeader
+                      label="স্টক পরিমাণ"
+                      active={filters.sort === "stock"}
+                      direction={sortDirection}
+                      align="right"
+                      onClick={() => changeSort("stock")}
+                    />
+                  </th>
                   <th className="p-3 text-right text-foreground">স্ট্যাটাস</th>
                 </tr>
               </thead>

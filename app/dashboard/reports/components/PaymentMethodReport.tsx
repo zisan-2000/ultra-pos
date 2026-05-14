@@ -9,12 +9,27 @@ import { handlePermissionError } from "@/lib/permission-toast";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { ReportEmptyState } from "./ReportEmptyState";
 import { RefreshingPill } from "./Shimmer";
+import { ReportControls } from "./ReportControls";
+import { useNamespacedReportState } from "./report-url-state";
 
 type PaymentRow = { name: string; value: number; count?: number };
 type Props = { shopId: string; from?: string; to?: string };
 
+const PAYMENT_FILTER_DEFAULTS: Record<"q" | "sort" | "dir", string> = {
+  q: "",
+  sort: "value",
+  dir: "desc",
+};
+
 export default function PaymentMethodReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
+  const {
+    values: filters,
+    setValue: setFilter,
+    reset: resetFilters,
+    activeCount,
+  } = useNamespacedReportState("payment", PAYMENT_FILTER_DEFAULTS);
+  const sortDirection = filters.dir === "asc" ? "asc" : "desc";
 
   const buildCacheKey = useCallback(
     (rangeFrom?: string, rangeTo?: string) =>
@@ -114,7 +129,23 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
   );
   const loading = paymentQuery.isFetching && online;
   const hasFetched = paymentQuery.isFetchedAfterMount;
-  const data = rawData;
+  const data = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    const rows = q
+      ? rawData.filter((row) => row.name.toLowerCase().includes(q))
+      : [...rawData];
+    const dir = sortDirection === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      if (filters.sort === "count") {
+        return (Number(a.count ?? 0) - Number(b.count ?? 0)) * dir;
+      }
+      if (filters.sort === "name") {
+        return a.name.localeCompare(b.name) * dir;
+      }
+      return (Number(a.value || 0) - Number(b.value || 0)) * dir;
+    });
+    return rows;
+  }, [filters.q, filters.sort, rawData, sortDirection]);
   const showEmpty = data.length === 0 && (!online || hasFetched) && !loading;
 
   const totalAmount = useMemo(
@@ -150,6 +181,22 @@ export default function PaymentMethodReport({ shopId, from, to }: Props) {
       </div>
 
       <div className="rounded-2xl border border-border/70 bg-card/80 p-2 shadow-[0_10px_20px_rgba(15,23,42,0.06)] space-y-2">
+        <ReportControls
+          searchValue={filters.q}
+          searchPlaceholder="পেমেন্ট মাধ্যম খুঁজুন..."
+          onSearchChange={(value) => setFilter("q", value)}
+          sortValue={filters.sort}
+          sortDirection={sortDirection}
+          sortOptions={[
+            { label: "টাকা অনুযায়ী", value: "value" },
+            { label: "লেনদেন অনুযায়ী", value: "count" },
+            { label: "নাম অনুযায়ী", value: "name" },
+          ]}
+          onSortChange={(value) => setFilter("sort", value)}
+          onSortDirectionChange={(value) => setFilter("dir", value)}
+          onClear={resetFilters}
+          activeCount={activeCount}
+        />
         {showEmpty ? (
           <ReportEmptyState
             icon="💳"

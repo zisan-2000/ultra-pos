@@ -211,15 +211,49 @@ function normalizeLimit(
 export type ReportCursor = {
   at: string;
   id: string;
+  value?: string | null;
 };
+
+type ReportSortDirection = "asc" | "desc";
 
 type ReportPaginationInput = {
   shopId: string;
   from?: string;
   to?: string;
   limit?: number;
-  cursor?: { at: Date; id: string } | null;
+  cursor?: { at?: Date | null; id: string; value?: string | null } | null;
 };
+
+type SalesReportPaginationInput = ReportPaginationInput & {
+  search?: string | null;
+  paymentMethod?: string | null;
+  saleStatus?: "all" | "paid" | "due" | null;
+  sortBy?: "date" | "amount" | null;
+  sortDir?: ReportSortDirection | null;
+};
+
+type ExpenseReportPaginationInput = ReportPaginationInput & {
+  search?: string | null;
+  category?: string | null;
+  sortBy?: "date" | "amount" | null;
+  sortDir?: ReportSortDirection | null;
+};
+
+type CashReportPaginationInput = ReportPaginationInput & {
+  search?: string | null;
+  entryType?: "all" | "IN" | "OUT" | null;
+  sortBy?: "date" | "amount" | null;
+  sortDir?: ReportSortDirection | null;
+};
+
+function cleanReportText(value?: string | null) {
+  const text = value?.trim();
+  return text ? text.slice(0, 80) : null;
+}
+
+function normalizeSortDir(value?: ReportSortDirection | null): ReportSortDirection {
+  return value === "asc" ? "asc" : "desc";
+}
 
 /* --------------------------------------------------
    SALES LIST WITH DATE FILTER
@@ -230,11 +264,21 @@ export async function getSalesWithFilterPaginated({
   to,
   limit,
   cursor,
-}: ReportPaginationInput) {
+  search,
+  paymentMethod,
+  saleStatus,
+  sortBy,
+  sortDir,
+}: SalesReportPaginationInput) {
   const user = await requireUser();
   ensureReportPermission(user, "view_sales_report");
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
+  const safeSearch = cleanReportText(search);
+  const safePayment = cleanReportText(paymentMethod);
+  const safeStatus = saleStatus === "due" || saleStatus === "paid" ? saleStatus : "all";
+  const safeSortBy = sortBy === "amount" ? "amount" : "date";
+  const safeSortDir = normalizeSortDir(sortDir);
   const parsed = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const { start, end } = useUnbounded
@@ -250,15 +294,67 @@ export async function getSalesWithFilterPaginated({
     },
   };
 
+  const and: Prisma.SaleWhereInput[] = [];
+
+  if (safeSearch) {
+    and.push({
+      OR: [
+        { invoiceNo: { contains: safeSearch, mode: "insensitive" } },
+        { note: { contains: safeSearch, mode: "insensitive" } },
+        {
+          customer: {
+            OR: [
+              { name: { contains: safeSearch, mode: "insensitive" } },
+              { phone: { contains: safeSearch, mode: "insensitive" } },
+            ],
+          },
+        },
+      ],
+    });
+  }
+
+  if (safePayment && safePayment !== "all") {
+    and.push({ paymentMethod: safePayment });
+  }
+
+  if (safeStatus === "due") {
+    and.push({ paymentMethod: "due" });
+  } else if (safeStatus === "paid") {
+    and.push({ paymentMethod: { not: "due" } });
+  }
+
   if (cursor) {
-    where.AND = [
-      {
+    if (safeSortBy === "amount" && cursor.value !== undefined && cursor.value !== null) {
+      const value = new Prisma.Decimal(cursor.value);
+      and.push({
+        OR:
+          safeSortDir === "asc"
+            ? [
+                { totalAmount: { gt: value } },
+                { totalAmount: value, id: { gt: cursor.id } },
+              ]
+            : [
+                { totalAmount: { lt: value } },
+                { totalAmount: value, id: { lt: cursor.id } },
+              ],
+      });
+    } else if (cursor.at) {
+      and.push({
         OR: [
-          { saleDate: { lt: cursor.at } },
-          { saleDate: cursor.at, id: { lt: cursor.id } },
+          safeSortDir === "asc"
+            ? { saleDate: { gt: cursor.at } }
+            : { saleDate: { lt: cursor.at } },
+          {
+            saleDate: cursor.at,
+            id: safeSortDir === "asc" ? { gt: cursor.id } : { lt: cursor.id },
+          },
         ],
-      },
-    ];
+      });
+    }
+  }
+
+  if (and.length > 0) {
+    where.AND = and;
   }
 
   const rows = await prisma.sale.findMany({
@@ -285,7 +381,10 @@ export async function getSalesWithFilterPaginated({
         },
       },
     },
-    orderBy: [{ saleDate: "desc" }, { id: "desc" }],
+    orderBy:
+      safeSortBy === "amount"
+        ? [{ totalAmount: safeSortDir }, { id: safeSortDir }]
+        : [{ saleDate: safeSortDir }, { id: safeSortDir }],
     take: safeLimit + 1,
   });
 
@@ -293,7 +392,14 @@ export async function getSalesWithFilterPaginated({
   const pageRows = rows.slice(0, safeLimit);
   const last = pageRows[pageRows.length - 1];
   const nextCursor: ReportCursor | null =
-    hasMore && last ? { at: last.saleDate.toISOString(), id: last.id } : null;
+    hasMore && last
+      ? {
+          at: last.saleDate.toISOString(),
+          id: last.id,
+          value:
+            safeSortBy === "amount" ? String(last.totalAmount) : undefined,
+        }
+      : null;
 
   return { rows: pageRows, nextCursor, hasMore };
 }
@@ -322,11 +428,19 @@ export async function getExpensesWithFilterPaginated({
   to,
   limit,
   cursor,
-}: ReportPaginationInput) {
+  search,
+  category,
+  sortBy,
+  sortDir,
+}: ExpenseReportPaginationInput) {
   const user = await requireUser();
   ensureReportPermission(user, "view_expense_report");
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
+  const safeSearch = cleanReportText(search);
+  const safeCategory = cleanReportText(category);
+  const safeSortBy = sortBy === "amount" ? "amount" : "date";
+  const safeSortDir = normalizeSortDir(sortDir);
   const parsed = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const { start, end } = useUnbounded
@@ -341,15 +455,53 @@ export async function getExpensesWithFilterPaginated({
     },
   };
 
+  const and: Prisma.ExpenseWhereInput[] = [];
+
+  if (safeSearch) {
+    and.push({
+      OR: [
+        { category: { contains: safeSearch, mode: "insensitive" } },
+        { note: { contains: safeSearch, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  if (safeCategory && safeCategory !== "all") {
+    and.push({ category: { contains: safeCategory, mode: "insensitive" } });
+  }
+
   if (cursor) {
-    where.AND = [
-      {
+    if (safeSortBy === "amount" && cursor.value !== undefined && cursor.value !== null) {
+      const value = new Prisma.Decimal(cursor.value);
+      and.push({
+        OR:
+          safeSortDir === "asc"
+            ? [
+                { amount: { gt: value } },
+                { amount: value, id: { gt: cursor.id } },
+              ]
+            : [
+                { amount: { lt: value } },
+                { amount: value, id: { lt: cursor.id } },
+              ],
+      });
+    } else if (cursor.at) {
+      and.push({
         OR: [
-          { expenseDate: { lt: cursor.at } },
-          { expenseDate: cursor.at, id: { lt: cursor.id } },
+          safeSortDir === "asc"
+            ? { expenseDate: { gt: cursor.at } }
+            : { expenseDate: { lt: cursor.at } },
+          {
+            expenseDate: cursor.at,
+            id: safeSortDir === "asc" ? { gt: cursor.id } : { lt: cursor.id },
+          },
         ],
-      },
-    ];
+      });
+    }
+  }
+
+  if (and.length > 0) {
+    where.AND = and;
   }
 
   const rows = await prisma.expense.findMany({
@@ -362,7 +514,10 @@ export async function getExpensesWithFilterPaginated({
       category: true,
       note: true,
     },
-    orderBy: [{ expenseDate: "desc" }, { id: "desc" }],
+    orderBy:
+      safeSortBy === "amount"
+        ? [{ amount: safeSortDir }, { id: safeSortDir }]
+        : [{ expenseDate: safeSortDir }, { id: safeSortDir }],
     take: safeLimit + 1,
   });
 
@@ -371,7 +526,11 @@ export async function getExpensesWithFilterPaginated({
   const last = pageRows[pageRows.length - 1];
   const nextCursor: ReportCursor | null =
     hasMore && last
-      ? { at: last.expenseDate.toISOString(), id: last.id }
+      ? {
+          at: last.expenseDate.toISOString(),
+          id: last.id,
+          value: safeSortBy === "amount" ? String(last.amount) : undefined,
+        }
       : null;
 
   return { rows: pageRows, nextCursor, hasMore };
@@ -401,11 +560,19 @@ export async function getCashWithFilterPaginated({
   to,
   limit,
   cursor,
-}: ReportPaginationInput) {
+  search,
+  entryType,
+  sortBy,
+  sortDir,
+}: CashReportPaginationInput) {
   const user = await requireUser();
   ensureReportPermission(user, "view_cashbook_report");
   await assertShopAccess(shopId, user);
   const safeLimit = normalizeLimit(limit);
+  const safeSearch = cleanReportText(search);
+  const safeEntryType = entryType === "IN" || entryType === "OUT" ? entryType : "all";
+  const safeSortBy = sortBy === "amount" ? "amount" : "date";
+  const safeSortDir = normalizeSortDir(sortDir);
   const parsed = parseDateRange(from, to);
   const useUnbounded = !from && !to;
   const { start, end } = useUnbounded
@@ -420,15 +587,48 @@ export async function getCashWithFilterPaginated({
     },
   };
 
+  const and: Prisma.CashEntryWhereInput[] = [];
+
+  if (safeSearch) {
+    and.push({ reason: { contains: safeSearch, mode: "insensitive" } });
+  }
+
+  if (safeEntryType !== "all") {
+    and.push({ entryType: safeEntryType });
+  }
+
   if (cursor) {
-    where.AND = [
-      {
+    if (safeSortBy === "amount" && cursor.value !== undefined && cursor.value !== null) {
+      const value = new Prisma.Decimal(cursor.value);
+      and.push({
+        OR:
+          safeSortDir === "asc"
+            ? [
+                { amount: { gt: value } },
+                { amount: value, id: { gt: cursor.id } },
+              ]
+            : [
+                { amount: { lt: value } },
+                { amount: value, id: { lt: cursor.id } },
+              ],
+      });
+    } else if (cursor.at) {
+      and.push({
         OR: [
-          { createdAt: { lt: cursor.at } },
-          { createdAt: cursor.at, id: { lt: cursor.id } },
+          safeSortDir === "asc"
+            ? { createdAt: { gt: cursor.at } }
+            : { createdAt: { lt: cursor.at } },
+          {
+            createdAt: cursor.at,
+            id: safeSortDir === "asc" ? { gt: cursor.id } : { lt: cursor.id },
+          },
         ],
-      },
-    ];
+      });
+    }
+  }
+
+  if (and.length > 0) {
+    where.AND = and;
   }
 
   const rows = await prisma.cashEntry.findMany({
@@ -441,7 +641,10 @@ export async function getCashWithFilterPaginated({
       createdAt: true,
       businessDate: true,
     },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    orderBy:
+      safeSortBy === "amount"
+        ? [{ amount: safeSortDir }, { id: safeSortDir }]
+        : [{ createdAt: safeSortDir }, { id: safeSortDir }],
     take: safeLimit + 1,
   });
 
@@ -449,7 +652,13 @@ export async function getCashWithFilterPaginated({
   const pageRows = rows.slice(0, safeLimit);
   const last = pageRows[pageRows.length - 1];
   const nextCursor: ReportCursor | null =
-    hasMore && last ? { at: last.createdAt.toISOString(), id: last.id } : null;
+    hasMore && last
+      ? {
+          at: last.createdAt.toISOString(),
+          id: last.id,
+          value: safeSortBy === "amount" ? String(last.amount) : undefined,
+        }
+      : null;
 
   return { rows: pageRows, nextCursor, hasMore };
 }

@@ -17,10 +17,12 @@ import {
 import { RefreshingPill, TableShimmer } from "./Shimmer";
 import { ReportEmptyState } from "./ReportEmptyState";
 import { LoadMoreButton } from "./LoadMoreButton";
+import { ReportControls, SortableHeader } from "./ReportControls";
+import { useNamespacedReportState } from "./report-url-state";
 
 type Props = { shopId: string; from?: string; to?: string };
 
-type ReportCursor = { at: string; id: string };
+type ReportCursor = { at: string; id: string; value?: string | null };
 type SummaryPayload = {
   sales: {
     totalAmount: number;
@@ -43,6 +45,14 @@ type SalesRow = {
   note?: string | null;
   customer?: { name?: string | null; phone?: string | null } | null;
   _count?: { saleItems?: number };
+};
+
+const SALES_FILTER_DEFAULTS: Record<"q" | "payment" | "status" | "sort" | "dir", string> = {
+  q: "",
+  payment: "all",
+  status: "all",
+  sort: "date",
+  dir: "desc",
 };
 
 function scheduleStateUpdate(fn: () => void) {
@@ -94,10 +104,20 @@ function getBillTitle(row: SalesRow) {
 
 export default function SalesReport({ shopId, from, to }: Props) {
   const online = useOnlineStatus();
+  const {
+    values: filters,
+    setValue: setFilter,
+    reset: resetFilters,
+    activeCount,
+  } = useNamespacedReportState("sales", SALES_FILTER_DEFAULTS);
+  const sortBy = filters.sort === "amount" ? "amount" : "date";
+  const sortDirection = filters.dir === "asc" ? "asc" : "desc";
+  const filterSignature = `${filters.q}|${filters.payment}|${filters.status}|${sortBy}|${sortDirection}`;
 
   const buildCacheKey = useCallback(
-    (f?: string, t?: string) => `reports:sales:${shopId}:${f || "all"}:${t || "all"}:${REPORT_ROW_LIMIT}`,
-    [shopId]
+    (f?: string, t?: string) =>
+      `reports:sales:${shopId}:${f || "all"}:${t || "all"}:${REPORT_ROW_LIMIT}:${filterSignature}`,
+    [filterSignature, shopId]
   );
 
   const readCached = useCallback((f?: string, t?: string) => {
@@ -113,7 +133,16 @@ export default function SalesReport({ shopId, from, to }: Props) {
     const params = new URLSearchParams({ shopId, limit: `${REPORT_ROW_LIMIT}` });
     if (f) params.append("from", f);
     if (t) params.append("to", t);
-    if (cursor) { params.append("cursorAt", cursor.at); params.append("cursorId", cursor.id); }
+    if (filters.q.trim()) params.append("q", filters.q.trim());
+    if (filters.payment !== "all") params.append("payment", filters.payment);
+    if (filters.status !== "all") params.append("status", filters.status);
+    params.append("sort", sortBy);
+    params.append("dir", sortDirection);
+    if (cursor) {
+      params.append("cursorAt", cursor.at);
+      params.append("cursorId", cursor.id);
+      if (cursor.value != null) params.append("cursorValue", cursor.value);
+    }
     const res = await fetch(`/api/reports/sales?${params}`, { cache: "no-store" });
     if (res.status === 304) {
       const cached = readCached(f, t);
@@ -131,7 +160,7 @@ export default function SalesReport({ shopId, from, to }: Props) {
       try { safeLocalStorageSet(buildCacheKey(f, t), JSON.stringify(rows)); } catch { /* ignore */ }
     }
     return { rows, hasMore: Boolean(data.hasMore), nextCursor: data.nextCursor ?? null };
-  }, [shopId, buildCacheKey, readCached]);
+  }, [shopId, filters.q, filters.payment, filters.status, sortBy, sortDirection, buildCacheKey, readCached]);
 
   const fetchSummary = useCallback(async () => {
     const params = new URLSearchParams({ shopId });
@@ -166,7 +195,18 @@ export default function SalesReport({ shopId, from, to }: Props) {
   }, [online, readCached, from, to]);
 
   const salesQuery = useInfiniteQuery({
-    queryKey: ["reports", "sales", shopId, from ?? "all", to ?? "all"],
+    queryKey: [
+      "reports",
+      "sales",
+      shopId,
+      from ?? "all",
+      to ?? "all",
+      filters.q,
+      filters.payment,
+      filters.status,
+      sortBy,
+      sortDirection,
+    ],
     queryFn: ({ pageParam }) => fetchSales(from, to, pageParam, pageParam == null),
     enabled: online,
     initialPageParam: null as ReportCursor | null,
@@ -262,6 +302,14 @@ export default function SalesReport({ shopId, from, to }: Props) {
     return `/dashboard/sales?${params}`;
   };
 
+  const changeSort = (field: "date" | "amount") => {
+    if (sortBy === field) {
+      setFilter("dir", sortDirection === "asc" ? "desc" : "asc");
+      return;
+    }
+    setFilter("sort", field);
+  };
+
   return (
     <div className="space-y-4">
 
@@ -338,6 +386,48 @@ export default function SalesReport({ shopId, from, to }: Props) {
           </div>
         </div>
 
+        <ReportControls
+          searchValue={filters.q}
+          searchPlaceholder="বিল, গ্রাহক, ফোন বা নোট খুঁজুন..."
+          onSearchChange={(value) => setFilter("q", value)}
+          filters={[
+            {
+              label: "পেমেন্ট",
+              value: filters.payment,
+              onChange: (value) => setFilter("payment", value),
+              options: [
+                { label: "সব পেমেন্ট", value: "all" },
+                { label: "ক্যাশ", value: "cash" },
+                { label: "বিকাশ", value: "bkash" },
+                { label: "নগদ", value: "nagad" },
+                { label: "কার্ড", value: "card" },
+                { label: "ব্যাংক", value: "bank_transfer" },
+                { label: "ধার", value: "due" },
+              ],
+            },
+            {
+              label: "অবস্থা",
+              value: filters.status,
+              onChange: (value) => setFilter("status", value),
+              options: [
+                { label: "সব অবস্থা", value: "all" },
+                { label: "পরিশোধিত", value: "paid" },
+                { label: "বাকি", value: "due" },
+              ],
+            },
+          ]}
+          sortValue={sortBy}
+          sortDirection={sortDirection}
+          sortOptions={[
+            { label: "তারিখ অনুযায়ী", value: "date" },
+            { label: "টাকা অনুযায়ী", value: "amount" },
+          ]}
+          onSortChange={(value) => setFilter("sort", value)}
+          onSortDirectionChange={(value) => setFilter("dir", value)}
+          onClear={resetFilters}
+          activeCount={activeCount}
+        />
+
         {showEmpty ? (
           <ReportEmptyState
             icon="🧾"
@@ -364,12 +454,27 @@ export default function SalesReport({ shopId, from, to }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/20">
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">বিল · সময়</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">
+                      <SortableHeader
+                        label="বিল · সময়"
+                        active={sortBy === "date"}
+                        direction={sortDirection}
+                        onClick={() => changeSort("date")}
+                      />
+                    </th>
                     <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">গ্রাহক</th>
                     <th className="px-4 py-2.5 text-center text-xs font-semibold text-muted-foreground">পেমেন্ট</th>
                     <th className="px-4 py-2.5 text-center text-xs font-semibold text-muted-foreground">ছাড়</th>
                     <th className="px-4 py-2.5 text-center text-xs font-semibold text-muted-foreground">অবস্থা</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">মোট টাকা</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">
+                      <SortableHeader
+                        label="মোট টাকা"
+                        active={sortBy === "amount"}
+                        direction={sortDirection}
+                        align="right"
+                        onClick={() => changeSort("amount")}
+                      />
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
