@@ -11,7 +11,7 @@ import useRealTimeReports from "@/hooks/useRealTimeReports";
 import { emitExpenseUpdate } from "@/lib/events/reportEvents";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import Link from "next/link";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast, showWarningToast } from "@/components/ui/action-toast";
 import { getDhakaDateString } from "@/lib/reporting-range";
 import {
   getSpeechRecognitionCtor,
@@ -459,7 +459,11 @@ export default function ExpenseFormClient({
             correlationId: pendingEvent.correlationId,
           });
         }
-        toast.success(isEdit ? "খরচ আপডেট হয়েছে" : "খরচ যোগ হয়েছে");
+        showSuccessToast({
+          title: isEdit ? "খরচ আপডেট হয়েছে" : "খরচ যোগ হয়েছে",
+          amount: Number(form.get("amount")) > 0 ? Number(form.get("amount")) : undefined,
+          subtitle: ((form.get("category") as string) || "").trim() || undefined,
+        });
         router.push(backHref);
         // Background sync for consistency
         setTimeout(() => {
@@ -478,7 +482,10 @@ export default function ExpenseFormClient({
           realTimeReports.rollbackLastUpdate();
         }
         console.error('Expense creation failed:', error);
-        toast.error("খরচ সংরক্ষণ করা যায়নি");
+        showErrorToast({
+          title: "খরচ সংরক্ষণ করা যায়নি",
+          subtitle: "আবার চেষ্টা করুন",
+        });
       }
       return;
     }
@@ -499,11 +506,10 @@ export default function ExpenseFormClient({
       await db.expenses.put(payload as any);
       await queueAdd("expense", isEdit ? "update" : "create", payload);
     });
-    toast.warning(
-      isEdit
-        ? "অফলাইন: খরচ আপডেট কিউ হয়েছে, সংযোগ পেলে সিঙ্ক হবে।"
-        : "অফলাইন: খরচ সংরক্ষিত, সংযোগ পেলে সিঙ্ক হবে।"
-    );
+    showWarningToast({
+      title: isEdit ? "অফলাইন: খরচ আপডেট কিউ হয়েছে" : "অফলাইন: খরচ সংরক্ষিত",
+      subtitle: "সংযোগ পেলে সিঙ্ক হবে",
+    });
   }
 
   return (

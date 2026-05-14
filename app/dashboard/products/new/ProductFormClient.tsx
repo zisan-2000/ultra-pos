@@ -40,7 +40,7 @@ import { useProductFields } from "@/hooks/useProductFields";
 import { type BusinessType, type Field, type BusinessFieldConfig } from "@/lib/productFormConfig";
 import { emitProductEvent } from "@/lib/products/product-events";
 import BarcodePreviewCard from "@/components/products/BarcodePreviewCard";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast } from "@/components/ui/action-toast";
 import { handlePermissionError } from "@/lib/permission-toast";
 import {
   CAMERA_DUPLICATE_WINDOW_MS,
@@ -1636,17 +1636,25 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       );
 
     if (variantModeEnabled && resolvedVariants.length === 0) {
-      toast.error("ভ্যারিয়েন্ট চালু থাকলে অন্তত ১টি label + price দিন।");
+      showErrorToast({
+        title: "ভ্যারিয়েন্ট অসম্পূর্ণ",
+        subtitle: "অন্তত ১টি label + price দিন",
+      });
       return;
     }
     const resolvedSellPrice =
       requestedSellPrice || resolvedVariants[0]?.sellPrice || "";
     if (!resolvedSellPrice) {
-      toast.error("বিক্রয় মূল্য দিন।");
+      showErrorToast({
+        title: "বিক্রয় মূল্য দিন",
+      });
       return;
     }
     if (cutLengthEnabled && !defaultCutLengthRaw) {
-      toast.error("কাট-লেন্থ ট্র্যাকিং চালু থাকলে ডিফল্ট ফুল লেন্থ দিন।");
+      showErrorToast({
+        title: "কাট-লেন্থ অসম্পূর্ণ",
+        subtitle: "ডিফল্ট ফুল লেন্থ দিন",
+      });
       return;
     }
 
@@ -1716,7 +1724,10 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
           at: Date.now(),
           source: "create",
         });
-        toast.success("পণ্য তৈরি হয়েছে।");
+        showSuccessToast({
+          title: "পণ্য তৈরি হয়েছে",
+          subtitle: payload.name,
+        });
       } else {
         await db.transaction("rw", db.products, db.queue, async () => {
           await db.products.put(payload);
@@ -1727,7 +1738,10 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
           at: Date.now(),
           source: "local",
         });
-        toast.success("অফলাইন: পণ্য কিউ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+        showSuccessToast({
+          title: "অফলাইন: পণ্য কিউ হয়েছে",
+          subtitle: "অনলাইনে গেলে সিঙ্ক হবে",
+        });
       }
 
       router.push(`/dashboard/products?shopId=${ensuredShopId}`);
@@ -1738,10 +1752,16 @@ function ProductForm({ shop, businessConfig, canUseBarcodeScan = false }: Props)
       const message = err instanceof Error ? err.message : "পণ্য তৈরি ব্যর্থ হয়েছে";
       const normalized = message.toLowerCase();
       if (normalized.includes("access to this shop")) {
-        toast.error("এই দোকানে আপনার অনুমতি নেই।");
+        showErrorToast({
+          title: "অনুমতি নেই",
+          subtitle: "এই দোকানে আপনার অনুমতি নেই",
+        });
         return;
       }
-      toast.error(message);
+      showErrorToast({
+        title: "পণ্য তৈরি ব্যর্থ",
+        subtitle: message,
+      });
     }
   }
   return (

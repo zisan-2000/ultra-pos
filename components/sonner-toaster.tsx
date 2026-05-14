@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { Toaster, toast } from "sonner";
+import { Toaster } from "sonner";
+import {
+  showSuccessToast,
+  showWarningToast,
+  showErrorToast,
+} from "@/components/ui/action-toast";
 
 const warningPattern = /(মুছ|ডিলিট|delete|remove|removed|বাতিল|রিমুভ)/i;
 const errorPattern = /(ভুল|সমস্যা|error|failed|cannot|can't|পারিনি|পারি না|নেই|missing|select|must|required|অনুমতি নেই|blocked)/i;
@@ -9,14 +14,14 @@ const errorPattern = /(ভুল|সমস্যা|error|failed|cannot|can't|�
 function notifyFromAlert(message: string) {
   if (!message) return;
   if (warningPattern.test(message)) {
-    toast.warning(message);
+    showWarningToast({ title: message });
     return;
   }
   if (errorPattern.test(message)) {
-    toast.error(message);
+    showErrorToast({ title: message });
     return;
   }
-  toast.success(message);
+  showSuccessToast({ title: message });
 }
 
 export default function SonnerToaster() {

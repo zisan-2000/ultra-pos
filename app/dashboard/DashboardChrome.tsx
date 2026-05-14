@@ -52,7 +52,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { toast } from "sonner";
+import { showSuccessToast } from "@/components/ui/action-toast";
 import {
   Dialog,
   DialogContent,
@@ -483,7 +483,10 @@ export function DashboardShell({
     document.cookie = `activeShopId=${id}; path=/; max-age=${
       60 * 60 * 24 * 30
     }`;
-    toast.success(`দোকান পরিবর্তন হয়েছে: ${nextShopName}`);
+    showSuccessToast({
+      title: "দোকান পরিবর্তন হয়েছে",
+      subtitle: nextShopName,
+    });
 
     const params = new URLSearchParams(searchParams?.toString() || "");
     params.set("shopId", id);

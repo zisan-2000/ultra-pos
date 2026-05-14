@@ -12,7 +12,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { showSuccessToast } from "@/components/ui/action-toast";
+import { showSuccessToast, showErrorToast, showWarningToast } from "@/components/ui/action-toast";
 import { useRouter } from "next/navigation";
 import { PosProductSearch } from "./components/pos-product-search";
 import { PosCartItem } from "./components/pos-cart-item";
@@ -35,7 +35,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ShoppingCart } from "lucide-react";
 
 import { useOnlineStatus } from "@/lib/sync/net-status";
-import { toast } from "sonner";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { db } from "@/lib/dexie/db";
 import { handlePermissionError } from "@/lib/permission-toast";
@@ -704,18 +703,27 @@ export function PosPageClient({
     if (items.length === 0) return;
 
     if (!canCreateSale) {
-      toast.error("আপনার বিক্রি সম্পন্ন করার অনুমতি নেই।");
+      showErrorToast({
+        title: "অনুমতি নেই",
+        subtitle: "আপনার বিক্রি সম্পন্ন করার অনুমতি নেই",
+      });
       return;
     }
 
     if (paymentMethod === "due" && !canUseDueSale) {
-      toast.error("বাকিতে বিক্রির অনুমতি নেই।");
+      showErrorToast({
+        title: "অনুমতি নেই",
+        subtitle: "বাকিতে বিক্রির অনুমতি নেই",
+      });
       setPaymentMethod("cash");
       return;
     }
 
     if (paymentMethod === "due" && !customerId) {
-      toast.warning("বাকিতে বিক্রির জন্য কাস্টমার নির্বাচন করুন।");
+      showWarningToast({
+        title: "কাস্টমার নির্বাচন করুন",
+        subtitle: "বাকিতে বিক্রির জন্য কাস্টমার প্রয়োজন",
+      });
       return;
     }
 
@@ -724,7 +732,10 @@ export function PosPageClient({
       return Boolean(product?.trackSerialNumbers);
     });
     if (!online && hasSerializedItem) {
-      toast.error("Serial-tracked পণ্য offline sale-এ সমর্থিত নয়। online হয়ে বিক্রি করুন।");
+      showErrorToast({
+        title: "Offline-এ সমর্থিত নয়",
+        subtitle: "Serial-tracked পণ্য বিক্রি করতে online হোন",
+      });
       return;
     }
 
@@ -741,9 +752,10 @@ export function PosPageClient({
     if (serialMismatchItem) {
       const expected = Math.max(0, Math.round(serialMismatchItem.qty));
       const actual = (serialMismatchItem.serialNumbers ?? []).length;
-      toast.error(
-        `Serial mismatch: qty ${expected}, selected serial ${actual}. আগে serial ঠিক করুন।`
-      );
+      showErrorToast({
+        title: "Serial mismatch",
+        subtitle: `qty ${expected}, selected serial ${actual} — আগে serial ঠিক করুন`,
+      });
       await openSerialPicker(
         serialMismatchItem.itemKey,
         serialMismatchItem.productId,
@@ -958,17 +970,19 @@ export function PosPageClient({
       customerName,
     });
 
-    toast.success(
-      isDue
-        ? "অফলাইন: বাকির বিক্রি সেভ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।"
-        : "অফলাইন: বিক্রি সেভ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।"
-    );
+    showSuccessToast({
+      title: isDue ? "অফলাইন: বাকির বিক্রি সেভ হয়েছে" : "অফলাইন: বিক্রি সেভ হয়েছে",
+      subtitle: "অনলাইনে গেলে সিঙ্ক হবে",
+    });
     clear();
     setDiscountType("amount");
     setDiscountValue("");
     } catch (error) {
       console.error("Sale submission failed:", error);
-      toast.error("বিল সম্পন্ন করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+      showErrorToast({
+        title: "বিল সম্পন্ন করা যায়নি",
+        subtitle: "আবার চেষ্টা করুন",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -1084,7 +1098,10 @@ export function PosPageClient({
 
   const handleSellFromBar = () => {
     if (!canCreateSale) {
-      toast.error("আপনার বিক্রি সম্পন্ন করার অনুমতি নেই।");
+      showErrorToast({
+        title: "অনুমতি নেই",
+        subtitle: "আপনার বিক্রি সম্পন্ন করার অনুমতি নেই",
+      });
       return;
     }
     suspendScannerBeforeCheckout();
@@ -1093,7 +1110,10 @@ export function PosPageClient({
       .items.filter((item) => item.shopId === shopId);
 
     if (latestCartItems.length === 0) {
-      toast.warning("কার্টে কোনো পণ্য নেই।");
+      showWarningToast({
+        title: "কার্ট খালি",
+        subtitle: "কোনো পণ্য নেই",
+      });
       return;
     }
 

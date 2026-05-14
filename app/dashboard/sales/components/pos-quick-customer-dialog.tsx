@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast, showWarningToast } from "@/components/ui/action-toast";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
@@ -56,7 +56,10 @@ export function PosQuickCustomerDialog({
 
   async function handleSave() {
     if (!canCreateCustomer) {
-      toast.error("গ্রাহক যোগ করার অনুমতি নেই।");
+      showErrorToast({
+        title: "অনুমতি নেই",
+        subtitle: "গ্রাহক যোগ করার অনুমতি নেই",
+      });
       return;
     }
 
@@ -65,7 +68,10 @@ export function PosQuickCustomerDialog({
     const address = quickCustomer.address.trim();
 
     if (!name) {
-      toast.warning("গ্রাহকের নাম লিখুন।");
+      showWarningToast({
+        title: "নাম লিখুন",
+        subtitle: "গ্রাহকের নাম প্রয়োজন",
+      });
       return;
     }
 
@@ -97,7 +103,11 @@ export function PosQuickCustomerDialog({
         onSelectCustomer(payload.id);
         setQuickCustomer({ name: "", phone: "", address: "" });
         onClose();
-        toast.success("অফলাইন: গ্রাহক যোগ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+        showSuccessToast({
+          title: "গ্রাহক যোগ হয়েছে (অফলাইন)",
+          subtitle: "অনলাইনে গেলে সিঙ্ক হবে",
+          meta: [name],
+        });
         return;
       }
 
@@ -148,10 +158,16 @@ export function PosQuickCustomerDialog({
       onClose();
       emitDueCustomersEvent({ shopId, at: Date.now(), source: "create" });
       onInvalidateQuery();
-      toast.success("গ্রাহক যোগ হয়েছে এবং নির্বাচন করা হয়েছে।");
+      showSuccessToast({
+        title: "গ্রাহক যোগ এবং নির্বাচিত",
+        subtitle: name,
+      });
     } catch (error) {
       console.error("Quick customer create failed:", error);
-      toast.error("গ্রাহক যোগ করা যায়নি। আবার চেষ্টা করুন।");
+      showErrorToast({
+        title: "গ্রাহক যোগ করা যায়নি",
+        subtitle: "আবার চেষ্টা করুন",
+      });
     } finally {
       setSavingCustomer(false);
     }

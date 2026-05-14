@@ -9,7 +9,7 @@ import useRealTimeReports from "@/hooks/useRealTimeReports";
 import { emitExpenseUpdate } from "@/lib/events/reportEvents";
 import { useState } from "react";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast } from "@/components/ui/action-toast";
 
 type Props = {
   id: string;
@@ -111,15 +111,18 @@ export function ExpensesDeleteButton({
       if (updateId) {
         realTimeReports.rollbackLastUpdate();
       }
-      toast.error("খরচ মুছে ফেলা যায়নি, আবার চেষ্টা করুন।");
+      showErrorToast({
+        title: "খরচ মুছে ফেলা যায়নি",
+        subtitle: "আবার চেষ্টা করুন",
+      });
       return;
     }
 
-    toast.success(
-      online
-        ? "খরচটি মুছে ফেলা হয়েছে।"
-        : "অফলাইন: অনলাইনে গেলে সিঙ্ক হবে।"
-    );
+    showSuccessToast({
+      title: "খরচ মুছে ফেলা হয়েছে",
+      subtitle: online ? undefined : "অফলাইন — অনলাইনে গেলে সিঙ্ক হবে",
+      amount: Number.isFinite(Number(amount)) && Number(amount) > 0 ? Number(amount) : undefined,
+    });
   };
 
   return (

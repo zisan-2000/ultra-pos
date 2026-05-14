@@ -36,7 +36,7 @@ import {
   startDualLanguageVoice,
   type VoiceSession,
 } from "@/lib/voice-recognition";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast } from "@/components/ui/action-toast";
 import { DEFAULT_BUSINESS_TYPE, getBusinessAssist } from "@/lib/business-types";
 import {
   Select,
@@ -1671,17 +1671,25 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
       );
 
     if (variantModeEnabled && resolvedVariants.length === 0) {
-      toast.error("ভ্যারিয়েন্ট চালু থাকলে অন্তত ১টি label + price দিন।");
+      showErrorToast({
+        title: "ভ্যারিয়েন্ট অসম্পূর্ণ",
+        subtitle: "অন্তত ১টি label + price দিন",
+      });
       return;
     }
     const resolvedSellPrice =
       requestedSellPrice || resolvedVariants[0]?.sellPrice || "";
     if (!resolvedSellPrice) {
-      toast.error("বিক্রয় মূল্য দিন।");
+      showErrorToast({
+        title: "বিক্রয় মূল্য দিন",
+      });
       return;
     }
     if (cutLengthEnabled && !defaultCutLengthRaw) {
-      toast.error("কাট-লেন্থ ট্র্যাকিং চালু থাকলে ডিফল্ট ফুল লেন্থ দিন।");
+      showErrorToast({
+        title: "কাট-লেন্থ অসম্পূর্ণ",
+        subtitle: "ডিফল্ট ফুল লেন্থ দিন",
+      });
       return;
     }
 
@@ -1746,13 +1754,19 @@ const advancedFieldRenderers: Partial<Record<Field, () => JSX.Element>> = {
 
     if (online) {
       await updateProduct(product.id, payload);
-      toast.success("পণ্য সফলভাবে আপডেট হয়েছে");
+      showSuccessToast({
+        title: "পণ্য আপডেট হয়েছে",
+        subtitle: payload.name,
+      });
     } else {
       await db.transaction("rw", db.products, db.queue, async () => {
         await db.products.put(payload);
         await queueAdd("product", "update", payload);
       });
-      toast.success("পণ্য অফলাইনে আপডেট; অনলাইনে হলে সিঙ্ক হবে");
+      showSuccessToast({
+        title: "অফলাইন: পণ্য আপডেট কিউ হয়েছে",
+        subtitle: "অনলাইনে গেলে সিঙ্ক হবে",
+      });
     }
 
     router.push(`/dashboard/products?shopId=${shopId}`);

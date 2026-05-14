@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast } from "@/components/ui/action-toast";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getDhakaDateString } from "@/lib/reporting-range";
 import {
@@ -177,13 +177,20 @@ export default function QuickExpenseSheet({
         throw new Error(payload.error || "খরচ যোগ করা যায়নি");
       }
 
-      toast.success("খরচ যোগ হয়েছে");
+      showSuccessToast({
+        title: "খরচ যোগ হয়েছে",
+        amount: Number(amount) > 0 ? Number(amount) : undefined,
+        subtitle: category?.trim() || undefined,
+      });
       setOpen(false);
       resetForm();
       onCreated?.();
     } catch (error) {
       const message = error instanceof Error ? error.message : "খরচ যোগ করা যায়নি";
-      toast.error(message);
+      showErrorToast({
+        title: "খরচ যোগ করা যায়নি",
+        subtitle: message !== "খরচ যোগ করা যায়নি" ? message : undefined,
+      });
     } finally {
       setSaving(false);
     }

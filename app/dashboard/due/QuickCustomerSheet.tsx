@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast } from "@/components/ui/action-toast";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
 import { useOnlineStatus } from "@/lib/sync/net-status";
@@ -192,7 +192,11 @@ export default function QuickCustomerSheet({
           await db.dueCustomers.put(payload);
           await queueAdd("due_customer", "create", payload);
         });
-        toast.success("অফলাইন: গ্রাহক কিউ হয়েছে, অনলাইনে সিঙ্ক হবে");
+        showSuccessToast({
+          title: "গ্রাহক যোগ হয়েছে (অফলাইন)",
+          subtitle: "অনলাইনে গেলে সিঙ্ক হবে",
+          meta: [name.trim()],
+        });
         setOpen(false);
         resetForm();
         onCreated?.("offline");
@@ -217,14 +221,20 @@ export default function QuickCustomerSheet({
         throw new Error(payload.error || "গ্রাহক যোগ করা যায়নি");
       }
 
-      toast.success("গ্রাহক যোগ হয়েছে");
+      showSuccessToast({
+        title: "গ্রাহক যোগ হয়েছে",
+        subtitle: name.trim() || undefined,
+      });
       setOpen(false);
       resetForm();
       onCreated?.("online");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "গ্রাহক যোগ করা যায়নি";
-      toast.error(message);
+      showErrorToast({
+        title: "গ্রাহক যোগ করা যায়নি",
+        subtitle: message !== "গ্রাহক যোগ করা যায়নি" ? message : undefined,
+      });
     } finally {
       setSaving(false);
     }

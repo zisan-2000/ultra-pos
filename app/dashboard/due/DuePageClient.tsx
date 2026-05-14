@@ -25,7 +25,7 @@ import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import { queueAdd } from "@/lib/sync/queue";
 import { handlePermissionError } from "@/lib/permission-toast";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast } from "@/components/ui/action-toast";
 import { useSmartPolling, type SmartPollingReason } from "@/lib/polling/use-smart-polling";
 import { usePageVisibility } from "@/lib/use-page-visibility";
 import {
@@ -715,7 +715,10 @@ export default function DuePageClient({
   async function handleAddCustomer(e: FormEvent) {
     e.preventDefault();
     if (!canCreateCustomer) {
-      toast.error("গ্রাহক যোগ করার অনুমতি নেই।");
+      showErrorToast({
+        title: "অনুমতি নেই",
+        subtitle: "গ্রাহক যোগ করার অনুমতি নেই",
+      });
       return;
     }
     if (!newCustomer.name.trim()) return;
@@ -802,7 +805,10 @@ export default function DuePageClient({
   async function handlePayment(e: FormEvent) {
     e.preventDefault();
     if (!canTakeDuePayment) {
-      toast.error("পেমেন্ট রেকর্ড করার অনুমতি নেই।");
+      showErrorToast({
+        title: "অনুমতি নেই",
+        subtitle: "পেমেন্ট রেকর্ড করার অনুমতি নেই",
+      });
       return;
     }
     if (!paymentForm.customerId || !paymentForm.amount) return;
@@ -913,7 +919,11 @@ export default function DuePageClient({
         });
 
         refreshStatement(paymentForm.customerId);
-        toast.success("অফলাইন: পেমেন্ট সেভ হয়েছে, অনলাইনে গেলে সিঙ্ক হবে।");
+        showSuccessToast({
+          title: "অফলাইন: পেমেন্ট সেভ হয়েছে",
+          subtitle: "অনলাইনে গেলে সিঙ্ক হবে",
+          amount: Number(paymentForm.amount) > 0 ? Number(paymentForm.amount) : undefined,
+        });
         return;
       }
 
@@ -1069,7 +1079,10 @@ export default function DuePageClient({
 
   const openAddTab = () => {
     if (!canCreateCustomer) {
-      toast.error("গ্রাহক যোগ করার অনুমতি নেই।");
+      showErrorToast({
+        title: "অনুমতি নেই",
+        subtitle: "গ্রাহক যোগ করার অনুমতি নেই",
+      });
       return;
     }
     handleTabSelect("add");
@@ -1077,7 +1090,10 @@ export default function DuePageClient({
 
   const openPaymentTab = (customerId?: string) => {
     if (!canTakeDuePayment) {
-      toast.error("পেমেন্ট নেওয়ার অনুমতি নেই।");
+      showErrorToast({
+        title: "অনুমতি নেই",
+        subtitle: "পেমেন্ট নেওয়ার অনুমতি নেই",
+      });
       return;
     }
     if (customerId) {

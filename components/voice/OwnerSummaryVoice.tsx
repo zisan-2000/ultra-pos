@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/ui/action-toast";
 import {
   Dialog,
   DialogContent,
@@ -270,7 +270,7 @@ export default function OwnerSummaryVoice({
         } catch {
           // ignore storage errors
         }
-        toast.success("নোটিফিকেশন চালু হয়েছে");
+        showSuccessToast({ title: "নোটিফিকেশন চালু হয়েছে" });
       } else {
         setNotificationEnabled(false);
         try {
@@ -279,18 +279,27 @@ export default function OwnerSummaryVoice({
           // ignore storage errors
         }
         if (permission === "denied") {
-          toast.error("নোটিফিকেশন ব্রাউজারে ব্লক করা হয়েছে");
+          showErrorToast({
+            title: "নোটিফিকেশন ব্লক করা",
+            subtitle: "ব্রাউজার সেটিংস থেকে অনুমতি দিন",
+          });
         }
       }
     } catch {
-      toast.error("নোটিফিকেশন চালু করা যাচ্ছে না");
+      showErrorToast({
+        title: "নোটিফিকেশন চালু করা যাচ্ছে না",
+        subtitle: "আবার চেষ্টা করুন",
+      });
     }
   }, [notificationSupported, isEnabledUser, notificationStorageKey]);
 
   const toggleNotifications = useCallback(() => {
     if (!notificationSupported || !isEnabledUser) return;
     if (notificationPermission === "denied") {
-      toast.error("নোটিফিকেশন ব্রাউজারে ব্লক করা হয়েছে");
+      showErrorToast({
+        title: "নোটিফিকেশন ব্লক করা",
+        subtitle: "ব্রাউজার সেটিংস থেকে অনুমতি দিন",
+      });
       return;
     }
     if (notificationEnabled) {
@@ -309,7 +318,7 @@ export default function OwnerSummaryVoice({
       } catch {
         // ignore storage errors
       }
-      toast.success("নোটিফিকেশন চালু হয়েছে");
+      showSuccessToast({ title: "নোটিফিকেশন চালু হয়েছে" });
       return;
     }
     void requestNotificationPermission();
@@ -363,9 +372,12 @@ export default function OwnerSummaryVoice({
         );
         setAlertDialogOpen(true);
         if (fetchFailed && !summaryForAlert) {
-          toast.error("সারাংশ পাওয়া যায়নি।");
+          showErrorToast({
+            title: "সারাংশ পাওয়া যায়নি",
+            subtitle: "আবার চেষ্টা করুন",
+          });
         } else {
-          toast.success(buildToastText(summaryForAlert));
+          showSuccessToast({ title: buildToastText(summaryForAlert) });
         }
         void playChime();
       }
@@ -417,7 +429,10 @@ export default function OwnerSummaryVoice({
   const downloadDailyReports = useCallback(async () => {
     if (!shopId) return;
     if (!online) {
-      toast.error("অফলাইনে রিপোর্ট ডাউনলোড করা যাবে না");
+      showErrorToast({
+        title: "অফলাইনে রিপোর্ট ডাউনলোড করা যাবে না",
+        subtitle: "ইন্টারনেট সংযোগ চেক করুন",
+      });
       return;
     }
 
@@ -425,7 +440,11 @@ export default function OwnerSummaryVoice({
     const dateLabel = from ?? getDhakaDateString();
     setReportDownloadBusy(true);
     setReportDownloadError(null);
-    const toastId = toast.success("রিপোর্ট ডাউনলোড হচ্ছে...");
+    const toastId = showInfoToast({
+      title: "রিপোর্ট ডাউনলোড হচ্ছে",
+      subtitle: "অপেক্ষা করুন...",
+      duration: 60_000,
+    });
 
     const fetchAllRows = async (endpoint: string) => {
       const rows: any[] = [];
@@ -528,11 +547,18 @@ export default function OwnerSummaryVoice({
       );
       downloadFile(`cashbook-${dateLabel}.csv`, cashCsv);
 
-      toast.success("রিপোর্ট ডাউনলোড হয়েছে", { id: toastId });
+      showSuccessToast({
+        id: toastId,
+        title: "রিপোর্ট ডাউনলোড হয়েছে",
+      });
     } catch (err) {
       handlePermissionError(err);
       setReportDownloadError("রিপোর্ট ডাউনলোড করা যায়নি");
-      toast.error("রিপোর্ট ডাউনলোড করা যায়নি", { id: toastId });
+      showErrorToast({
+        id: toastId,
+        title: "রিপোর্ট ডাউনলোড করা যায়নি",
+        subtitle: "আবার চেষ্টা করুন",
+      });
     } finally {
       setReportDownloadBusy(false);
     }
@@ -553,7 +579,7 @@ export default function OwnerSummaryVoice({
       if (isVisible) {
         setReportText(text);
         setReportDialogOpen(true);
-        toast.success("দিনশেষ রিপোর্ট প্রস্তুত");
+        showSuccessToast({ title: "দিনশেষ রিপোর্ট প্রস্তুত" });
         void playChime();
       }
 
@@ -649,11 +675,14 @@ export default function OwnerSummaryVoice({
       try {
         await updateShop(shopId, { closingTime: normalized });
         setClosingTimeValue(normalized);
-        toast.success("ক্লোজিং টাইম সেভ হয়েছে");
+        showSuccessToast({ title: "ক্লোজিং টাইম সেভ হয়েছে" });
       } catch (err) {
         handlePermissionError(err);
         setClosingTimeError("ক্লোজিং টাইম সেভ করা যায়নি");
-        toast.error("ক্লোজিং টাইম সেভ করা যায়নি");
+        showErrorToast({
+          title: "ক্লোজিং টাইম সেভ করা যায়নি",
+          subtitle: "আবার চেষ্টা করুন",
+        });
       }
     });
   }, [shopId, closingTimeValue]);

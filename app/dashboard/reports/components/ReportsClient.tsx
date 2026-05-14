@@ -21,7 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import RefreshIconButton from "@/components/ui/refresh-icon-button";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast, showInfoToast } from "@/components/ui/action-toast";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { useSyncStatus } from "@/lib/sync/sync-status";
 import {
@@ -1465,12 +1465,19 @@ export default function ReportsClient({
   const handleExport = useCallback(
     async (key: ExportKey) => {
       if (!online) {
-        toast.error("অফলাইনে রিপোর্ট ডাউনলোড করা যাবে না");
+        showErrorToast({
+          title: "অফলাইনে রিপোর্ট ডাউনলোড করা যাবে না",
+          subtitle: "ইন্টারনেট সংযোগ চেক করুন",
+        });
         return;
       }
       setExportingKey(key);
       setExportError(null);
-      const toastId = toast.success("রিপোর্ট ডাউনলোড হচ্ছে...");
+      const toastId = showInfoToast({
+        title: "রিপোর্ট ডাউনলোড হচ্ছে",
+        subtitle: "অপেক্ষা করুন...",
+        duration: 60_000,
+      });
 
       try {
         if (key === "all") {
@@ -1498,12 +1505,19 @@ export default function ReportsClient({
           await exportSingle(key);
         }
 
-        toast.success("CSV ডাউনলোড হয়েছে", { id: toastId });
+        showSuccessToast({
+          id: toastId,
+          title: "CSV ডাউনলোড হয়েছে",
+        });
         setExportOpen(false);
       } catch (err) {
         handlePermissionError(err);
         setExportError("CSV ডাউনলোড করা যায়নি");
-        toast.error("CSV ডাউনলোড করা যায়নি", { id: toastId });
+        showErrorToast({
+          id: toastId,
+          title: "CSV ডাউনলোড করা যায়নি",
+          subtitle: "আবার চেষ্টা করুন",
+        });
       } finally {
         setExportingKey(null);
       }

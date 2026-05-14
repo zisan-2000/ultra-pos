@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast } from "@/components/ui/action-toast";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import {
   Dialog,
@@ -223,14 +223,20 @@ export default function QuickDuePaymentSheet({
         throw new Error(payload.error || "পেমেন্ট সংরক্ষণ করা যায়নি");
       }
 
-      toast.success("পেমেন্ট রেকর্ড হয়েছে");
+      showSuccessToast({
+        title: "পেমেন্ট রেকর্ড হয়েছে",
+        amount: Number(amount) > 0 ? Number(amount) : undefined,
+      });
       setOpen(false);
       resetForm();
       onSuccess?.(customerId);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "পেমেন্ট সংরক্ষণ করা যায়নি";
-      toast.error(message);
+      showErrorToast({
+        title: "পেমেন্ট সংরক্ষণ করা যায়নি",
+        subtitle: message !== "পেমেন্ট সংরক্ষণ করা যায়নি" ? message : undefined,
+      });
     } finally {
       setSaving(false);
     }

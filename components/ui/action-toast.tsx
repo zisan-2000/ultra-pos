@@ -330,32 +330,43 @@ export function ActionToast({
 
 // ---------- Helper functions — call these directly from any component ----------
 
-type ToastInput = Omit<ActionToastProps, "id" | "variant">;
+type ToastInput = Omit<ActionToastProps, "id" | "variant"> & {
+  /** Reuse an existing toast id to update its content in-place */
+  id?: string | number;
+};
+
+function pickOptions(props: ToastInput) {
+  const opts: { duration: number; id?: string | number } = {
+    duration: props.duration ?? 5000,
+  };
+  if (props.id !== undefined) opts.id = props.id;
+  return opts;
+}
 
 export function showSuccessToast(props: ToastInput) {
   return toast.custom(
     (id) => <ActionToast id={id} variant="success" {...props} />,
-    { duration: props.duration ?? 5000 }
+    pickOptions(props)
   );
 }
 
 export function showInfoToast(props: ToastInput) {
   return toast.custom(
     (id) => <ActionToast id={id} variant="info" {...props} />,
-    { duration: props.duration ?? 5000 }
+    pickOptions(props)
   );
 }
 
 export function showWarningToast(props: ToastInput) {
   return toast.custom(
     (id) => <ActionToast id={id} variant="warning" {...props} />,
-    { duration: props.duration ?? 5000 }
+    pickOptions(props)
   );
 }
 
 export function showErrorToast(props: ToastInput) {
   return toast.custom(
     (id) => <ActionToast id={id} variant="error" {...props} />,
-    { duration: props.duration ?? 5000 }
+    pickOptions(props)
   );
 }

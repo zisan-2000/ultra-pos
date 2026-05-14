@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { showSuccessToast, showErrorToast } from "@/components/ui/action-toast";
 import {
   Dialog,
   DialogContent,
@@ -163,7 +163,15 @@ export default function QuickCashEntrySheet({
       if (!res.ok || !data.success) {
         throw new Error(data.error || "ক্যাশ এন্ট্রি যোগ করা যায়নি");
       }
-      toast.success("ক্যাশ এন্ট্রি যোগ হয়েছে");
+      showSuccessToast({
+        title: "ক্যাশ এন্ট্রি যোগ হয়েছে",
+        amount: Number(amount) > 0 ? Number(amount) : undefined,
+        subtitle: reason?.trim() || undefined,
+        badge:
+          entryType === "IN"
+            ? { label: "ইন", color: "text-emerald-700 bg-emerald-50 border-emerald-200" }
+            : { label: "আউট", color: "text-rose-700 bg-rose-50 border-rose-200" },
+      });
       setOpen(false);
       setAmount("");
       setReason("");
@@ -172,7 +180,10 @@ export default function QuickCashEntrySheet({
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "ক্যাশ এন্ট্রি যোগ করা যায়নি";
-      toast.error(message);
+      showErrorToast({
+        title: "ক্যাশ এন্ট্রি যোগ করা যায়নি",
+        subtitle: message !== "ক্যাশ এন্ট্রি যোগ করা যায়নি" ? message : undefined,
+      });
     } finally {
       setSaving(false);
     }

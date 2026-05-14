@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { showSuccessToast } from "@/components/ui/action-toast";
 import { useOnlineStatus } from "@/lib/sync/net-status";
 import { db } from "@/lib/dexie/db";
 import { queueAdd } from "@/lib/sync/queue";
@@ -426,7 +426,12 @@ export default function CashFormClient({
       await db.cash.put(payload as any);
       await queueAdd("cash", isEdit ? "update" : "create", payload);
     });
-    toast.success(isEdit ? "Offline: ক্যাশ এন্ট্রি আপডেট কিউ হয়েছে, সংযোগ পেলে সিঙ্ক হবে।" : "Offline: ক্যাশ এন্ট্রি সংরক্ষিত, সংযোগ পেলে সিঙ্ক হবে।");
+    showSuccessToast({
+      title: isEdit ? "ক্যাশ এন্ট্রি আপডেট হয়েছে" : "ক্যাশ এন্ট্রি সংরক্ষিত",
+      subtitle: "অফলাইন — সংযোগ পেলে সিঙ্ক হবে",
+      amount: Number.isFinite(cashAmount) && cashAmount > 0 ? cashAmount : undefined,
+      meta: (form.get("reason") as string)?.trim() ? [(form.get("reason") as string).trim()] : undefined,
+    });
   }
 
   return (

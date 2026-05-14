@@ -1,4 +1,4 @@
-import { toast } from "sonner";
+import { showErrorToast } from "@/components/ui/action-toast";
 
 const PERMISSION_PREFIX = "forbidden: missing permission";
 let lastToastAt = 0;
@@ -33,6 +33,6 @@ export function handlePermissionError(err: unknown): boolean {
   const now = Date.now();
   if (now - lastToastAt < 1200) return true;
   lastToastAt = now;
-  toast.error("এই কাজের অনুমতি নেই।");
+  showErrorToast({ title: "এই কাজের অনুমতি নেই।" });
   return true;
 }
