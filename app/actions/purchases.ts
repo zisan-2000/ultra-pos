@@ -15,6 +15,8 @@ import {
   parseDhakaDateOnlyRange,
   toDhakaBusinessDate,
 } from "@/lib/dhaka-date";
+import { auditActorSnapshot, logAudit } from "@/lib/audit/logger";
+import { auditMoney } from "@/lib/audit/formatters";
 
 type PurchaseItemInput = {
   productId: string;
@@ -475,6 +477,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
   const purchaseDate = normalizePurchaseDate(input.purchaseDate);
   let createdPurchaseId: string | null = null;
 
+  const actor = auditActorSnapshot(user);
   await prisma.$transaction(async (tx) => {
     const created = await tx.purchase.create({
       data: {
@@ -763,6 +766,43 @@ export async function createPurchase(input: CreatePurchaseInput) {
         });
       }
     }
+    await logAudit(
+      {
+        shopId: input.shopId,
+        ...actor,
+        action: "purchase.create",
+        targetType: "purchase",
+        targetId: created.id,
+        summary: `${actor.userName || "সিস্টেম"} পণ্য ক্রয় করেছেন: ${auditMoney(totalAmount)} · ${rowsWithLanded.length} আইটেম${supplierName ? ` · ${supplierName}` : ""}`,
+        metadata: {
+          purchaseId: created.id,
+          supplierId,
+          supplierName,
+          subtotalAmount,
+          landedCostTotal,
+          totalAmount,
+          paidAmount,
+          dueAmount,
+          paymentMethod,
+          items: rowsWithLanded.map((row) => ({
+            productId: row.product.id,
+            productName: row.product.name,
+            variantId: row.variantId,
+            qty: row.baseQty,
+            purchaseQty: row.purchaseQty,
+            purchaseUnitLabel: row.purchaseUnitLabel,
+            unitCost: row.unitCost,
+            effectiveUnitCost: row.effectiveUnitCost,
+            batchNo: row.batchNo || null,
+            batchExpiryDate: row.batchExpiryDate,
+          })),
+        },
+        severity: "info",
+        correlationId: created.id,
+        businessDate: toDhakaBusinessDate(purchaseDate).toISOString().slice(0, 10),
+      },
+      tx,
+    );
   });
 
   revalidatePath("/dashboard/purchases");

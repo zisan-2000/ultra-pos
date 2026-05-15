@@ -198,6 +198,7 @@ export const permissionMeta: Record<string, PermissionMeta> = {
   view_top_products_report: { label: "বেস্টসেলার রিপোর্ট", module: "reports" },
   view_low_stock_report: { label: "লো স্টক রিপোর্ট", module: "reports" },
   export_reports: { label: "রিপোর্ট এক্সপোর্ট", module: "reports" },
+  view_audit_log: { label: "অডিট লগ দেখা", module: "reports", critical: true },
   view_users: { label: "ব্যবহারকারী দেখা", module: "users" },
   create_user: { label: "ব্যবহারকারী তৈরি", module: "users" },
   update_user: { label: "ব্যবহারকারী সম্পাদনা", module: "users" },

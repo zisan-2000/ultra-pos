@@ -10,6 +10,8 @@ import { Prisma, ProductSourceType } from "@prisma/client";
 import { revalidateReportsForProduct } from "@/lib/reports/revalidate";
 import { getDhakaBusinessDate } from "@/lib/dhaka-date";
 import { buildProductSearchTerms } from "@/lib/product-search";
+import { auditActorSnapshot, logAudit } from "@/lib/audit/logger";
+import { productSummary } from "@/lib/audit/formatters";
 
 import { type CursorToken } from "@/lib/cursor-pagination";
 
@@ -1172,6 +1174,7 @@ export async function createProduct(input: CreateProductInput) {
 
   let created: { id: string };
   try {
+    const actor = auditActorSnapshot(user);
     created = await prisma.$transaction(async (tx) => {
       const createdProduct = await tx.product.create({ data });
       if (variants && variants.length > 0) {
@@ -1206,6 +1209,37 @@ export async function createProduct(input: CreateProductInput) {
           })),
         });
       }
+      await logAudit(
+        {
+          shopId: input.shopId,
+          ...actor,
+          action: "product.create",
+          targetType: "product",
+          targetId: createdProduct.id,
+          summary: productSummary("create", {
+            name: createdProduct.name,
+            actor: user,
+          }),
+          metadata: {
+            product: {
+              id: createdProduct.id,
+              name: createdProduct.name,
+              category: createdProduct.category,
+              sellPrice: createdProduct.sellPrice,
+              buyPrice: createdProduct.buyPrice,
+              trackStock: createdProduct.trackStock,
+              trackSerialNumbers: createdProduct.trackSerialNumbers,
+              trackBatch: createdProduct.trackBatch,
+              trackCutLength: createdProduct.trackCutLength,
+            },
+            variantCount: variants?.length ?? 0,
+            unitConversionCount: unitConversions?.length ?? 0,
+          },
+          severity: "info",
+          correlationId: createdProduct.id,
+        },
+        tx,
+      );
       return { id: createdProduct.id };
     });
   } catch (err) {
@@ -2278,6 +2312,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
   });
 
   try {
+    const actor = auditActorSnapshot(user);
     await prisma.$transaction(async (tx) => {
       await assertNoActiveBaseInventoryForVariantTransition(tx, {
         productId: id,
@@ -2293,7 +2328,7 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
         nextVariantCount: variants?.length ?? previousVariantCount,
       });
 
-      await tx.product.update({
+      const updated = await tx.product.update({
         where: { id },
         data: payload,
       });
@@ -2336,6 +2371,60 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
           });
         }
       }
+      const oldSellPrice = product.sellPrice?.toString?.() ?? product.sellPrice ?? null;
+      const newSellPrice = updated.sellPrice?.toString?.() ?? updated.sellPrice ?? null;
+      const priceChanged =
+        oldSellPrice !== null &&
+        newSellPrice !== null &&
+        Number(oldSellPrice) !== Number(newSellPrice);
+      await logAudit(
+        {
+          shopId: product.shopId,
+          ...actor,
+          action: priceChanged ? "product.price.change" : "product.update",
+          targetType: "product",
+          targetId: id,
+          summary: productSummary(priceChanged ? "price" : "update", {
+            name: updated.name,
+            actor: user,
+            oldSellPrice,
+            newSellPrice,
+          }),
+          metadata: {
+            before: {
+              id: product.id,
+              name: product.name,
+              category: product.category,
+              buyPrice: product.buyPrice,
+              sellPrice: product.sellPrice,
+              stockQty: product.stockQty,
+              isActive: product.isActive,
+              trackStock: product.trackStock,
+              trackSerialNumbers: (product as any).trackSerialNumbers,
+              trackBatch: (product as any).trackBatch,
+              trackCutLength: (product as any).trackCutLength,
+            },
+            after: {
+              id: updated.id,
+              name: updated.name,
+              category: updated.category,
+              buyPrice: updated.buyPrice,
+              sellPrice: updated.sellPrice,
+              stockQty: updated.stockQty,
+              isActive: updated.isActive,
+              trackStock: updated.trackStock,
+              trackSerialNumbers: (updated as any).trackSerialNumbers,
+              trackBatch: (updated as any).trackBatch,
+              trackCutLength: (updated as any).trackCutLength,
+            },
+            variantChanged: variants !== undefined,
+            unitConversionsChanged: unitConversions !== undefined,
+          },
+          severity: priceChanged ? "critical" : "warning",
+          correlationId: id,
+        },
+        tx,
+      );
     });
   } catch (err) {
     throwFriendlyCodeConflict(err);
@@ -2351,7 +2440,6 @@ export async function updateProduct(id: string, data: UpdateProductInput) {
 export async function deleteProduct(id: string) {
   const product = await prisma.product.findUnique({
     where: { id },
-    select: { id: true, shopId: true },
   });
 
   if (!product) throw new Error("Product not found");
@@ -2365,12 +2453,29 @@ export async function deleteProduct(id: string) {
   });
 
   if (saleItemsCount > 0) {
-    await prisma.product.update({
-      where: { id },
-      data: {
-        isActive: false,
-        trackStock: false,
-      },
+    const actor = auditActorSnapshot(user);
+    await prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id },
+        data: {
+          isActive: false,
+          trackStock: false,
+        },
+      });
+      await logAudit(
+        {
+          shopId: product.shopId,
+          ...actor,
+          action: "product.delete",
+          targetType: "product",
+          targetId: id,
+          summary: productSummary("delete", { name: product.name, actor: user }),
+          metadata: { archived: true, before: product, saleItemsCount },
+          severity: "warning",
+          correlationId: id,
+        },
+        tx,
+      );
     });
 
     revalidateReportsForProduct();
@@ -2383,7 +2488,24 @@ export async function deleteProduct(id: string) {
     };
   }
 
-  await prisma.product.delete({ where: { id } });
+  const actor = auditActorSnapshot(user);
+  await prisma.$transaction(async (tx) => {
+    await tx.product.delete({ where: { id } });
+    await logAudit(
+      {
+        shopId: product.shopId,
+        ...actor,
+        action: "product.delete",
+        targetType: "product",
+        targetId: id,
+        summary: productSummary("delete", { name: product.name, actor: user }),
+        metadata: { deleted: true, before: product },
+        severity: "warning",
+        correlationId: id,
+      },
+      tx,
+    );
+  });
 
   revalidateReportsForProduct();
   return { success: true, deleted: true };

@@ -13,6 +13,7 @@ import {
   getStaffPermissionPreset,
   type StaffPermissionPresetKey,
 } from "@/lib/staff-permission-presets";
+import { auditActorSnapshot, logAudit } from "@/lib/audit/logger";
 
 /**
  * Role hierarchy (lower index = higher privilege):
@@ -298,34 +299,62 @@ export async function createUserWithRole(
     resolvedStaffShopId = staffShopId;
   }
 
-  // Create user
-  const newUser = await prisma.user.create({
-    data: {
-      email,
-      name,
-      emailVerified: false,
-      passwordHash,
-      createdBy: creator.id,
-      staffShopId: resolvedStaffShopId ?? undefined,
-      roles: {
-        connect: { id: roleId },
+  const actor = auditActorSnapshot(creator);
+  const newUser = await prisma.$transaction(async (tx) => {
+    const createdUser = await tx.user.create({
+      data: {
+        email,
+        name,
+        emailVerified: false,
+        passwordHash,
+        createdBy: creator.id,
+        staffShopId: resolvedStaffShopId ?? undefined,
+        roles: {
+          connect: { id: roleId },
+        },
       },
-    },
-    include: {
-      roles: { select: { id: true, name: true } },
-    },
-  });
+      include: {
+        roles: { select: { id: true, name: true } },
+      },
+    });
 
-  // Create account for credential auth
-  await prisma.account.create({
-    data: {
-      userId: newUser.id,
-      providerId: "credential",
-      providerUserId: newUser.id,
-      accountId: newUser.id,
-      password: passwordHash,
-      scope: "email:password",
-    },
+    await tx.account.create({
+      data: {
+        userId: createdUser.id,
+        providerId: "credential",
+        providerUserId: createdUser.id,
+        accountId: createdUser.id,
+        password: passwordHash,
+        scope: "email:password",
+      },
+    });
+
+    if (resolvedStaffShopId) {
+      await logAudit(
+        {
+          shopId: resolvedStaffShopId,
+          ...actor,
+          action: "user.create",
+          targetType: "user",
+          targetId: createdUser.id,
+          summary: `${actor.userName || "সিস্টেম"} ${role.name} ব্যবহারকারী তৈরি করেছেন: ${createdUser.name || createdUser.email}`,
+          metadata: {
+            user: {
+              id: createdUser.id,
+              name: createdUser.name,
+              email: createdUser.email,
+              roles: createdUser.roles.map((r) => r.name),
+              staffShopId: createdUser.staffShopId,
+            },
+          },
+          severity: "warning",
+          correlationId: createdUser.id,
+        },
+        tx,
+      );
+    }
+
+    return createdUser;
   });
 
   if (role.name === "staff") {
@@ -403,27 +432,64 @@ export async function updateUser(
     assertStrongPassword(trimmedPassword);
     passwordHash = await hashPassword(trimmedPassword);
 
-    // Update credential account password if exists
-    await prisma.account.updateMany({
-      where: {
-        userId,
-        providerId: "credential",
-      },
-      data: {
-        password: passwordHash,
-      },
-    });
   }
 
-  return await prisma.user.update({
-    where: { id: userId },
-    data: {
-      ...rest,
-      ...(passwordHash ? { passwordHash } : {}),
-    },
-    include: {
-      roles: { select: { id: true, name: true } },
-    },
+  const actor = auditActorSnapshot(editor);
+  return await prisma.$transaction(async (tx) => {
+    if (passwordHash) {
+      await tx.account.updateMany({
+        where: {
+          userId,
+          providerId: "credential",
+        },
+        data: {
+          password: passwordHash,
+        },
+      });
+    }
+    const updated = await tx.user.update({
+      where: { id: userId },
+      data: {
+        ...rest,
+        ...(passwordHash ? { passwordHash } : {}),
+      },
+      include: {
+        roles: { select: { id: true, name: true } },
+      },
+    });
+    if (targetUser.staffShopId) {
+      await logAudit(
+        {
+          shopId: targetUser.staffShopId,
+          ...actor,
+          action: "user.update",
+          targetType: "user",
+          targetId: userId,
+          summary: `${actor.userName || "সিস্টেম"} ব্যবহারকারী সম্পাদনা করেছেন: ${updated.name || updated.email}`,
+          metadata: {
+            before: {
+              id: targetUser.id,
+              name: targetUser.name,
+              email: targetUser.email,
+              roles: targetUser.roles.map((r) => r.name),
+              staffShopId: targetUser.staffShopId,
+            },
+            after: {
+              id: updated.id,
+              name: updated.name,
+              email: updated.email,
+              roles: updated.roles.map((r) => r.name),
+              staffShopId: updated.staffShopId,
+            },
+            passwordChanged: Boolean(passwordHash),
+          },
+          severity: "warning",
+          correlationId: userId,
+        },
+        tx,
+      );
+    }
+    return updated;
   });
 }
 
@@ -474,13 +540,38 @@ export async function deleteUser(userId: string) {
     throw new Error("Forbidden: cannot delete super_admin users");
   }
 
-  // Delete related records first
-  await prisma.session.deleteMany({ where: { userId } });
-  await prisma.account.deleteMany({ where: { userId } });
-  await prisma.verification.deleteMany({ where: { userId } });
-
-  // Delete the user
-  return await prisma.user.delete({ where: { id: userId } });
+  const actor = auditActorSnapshot(deleter);
+  return await prisma.$transaction(async (tx) => {
+    await tx.session.deleteMany({ where: { userId } });
+    await tx.account.deleteMany({ where: { userId } });
+    await tx.verification.deleteMany({ where: { userId } });
+    const deleted = await tx.user.delete({ where: { id: userId } });
+    if (targetUser.staffShopId) {
+      await logAudit(
+        {
+          shopId: targetUser.staffShopId,
+          ...actor,
+          action: "user.delete",
+          targetType: "user",
+          targetId: userId,
+          summary: `${actor.userName || "সিস্টেম"} ব্যবহারকারী মুছে ফেলেছেন: ${targetUser.name || targetUser.email}`,
+          metadata: {
+            deleted: {
+              id: targetUser.id,
+              name: targetUser.name,
+              email: targetUser.email,
+              roles: targetUser.roles.map((r) => r.name),
+              staffShopId: targetUser.staffShopId,
+            },
+          },
+          severity: "critical",
+          correlationId: userId,
+        },
+        tx,
+      );
+    }
+    return deleted;
+  });
 }
 
 /**
@@ -694,6 +785,11 @@ export async function updateStaffPermissions(
     userId,
     "edit_users_under_me",
   );
+  const actor = await requireUser();
+  const targetUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, staffShopId: true },
+  });
 
   const basePermissions = await getBasePermissionsForManagedRole(targetRoleName, {
     syncStaffBaseline: true,
@@ -703,6 +799,23 @@ export async function updateStaffPermissions(
     basePermissions,
     enabledPermissionIds,
   );
+  if (targetUser?.staffShopId) {
+    await logAudit({
+      shopId: targetUser.staffShopId,
+      ...auditActorSnapshot(actor),
+      action: "permission.change",
+      targetType: "user",
+      targetId: userId,
+      summary: `${actor.name || actor.email || "সিস্টেম"} ${targetUser.name || targetUser.email || "ব্যবহারকারী"}-এর permission পরিবর্তন করেছেন`,
+      metadata: {
+        targetRoleName,
+        enabledPermissionIds,
+        enabledPermissionCount: enabledPermissionIds.length,
+      },
+      severity: "critical",
+      correlationId: userId,
+    });
+  }
 
   return { success: true };
 }

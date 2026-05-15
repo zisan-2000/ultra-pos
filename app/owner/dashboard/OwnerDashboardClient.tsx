@@ -122,6 +122,15 @@ export default function OwnerDashboardClient({
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [expandedStatKey, setExpandedStatKey] = useState<string | null>(null);
   const [manualRefreshing, setManualRefreshing] = useState(false);
+  // `lastSyncAt` is sourced from a client-only store (Dexie/local storage)
+  // and is null on the server. Rendering its formatted form during SSR
+  // therefore mismatches client hydration. Gate the label behind a mounted
+  // flag so the first render on both sides shows nothing, and the real
+  // value swaps in after hydration.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const serverSnapshotRef = useRef(initialData);
   const refreshInFlightRef = useRef(false);
 
@@ -287,12 +296,12 @@ export default function OwnerDashboardClient({
     return null;
   }, [supportContact.supportPhone, supportContact.supportWhatsapp]);
   const lastSyncLabel = useMemo(() => {
-    if (!lastSyncAt) return null;
+    if (!mounted || !lastSyncAt) return null;
     return new Intl.DateTimeFormat("bn-BD", {
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date(lastSyncAt));
-  }, [lastSyncAt]);
+  }, [mounted, lastSyncAt]);
 
   return (
     <div className="space-y-5 -mt-1 mb-6">

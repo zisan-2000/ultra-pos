@@ -73,6 +73,7 @@ model User {
   impersonationAuditsStarted ImpersonationAudit[] @relation("ImpersonationAuditActor")
   impersonationAuditsTargeted ImpersonationAudit[] @relation("ImpersonationAuditTarget")
   impersonationAuditsEnded   ImpersonationAudit[] @relation("ImpersonationAuditEndedBy")
+  auditLogs           AuditLog[]
 
   roles               Role[]                   @relation("UserRoles")
   permissionOverrides UserPermissionOverride[]
@@ -260,9 +261,41 @@ model Shop {
   batchAllocations     BatchAllocation[]
   remnantPieces        RemnantPiece[]
   stockAdjustments     StockAdjustment[]
+  auditLogs            AuditLog[]
 
   @@index([ownerId], map: "idx_shops_owner_id")
   @@map("shops")
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  shopId        String   @map("shop_id") @db.Uuid
+  userId        String?  @map("user_id")
+  userName      String?  @map("user_name")
+  userRoles     String[] @default([]) @map("user_roles")
+  action        String
+  targetType    String   @map("target_type")
+  targetId      String?  @map("target_id")
+  summary       String   @db.Text
+  metadata      Json?
+  severity      String   @default("info")
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent") @db.Text
+  correlationId String?  @map("correlation_id")
+  at            DateTime @default(now()) @db.Timestamptz(6)
+  businessDate  String   @map("business_date")
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([shopId, at(sort: Desc)], map: "idx_audit_logs_shop_at")
+  @@index([shopId, userId, at(sort: Desc)], map: "idx_audit_logs_shop_user_at")
+  @@index([shopId, action, at(sort: Desc)], map: "idx_audit_logs_shop_action_at")
+  @@index([shopId, severity, at(sort: Desc)], map: "idx_audit_logs_shop_severity_at")
+  @@index([shopId, businessDate], map: "idx_audit_logs_shop_business_date")
+  @@index([targetType, targetId], map: "idx_audit_logs_target")
+  @@index([correlationId], map: "idx_audit_logs_correlation")
+  @@map("audit_logs")
 }
 
 enum SubscriptionStatus {

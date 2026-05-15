@@ -162,6 +162,7 @@ export async function seedRBACAndUsers(prisma: PrismaClient): Promise<{
     "view_top_products_report",
     "view_low_stock_report",
     "export_reports",
+    "view_audit_log",
     "view_users_under_me",
     "create_user_manager",
     "create_user_staff",

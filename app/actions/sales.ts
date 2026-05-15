@@ -30,6 +30,8 @@ import {
   type SaleDiscountType,
 } from "@/lib/sales/discount";
 import { computeSaleTax } from "@/lib/sales/tax";
+import { auditActorSnapshot, logAudit } from "@/lib/audit/logger";
+import { saleCreateSummary, saleVoidSummary } from "@/lib/audit/formatters";
 
 const logPerf = (...args: unknown[]) => {
   if (process.env.NODE_ENV !== "production") {
@@ -2092,6 +2094,68 @@ export async function createSale(input: CreateSaleInput) {
       `⏱️ [PERF] Transaction completed in: ${transactionEnd - transactionStart}ms`
     );
 
+    const actor = auditActorSnapshot(user);
+    await logAudit(
+      {
+        shopId: input.shopId,
+        ...actor,
+        action: "sale.create",
+        targetType: "sale",
+        targetId: inserted.id,
+        summary: saleCreateSummary({
+          invoiceNo: inserted.invoiceNo,
+          totalAmount: totalStr,
+          paymentMethod: normalizedPaymentMethod,
+          itemCount: input.items.length,
+          actor: user,
+        }),
+        metadata: {
+          saleId: inserted.id,
+          invoiceNo: inserted.invoiceNo,
+          subtotal: subtotalStr,
+          discountAmount: discountAmountStr,
+          taxAmount: taxAmountStr,
+          totalAmount: totalStr,
+          paymentMethod: normalizedPaymentMethod,
+          customerId: input.customerId ?? null,
+          paidNow: normalizedPaymentMethod === "due" ? payNow : totalNum,
+          items: input.items.map((item) => ({
+            productId: item.productId,
+            variantId: item.variantId ?? null,
+            name: item.name,
+            qty: item.qty,
+            unitPrice: item.unitPrice,
+            serialCount: item.serialNumbers?.length ?? 0,
+          })),
+        },
+        severity: "info",
+        correlationId: inserted.id,
+        businessDate: toDhakaBusinessDate(saleTimestamp).toISOString().slice(0, 10),
+      },
+      tx,
+    );
+    if (inserted.invoiceNo) {
+      await logAudit(
+        {
+          shopId: input.shopId,
+          ...actor,
+          action: "invoice.issue",
+          targetType: "sale",
+          targetId: inserted.id,
+          summary: `${actor.userName || "সিস্টেম"} ইনভয়েস ${inserted.invoiceNo} ইস্যু করেছেন`,
+          metadata: {
+            saleId: inserted.id,
+            invoiceNo: inserted.invoiceNo,
+            issuedAt: saleTimestamp,
+          },
+          severity: "info",
+          correlationId: inserted.id,
+          businessDate: toDhakaBusinessDate(saleTimestamp).toISOString().slice(0, 10),
+        },
+        tx,
+      );
+    }
+
     return {
       saleId: inserted.id,
       invoiceNo: inserted.invoiceNo ?? null,
@@ -3451,6 +3515,40 @@ export async function voidSale(saleId: string, reason?: string | null) {
         cashOutAmount = roundMoney(cashOutAmount + partialCashAtSale);
       }
     }
+
+    const actor = auditActorSnapshot(user);
+    await logAudit(
+      {
+        shopId: sale.shopId,
+        ...actor,
+        action: "sale.void",
+        targetType: "sale",
+        targetId: sale.id,
+        summary: saleVoidSummary({
+          saleId: sale.id,
+          totalAmount: sale.totalAmount,
+          reason,
+          actor: user,
+        }),
+        metadata: {
+          sale: {
+            id: sale.id,
+            invoiceNo: sale.invoiceNo,
+            customerId: sale.customerId,
+            totalAmount: sale.totalAmount,
+            paymentMethod: sale.paymentMethod,
+            saleDate: sale.saleDate,
+          },
+          reason: reason ?? null,
+          affectedProductIds,
+          cashOutAmount,
+        },
+        severity: "warning",
+        correlationId: sale.id,
+        businessDate: voidBusinessDate.toISOString().slice(0, 10),
+      },
+      tx,
+    );
 
     return { alreadyVoided: false as const, affectedProductIds, cashOutAmount };
   });

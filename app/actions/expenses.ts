@@ -19,6 +19,8 @@ import {
 
 import { Prisma } from "@prisma/client";
 import { type CursorToken } from "@/lib/cursor-pagination";
+import { auditActorSnapshot, logAudit } from "@/lib/audit/logger";
+import { expenseSummary } from "@/lib/audit/formatters";
 
 function normalizeExpenseDate(raw?: string | null) {
   const trimmed = raw?.trim();
@@ -160,6 +162,7 @@ export async function createExpense(input: any) {
   await assertShopAccess(parsed.shopId, user);
 
   let createdExpenseId: string | null = null;
+  const actor = auditActorSnapshot(user);
   await prisma.$transaction(async (tx) => {
     const expenseDate = normalizeExpenseDate(parsed.expenseDate);
     const created = await tx.expense.create({
@@ -182,6 +185,24 @@ export async function createExpense(input: any) {
         businessDate: toDhakaBusinessDate(expenseDate),
       },
     });
+    await logAudit(
+      {
+        shopId: parsed.shopId,
+        ...actor,
+        action: "expense.create",
+        targetType: "expense",
+        targetId: created.id,
+        summary: expenseSummary("create", {
+          amount: created.amount,
+          category: created.category,
+          actor: user,
+        }),
+        metadata: { expense: created },
+        severity: "info",
+        correlationId: created.id,
+      },
+      tx,
+    );
   });
 
   await publishRealtimeEvent(REALTIME_EVENTS.expenseCreated, parsed.shopId, {
@@ -221,8 +242,9 @@ export async function updateExpense(id: string, input: any) {
   const nextAmount = Number(parsed.amount);
   const delta = Number((nextAmount - prevAmount).toFixed(2));
 
+  const actor = auditActorSnapshot(user);
   await prisma.$transaction(async (tx) => {
-    await tx.expense.update({
+    const updated = await tx.expense.update({
       where: { id },
       data: {
         amount: parsed.amount,
@@ -243,6 +265,24 @@ export async function updateExpense(id: string, input: any) {
         },
       });
     }
+    await logAudit(
+      {
+        shopId: parsed.shopId,
+        ...actor,
+        action: "expense.update",
+        targetType: "expense",
+        targetId: id,
+        summary: expenseSummary("update", {
+          amount: updated.amount,
+          category: updated.category,
+          actor: user,
+        }),
+        metadata: { before: existing, after: updated, cashDelta: delta },
+        severity: "warning",
+        correlationId: id,
+      },
+      tx,
+    );
   });
 
   await publishRealtimeEvent(REALTIME_EVENTS.expenseCreated, parsed.shopId, {
@@ -309,6 +349,7 @@ export async function deleteExpense(id: string) {
 
   await assertShopAccess(expense.shopId, user);
 
+  const actor = auditActorSnapshot(user);
   await prisma.$transaction(async (tx) => {
     await tx.cashEntry.create({
       data: {
@@ -320,6 +361,24 @@ export async function deleteExpense(id: string) {
       },
     });
     await tx.expense.delete({ where: { id } });
+    await logAudit(
+      {
+        shopId: expense.shopId,
+        ...actor,
+        action: "expense.delete",
+        targetType: "expense",
+        targetId: id,
+        summary: expenseSummary("delete", {
+          amount: expense.amount,
+          category: expense.category,
+          actor: user,
+        }),
+        metadata: { deleted: expense },
+        severity: "warning",
+        correlationId: id,
+      },
+      tx,
+    );
   });
 
   await publishRealtimeEvent(REALTIME_EVENTS.expenseCreated, expense.shopId, {

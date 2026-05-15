@@ -20,6 +20,8 @@ import {
   parseDhakaDateOnlyRange,
   toDhakaBusinessDate,
 } from "@/lib/dhaka-date";
+import { auditActorSnapshot, logAudit } from "@/lib/audit/logger";
+import { cashSummary } from "@/lib/audit/formatters";
 
 const CASH_SUMMARY_TAG = REPORTS_CACHE_TAGS.cashSummary;
 
@@ -187,7 +189,9 @@ export async function createCashEntry(input: any) {
   requirePermission(user, "create_cash_entry");
   await assertShopAccess(parsed.shopId, user);
 
-    await prisma.cashEntry.create({
+  const actor = auditActorSnapshot(user);
+  await prisma.$transaction(async (tx) => {
+    const created = await tx.cashEntry.create({
       data: {
         shopId: parsed.shopId,
         entryType: parsed.entryType,
@@ -196,6 +200,26 @@ export async function createCashEntry(input: any) {
         businessDate: toDhakaBusinessDate(),
       },
     });
+    await logAudit(
+      {
+        shopId: parsed.shopId,
+        ...actor,
+        action: "cash.create",
+        targetType: "cash",
+        targetId: created.id,
+        summary: cashSummary("create", {
+          entryType: created.entryType,
+          amount: created.amount,
+          reason: created.reason,
+          actor: user,
+        }),
+        metadata: { entry: created },
+        severity: "info",
+        correlationId: created.id,
+      },
+      tx,
+    );
+  });
 
   revalidateCashSummary();
   revalidateReportsForCash();
@@ -224,13 +248,35 @@ export async function updateCashEntry(id: string, input: any) {
     throw new Error("Unauthorized access to this cash entry");
   }
 
-  await prisma.cashEntry.update({
-    where: { id },
-    data: {
-      entryType: parsed.entryType,
-      amount: parsed.amount,
-      reason: parsed.reason || "",
-    },
+  const actor = auditActorSnapshot(user);
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.cashEntry.update({
+      where: { id },
+      data: {
+        entryType: parsed.entryType,
+        amount: parsed.amount,
+        reason: parsed.reason || "",
+      },
+    });
+    await logAudit(
+      {
+        shopId: parsed.shopId,
+        ...actor,
+        action: "cash.update",
+        targetType: "cash",
+        targetId: id,
+        summary: cashSummary("update", {
+          entryType: updated.entryType,
+          amount: updated.amount,
+          reason: updated.reason,
+          actor: user,
+        }),
+        metadata: { before: existing, after: updated },
+        severity: "warning",
+        correlationId: id,
+      },
+      tx,
+    );
   });
 
   revalidateCashSummary();
@@ -289,7 +335,29 @@ export async function deleteCashEntry(id: string) {
 
   await assertShopAccess(entry.shopId, user);
 
-  await prisma.cashEntry.delete({ where: { id } });
+  const actor = auditActorSnapshot(user);
+  await prisma.$transaction(async (tx) => {
+    await tx.cashEntry.delete({ where: { id } });
+    await logAudit(
+      {
+        shopId: entry.shopId,
+        ...actor,
+        action: "cash.delete",
+        targetType: "cash",
+        targetId: id,
+        summary: cashSummary("delete", {
+          entryType: entry.entryType,
+          amount: entry.amount,
+          reason: entry.reason,
+          actor: user,
+        }),
+        metadata: { deleted: entry },
+        severity: "warning",
+        correlationId: id,
+      },
+      tx,
+    );
+  });
   revalidateCashSummary();
   revalidateReportsForCash();
   await publishRealtimeEvent(REALTIME_EVENTS.cashUpdated, entry.shopId, {

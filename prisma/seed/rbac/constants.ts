@@ -90,6 +90,7 @@ export const PERMISSION_NAMES: string[] = [
   "view_top_products_report",
   "view_low_stock_report",
   "export_reports",
+  "view_audit_log",
   "view_users",
   "create_user",
   "update_user",

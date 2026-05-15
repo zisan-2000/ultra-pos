@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-session";
 import { requirePermission } from "@/lib/rbac";
 import { assertShopAccess } from "@/lib/shop-access";
+import { auditActorSnapshot, logAudit } from "@/lib/audit/logger";
+import { stockAdjustmentSummary } from "@/lib/audit/formatters";
 
 type SerialMarkStatus = "RETURNED" | "DAMAGED";
 
@@ -58,6 +60,7 @@ export async function createStockAdjustment(input: StockAdjustmentInput) {
       },
       select: {
         id: true,
+        name: true,
         stockQty: true,
         trackStock: true,
         trackSerialNumbers: true,
@@ -383,7 +386,7 @@ export async function createStockAdjustment(input: StockAdjustmentInput) {
       });
     }
 
-    await tx.stockAdjustment.create({
+    const createdAdjustment = await tx.stockAdjustment.create({
       data: {
         id: createdAdjustmentId ?? undefined,
         shopId: input.shopId,
@@ -396,6 +399,37 @@ export async function createStockAdjustment(input: StockAdjustmentInput) {
         newQty: normalizedNewQty.toFixed(2),
       },
     });
+    const actor = auditActorSnapshot(user);
+    await logAudit(
+      {
+        shopId: input.shopId,
+        ...actor,
+        action: "stock.adjust",
+        targetType: "stock_adjustment",
+        targetId: createdAdjustment.id,
+        summary: stockAdjustmentSummary({
+          productName: product.name,
+          variantLabel: selectedVariant?.label ?? null,
+          previousQty: previousQty.toFixed(2),
+          newQty: normalizedNewQty.toFixed(2),
+          reason: input.reason,
+          actor: user,
+        }),
+        metadata: {
+          adjustment: createdAdjustment,
+          productId: input.productId,
+          variantId: input.variantId ?? null,
+          serialAdjustment: {
+            increaseCount: increaseSerials.length,
+            decreaseCount: decreaseSerials.length,
+            decreaseStatus,
+          },
+        },
+        severity: "warning",
+        correlationId: createdAdjustment.id,
+      },
+      tx,
+    );
   });
 
   revalidatePath("/dashboard/products");
