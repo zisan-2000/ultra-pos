@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { AlertTriangle, CheckCircle2, LayoutGrid, List, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, LayoutGrid, List, XCircle } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { getStockToneClasses } from "@/lib/stock-level";
 import ConfirmDialog from "@/components/confirm-dialog";
@@ -596,11 +596,13 @@ function StockBadge({ tracksStock, stock }: { tracksStock: boolean; stock: numbe
 const ProductButton = memo(function ProductButton({
   product,
   onAdd,
+  onInfo,
   isRecentlyAdded,
   isCooldown,
 }: {
   product: EnrichedProduct;
   onAdd: (product: EnrichedProduct) => void;
+  onInfo: (product: EnrichedProduct) => void;
   isRecentlyAdded: boolean;
   isCooldown: boolean;
 }) {
@@ -667,17 +669,23 @@ const ProductButton = memo(function ProductButton({
             {product.compatibility}
           </p>
         ) : null}
-        {product.storageLocation ? (
-          <p className="text-[11px] font-medium text-primary">
-            📍 {product.storageLocation}
-          </p>
-        ) : null}
         {hasVariants ? (
           <p className="text-[11px] font-semibold text-primary">
             {variantCount}টি সাইজ →
           </p>
         ) : null}
       </div>
+
+      {/* Info icon — tap to see full product details without adding to cart */}
+      <button
+        type="button"
+        className="absolute bottom-2 right-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-muted/70 text-muted-foreground/70 transition-all hover:bg-primary/10 hover:text-primary active:scale-90"
+        onClick={(e) => { e.stopPropagation(); onInfo(product); }}
+        aria-label="বিস্তারিত দেখুন"
+        tabIndex={-1}
+      >
+        <Info className="h-3.5 w-3.5" />
+      </button>
     </button>
   );
 });
@@ -712,6 +720,7 @@ export const PosProductSearch = memo(function PosProductSearch({
     }
   });
   const [showAllProducts, setShowAllProducts] = useState(false);
+  const [infoProduct, setInfoProduct] = useState<EnrichedProduct | null>(null);
   const [listening, setListening] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -1959,6 +1968,7 @@ export const PosProductSearch = memo(function PosProductSearch({
       key={product.id}
       product={product}
       onAdd={handleProductTap}
+      onInfo={setInfoProduct}
       isRecentlyAdded={recentlyAdded?.startsWith(`${product.id}:`) || recentlyAdded === product.id}
       isCooldown={cooldownProductId?.startsWith(`${product.id}:`) || cooldownProductId === product.id}
     />
@@ -1969,6 +1979,7 @@ export const PosProductSearch = memo(function PosProductSearch({
       key={`list-${product.id}`}
       product={product}
       onAdd={handleProductTap}
+      onInfo={setInfoProduct}
       isRecentlyAdded={recentlyAdded?.startsWith(`${product.id}:`) || recentlyAdded === product.id}
       isCooldown={cooldownProductId?.startsWith(`${product.id}:`) || cooldownProductId === product.id}
     />
@@ -1986,6 +1997,7 @@ export const PosProductSearch = memo(function PosProductSearch({
         key={`quick-slot-${index}`}
         product={slot}
         onAdd={handleProductTap}
+        onInfo={setInfoProduct}
         isRecentlyAdded={recentlyAdded?.startsWith(`${slot.id}:`) || recentlyAdded === slot.id}
         isCooldown={cooldownProductId?.startsWith(`${slot.id}:`) || cooldownProductId === slot.id}
       />
@@ -2766,6 +2778,147 @@ export const PosProductSearch = memo(function PosProductSearch({
           </div>
         </div>
       ) : null}
+
+      {/* ── Product Info Modal (bottom sheet) ── */}
+      {infoProduct && (
+        <div className="fixed inset-0 z-50">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-foreground/40 backdrop-blur-[2px] animate-fade-in"
+            onClick={() => setInfoProduct(null)}
+          />
+          {/* Sheet */}
+          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-3xl bg-card shadow-[0_-20px_50px_rgba(15,23,42,0.22)] animate-slide-up">
+            {/* Drag handle */}
+            <div className="sticky top-0 z-10 flex justify-center bg-card/95 pb-2 pt-3 backdrop-blur-sm">
+              <div className="h-1 w-10 rounded-full bg-muted-foreground/25" />
+            </div>
+
+            <div className="px-5 pb-8 space-y-5">
+              {/* Header: name + close */}
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="text-xl font-bold leading-snug text-foreground flex-1 pr-2">
+                  {infoProduct.name}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setInfoProduct(null)}
+                  className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-muted/60 text-muted-foreground hover:bg-muted transition-colors"
+                  aria-label="বন্ধ করুন"
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Price + Stock */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 rounded-2xl border border-border bg-gradient-to-br from-primary/8 to-primary/4 px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-primary/70">মূল্য</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    <span className="text-base font-semibold text-muted-foreground">৳</span> {infoProduct.sellPrice}
+                  </p>
+                </div>
+                {infoProduct.trackStock !== false && (
+                  <div className="flex-1 rounded-2xl border border-border bg-muted/40 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">স্টক</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      {(() => {
+                        const av = getActiveVariants(infoProduct);
+                        return av.length > 0
+                          ? av.reduce((s, v) => s + toNumber(v.stockQty), 0).toFixed(0)
+                          : toNumber(infoProduct.stockQty).toFixed(0);
+                      })()}
+                      <span className="ml-1 text-sm font-medium text-muted-foreground">
+                        {infoProduct.baseUnit || "pcs"}
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Core details */}
+              <div className="rounded-2xl border border-border bg-muted/30 divide-y divide-border overflow-hidden">
+                {[
+                  { label: "বিভাগ", value: formatCategoryLabel(infoProduct.category) },
+                  infoProduct.brand ? { label: "ব্র্যান্ড", value: infoProduct.brand } : null,
+                  infoProduct.modelName ? { label: "মডেল", value: infoProduct.modelName } : null,
+                  infoProduct.size ? { label: "সাইজ", value: infoProduct.size } : null,
+                  infoProduct.sku ? { label: "SKU", value: infoProduct.sku } : null,
+                  infoProduct.barcode ? { label: "বারকোড", value: infoProduct.barcode } : null,
+                  infoProduct.compatibility ? { label: "সামঞ্জস্যতা", value: infoProduct.compatibility } : null,
+                  infoProduct.warrantyDays ? { label: "ওয়ারেন্টি", value: `${infoProduct.warrantyDays} দিন` } : null,
+                  infoProduct.storageLocation ? { label: "স্থান", value: `📍 ${infoProduct.storageLocation}` } : null,
+                ].filter(Boolean).map((row) => (
+                  <div key={row!.label} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="w-28 shrink-0 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                      {row!.label}
+                    </span>
+                    <span className="text-sm font-medium text-foreground">{row!.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tracking tags */}
+              {(infoProduct.trackSerialNumbers || infoProduct.trackBatch || infoProduct.trackCutLength) && (
+                <div className="flex flex-wrap gap-2">
+                  {infoProduct.trackSerialNumbers && (
+                    <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/8 px-3 py-1 text-xs font-semibold text-primary">
+                      Serial tracked
+                    </span>
+                  )}
+                  {infoProduct.trackBatch && (
+                    <span className="inline-flex items-center rounded-full border border-warning/30 bg-warning-soft/40 px-3 py-1 text-xs font-semibold text-warning-foreground">
+                      Batch tracked
+                    </span>
+                  )}
+                  {infoProduct.trackCutLength && (
+                    <span className="inline-flex items-center rounded-full border border-success/25 bg-success-soft/40 px-3 py-1 text-xs font-semibold text-success">
+                      Cut-length tracked
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Variants */}
+              {getActiveVariants(infoProduct).length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    ভ্যারিয়েন্ট / সাইজ ({getActiveVariants(infoProduct).length}টি)
+                  </p>
+                  <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
+                    {getActiveVariants(infoProduct).map((v) => (
+                      <div key={v.id} className="flex items-center gap-3 px-4 py-2.5">
+                        <span className="flex-1 text-sm font-semibold text-foreground">{v.label}</span>
+                        {infoProduct.trackStock !== false && (
+                          <span className={`inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-semibold shadow-sm ${
+                            infoProduct.trackStock
+                              ? getStockToneClasses(toNumber(v.stockQty)).badge
+                              : "bg-muted text-muted-foreground border border-border/60"
+                          }`}>
+                            <StockBadge tracksStock={Boolean(infoProduct.trackStock)} stock={toNumber(v.stockQty)} />
+                          </span>
+                        )}
+                        <span className="shrink-0 text-sm font-bold text-foreground">
+                          <span className="text-muted-foreground text-xs">৳</span> {v.sellPrice}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* CTA */}
+              <button
+                type="button"
+                onClick={() => { handleProductTap(infoProduct); setInfoProduct(null); }}
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-base font-semibold shadow-[0_8px_18px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99]"
+              >
+                কার্টে যোগ করুন
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
@@ -2773,11 +2926,13 @@ export const PosProductSearch = memo(function PosProductSearch({
 const ProductListButton = memo(function ProductListButton({
   product,
   onAdd,
+  onInfo,
   isRecentlyAdded,
   isCooldown,
 }: {
   product: EnrichedProduct;
   onAdd: (product: EnrichedProduct) => void;
+  onInfo: (product: EnrichedProduct) => void;
   isRecentlyAdded: boolean;
   isCooldown: boolean;
 }) {
@@ -2808,11 +2963,6 @@ const ProductListButton = memo(function ProductListButton({
           <p className="mt-0.5 text-[11px] font-medium tracking-[0.08em] text-muted-foreground">
             {formatCategoryLabel(product.category)}
           </p>
-          {product.storageLocation ? (
-            <p className="mt-0.5 text-[11px] font-medium text-primary">
-              📍 {product.storageLocation}
-            </p>
-          ) : null}
           {hasVariants ? (
             <p className="mt-0.5 text-[11px] font-semibold text-primary">
               {variantCount}টি সাইজ →
@@ -2827,6 +2977,16 @@ const ProductListButton = memo(function ProductListButton({
         <p className="shrink-0 text-sm font-bold text-foreground">
           <span className="text-muted-foreground">৳</span> {product.sellPrice}
         </p>
+        {/* Info icon for list view */}
+        <button
+          type="button"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/60 text-muted-foreground/70 transition-all hover:bg-primary/10 hover:text-primary active:scale-90"
+          onClick={(e) => { e.stopPropagation(); onInfo(product); }}
+          aria-label="বিস্তারিত দেখুন"
+          tabIndex={-1}
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
       </div>
       {isRecentlyAdded ? (
         <span className="absolute -top-1 -right-1 rounded-full bg-success px-2 py-0.5 text-[10px] font-semibold text-primary-foreground pop-badge">
