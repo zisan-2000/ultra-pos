@@ -32,6 +32,13 @@ export default function DashboardClientShell({
   const { shopId } = useCurrentShop();
 
   useEffect(() => {
+    document.documentElement.classList.add("app-locked");
+    return () => {
+      document.documentElement.classList.remove("app-locked");
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     const validateSession = async () => {
