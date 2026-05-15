@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { buttonVariants } from "@/components/ui/button";
+import { Download, FileText, X } from "lucide-react";
 import { updateShop } from "@/app/actions/shops";
 import { generateCSV } from "@/lib/utils/csv";
 import { downloadFile } from "@/lib/utils/download";
@@ -579,7 +580,6 @@ export default function OwnerSummaryVoice({
       if (isVisible) {
         setReportText(text);
         setReportDialogOpen(true);
-        showSuccessToast({ title: "দিনশেষ রিপোর্ট প্রস্তুত" });
         void playChime();
       }
 
@@ -833,32 +833,71 @@ export default function OwnerSummaryVoice({
       </Dialog>
 
       <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-sm p-0 overflow-hidden rounded-2xl border border-border shadow-[0_24px_48px_rgba(15,23,42,0.16)]">
+          {/* Hidden title for accessibility */}
+          <DialogHeader className="sr-only">
             <DialogTitle>দিনশেষ রিপোর্ট</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">{reportText}</p>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setReportDialogOpen(false)}
-                className={buttonVariants({ variant: "outline", size: "sm" })}
-              >
-                পরে
-              </button>
+
+          {/* Close button */}
+          <button
+            type="button"
+            onClick={() => setReportDialogOpen(false)}
+            className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/10 text-white/80 transition hover:bg-black/20"
+            aria-label="বন্ধ করুন"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Header band */}
+          <div className="bg-gradient-to-br from-primary/90 via-primary to-primary-hover px-6 pb-6 pt-7 text-center">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm shadow-inner">
+              <FileText className="h-7 w-7 text-white" />
+            </div>
+            <h2 className="text-lg font-bold text-white">দিনশেষ রিপোর্ট</h2>
+            <p className="mt-1 text-sm text-white/75">{getDhakaDateString()}</p>
+          </div>
+
+          {/* Body */}
+          <div className="px-6 py-5 space-y-4">
+            <p className="text-sm text-muted-foreground text-center leading-relaxed">
+              {reportText}
+            </p>
+
+            {reportDownloadError && (
+              <p className="rounded-xl border border-danger/30 bg-danger/8 px-3 py-2 text-xs text-danger text-center">
+                {reportDownloadError}
+              </p>
+            )}
+
+            {/* Actions */}
+            <div className="space-y-2.5">
               <button
                 type="button"
                 onClick={downloadDailyReports}
-                className={buttonVariants({ size: "sm" })}
                 disabled={reportDownloadBusy}
+                className="flex w-full h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-primary-foreground border border-primary/40 text-sm font-semibold shadow-[0_8px_18px_rgba(22,163,74,0.28)] transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {reportDownloadBusy ? "ডাউনলোড হচ্ছে..." : "ডাউনলোড"}
+                {reportDownloadBusy ? (
+                  <>
+                    <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    ডাউনলোড হচ্ছে...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    ডাউনলোড করুন
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setReportDialogOpen(false)}
+                className="w-full h-10 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >
+                পরে করব
               </button>
             </div>
-            {reportDownloadError ? (
-              <p className="text-xs text-danger">{reportDownloadError}</p>
-            ) : null}
           </div>
         </DialogContent>
       </Dialog>
