@@ -3,7 +3,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   type FormEvent,
   useCallback,
@@ -49,6 +49,7 @@ import {
 import { matchesProductSearchQuery } from "@/lib/product-search";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UnifiedPagination } from "@/components/pagination/UnifiedPagination";
 import { Package } from "lucide-react";
 
 type Shop = { id: string; name: string };
@@ -723,10 +724,22 @@ export default function ProductsListClient({
   const lastEventAtRef = useRef(0);
   const EVENT_DEBOUNCE_MS = 500;
 
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Bootstrap offlinePage from the URL so refreshes / shared links land on
+  // the same page when the device is offline.
+  const initialOfflinePage = (() => {
+    const raw = searchParams?.get("offlinePage");
+    if (!raw) return page;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : page;
+  })();
+
   const [products, setProducts] = useState(serverProducts);
   const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState<ProductStatusFilter>(initialStatus);
-  const [offlinePage, setOfflinePage] = useState(page);
+  const [offlinePage, setOfflinePage] = useState(initialOfflinePage);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [expandedKpiByProductId, setExpandedKpiByProductId] = useState<
@@ -992,6 +1005,26 @@ export default function ProductsListClient({
       setOfflinePage(page);
     }
   }, [online, page]);
+
+  // Persist offlinePage in the URL so a refresh or shared link in offline
+  // mode keeps the user on the same page. Online mode is driven by the
+  // server's cursor-based ?page param, so we only touch the URL while
+  // offline. Defaults (page 1) are pruned from the URL for clean links.
+  useEffect(() => {
+    if (online) return;
+    if (typeof window === "undefined") return;
+    const next = new URLSearchParams(searchParams?.toString() ?? "");
+    if (offlinePage <= 1) {
+      next.delete("offlinePage");
+    } else {
+      next.set("offlinePage", String(offlinePage));
+    }
+    const queryString = next.toString();
+    const currentQuery = searchParams?.toString() ?? "";
+    if (queryString === currentQuery) return;
+    const target = queryString ? `${pathname}?${queryString}` : pathname;
+    router.replace(target, { scroll: false });
+  }, [online, offlinePage, pathname, router, searchParams]);
 
   useEffect(() => {
     const SpeechRecognitionImpl = getSpeechRecognitionCtor();
@@ -3725,53 +3758,22 @@ export default function ProductsListClient({
 
       {/* Pagination - Scrolls normally */}
       {showPagination && (
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-muted-foreground">
-              পৃষ্ঠা {Number(effectivePage).toLocaleString("bn-BD")} / {Number(effectiveTotalPages).toLocaleString("bn-BD")}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              মোট {Number(effectiveTotalCount).toLocaleString("bn-BD")} টি
-            </span>
-          </div>
-
-          <div className="flex items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleNavigate(effectivePage - 1)}
-              disabled={effectivePage <= 1}
-              className="flex items-center justify-center w-10 h-10 rounded-full border border-border text-muted-foreground font-medium shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition"
-            >
-              {"<"}
-            </button>
-
-            <div className="flex gap-1.5 overflow-x-auto max-w-[200px]">
-              {pageNumbers.map((pageNumber) => (
-                <button
-                  key={pageNumber}
-                  type="button"
-                  onClick={() => handleNavigate(pageNumber)}
-                  className={`flex-shrink-0 w-10 h-10 rounded-full font-semibold text-sm transition active:scale-95 ${
-                    pageNumber === effectivePage
-                      ? "bg-primary-soft text-primary border border-primary/40 shadow-sm"
-                      : "border border-border text-muted-foreground"
-                  }`}
-                >
-                  {pageNumber}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleNavigate(effectivePage + 1)}
-              disabled={effectivePage >= effectiveTotalPages}
-              className="flex items-center justify-center w-10 h-10 rounded-full border border-border text-muted-foreground font-medium shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition"
-            >
-              {">"}
-            </button>
-          </div>
-        </div>
+        <UnifiedPagination
+          mode={online ? "cursor" : "offset"}
+          page={effectivePage}
+          totalPages={online ? undefined : effectiveTotalPages}
+          totalCount={effectiveTotalCount}
+          loadedCount={visibleProducts.length}
+          pageSize={visibleProducts.length}
+          prevHref={online ? prevHref : null}
+          nextHref={online ? nextHref : null}
+          hasMore={online ? Boolean(hasMore && nextHref) : effectivePage < effectiveTotalPages}
+          pageNumbers={online ? undefined : pageNumbers}
+          onNavigate={online ? undefined : handleNavigate}
+          disabled={!online && effectiveTotalPages <= 1}
+          prevLabel={online ? "নতুনগুলো" : "আগের"}
+          nextLabel={online ? "আরও দেখুন" : "পরের"}
+        />
       )}
 
       {/* Bottom Sheet for Product Details */}

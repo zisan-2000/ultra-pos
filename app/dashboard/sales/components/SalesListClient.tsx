@@ -18,6 +18,7 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
 import { getDhakaDateString } from "@/lib/reporting-range";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UnifiedPagination } from "@/components/pagination/UnifiedPagination";
 import { ShoppingBag, WifiOff, MoreVertical, FileText, Undo2, Pencil, Ban } from "lucide-react";
 
 type SaleSummary = {
@@ -362,14 +363,6 @@ export default function SalesListClient({
               📡 অফলাইন - শুধু দেখা যাবে
             </span>
           )}
-          {page > 1 && prevHref && (
-            <Link
-              href={prevHref}
-              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted"
-            >
-              ⬆️ নতুনগুলো
-            </Link>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <RefreshIconButton
@@ -378,7 +371,6 @@ export default function SalesListClient({
             label="রিফ্রেশ"
             className="h-8 px-2.5 text-xs"
           />
-          <span className="text-xs text-muted-foreground">পৃষ্ঠা {page}</span>
         </div>
       </div>
 
@@ -752,25 +744,19 @@ export default function SalesListClient({
           })
       )}
 
-      {hasMore && (
-        <div className="flex justify-center pt-2">
-          {online && nextHref ? (
-            <Link
-              href={nextHref}
-              className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft text-primary border border-primary/30 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-primary/15 hover:border-primary/40 transition"
-            >
-              ⬇️ আরও দেখুন
-            </Link>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="inline-flex items-center gap-1.5 rounded-full bg-muted px-4 py-2 text-sm font-semibold text-muted-foreground"
-            >
-              ⬇️ আরও দেখুন
-            </button>
-          )}
-        </div>
+      {(prevHref || nextHref || renderedItems.length > 0) && (
+        <UnifiedPagination
+          mode="cursor"
+          page={page}
+          prevHref={online ? prevHref : null}
+          nextHref={online ? nextHref : null}
+          hasMore={Boolean(hasMore && nextHref)}
+          disabled={!online}
+          loadedCount={renderedItems.length}
+          pageSize={renderedItems.length}
+          prevLabel="নতুনগুলো"
+          nextLabel="আরও দেখুন"
+        />
       )}
     </div>
   );

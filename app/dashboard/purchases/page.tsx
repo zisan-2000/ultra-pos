@@ -8,12 +8,12 @@ import {
   getPurchaseSummaryByRange,
 } from "@/app/actions/purchases";
 import ShopSelectorClient from "./ShopSelectorClient";
-import DashboardManualRefresh from "@/components/dashboard-manual-refresh";
 import PurchaseDateFilterClient from "./PurchaseDateFilterClient";
 import { getDhakaDateString } from "@/lib/dhaka-date";
 import { requireUser } from "@/lib/auth-session";
 import { hasPermission } from "@/lib/rbac";
 import { resolveInventoryModuleEnabled } from "@/lib/accounting/cogs";
+import { UnifiedPagination } from "@/components/pagination/UnifiedPagination";
 
 type PurchasePageProps = {
   searchParams?: Promise<{
@@ -150,6 +150,18 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
 
   const prevHref = page > 1 ? buildHref(page - 1) : null;
   const nextHref = page < totalPages ? buildHref(page + 1) : null;
+
+  // Build a windowed list of clickable page numbers — let users jump to any
+  // nearby page in one click instead of stepping with prev/next.
+  const pageNumbers: number[] = (() => {
+    if (totalPages <= 1) return [];
+    const MAX_BUTTONS = 7;
+    const halfWindow = Math.floor(MAX_BUTTONS / 2);
+    let start = Math.max(1, page - halfWindow);
+    const end = Math.min(totalPages, start + MAX_BUTTONS - 1);
+    start = Math.max(1, end - MAX_BUTTONS + 1);
+    return Array.from({ length: end - start + 1 }, (_, idx) => start + idx);
+  })();
 
   return (
     <div className="space-y-4 sm:space-y-5 section-gap">
@@ -346,33 +358,19 @@ export default async function PurchasesPage({ searchParams }: PurchasePageProps)
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 pt-2">
-        <Link
-          href={prevHref ?? "#"}
-          aria-disabled={!prevHref}
-          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${
-            prevHref
-              ? "border-border text-foreground hover:bg-muted"
-              : "border-border/50 text-muted-foreground pointer-events-none"
-          }`}
-        >
-          ◀ আগের
-        </Link>
-        <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground">
-          পৃষ্ঠা {page.toLocaleString("bn-BD")} / {totalPages.toLocaleString("bn-BD")}
-        </span>
-        <Link
-          href={nextHref ?? "#"}
-          aria-disabled={!nextHref}
-          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${
-            nextHref
-              ? "border-border text-foreground hover:bg-muted"
-              : "border-border/50 text-muted-foreground pointer-events-none"
-          }`}
-        >
-          পরের ▶
-        </Link>
-      </div>
+      {(totalPages > 1 || items.length > 0) ? (
+        <UnifiedPagination
+          mode="offset"
+          page={page}
+          totalPages={totalPages}
+          totalCount={summary.count ?? items.length}
+          loadedCount={items.length}
+          prevHref={prevHref}
+          nextHref={nextHref}
+          pageNumbers={pageNumbers}
+          buildPageHref={buildHref}
+        />
+      ) : null}
     </div>
   );
 }

@@ -11,7 +11,7 @@
 //     user knows the list is complete (instead of just disappearing).
 "use client";
 
-import { cn } from "@/lib/utils";
+import { UnifiedPagination } from "@/components/pagination/UnifiedPagination";
 
 type Props = {
   hasMore: boolean;
@@ -26,10 +26,6 @@ type Props = {
   className?: string;
 };
 
-const BN_DIGITS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
-const toBn = (n: number | string) =>
-  String(n).replace(/[0-9]/g, (d) => BN_DIGITS[Number(d)]);
-
 export function LoadMoreButton({
   hasMore,
   loading,
@@ -39,52 +35,16 @@ export function LoadMoreButton({
   label = "আরও দেখুন",
   className,
 }: Props) {
-  if (!hasMore) {
-    if (loadedCount === 0) return null;
-    return (
-      <div
-        className={cn(
-          "flex items-center justify-center gap-2 px-4 py-4 border-t border-border bg-muted/10",
-          className
-        )}
-      >
-        <span className="text-[11px] font-medium text-muted-foreground italic">
-          সব দেখানো হয়েছে · {toBn(loadedCount.toLocaleString("en-IN"))} টি
-        </span>
-      </div>
-    );
-  }
-
   return (
-    <div
-      className={cn(
-        "flex items-center justify-center gap-3 px-4 py-3 border-t border-border bg-muted/10",
-        className
-      )}
-    >
-      <button
-        type="button"
-        onClick={onLoadMore}
-        disabled={loading || disabled}
-        className="inline-flex h-10 min-w-[160px] items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary-soft text-primary px-5 text-sm font-semibold transition hover:bg-primary/15 hover:border-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
-      >
-        {loading ? (
-          <>
-            <span
-              aria-hidden="true"
-              className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse"
-            />
-            লোড হচ্ছে...
-          </>
-        ) : (
-          <>↓ {label}</>
-        )}
-      </button>
-      {loadedCount > 0 ? (
-        <span className="text-[11px] text-muted-foreground hidden sm:inline">
-          এখন পর্যন্ত {toBn(loadedCount.toLocaleString("en-IN"))} টি দেখানো হচ্ছে
-        </span>
-      ) : null}
-    </div>
+    <UnifiedPagination
+      mode="loadMore"
+      hasMore={hasMore}
+      loading={loading}
+      disabled={disabled}
+      onLoadMore={onLoadMore}
+      loadedCount={loadedCount}
+      label={label}
+      className={className}
+    />
   );
 }

@@ -23,6 +23,7 @@ import {
 } from "@/lib/reporting-range";
 import { REPORT_MAX_RANGE_DAYS } from "@/lib/reporting-config";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UnifiedPagination } from "@/components/pagination/UnifiedPagination";
 
 type CashEntry = {
   id: string;
@@ -679,31 +680,6 @@ export function CashListClient({
         </div>
       </div>
 
-      {/* Pagination */}
-      {(prevHref || nextHref) ? (
-        <div className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-card px-4 py-2.5 shadow-sm">
-          {prevHref ? (
-            <Link
-              href={prevHref}
-              className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted transition-colors"
-            >
-              ← আগের পাতা
-            </Link>
-          ) : <span />}
-          <span className="text-xs text-muted-foreground">পাতা {page ?? 1}</span>
-          {nextHref ? (
-            <Link
-              href={nextHref}
-              className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted transition-colors"
-            >
-              পরের পাতা →
-            </Link>
-          ) : (
-            <span className="text-xs text-muted-foreground">{online ? "শেষ পাতা" : ""}</span>
-          )}
-        </div>
-      ) : null}
-
       {/* Grouped list */}
       {manualRefreshing ? (
         <div className="space-y-3">
@@ -854,6 +830,21 @@ export function CashListClient({
           ) : null}
         </div>
       )}
+
+      {(prevHref || nextHref || rendered.length > 0) ? (
+        <UnifiedPagination
+          mode="cursor"
+          page={page ?? 1}
+          prevHref={online ? prevHref : null}
+          nextHref={online ? nextHref : null}
+          hasMore={Boolean(hasMore && nextHref)}
+          disabled={!online}
+          loadedCount={rendered.length}
+          pageSize={rendered.length}
+          prevLabel="নতুনগুলো"
+          nextLabel="আরও দেখুন"
+        />
+      ) : null}
     </div>
   );
 }
