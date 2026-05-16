@@ -152,30 +152,30 @@ export default async function ProductLocationPage({ searchParams }: Props) {
   });
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-5">
       <Breadcrumb
         items={[
           { label: "হোম", href: "/dashboard" },
           { label: "পণ্য", href: `/dashboard/products?shopId=${selectedShopId}` },
           { label: "লোকেশন ট্র্যাকিং" },
         ]}
-        className="mb-2"
+        className="mb-1"
       />
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-          পণ্য ট্র্যাকিং
-        </p>
-        <h1 className="text-2xl font-bold leading-tight text-foreground">
-          র্যাক / শেলফ / লোকেশন
-        </h1>
-        <p className="mt-1 text-xs text-muted-foreground">
-          দোকান: <span className="font-semibold">{selectedShop.name}</span> — মোট{" "}
-          {rows.length}টি location row
-        </p>
-      </div>
 
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <p className="mb-3 text-xs font-semibold text-muted-foreground">দ্রুত কাজ</p>
+      {/* Page header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+            পণ্য ট্র্যাকিং
+          </p>
+          <h1 className="text-2xl font-bold leading-tight text-foreground">
+            র্যাক / শেলফ / লোকেশন
+          </h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            <span className="font-semibold">{selectedShop.name}</span> — মোট{" "}
+            {rows.length}টি location row
+          </p>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Link
             href={`/dashboard/products?shopId=${selectedShopId}`}
@@ -192,6 +192,7 @@ export default async function ProductLocationPage({ searchParams }: Props) {
         </div>
       </div>
 
+      {/* Lookup client */}
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <LocationLookupClient
           rows={rows}

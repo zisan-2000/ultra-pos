@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { X, ChevronDown, ChevronUp, Info } from "lucide-react";
 import { generateCSV } from "@/lib/utils/csv";
 import { downloadFile } from "@/lib/utils/download";
+import { UnifiedPagination } from "@/components/pagination/UnifiedPagination";
 
 type BatchRow = {
   id: string;
@@ -30,11 +32,18 @@ type BatchRow = {
   }>;
 };
 
-function getExpiryInfo(expiryDate?: string | null) {
+const PAGE_SIZE = 30;
+const MAX_PAGE_BUTTONS = 5;
+
+function getExpiryInfo(expiryDate?: string | null): {
+  label: string;
+  badgeClass: string;
+  textClass: string;
+} {
   if (!expiryDate) {
     return {
       label: "Expiry নেই",
-      className: "border-border bg-muted text-muted-foreground",
+      badgeClass: "border-border bg-muted text-muted-foreground",
       textClass: "text-muted-foreground",
     };
   }
@@ -44,22 +53,22 @@ function getExpiryInfo(expiryDate?: string | null) {
   const days = Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
   if (days < 0) {
     return {
-      label: `${expiryDate} · expired`,
-      className: "border-red-200 bg-red-50 text-red-700",
-      textClass: "text-red-700",
+      label: `মেয়াদ শেষ · ${expiryDate}`,
+      badgeClass: "border-danger/30 bg-danger-soft text-danger",
+      textClass: "text-danger",
     };
   }
   if (days <= 30) {
     return {
-      label: `${expiryDate} · ${days} দিন`,
-      className: "border-amber-200 bg-amber-50 text-amber-700",
-      textClass: "text-amber-700",
+      label: `${days} দিন বাকি · ${expiryDate}`,
+      badgeClass: "border-warning/30 bg-warning-soft/60 text-warning",
+      textClass: "text-warning",
     };
   }
   return {
-    label: `${expiryDate} · ${days} দিন`,
-    className: "border-green-200 bg-green-50 text-green-700",
-    textClass: "text-green-700",
+    label: `${days} দিন বাকি · ${expiryDate}`,
+    badgeClass: "border-success/30 bg-success-soft text-success",
+    textClass: "text-success",
   };
 }
 
@@ -82,6 +91,18 @@ export default function BatchLookupClient({
   );
   const [productFilter, setProductFilter] = useState(initialProductId);
   const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  const productOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const row of rows) {
+      if (!seen.has(row.productId)) seen.set(row.productId, row.productName);
+    }
+    return Array.from(seen.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [rows]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -100,31 +121,67 @@ export default function BatchLookupClient({
     });
   }, [productFilter, query, rows, statusFilter]);
 
-  const productOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const row of rows) {
-      if (!seen.has(row.productId)) {
-        seen.set(row.productId, row.productName);
-      }
-    }
-    return Array.from(seen.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [rows]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, statusFilter, productFilter]);
 
-  const activeProductLabel = useMemo(() => {
-    if (!productFilter) return null;
-    return productOptions.find((row) => row.id === productFilter)?.name ?? null;
-  }, [productFilter, productOptions]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+
+  const paginatedRows = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage]
+  );
+
+  const pageNumbers = useMemo(() => {
+    const half = Math.floor(MAX_PAGE_BUTTONS / 2);
+    let start = Math.max(1, safePage - half);
+    let end = Math.min(totalPages, start + MAX_PAGE_BUTTONS - 1);
+    start = Math.max(1, end - MAX_PAGE_BUTTONS + 1);
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [safePage, totalPages]);
 
   const activeCnt = rows.filter((r) => r.isActive).length;
   const depletedCnt = rows.filter((r) => !r.isActive).length;
 
+  const expiringSoonCnt = useMemo(
+    () =>
+      rows.filter((r) => {
+        if (!r.expiryDate || !r.isActive) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const expiry = new Date(`${r.expiryDate}T00:00:00`);
+        const days = Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
+        return days >= 0 && days <= 30;
+      }).length,
+    [rows]
+  );
+
+  const expiredCnt = useMemo(
+    () =>
+      rows.filter((r) => {
+        if (!r.expiryDate || !r.isActive) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const expiry = new Date(`${r.expiryDate}T00:00:00`);
+        return expiry < today;
+      }).length,
+    [rows]
+  );
+
+  const hasFilter = Boolean(query || productFilter || statusFilter !== "all");
+
+  function handleNavigate(page: number) {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+    tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function exportRows() {
     const flattened = filtered.flatMap((row) => {
-      const netOutQty = row.allocations.reduce((sum, allocation) => {
-        const allocated = Number(allocation.quantityAllocated || 0);
-        const returned = Number(allocation.quantityReturned || 0);
+      const netOutQty = row.allocations.reduce((sum, a) => {
+        const allocated = Number(a.quantityAllocated || 0);
+        const returned = Number(a.quantityReturned || 0);
         return sum + Math.max(0, allocated - returned);
       }, 0);
 
@@ -150,9 +207,9 @@ export default function BatchLookupClient({
         ];
       }
 
-      return row.allocations.map((allocation) => {
-        const allocated = Number(allocation.quantityAllocated || 0);
-        const returned = Number(allocation.quantityReturned || 0);
+      return row.allocations.map((a) => {
+        const allocated = Number(a.quantityAllocated || 0);
+        const returned = Number(a.quantityReturned || 0);
         const outsideQty = Math.max(0, allocated - returned);
         return {
           batchNo: row.batchNo,
@@ -163,10 +220,10 @@ export default function BatchLookupClient({
           totalQty: row.totalQty,
           remainingQty: row.remainingQty,
           netOutQty: netOutQty.toFixed(2),
-          invoiceNo: allocation.invoiceNo || "",
-          customerName: allocation.customerName || "",
-          saleDate: allocation.saleDate,
-          saleStatus: allocation.saleStatus || "",
+          invoiceNo: a.invoiceNo || "",
+          customerName: a.customerName || "",
+          saleDate: a.saleDate,
+          saleStatus: a.saleStatus || "",
           quantityAllocated: allocated.toFixed(2),
           quantityReturned: returned.toFixed(2),
           outsideQty: outsideQty.toFixed(2),
@@ -194,149 +251,206 @@ export default function BatchLookupClient({
       ],
       flattened
     );
-    downloadFile("batch-recall-export.csv", csv);
+    downloadFile("batch-export.csv", csv);
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Batch নম্বর বা পণ্য নাম দিয়ে খুঁজুন..."
-          className="flex-1 h-11 rounded-xl border border-border bg-card px-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-        <div className="flex gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={exportRows}
-            className="h-9 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted"
-          >
-            CSV export
-          </button>
-          {(["all", "active", "depleted"] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setStatusFilter(s)}
-              className={`h-9 rounded-full px-3 text-xs font-semibold transition-colors ${
-                statusFilter === s
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card border border-border text-foreground hover:bg-muted"
-              }`}
-            >
-              {s === "all"
-                ? `সব (${rows.length})`
-                : s === "active"
-                ? `চালু (${activeCnt})`
-                : `শেষ (${depletedCnt})`}
-            </button>
-          ))}
+
+      {/* Info banner — explains batch tracking */}
+      <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="text-xs text-foreground/80 leading-relaxed">
+          <span className="font-semibold text-foreground">ব্যাচ ট্র্যাকিং কীভাবে কাজ করে?</span>{" "}
+          পণ্যের settings-এ <span className="font-semibold">Batch tracking চালু</span> করলে প্রতিটি ক্রয়ে batch নম্বর ও মেয়াদ উত্তীর্ণের তারিখ (expiry) দেওয়া যায়।
+          বিক্রির সময় system স্বয়ংক্রিয়ভাবে পুরনো batch থেকে আগে কাটে (FIFO)।
+          নিচে দেখুন কোন batch থেকে কোন invoice-এ কত গেছে।
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {/* Alert badges */}
+      {(expiredCnt > 0 || expiringSoonCnt > 0) && (
         <div className="flex flex-wrap gap-2">
-          <select
-            value={productFilter}
-            onChange={(e) => setProductFilter(e.target.value)}
-            className="h-10 rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          {expiredCnt > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-danger/30 bg-danger-soft px-3 py-1 text-xs font-semibold text-danger">
+              ⚠ {expiredCnt}টি ব্যাচের মেয়াদ শেষ
+            </span>
+          )}
+          {expiringSoonCnt > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning-soft/60 px-3 py-1 text-xs font-semibold text-warning">
+              ↓ {expiringSoonCnt}টি ব্যাচের মেয়াদ শেষ হওয়ার পথে
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Search bar */}
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="ব্যাচ নম্বর বা পণ্যের নাম দিয়ে খুঁজুন..."
+        className="h-11 w-full rounded-xl border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/25"
+      />
+
+      {/* Filters row */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Status tabs */}
+        {(["all", "active", "depleted"] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setStatusFilter(s)}
+            className={`h-9 rounded-full px-4 text-xs font-semibold transition-colors ${
+              statusFilter === s
+                ? "bg-primary text-white shadow-sm"
+                : "border border-border bg-card text-foreground hover:bg-muted"
+            }`}
           >
-            <option value="">সব পণ্য</option>
-            {productOptions.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name}
-              </option>
-            ))}
-          </select>
-          {(query || statusFilter !== "all" || productFilter) && (
+            {s === "all"
+              ? `সব (${rows.length})`
+              : s === "active"
+                ? `চালু (${activeCnt})`
+                : `শেষ (${depletedCnt})`}
+          </button>
+        ))}
+
+        {/* Product filter */}
+        <select
+          value={productFilter}
+          onChange={(e) => setProductFilter(e.target.value)}
+          className="h-9 rounded-xl border border-border bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/25"
+        >
+          <option value="">সব পণ্য</option>
+          {productOptions.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+
+        {/* Clear filter */}
+        {hasFilter && (
+          <button
+            type="button"
+            onClick={() => { setQuery(""); setStatusFilter("all"); setProductFilter(""); }}
+            className="inline-flex h-9 items-center gap-1 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted"
+          >
+            <X className="h-3 w-3" />
+            ফিল্টার মুছুন
+          </button>
+        )}
+
+        {/* CSV export — pushed to right */}
+        <button
+          type="button"
+          onClick={exportRows}
+          className="ml-auto h-9 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted"
+        >
+          CSV ডাউনলোড
+        </button>
+      </div>
+
+      {/* Result count */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="inline-flex items-center rounded-full border border-border bg-card px-3 py-1 text-muted-foreground">
+          {filtered.length.toLocaleString("bn-BD")}টি ব্যাচ
+        </span>
+        {hasFilter && (
+          <button
+            type="button"
+            onClick={() => { setQuery(""); setStatusFilter("all"); setProductFilter(""); }}
+            className="text-xs font-semibold text-primary hover:underline"
+          >
+            ফিল্টার মুছুন
+          </button>
+        )}
+      </div>
+
+      {/* Table / list */}
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-card p-10 text-center">
+          <p className="text-sm font-medium text-foreground">কোনো ব্যাচ পাওয়া যায়নি</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            ভিন্ন কীওয়ার্ড বা ফিল্টার দিয়ে চেষ্টা করুন
+          </p>
+          {hasFilter && (
             <button
               type="button"
-              onClick={() => {
-                setQuery("");
-                setStatusFilter("all");
-                setProductFilter("");
-              }}
-              className="h-10 rounded-xl border border-border bg-card px-3 text-sm font-semibold text-muted-foreground hover:bg-muted"
+              onClick={() => { setQuery(""); setStatusFilter("all"); setProductFilter(""); }}
+              className="mt-3 text-xs font-semibold text-primary hover:underline"
             >
-              Clear filter
+              ফিল্টার মুছুন
             </button>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {activeProductLabel ? (
-            <span>
-              এখন দেখাচ্ছে: <span className="font-semibold text-foreground">{activeProductLabel}</span>
-            </span>
-          ) : null}
-          <Link
-            href={`/dashboard/products?shopId=${shopId}`}
-            className="font-semibold text-primary hover:underline"
-          >
-            পণ্য তালিকায় ফিরুন
-          </Link>
-        </div>
-      </div>
-
-      <p className="text-xs text-muted-foreground">{filtered.length}টি ফলাফল</p>
-
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-card p-8 text-center">
-          <p className="text-sm text-muted-foreground">কোনো batch পাওয়া যায়নি</p>
-        </div>
       ) : (
-        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-          <div className="hidden md:block overflow-x-auto">
+        <div ref={tableRef} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+
+          {/* Desktop table */}
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Batch No</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">ব্যাচ নম্বর</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">পণ্য</th>
                   <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">মোট পরিমাণ</th>
                   <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">অবশিষ্ট</th>
-                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">কাস্টমারের কাছে</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">ইনভয়েস</th>
+                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">বাইরে আছে</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">ইনভয়েস</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">ক্রয় তারিখ</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Expiry</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">মেয়াদ</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">অবস্থা</th>
-                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">ট্রেস</th>
+                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">বিস্তারিত</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r) => {
-                  const pct = Number(r.totalQty) > 0
-                    ? Math.round((Number(r.remainingQty) / Number(r.totalQty)) * 100)
-                    : 0;
-                  const netOutQty = r.allocations.reduce((sum, allocation) => {
-                    const allocated = Number(allocation.quantityAllocated || 0);
-                    const returned = Number(allocation.quantityReturned || 0);
+                {paginatedRows.map((r) => {
+                  const pct =
+                    Number(r.totalQty) > 0
+                      ? Math.round((Number(r.remainingQty) / Number(r.totalQty)) * 100)
+                      : 0;
+                  const netOutQty = r.allocations.reduce((sum, a) => {
+                    const allocated = Number(a.quantityAllocated || 0);
+                    const returned = Number(a.quantityReturned || 0);
                     return sum + Math.max(0, allocated - returned);
                   }, 0);
-                  const liveAllocations = r.allocations.filter((allocation) => {
-                    const allocated = Number(allocation.quantityAllocated || 0);
-                    const returned = Number(allocation.quantityReturned || 0);
+                  const liveAllocations = r.allocations.filter((a) => {
+                    const allocated = Number(a.quantityAllocated || 0);
+                    const returned = Number(a.quantityReturned || 0);
                     return Math.max(0, allocated - returned) > 0.000001;
                   });
                   const invoicePreview = liveAllocations
                     .slice(0, 2)
-                    .map((allocation) => allocation.invoiceNo || `Sale ${allocation.saleId.slice(0, 6)}`)
+                    .map((a) => a.invoiceNo || `#${a.saleId.slice(0, 6)}`)
                     .join(", ");
                   const isExpanded = expandedBatchId === r.id;
                   const expiryInfo = getExpiryInfo(r.expiryDate);
+
                   return (
                     <Fragment key={r.id}>
-                      <tr className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                        <td className="px-4 py-3 font-mono font-semibold text-foreground">{r.batchNo}</td>
+                      <tr className="border-b border-border/50 align-middle transition-colors hover:bg-muted/20">
+                        <td className="px-4 py-3 font-mono font-semibold text-foreground">
+                          {r.batchNo}
+                        </td>
                         <td className="px-4 py-3">
-                          <span className="font-medium text-foreground">{r.productName}</span>
+                          <Link
+                            href={`/dashboard/products/${r.productId}`}
+                            className="font-medium text-foreground hover:text-primary"
+                          >
+                            {r.productName}
+                          </Link>
                           {r.variantLabel && (
-                            <span className="ml-1 text-xs text-muted-foreground">({r.variantLabel})</span>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{r.variantLabel}</p>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right text-muted-foreground">{Number(r.totalQty).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-foreground">
-                          {Number(r.remainingQty).toFixed(2)}
+                        <td className="px-4 py-3 text-right text-muted-foreground">
+                          {Number(r.totalQty).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="font-semibold text-foreground">
+                            {Number(r.remainingQty).toFixed(2)}
+                          </span>
                           <span className="ml-1 text-xs text-muted-foreground">({pct}%)</span>
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-foreground">
@@ -344,73 +458,88 @@ export default function BatchLookupClient({
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">
                           {invoicePreview || "—"}
-                          {liveAllocations.length > 2 ? ` +${liveAllocations.length - 2}` : ""}
+                          {liveAllocations.length > 2
+                            ? ` +${liveAllocations.length - 2}`
+                            : ""}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{r.purchaseDate ?? "—"}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {r.purchaseDate ?? "—"}
+                        </td>
                         <td className="px-4 py-3">
-                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${expiryInfo.className}`}>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${expiryInfo.badgeClass}`}
+                          >
                             {expiryInfo.label}
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                            r.isActive
-                              ? "bg-green-50 text-green-700 border-green-200"
-                              : "bg-muted text-muted-foreground border-border"
-                          }`}>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                              r.isActive
+                                ? "border-success/30 bg-success-soft text-success"
+                                : "border-border bg-muted text-muted-foreground"
+                            }`}
+                          >
                             {r.isActive ? "চালু" : "শেষ"}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
                             type="button"
-                            onClick={() => setExpandedBatchId((current) => current === r.id ? null : r.id)}
-                            className="inline-flex h-8 items-center rounded-full border border-border bg-card px-3 text-[11px] font-semibold text-foreground hover:bg-muted"
+                            onClick={() =>
+                              setExpandedBatchId((cur) => (cur === r.id ? null : r.id))
+                            }
+                            className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-card px-3 text-[11px] font-semibold text-foreground hover:bg-muted"
                           >
-                            {isExpanded ? "লুকান" : "ট্রেস"}
+                            {isExpanded ? (
+                              <>লুকান <ChevronUp className="h-3 w-3" /></>
+                            ) : (
+                              <>কোথায় গেছে <ChevronDown className="h-3 w-3" /></>
+                            )}
                           </button>
                         </td>
                       </tr>
-                      {isExpanded ? (
+
+                      {isExpanded && (
                         <tr className="border-b border-border/50 bg-muted/10">
                           <td colSpan={10} className="px-4 py-4">
                             <div className="space-y-3">
                               <div className="flex flex-wrap gap-2 text-[11px] font-medium text-muted-foreground">
                                 <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
-                                  মোট trace {r.allocations.length}টি
+                                  মোট {r.allocations.length}টি বিক্রয়
                                 </span>
                                 <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1">
-                                  কাস্টমারের কাছে {netOutQty.toFixed(2)}
+                                  বাইরে আছে {netOutQty.toFixed(2)}
                                 </span>
                               </div>
                               {r.allocations.length === 0 ? (
                                 <div className="rounded-xl border border-dashed border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-                                  এই batch এখনো কোনো sale-এ যায়নি।
+                                  এই ব্যাচ এখনো কোনো বিক্রয়ে ব্যবহার হয়নি।
                                 </div>
                               ) : (
                                 <div className="space-y-2">
-                                  {r.allocations.map((allocation) => {
-                                    const allocated = Number(allocation.quantityAllocated || 0);
-                                    const returned = Number(allocation.quantityReturned || 0);
+                                  {r.allocations.map((a) => {
+                                    const allocated = Number(a.quantityAllocated || 0);
+                                    const returned = Number(a.quantityReturned || 0);
                                     const netQty = Math.max(0, allocated - returned);
                                     return (
                                       <div
-                                        key={allocation.id}
+                                        key={a.id}
                                         className="rounded-xl border border-border bg-card px-4 py-3"
                                       >
                                         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                           <div>
                                             <p className="text-sm font-semibold text-foreground">
-                                              {allocation.invoiceNo || `Sale ${allocation.saleId.slice(0, 8)}`}
+                                              {a.invoiceNo || `বিক্রয় #${a.saleId.slice(0, 8)}`}
                                             </p>
                                             <p className="text-xs text-muted-foreground">
-                                              {allocation.customerName || "Walk-in customer"} · {allocation.saleDate}
+                                              {a.customerName || "Walk-in customer"} · {a.saleDate}
                                             </p>
                                             <Link
-                                              href={`/dashboard/sales/${allocation.saleId}/invoice`}
+                                              href={`/dashboard/sales/${a.saleId}/invoice`}
                                               className="mt-1 inline-flex text-[11px] font-semibold text-primary hover:underline"
                                             >
-                                              ইনভয়েস খুলুন
+                                              ইনভয়েস খুলুন →
                                             </Link>
                                           </div>
                                           <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
@@ -420,15 +549,17 @@ export default function BatchLookupClient({
                                             <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
                                               ফিরেছে {returned.toFixed(2)}
                                             </span>
-                                            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 ${
-                                              netQty > 0.000001
-                                                ? "border-amber-200 bg-amber-50 text-amber-700"
-                                                : "border-green-200 bg-green-50 text-green-700"
-                                            }`}>
-                                              বাইরে আছে {netQty.toFixed(2)}
+                                            <span
+                                              className={`inline-flex items-center rounded-full border px-2.5 py-1 ${
+                                                netQty > 0.000001
+                                                  ? "border-warning/30 bg-warning-soft/60 text-warning"
+                                                  : "border-success/30 bg-success-soft text-success"
+                                              }`}
+                                            >
+                                              বাইরে {netQty.toFixed(2)}
                                             </span>
                                             <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-muted-foreground">
-                                              {(allocation.saleStatus || "COMPLETED").toUpperCase()}
+                                              {(a.saleStatus || "COMPLETED").toUpperCase()}
                                             </span>
                                           </div>
                                         </div>
@@ -440,7 +571,7 @@ export default function BatchLookupClient({
                             </div>
                           </td>
                         </tr>
-                      ) : null}
+                      )}
                     </Fragment>
                   );
                 })}
@@ -448,92 +579,130 @@ export default function BatchLookupClient({
             </table>
           </div>
 
-          <div className="md:hidden divide-y divide-border">
-            {filtered.map((r) => {
-              const pct = Number(r.totalQty) > 0
-                ? Math.round((Number(r.remainingQty) / Number(r.totalQty)) * 100)
-                : 0;
-              const netOutQty = r.allocations.reduce((sum, allocation) => {
-                const allocated = Number(allocation.quantityAllocated || 0);
-                const returned = Number(allocation.quantityReturned || 0);
+          {/* Mobile card list */}
+          <div className="divide-y divide-border md:hidden">
+            {paginatedRows.map((r) => {
+              const pct =
+                Number(r.totalQty) > 0
+                  ? Math.round((Number(r.remainingQty) / Number(r.totalQty)) * 100)
+                  : 0;
+              const netOutQty = r.allocations.reduce((sum, a) => {
+                const allocated = Number(a.quantityAllocated || 0);
+                const returned = Number(a.quantityReturned || 0);
                 return sum + Math.max(0, allocated - returned);
               }, 0);
               const isExpanded = expandedBatchId === r.id;
               const expiryInfo = getExpiryInfo(r.expiryDate);
+
               return (
-                <div key={r.id} className="p-4 space-y-1.5">
+                <div key={r.id} className="space-y-2 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-mono font-bold text-foreground">{r.batchNo}</span>
-                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                      r.isActive
-                        ? "bg-green-50 text-green-700 border-green-200"
-                        : "bg-muted text-muted-foreground border-border"
-                    }`}>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                        r.isActive
+                          ? "border-success/30 bg-success-soft text-success"
+                          : "border-border bg-muted text-muted-foreground"
+                      }`}
+                    >
                       {r.isActive ? "চালু" : "শেষ"}
                     </span>
                   </div>
-                  <p className="text-sm font-medium text-foreground">
+
+                  <Link
+                    href={`/dashboard/products/${r.productId}`}
+                    className="block text-sm font-semibold text-foreground hover:text-primary"
+                  >
                     {r.productName}
-                    {r.variantLabel && <span className="ml-1 text-xs text-muted-foreground">({r.variantLabel})</span>}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    অবশিষ্ট: <span className="font-semibold text-foreground">{Number(r.remainingQty).toFixed(2)}</span>
-                    {" "} / {Number(r.totalQty).toFixed(2)} ({pct}%)
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    কাস্টমারের কাছে: <span className="font-semibold text-foreground">{netOutQty.toFixed(2)}</span>
-                  </p>
+                    {r.variantLabel && (
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        ({r.variantLabel})
+                      </span>
+                    )}
+                  </Link>
+
+                  <div className="flex flex-wrap gap-2 text-[11px]">
+                    <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1 text-muted-foreground">
+                      অবশিষ্ট{" "}
+                      <span className="ml-1 font-semibold text-foreground">
+                        {Number(r.remainingQty).toFixed(2)}
+                      </span>
+                      <span className="ml-0.5 text-muted-foreground">({pct}%)</span>
+                    </span>
+                    <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1 text-muted-foreground">
+                      বাইরে{" "}
+                      <span className="ml-1 font-semibold text-foreground">
+                        {netOutQty.toFixed(2)}
+                      </span>
+                    </span>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 font-semibold ${expiryInfo.badgeClass}`}
+                    >
+                      {expiryInfo.label}
+                    </span>
+                  </div>
+
                   {r.purchaseDate && (
                     <p className="text-xs text-muted-foreground">ক্রয়: {r.purchaseDate}</p>
                   )}
-                  <p className="text-xs">
-                    Expiry: <span className={`font-semibold ${expiryInfo.textClass}`}>{expiryInfo.label}</span>
-                  </p>
+
                   <button
                     type="button"
-                    onClick={() => setExpandedBatchId((current) => current === r.id ? null : r.id)}
-                    className="mt-2 inline-flex h-8 items-center rounded-full border border-border bg-card px-3 text-[11px] font-semibold text-foreground hover:bg-muted"
+                    onClick={() =>
+                      setExpandedBatchId((cur) => (cur === r.id ? null : r.id))
+                    }
+                    className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-card px-3 text-[11px] font-semibold text-foreground hover:bg-muted"
                   >
-                    {isExpanded ? "ট্রেস লুকান" : "কোথায় গেছে দেখুন"}
+                    {isExpanded ? (
+                      <>লুকান <ChevronUp className="h-3 w-3" /></>
+                    ) : (
+                      <>কোথায় গেছে দেখুন <ChevronDown className="h-3 w-3" /></>
+                    )}
                   </button>
-                  {isExpanded ? (
-                    <div className="mt-2 space-y-2 rounded-xl border border-border bg-muted/20 p-3">
+
+                  {isExpanded && (
+                    <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-3">
                       {r.allocations.length === 0 ? (
                         <p className="text-xs text-muted-foreground">
-                          এই batch এখনো কোনো sale-এ যায়নি।
+                          এই ব্যাচ এখনো কোনো বিক্রয়ে ব্যবহার হয়নি।
                         </p>
                       ) : (
-                        r.allocations.map((allocation) => {
-                          const allocated = Number(allocation.quantityAllocated || 0);
-                          const returned = Number(allocation.quantityReturned || 0);
+                        r.allocations.map((a) => {
+                          const allocated = Number(a.quantityAllocated || 0);
+                          const returned = Number(a.quantityReturned || 0);
                           const netQty = Math.max(0, allocated - returned);
                           return (
-                            <div key={allocation.id} className="rounded-lg border border-border bg-card p-3">
+                            <div
+                              key={a.id}
+                              className="rounded-lg border border-border bg-card p-3"
+                            >
                               <p className="text-sm font-semibold text-foreground">
-                                {allocation.invoiceNo || `Sale ${allocation.saleId.slice(0, 8)}`}
+                                {a.invoiceNo || `বিক্রয় #${a.saleId.slice(0, 8)}`}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                {allocation.customerName || "Walk-in customer"} · {allocation.saleDate}
+                                {a.customerName || "Walk-in customer"} · {a.saleDate}
                               </p>
                               <Link
-                                href={`/dashboard/sales/${allocation.saleId}/invoice`}
+                                href={`/dashboard/sales/${a.saleId}/invoice`}
                                 className="mt-1 inline-flex text-[11px] font-semibold text-primary hover:underline"
                               >
-                                ইনভয়েস খুলুন
+                                ইনভয়েস খুলুন →
                               </Link>
-                              <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
+                              <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold">
                                 <span className="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-foreground">
                                   গেছে {allocated.toFixed(2)}
                                 </span>
                                 <span className="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-foreground">
                                   ফিরেছে {returned.toFixed(2)}
                                 </span>
-                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 ${
-                                  netQty > 0.000001
-                                    ? "border-amber-200 bg-amber-50 text-amber-700"
-                                    : "border-green-200 bg-green-50 text-green-700"
-                                }`}>
-                                  বাইরে আছে {netQty.toFixed(2)}
+                                <span
+                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 ${
+                                    netQty > 0.000001
+                                      ? "border-warning/30 bg-warning-soft/60 text-warning"
+                                      : "border-success/30 bg-success-soft text-success"
+                                  }`}
+                                >
+                                  বাইরে {netQty.toFixed(2)}
                                 </span>
                               </div>
                             </div>
@@ -541,13 +710,39 @@ export default function BatchLookupClient({
                         })
                       )}
                     </div>
-                  ) : null}
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
       )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <UnifiedPagination
+          mode="offset"
+          page={safePage}
+          totalPages={totalPages}
+          totalCount={filtered.length}
+          loadedCount={paginatedRows.length}
+          pageSize={PAGE_SIZE}
+          pageNumbers={pageNumbers}
+          onNavigate={handleNavigate}
+          prevLabel="আগের"
+          nextLabel="পরের"
+        />
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        ব্যাচ tracking চালু করতে পণ্য edit করুন। ব্যাচ নম্বর যোগ করতে{" "}
+        <Link
+          href={`/dashboard/purchases/new?shopId=${shopId}`}
+          className="font-semibold text-primary hover:underline"
+        >
+          নতুন ক্রয় করুন →
+        </Link>
+      </p>
     </div>
   );
 }

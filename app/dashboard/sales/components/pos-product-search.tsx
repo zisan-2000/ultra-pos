@@ -2787,14 +2787,14 @@ export const PosProductSearch = memo(function PosProductSearch({
             className="absolute inset-0 bg-foreground/40 backdrop-blur-[2px] animate-fade-in"
             onClick={() => setInfoProduct(null)}
           />
-          {/* Sheet */}
-          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-3xl bg-card shadow-[0_-20px_50px_rgba(15,23,42,0.22)] animate-slide-up">
-            {/* Drag handle */}
-            <div className="sticky top-0 z-10 flex justify-center bg-card/95 pb-2 pt-3 backdrop-blur-sm">
+          {/* Sheet — bottom sheet on mobile, centered modal on desktop */}
+          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-3xl bg-card shadow-[0_-20px_50px_rgba(15,23,42,0.22)] animate-slide-up md:inset-auto md:top-1/2 md:left-1/2 md:w-[460px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:shadow-[0_24px_64px_rgba(15,23,42,0.22)]">
+            {/* Drag handle — mobile only */}
+            <div className="sticky top-0 z-10 flex justify-center bg-card/95 pb-2 pt-3 backdrop-blur-sm md:hidden">
               <div className="h-1 w-10 rounded-full bg-muted-foreground/25" />
             </div>
 
-            <div className="px-5 pb-8 space-y-5">
+            <div className="px-5 pb-8 pt-0 space-y-5 md:pt-5">
               {/* Header: name + close */}
               <div className="flex items-start justify-between gap-3">
                 <h2 className="text-xl font-bold leading-snug text-foreground flex-1 pr-2">

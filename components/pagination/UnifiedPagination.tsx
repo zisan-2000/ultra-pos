@@ -316,7 +316,7 @@ export function UnifiedPagination({
           </NavButton>
 
           {pageButtons.length > 0 ? (
-            <div className="hidden max-w-[220px] items-center gap-1.5 overflow-x-auto md:flex">
+            <div className="hidden max-w-55 items-center gap-1.5 overflow-x-auto md:flex">
               {pageButtons.map((pageNumber) => {
                 const isActive = pageNumber === safePage;
                 const buttonClass = cn(

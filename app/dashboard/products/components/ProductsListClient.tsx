@@ -50,7 +50,7 @@ import { matchesProductSearchQuery } from "@/lib/product-search";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UnifiedPagination } from "@/components/pagination/UnifiedPagination";
-import { Package } from "lucide-react";
+import { Package, X, MapPin, Tag, Barcode, Hash, CheckCircle2, XCircle, Pencil, Trash2 } from "lucide-react";
 
 type Shop = { id: string; name: string };
 type ProductVariant = {
@@ -2474,7 +2474,7 @@ export default function ProductsListClient({
             </div>
       </div>
 
-      {hardwareStarterPacks.length > 0 && (
+      {hardwareStarterPacks.length > 0 && !trimmedQuery && (
         <div className="relative overflow-hidden rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.09),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.08),transparent_28%)]" />
           <div className="relative space-y-4">
@@ -2604,7 +2604,7 @@ export default function ProductsListClient({
         </div>
       )}
 
-      {templateItems.length > 0 && (
+      {templateItems.length > 0 && !trimmedQuery && (
         <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 via-card to-card" />
           <div className="relative">
@@ -2918,7 +2918,7 @@ export default function ProductsListClient({
         </div>
       )}
 
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
+      {!trimmedQuery && <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-success/5 via-card to-card" />
         <div className="relative">
         <div className="flex items-center justify-between gap-2">
@@ -3315,7 +3315,7 @@ export default function ProductsListClient({
           </div>
         )}
         </div>
-      </div>
+      </div>}
 
 
       {/* Products List - Scrolls normally */}
@@ -3779,286 +3779,255 @@ export default function ProductsListClient({
       {/* Bottom Sheet for Product Details */}
       {selectedProduct && (
         <div
-          className="fixed inset-0 bg-foreground/40 z-50 flex items-end"
+          className="fixed inset-0 bg-foreground/40 z-50 flex items-end md:items-center md:justify-center backdrop-blur-[2px]"
           onClick={() => setSelectedProduct(null)}
         >
           <div
-            className="bg-card rounded-t-3xl w-full max-h-[80vh] overflow-y-auto animate-slide-up"
+            className="flex w-full max-h-[88dvh] flex-col overflow-hidden rounded-t-3xl bg-card animate-slide-up md:max-h-[85dvh] md:w-[500px] md:rounded-2xl md:shadow-[0_24px_64px_rgba(15,23,42,0.22)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-              <h3 className="font-semibold text-foreground">পণ্যের বিস্তারিত</h3>
-              <button
-                type="button"
-                onClick={() => setSelectedProduct(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-muted text-muted-foreground active:scale-95 transition-transform"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <h4 className="text-2xl font-bold text-foreground mb-2">
-                  {selectedProduct.name}
-                </h4>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                    {formatCategoryLabel(selectedProduct.category)}
-                  </span>
-                  {getVariantSummary(selectedProduct) ? (
-                    <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-soft/80 px-2.5 py-1 text-[11px] font-semibold text-primary">
-                      {getVariantSummary(selectedProduct)}
-                    </span>
-                  ) : null}
-                  {selectedProduct.barcode ? (
-                    <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                      বারকোড {selectedProduct.barcode}
-                    </span>
-                  ) : null}
-                </div>
+            {/* ── Sticky header ── */}
+            <div className="shrink-0">
+              <div className="flex justify-center pb-1 pt-3 md:hidden">
+                <div className="h-1 w-10 rounded-full bg-muted-foreground/25" />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-primary/30 bg-primary-soft p-4 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
-                  <p className="text-xs font-medium text-primary mb-1">
-                    বিক্রয় মূল্য
+              <div className="flex items-start gap-3 border-b border-border px-5 pb-4 pt-3 md:pt-5">
+                <div className="min-w-0 flex-1">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    পণ্যের বিস্তারিত
                   </p>
+                  <h3 className="text-lg font-bold leading-snug text-foreground">
+                    {selectedProduct.name}
+                  </h3>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${selectedProduct.isActive ? "border-success/25 bg-success-soft text-success" : "border-border bg-muted text-muted-foreground"}`}>
+                      {selectedProduct.isActive
+                        ? <><CheckCircle2 className="h-3 w-3" /> সক্রিয়</>
+                        : <><XCircle className="h-3 w-3" /> বন্ধ</>}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      <Tag className="h-3 w-3" />
+                      {formatCategoryLabel(selectedProduct.category)}
+                    </span>
+                    {getVariantSummary(selectedProduct) ? (
+                      <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/8 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                        {getVariantSummary(selectedProduct)}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedProduct(null)}
+                  className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted/60 text-muted-foreground transition hover:bg-muted"
+                  aria-label="বন্ধ করুন"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* ── Scrollable body ── */}
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
+
+              {/* Pricing row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-primary/30 bg-primary/6 px-4 py-3">
+                  <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-primary/70">বিক্রয় মূল্য</p>
                   <p className="text-2xl font-bold text-foreground">
-                    ৳ {selectedProduct.sellPrice}
+                    <span className="text-sm font-medium text-muted-foreground">৳</span> {selectedProduct.sellPrice}
                   </p>
                 </div>
-                {selectedProduct.buyPrice && (
-                  <div className="rounded-xl border border-success/30 bg-success-soft p-4 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
-  <p className="text-xs font-medium text-success mb-1">
-    ক্রয় মূল্য
-                    </p>
+                {selectedProduct.buyPrice ? (
+                  <div className="rounded-xl border border-success/25 bg-success-soft/60 px-4 py-3">
+                    <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-success/80">ক্রয় মূল্য</p>
                     <p className="text-2xl font-bold text-foreground">
-                      ৳ {selectedProduct.buyPrice}
+                      <span className="text-sm font-medium text-muted-foreground">৳</span> {selectedProduct.buyPrice}
                     </p>
                   </div>
+                ) : (
+                  <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+                    <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">ক্রয় মূল্য</p>
+                    <p className="text-sm italic text-muted-foreground/60">সেট করা নেই</p>
+                  </div>
                 )}
-                <div className={`rounded-xl border p-4 shadow-[0_1px_0_rgba(0,0,0,0.02)] ${selectedStockClasses.card}`}>
-                  <p className={`text-xs font-medium mb-1 ${selectedStockClasses.label}`}>
-                    স্টক
-  </p>
-  <p className="text-2xl font-bold text-foreground">
-    {formatStockText(selectedProduct)}
-  </p>
-</div>
-                <div className="rounded-xl border border-border bg-muted/50 p-4 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
-                  <p className="text-xs text-muted-foreground font-medium mb-1">
-                    স্ট্যাটাস
-                  </p>
-                  <p className="text-lg font-bold text-foreground">
-                    {selectedProduct.isActive ? "✅ সক্রিয়" : "⏸️ বন্ধ"}
-                  </p>
-                </div>
               </div>
+              {/* Stock row */}
+              {selectedProduct.trackStock !== false && (
+                <div className={`flex items-center justify-between rounded-xl border px-4 py-3 ${selectedStockClasses.card}`}>
+                  <div>
+                    <p className={`mb-0.5 text-[10px] font-semibold uppercase tracking-widest ${selectedStockClasses.label}`}>বর্তমান স্টক</p>
+                    <p className="text-2xl font-bold text-foreground">{formatStockText(selectedProduct)}</p>
+                  </div>
+                  {selectedProduct.reorderPoint ? (
+                    <div className="text-right">
+                      <p className="text-[10px] text-muted-foreground">রিঅর্ডার পয়েন্ট</p>
+                      <p className="text-sm font-semibold text-foreground">{selectedProduct.reorderPoint}</p>
+                    </div>
+                  ) : null}
+                </div>
+              )}
 
-              {getLocationEntries(selectedProduct).length > 0 ? (
-                <div className="rounded-2xl border border-border bg-muted/30 p-3 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <h5 className="text-sm font-semibold text-foreground">
-                      র্যাক / শেলফ / লোকেশন
-                    </h5>
+
+              {/* Product info table */}
+              {(() => {
+                const rows = [
+                  selectedProduct.sku ? { label: "SKU", value: selectedProduct.sku } : null,
+                  selectedProduct.barcode ? { label: "বারকোড", value: selectedProduct.barcode } : null,
+                  selectedProduct.brand ? { label: "ব্র্যান্ড", value: selectedProduct.brand } : null,
+                  selectedProduct.modelName ? { label: "মডেল", value: selectedProduct.modelName } : null,
+                  selectedProduct.size ? { label: "সাইজ", value: selectedProduct.size } : null,
+                  selectedProduct.baseUnit ? { label: "একক", value: selectedProduct.baseUnit } : null,
+                  selectedProduct.warrantyDays ? { label: "ওয়ারেন্টি", value: selectedProduct.warrantyDays + " দিন" } : null,
+                  selectedProduct.compatibility ? { label: "সামঞ্জস্য", value: selectedProduct.compatibility } : null,
+                  selectedProduct.genericName ? { label: "Generic", value: selectedProduct.genericName } : null,
+                  selectedProduct.strength ? { label: "Strength", value: selectedProduct.strength } : null,
+                  selectedProduct.manufacturer ? { label: "Manufacturer", value: selectedProduct.manufacturer } : null,
+                ].filter(Boolean);
+                return rows.length > 0 ? (
+                  <div className="overflow-hidden rounded-xl border border-border divide-y divide-border">
+                    {rows.map((row) => (
+                      <div key={row!.label} className="flex items-center gap-3 bg-card px-4 py-2.5">
+                        <span className="w-24 shrink-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{row!.label}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{row!.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Tracking badges */}
+              {(selectedProduct.trackSerialNumbers || selectedProduct.trackBatch || selectedProduct.trackCutLength) && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedProduct.trackSerialNumbers && (
+                    <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-400">
+                      Serial tracked
+                    </span>
+                  )}
+                  {selectedProduct.trackBatch && (
+                    <span className="inline-flex items-center rounded-full border border-warning/30 bg-warning-soft/50 px-3 py-1 text-xs font-semibold text-warning">
+                      Batch tracked
+                    </span>
+                  )}
+                  {selectedProduct.trackCutLength && (
+                    <span className="inline-flex items-center rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-400">
+                      Cut-length tracked
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Location entries */}
+              {getLocationEntries(selectedProduct).length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">র্যাক / শেলফ / লোকেশন</p>
                     <Link
-                      href={`/dashboard/products/locations?shopId=${activeShopId}&productId=${selectedProduct.id}`}
+                      href={'/dashboard/products/locations?shopId=' + activeShopId + '&productId=' + selectedProduct.id}
                       className="text-[11px] font-semibold text-primary hover:underline"
                       onClick={() => triggerHaptic("light")}
                     >
-                      লোকেশন ফাইন্ডার
+                      লোকেশন ফাইন্ডার →
                     </Link>
                   </div>
-                  <div className="space-y-2">
+                  <div className="overflow-hidden rounded-xl border border-border divide-y divide-border">
                     {getLocationEntries(selectedProduct).map((entry) => (
-                      <div
-                        key={entry.key}
-                        className="flex items-start justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2.5"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-foreground">
-                            {entry.label}
-                          </p>
-                          <p className="mt-1 text-sm text-muted-foreground break-words">
-                            {entry.location}
-                          </p>
-                        </div>
-                        <span className="shrink-0 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                          {entry.kind === "variant" ? "ভ্যারিয়েন্ট" : "বেস"}
+                      <div key={entry.key} className="flex items-center gap-3 bg-card px-4 py-2.5">
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
+                        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{entry.location}</span>
+                        <span className="shrink-0 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {entry.label}
                         </span>
                       </div>
                     ))}
                   </div>
                 </div>
-              ) : null}
+              )}
 
-              <div className="rounded-2xl border border-border bg-muted/30 p-3 space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <h5 className="text-sm font-semibold text-foreground">
-                    রিটার্ন ও এক্সচেঞ্জ সারাংশ
-                  </h5>
-                  <span className="inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    শেষ রিটার্ন: {formatDateTime(selectedMetrics.lastReturnAt)}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-xl border border-border bg-card px-2.5 py-2.5">
-                    <p className="text-[10px] text-muted-foreground">আজ বিক্রি</p>
-                    <p className="text-sm font-semibold text-foreground">
-                      {formatQty(selectedMetrics.soldQtyToday)}
-                    </p>
+              {/* Today sales summary */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">আজকের বিক্রি · রিটার্ন</p>
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="rounded-xl border border-border bg-card px-2.5 py-2.5 text-center">
+                    <p className="mb-0.5 text-[10px] text-muted-foreground">বিক্রি</p>
+                    <p className="text-sm font-bold text-foreground">{formatQty(selectedMetrics.soldQtyToday)}</p>
                   </div>
-                  <div className="rounded-xl border border-danger/20 bg-danger-soft/50 px-2.5 py-2.5">
-                    <p className="text-[10px] text-danger/80">আজ রিটার্ন</p>
-                    <p className="text-sm font-semibold text-danger">
-                      {formatQty(selectedMetrics.returnedQtyToday)}
-                    </p>
+                  <div className="rounded-xl border border-danger/20 bg-danger-soft/40 px-2.5 py-2.5 text-center">
+                    <p className="mb-0.5 text-[10px] text-danger/80">রিটার্ন</p>
+                    <p className="text-sm font-bold text-danger">{formatQty(selectedMetrics.returnedQtyToday)}</p>
                   </div>
-                  <div className="rounded-xl border border-success/20 bg-success-soft/60 px-2.5 py-2.5">
-                    <p className="text-[10px] text-success/80">আজ নেট বিক্রি</p>
-                    <p className="text-sm font-semibold text-success">
-                      {formatQty(selectedMetrics.netQtyToday)}
-                    </p>
+                  <div className="rounded-xl border border-success/20 bg-success-soft/50 px-2.5 py-2.5 text-center">
+                    <p className="mb-0.5 text-[10px] text-success/80">নেট</p>
+                    <p className="text-sm font-bold text-success">{formatQty(selectedMetrics.netQtyToday)}</p>
                   </div>
-                  <div className="rounded-xl border border-warning/25 bg-warning-soft/40 px-2.5 py-2.5">
-                    <p className="text-[10px] text-warning">রিটার্ন রেট · ৩০ দিন</p>
-                    <p className="text-sm font-semibold text-warning">
-                      {formatPercent(selectedMetrics.returnRate30d)}%
-                    </p>
+                  <div className="rounded-xl border border-warning/25 bg-warning-soft/40 px-2.5 py-2.5 text-center">
+                    <p className="mb-0.5 text-[10px] text-warning">রিটার্ন%</p>
+                    <p className="text-sm font-bold text-warning">{formatPercent(selectedMetrics.returnRate30d)}%</p>
                   </div>
                 </div>
-
-                {!online ? (
-                  <p className="text-xs text-muted-foreground">
-                    অফলাইনে আছেন। রিটার্ন/এক্সচেঞ্জ history দেখতে অনলাইনে আসুন।
-                  </p>
-                ) : insightLoadingProductId === selectedProduct.id ? (
-                  <p className="text-xs text-muted-foreground">
-                    রিটার্ন history লোড হচ্ছে...
-                  </p>
-                ) : insightError ? (
-                  <p className="text-xs text-danger">{insightError}</p>
-                ) : selectedInsight && selectedInsight.events.length > 0 ? (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-lg border border-border bg-card px-2.5 py-2">
-                        <p className="text-[10px] text-muted-foreground">
-                          সাম্প্রতিক রিটার্ন
-                        </p>
-                        <p className="text-sm font-semibold text-danger">
-                          {formatQty(selectedInsight.totals.returnedQty)}
-                        </p>
-                      </div>
-                      <div className="rounded-lg border border-border bg-card px-2.5 py-2">
-                        <p className="text-[10px] text-muted-foreground">
-                          সাম্প্রতিক এক্সচেঞ্জ
-                        </p>
-                        <p className="text-sm font-semibold text-success">
-                          {formatQty(selectedInsight.totals.exchangeQty)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                      {selectedInsight.events.map((event) => (
-                        <div
-                          key={event.id}
-                          className="rounded-xl border border-border bg-card px-3 py-2.5 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span
-                              className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                                event.kind === "returned"
-                                  ? "border-danger/30 bg-danger-soft text-danger"
-                                  : "border-success/30 bg-success-soft text-success"
-                              }`}
-                            >
-                              {event.kind === "returned" ? "রিটার্ন" : "এক্সচেঞ্জ আউট"}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {formatDateTime(event.createdAt)}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-foreground">
-                            {event.returnNo}
-                            {event.saleInvoiceNo ? ` · ইনভয়েস ${event.saleInvoiceNo}` : ""}
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                              পরিমাণ {formatQty(event.quantity)}
-                            </span>
-                            <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                              লাইন ৳ {formatQty(event.lineTotal)}
-                            </span>
-                          </div>
-                          {event.reason ? (
-                            <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-                              কারণ: {event.reason}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    এই পণ্যে এখনো কোনো রিটার্ন/এক্সচেঞ্জ ইভেন্ট নেই।
-                  </p>
-                )}
               </div>
 
-              {canUpdateProducts || canDeleteProducts ? (
-                <div
-                  className={`grid gap-3 pt-2 ${
-                    canUpdateProducts && canDeleteProducts
-                      ? "grid-cols-2"
-                      : "grid-cols-1"
-                  }`}
-                >
-                  {canUpdateProducts ? (
+              {/* Return event history */}
+              {online && selectedInsight && selectedInsight.events.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">সাম্প্রতিক রিটার্ন / এক্সচেঞ্জ</p>
+                  <div className="max-h-48 space-y-2 overflow-y-auto pr-0.5">
+                    {selectedInsight.events.map((event) => (
+                      <div key={event.id} className="rounded-xl border border-border bg-card px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={event.kind === "returned" ? "inline-flex rounded-full border border-danger/30 bg-danger-soft px-2 py-0.5 text-[10px] font-semibold text-danger" : "inline-flex rounded-full border border-success/30 bg-success-soft px-2 py-0.5 text-[10px] font-semibold text-success"}>
+                            {event.kind === "returned" ? "রিটার্ন" : "এক্সচেঞ্জ আউট"}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">{formatDateTime(event.createdAt)}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-foreground">
+                          {event.returnNo}{event.saleInvoiceNo ? " · ইনভয়েস " + event.saleInvoiceNo : ""}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] text-muted-foreground">পরিমাণ {formatQty(event.quantity)}</span>
+                          <span className="inline-flex items-center rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] text-muted-foreground">৳ {formatQty(event.lineTotal)}</span>
+                        </div>
+                        {event.reason ? <p className="mt-1.5 text-[11px] text-muted-foreground">কারণ: {event.reason}</p> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              {(canUpdateProducts || canDeleteProducts) ? (
+                <div className={canUpdateProducts && canDeleteProducts ? "grid grid-cols-2 gap-3 pb-2 pt-1" : "grid grid-cols-1 gap-3 pb-2 pt-1"}>
+                  {canUpdateProducts && (
                     <Link
-                      href={`/dashboard/products/${selectedProduct.id}`}
-                      className="flex items-center justify-center gap-2 h-12 bg-primary-soft text-primary border border-primary/30 rounded-xl font-semibold hover:bg-primary/15 hover:border-primary/40 active:scale-95 transition-all"
+                      href={'/dashboard/products/' + selectedProduct.id}
+                      className="flex h-11 items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/8 text-sm font-semibold text-primary transition hover:bg-primary/15 active:scale-95"
                       onClick={() => triggerHaptic("medium")}
                     >
-                      <span>✏️</span>
-                      <span>এডিট করুন</span>
+                      <Pencil className="h-4 w-4" />
+                      এডিট করুন
                     </Link>
-                  ) : null}
-                  {canDeleteProducts ? (
+                  )}
+                  {canDeleteProducts && (
                     <button
                       type="button"
-                      onClick={() =>
-                        setConfirmDelete({
-                          id: selectedProduct.id,
-                          name: selectedProduct.name,
-                        })
-                      }
+                      onClick={() => setConfirmDelete({ id: selectedProduct.id, name: selectedProduct.name })}
                       disabled={deletingId === selectedProduct.id}
-                      className={`flex items-center justify-center gap-2 h-12 rounded-xl font-semibold transition-all ${
-                        deletingId === selectedProduct.id
-                          ? "bg-danger-soft text-danger/60 border border-danger/20 cursor-not-allowed"
-                          : "bg-danger-soft text-danger border border-danger/30 hover:bg-danger/15 hover:border-danger/40 active:scale-95"
-                      }`}
+                      className="flex h-11 items-center justify-center gap-2 rounded-xl border border-danger/30 bg-danger-soft text-sm font-semibold text-danger transition hover:bg-danger/15 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      <span>🗑️</span>
-                      <span>
-                        {deletingId === selectedProduct.id ? "মুছছে..." : "ডিলিট"}
-                      </span>
+                      <Trash2 className="h-4 w-4" />
+                      {deletingId === selectedProduct.id ? "মুছছে..." : "ডিলিট"}
                     </button>
-                  ) : null}
+                  )}
                 </div>
               ) : (
-                <p className="pt-2 text-xs text-muted-foreground">
-                  এডিট/ডিলিট অনুমতি নেই।
-                </p>
+                <p className="pb-2 pt-1 text-xs text-muted-foreground">এডিট/ডিলিট অনুমতি নেই।</p>
               )}
             </div>
           </div>
         </div>
       )}
 
-      <Dialog open={templateSetupOpen} onOpenChange={setTemplateSetupOpen}>
+            <Dialog open={templateSetupOpen} onOpenChange={setTemplateSetupOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>টেমপ্লেট সেটআপ করে যোগ করুন</DialogTitle>

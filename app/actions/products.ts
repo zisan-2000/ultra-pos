@@ -9,7 +9,7 @@ import { assertShopAccess } from "@/lib/shop-access";
 import { Prisma, ProductSourceType } from "@prisma/client";
 import { revalidateReportsForProduct } from "@/lib/reports/revalidate";
 import { getDhakaBusinessDate } from "@/lib/dhaka-date";
-import { buildProductSearchTerms } from "@/lib/product-search";
+import { buildProductSearchTerms, tokenizeSearchText } from "@/lib/product-search";
 import { auditActorSnapshot, logAudit } from "@/lib/audit/logger";
 import { productSummary } from "@/lib/audit/formatters";
 
@@ -1453,6 +1453,66 @@ export async function getProductsByShop(shopId: string) {
 }
 
 // ---------------------------------
+// PRODUCT SEARCH HELPERS
+// ---------------------------------
+function buildProductFieldConditions(term: string): any[] {
+  return [
+    { name: { contains: term, mode: "insensitive" } },
+    { category: { contains: term, mode: "insensitive" } },
+    { sku: { contains: term, mode: "insensitive" } },
+    { barcode: { contains: term, mode: "insensitive" } },
+    { storageLocation: { contains: term, mode: "insensitive" } },
+    { brand: { contains: term, mode: "insensitive" } },
+    { modelName: { contains: term, mode: "insensitive" } },
+    { compatibility: { contains: term, mode: "insensitive" } },
+    { genericName: { contains: term, mode: "insensitive" } },
+    { strength: { contains: term, mode: "insensitive" } },
+    { dosageForm: { contains: term, mode: "insensitive" } },
+    { manufacturer: { contains: term, mode: "insensitive" } },
+    {
+      variants: {
+        some: {
+          OR: [
+            { label: { contains: term, mode: "insensitive" } },
+            { sku: { contains: term, mode: "insensitive" } },
+            { barcode: { contains: term, mode: "insensitive" } },
+            { storageLocation: { contains: term, mode: "insensitive" } },
+          ],
+        },
+      },
+    },
+    { catalogProduct: { is: { name: { contains: term, mode: "insensitive" } } } },
+    { catalogProduct: { is: { brand: { contains: term, mode: "insensitive" } } } },
+    {
+      catalogProduct: {
+        is: { aliases: { some: { alias: { contains: term, mode: "insensitive" } } } },
+      },
+    },
+    {
+      catalogProduct: {
+        is: { barcodes: { some: { code: { contains: term, mode: "insensitive" } } } },
+      },
+    },
+  ];
+}
+
+function applyProductSearchWhere(where: any, normalizedQuery: string) {
+  const searchTerms = buildProductSearchTerms(normalizedQuery);
+  if (searchTerms.length === 0) return;
+  const queryTokens = tokenizeSearchText(normalizedQuery);
+  if (queryTokens.length > 1) {
+    // Multi-word: every token must appear somewhere — AND across tokens, OR across fields
+    where.AND = (where.AND ?? []).concat(
+      queryTokens.map((token) => ({
+        OR: buildProductSearchTerms(token).flatMap(buildProductFieldConditions),
+      }))
+    );
+  } else {
+    where.OR = searchTerms.flatMap(buildProductFieldConditions);
+  }
+}
+
+// ---------------------------------
 // GET PRODUCTS BY SHOP (PAGINATED + SEARCH)
 // ---------------------------------
 export async function getProductsByShopPaginated({
@@ -1469,7 +1529,6 @@ export async function getProductsByShopPaginated({
   const safePage = Math.max(1, Math.floor(page));
   const safePageSize = Math.max(1, Math.min(Math.floor(pageSize), 100));
   const normalizedQuery = (query || "").trim();
-  const searchTerms = buildProductSearchTerms(normalizedQuery);
   const where: any = { shopId };
 
   if (status === "active") {
@@ -1478,53 +1537,8 @@ export async function getProductsByShopPaginated({
     where.isActive = false;
   }
 
-  if (searchTerms.length > 0) {
-    where.OR = searchTerms.flatMap((term) => [
-      { name: { contains: term, mode: "insensitive" } },
-      { category: { contains: term, mode: "insensitive" } },
-      { sku: { contains: term, mode: "insensitive" } },
-      { barcode: { contains: term, mode: "insensitive" } },
-      { storageLocation: { contains: term, mode: "insensitive" } },
-      { brand: { contains: term, mode: "insensitive" } },
-      { modelName: { contains: term, mode: "insensitive" } },
-      { compatibility: { contains: term, mode: "insensitive" } },
-      { genericName: { contains: term, mode: "insensitive" } },
-      { strength: { contains: term, mode: "insensitive" } },
-      { dosageForm: { contains: term, mode: "insensitive" } },
-      { manufacturer: { contains: term, mode: "insensitive" } },
-      {
-        variants: {
-          some: {
-            OR: [
-              { label: { contains: term, mode: "insensitive" } },
-              { sku: { contains: term, mode: "insensitive" } },
-              { barcode: { contains: term, mode: "insensitive" } },
-              { storageLocation: { contains: term, mode: "insensitive" } },
-            ],
-          },
-        },
-      },
-      { catalogProduct: { is: { name: { contains: term, mode: "insensitive" } } } },
-      { catalogProduct: { is: { brand: { contains: term, mode: "insensitive" } } } },
-      {
-        catalogProduct: {
-          is: {
-            aliases: {
-              some: { alias: { contains: term, mode: "insensitive" } },
-            },
-          },
-        },
-      },
-      {
-        catalogProduct: {
-          is: {
-            barcodes: {
-              some: { code: { contains: term, mode: "insensitive" } },
-            },
-          },
-        },
-      },
-    ]);
+  if (normalizedQuery) {
+    applyProductSearchWhere(where, normalizedQuery);
   }
 
   const totalCount = await prisma.product.count({ where });
@@ -1636,7 +1650,6 @@ export async function getProductsByShopCursorPaginated({
 
   const safeLimit = Math.max(1, Math.min(Math.floor(limit), 100));
   const normalizedQuery = (query || "").trim();
-  const searchTerms = buildProductSearchTerms(normalizedQuery);
 
   const baseWhere: any = { shopId };
   if (status === "active") {
@@ -1645,66 +1658,20 @@ export async function getProductsByShopCursorPaginated({
     baseWhere.isActive = false;
   }
 
-  if (searchTerms.length > 0) {
-    baseWhere.OR = searchTerms.flatMap((term) => [
-      { name: { contains: term, mode: "insensitive" } },
-      { category: { contains: term, mode: "insensitive" } },
-      { sku: { contains: term, mode: "insensitive" } },
-      { barcode: { contains: term, mode: "insensitive" } },
-      { storageLocation: { contains: term, mode: "insensitive" } },
-      { brand: { contains: term, mode: "insensitive" } },
-      { modelName: { contains: term, mode: "insensitive" } },
-      { compatibility: { contains: term, mode: "insensitive" } },
-      { genericName: { contains: term, mode: "insensitive" } },
-      { strength: { contains: term, mode: "insensitive" } },
-      { dosageForm: { contains: term, mode: "insensitive" } },
-      { manufacturer: { contains: term, mode: "insensitive" } },
-      {
-        variants: {
-          some: {
-            OR: [
-              { label: { contains: term, mode: "insensitive" } },
-              { sku: { contains: term, mode: "insensitive" } },
-              { barcode: { contains: term, mode: "insensitive" } },
-              { storageLocation: { contains: term, mode: "insensitive" } },
-            ],
-          },
-        },
-      },
-      { catalogProduct: { is: { name: { contains: term, mode: "insensitive" } } } },
-      { catalogProduct: { is: { brand: { contains: term, mode: "insensitive" } } } },
-      {
-        catalogProduct: {
-          is: {
-            aliases: {
-              some: { alias: { contains: term, mode: "insensitive" } },
-            },
-          },
-        },
-      },
-      {
-        catalogProduct: {
-          is: {
-            barcodes: {
-              some: { code: { contains: term, mode: "insensitive" } },
-            },
-          },
-        },
-      },
-    ]);
+  if (normalizedQuery) {
+    applyProductSearchWhere(baseWhere, normalizedQuery);
   }
 
   const where: any = { ...baseWhere };
 
   if (cursor) {
-    where.AND = [
-      {
-        OR: [
-          { createdAt: { lt: cursor.createdAt } },
-          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
-        ],
-      },
-    ];
+    const cursorCondition = {
+      OR: [
+        { createdAt: { lt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+      ],
+    };
+    where.AND = [...(where.AND ?? []), cursorCondition];
   }
 
   const [rows, totalCount] = await Promise.all([
