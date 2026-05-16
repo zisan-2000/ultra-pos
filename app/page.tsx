@@ -7,6 +7,7 @@ import { LandingForWhom } from "@/components/landing/LandingForWhom";
 import { LandingSteps } from "@/components/landing/LandingSteps";
 import { LandingSupport } from "@/components/landing/LandingSupport";
 import { LandingFooter } from "@/components/landing/LandingFooter";
+import { getSupportContactCachedData } from "@/lib/system/support-contact";
 
 const organizationJsonLd = {
   "@context": "https://schema.org",
@@ -29,7 +30,9 @@ const websiteJsonLd = {
   publisher: { "@type": "Organization", name: "SellFlick" },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supportContact = await getSupportContactCachedData();
+
   return (
     <>
       <script
@@ -46,8 +49,8 @@ export default function HomePage() {
         aria-hidden
         className="pointer-events-none fixed inset-0 -z-10 bg-linear-to-br from-primary-soft/30 via-background to-warning-soft/20"
       >
-        <div className="absolute -top-32 right-[-10%] h-125 w-125 rounded-full bg-primary/12 blur-[130px]" />
-        <div className="absolute bottom-[-20%] left-[-10%] h-105 w-105 rounded-full bg-warning/10 blur-[120px]" />
+        <div className="absolute -top-32 right-[-10%] h-125 w-125 rounded-full bg-primary/12 blur-[130px] animate-blob-a" />
+        <div className="absolute bottom-[-20%] left-[-10%] h-105 w-105 rounded-full bg-warning/10 blur-[120px] animate-blob-b" />
       </div>
 
       <LandingNav />
@@ -57,7 +60,7 @@ export default function HomePage() {
         <LandingPainSolution />
         <LandingForWhom />
         <LandingSteps />
-        <LandingSupport />
+        <LandingSupport contact={supportContact} />
       </main>
 
       <LandingFooter />

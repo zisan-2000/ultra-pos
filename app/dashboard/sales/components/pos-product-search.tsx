@@ -621,62 +621,63 @@ const ProductButton = memo(function ProductButton({
     : "bg-muted text-muted-foreground border border-border/60";
 
   return (
-    <button
-      key={product.id}
-      type="button"
-      className={`relative w-full h-full min-h-[150px] text-left rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 shadow-[0_8px_20px_rgba(15,23,42,0.08)] hover:border-primary/40 hover:shadow-[0_12px_26px_rgba(15,23,42,0.12)] transition-all p-3.5 pressable active:scale-[0.98] active:translate-y-[1px] flex flex-col ${
-        isRecentlyAdded ? "ring-2 ring-success/30" : ""
-      } ${tracksStock && displayStock <= 0 ? "opacity-80" : ""} ${
-        isCooldown ? "opacity-95 shadow-inner border-success/30" : ""
-      }`}
-      onClick={() => onAdd(product)}
-    >
-      {/* ── Top: name + price (primary info) ── */}
-      <div className="flex-1">
-        <div className="relative mb-2">
-          {/* Stock badge — absolute top-right so name gets full width */}
-          <span
-            className={`absolute top-0 right-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold shadow-sm ${stockStyle}`}
-          >
-            <StockBadge tracksStock={tracksStock} stock={displayStock} />
-          </span>
-          {isRecentlyAdded && (
-            <span className="absolute -top-1 -right-1 z-10 bg-success text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
-              +1
+    <div key={product.id} className="relative h-full">
+      <button
+        type="button"
+        className={`relative w-full h-full min-h-[150px] text-left rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 shadow-[0_8px_20px_rgba(15,23,42,0.08)] hover:border-primary/40 hover:shadow-[0_12px_26px_rgba(15,23,42,0.12)] transition-all p-3.5 pressable active:scale-[0.98] active:translate-y-[1px] flex flex-col ${
+          isRecentlyAdded ? "ring-2 ring-success/30" : ""
+        } ${tracksStock && displayStock <= 0 ? "opacity-80" : ""} ${
+          isCooldown ? "opacity-95 shadow-inner border-success/30" : ""
+        }`}
+        onClick={() => onAdd(product)}
+      >
+        {/* ── Top: name + price (primary info) ── */}
+        <div className="flex-1">
+          <div className="relative mb-2">
+            {/* Stock badge — absolute top-right so name gets full width */}
+            <span
+              className={`absolute top-0 right-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold shadow-sm ${stockStyle}`}
+            >
+              <StockBadge tracksStock={tracksStock} stock={displayStock} />
             </span>
-          )}
-          <h3 className="pr-12 font-semibold text-foreground text-sm sm:text-base leading-snug line-clamp-3">
-            {product.name}
-          </h3>
+            {isRecentlyAdded && (
+              <span className="absolute -top-1 -right-1 z-10 bg-success text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full pop-badge">
+                +1
+              </span>
+            )}
+            <h3 className="pr-12 font-semibold text-foreground text-sm sm:text-base leading-snug line-clamp-3">
+              {product.name}
+            </h3>
+          </div>
+          <p className="text-lg font-bold text-foreground">
+            <span className="text-muted-foreground">৳</span> {product.sellPrice}
+          </p>
         </div>
-        <p className="text-lg font-bold text-foreground">
-          <span className="text-muted-foreground">৳</span> {product.sellPrice}
-        </p>
-      </div>
 
-      {/* ── Bottom: metadata (anchored to card bottom) ── */}
-      <div className="mt-2 space-y-0.5">
-        {(product.brand || product.modelName) ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-            {[product.brand, product.modelName].filter(Boolean).join(" · ")}
+        {/* ── Bottom: metadata (anchored to card bottom) ── */}
+        <div className="mt-2 space-y-0.5 pr-8">
+          {(product.brand || product.modelName) ? (
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+              {[product.brand, product.modelName].filter(Boolean).join(" · ")}
+            </p>
+          ) : null}
+          <p className="text-[11px] font-medium tracking-[0.08em] text-muted-foreground">
+            {formatCategoryLabel(product.category)}
           </p>
-        ) : null}
-        <p className="text-[11px] font-medium tracking-[0.08em] text-muted-foreground">
-          {formatCategoryLabel(product.category)}
-        </p>
-        {product.compatibility ? (
-          <p className="line-clamp-1 text-[11px] text-muted-foreground">
-            {product.compatibility}
-          </p>
-        ) : null}
-        {hasVariants ? (
-          <p className="text-[11px] font-semibold text-primary">
-            {variantCount}টি সাইজ →
-          </p>
-        ) : null}
-      </div>
+          {product.compatibility ? (
+            <p className="line-clamp-1 text-[11px] text-muted-foreground">
+              {product.compatibility}
+            </p>
+          ) : null}
+          {hasVariants ? (
+            <p className="text-[11px] font-semibold text-primary">
+              {variantCount}টি সাইজ →
+            </p>
+          ) : null}
+        </div>
+      </button>
 
-      {/* Info icon — tap to see full product details without adding to cart */}
+      {/* Info icon — sibling (not nested) so HTML stays valid. Sits over the card via absolute positioning. */}
       <button
         type="button"
         className="absolute bottom-2 right-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-muted/70 text-muted-foreground/70 transition-all hover:bg-primary/10 hover:text-primary active:scale-90"
@@ -686,7 +687,7 @@ const ProductButton = memo(function ProductButton({
       >
         <Info className="h-3.5 w-3.5" />
       </button>
-    </button>
+    </div>
   );
 });
 

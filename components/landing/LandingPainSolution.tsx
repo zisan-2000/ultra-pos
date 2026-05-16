@@ -19,10 +19,16 @@ const pairs = [
 
 export function LandingPainSolution() {
   return (
-    <section id="pain" className="py-20">
+    <section id="pain" className="relative overflow-hidden py-16 lg:py-24">
+      {/* Section-specific animated shade — pain (danger) → solution (primary) */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute left-[5%] top-20 h-72 w-72 rounded-full bg-danger/10 blur-[110px] animate-blob-b" />
+        <div className="absolute bottom-10 right-[8%] h-80 w-80 rounded-full bg-primary/12 blur-[120px] animate-blob-c" />
+      </div>
+
       <div className="mx-auto max-w-6xl px-5">
         {/* Header */}
-        <div className="mb-14 text-center">
+        <div className="mb-10 text-center lg:mb-14">
           <p className="mb-3 text-sm font-bold uppercase tracking-widest text-primary">
             সমস্যা ও সমাধান
           </p>
@@ -37,9 +43,9 @@ export function LandingPainSolution() {
 
         {/* Before / After header */}
         <div className="mb-4 hidden grid-cols-2 gap-4 sm:grid">
-          <div className="flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/60 px-5 py-3 dark:border-rose-900 dark:bg-rose-950/30">
+          <div className="flex items-center gap-2 rounded-2xl border border-danger/25 bg-danger-soft/60 px-5 py-3">
             <span className="text-lg">😓</span>
-            <span className="font-bold text-rose-700 dark:text-rose-400">আগে এভাবে চলত</span>
+            <span className="font-bold text-danger">আগে এভাবে চলত</span>
           </div>
           <div className="flex items-center gap-2 rounded-2xl border border-primary/30 bg-primary/6 px-5 py-3">
             <span className="text-lg">✅</span>
@@ -52,9 +58,9 @@ export function LandingPainSolution() {
           {pairs.map((p, i) => (
             <div key={i} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {/* Pain */}
-              <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50/50 px-5 py-4 dark:border-rose-900 dark:bg-rose-950/20">
-                <span className="mt-0.5 shrink-0 text-lg leading-none">✗</span>
-                <p className="text-sm font-medium leading-relaxed text-rose-800 dark:text-rose-300">
+              <div className="flex items-start gap-3 rounded-2xl border border-danger/25 bg-danger-soft/50 px-5 py-4">
+                <span className="mt-0.5 shrink-0 text-lg leading-none text-danger">✗</span>
+                <p className="text-sm font-medium leading-relaxed text-danger">
                   {p.pain}
                 </p>
               </div>

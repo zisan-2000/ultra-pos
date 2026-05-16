@@ -195,30 +195,30 @@ export default async function RemnantLookupPage({ searchParams }: Props) {
   });
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-5">
       <Breadcrumb
         items={[
           { label: "হোম", href: "/dashboard" },
           { label: "পণ্য", href: `/dashboard/products?shopId=${selectedShopId}` },
           { label: "কাটা বাকি অংশ" },
         ]}
-        className="mb-2"
+        className="mb-1"
       />
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-          পণ্য ট্র্যাকিং
-        </p>
-        <h1 className="text-2xl font-bold leading-tight text-foreground">
-          কাটা বাকি অংশ
-        </h1>
-        <p className="mt-1 text-xs text-muted-foreground">
-          দোকান: <span className="font-semibold">{selectedShop.name}</span> — মোট{" "}
-          {rows.length}টি cut-piece/history row
-        </p>
-      </div>
 
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <p className="mb-3 text-xs font-semibold text-muted-foreground">দ্রুত কাজ</p>
+      {/* Page header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+            পণ্য ট্র্যাকিং
+          </p>
+          <h1 className="text-2xl font-bold leading-tight text-foreground">
+            কাটা বাকি অংশ / Remnant
+          </h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            <span className="font-semibold">{selectedShop.name}</span> — মোট{" "}
+            {rows.length}টি cut piece নথিভুক্ত
+          </p>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Link
             href={`/dashboard/products?shopId=${selectedShopId}`}
@@ -228,13 +228,20 @@ export default async function RemnantLookupPage({ searchParams }: Props) {
           </Link>
           <Link
             href={`/dashboard/sales/new?shopId=${selectedShopId}`}
+            className="inline-flex h-9 items-center rounded-full border border-primary/30 bg-primary-soft/60 px-4 text-sm font-semibold text-primary hover:bg-primary/15"
+          >
+            ✂️ কাট সেল দিন
+          </Link>
+          <Link
+            href={`/dashboard/purchases?shopId=${selectedShopId}`}
             className="inline-flex h-9 items-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
           >
-            কাট সেল দিন
+            ক্রয় তালিকা
           </Link>
         </div>
       </div>
 
+      {/* Lookup client */}
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <RemnantLookupClient
           rows={rows}

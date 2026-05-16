@@ -20,10 +20,16 @@ const steps = [
 
 export function LandingSteps() {
   return (
-    <section className="bg-gradient-to-br from-primary/5 via-background to-warning/5 py-20">
+    <section className="relative overflow-hidden bg-linear-to-br from-primary/5 via-background to-warning/5 py-16 lg:py-24">
+      {/* Section-specific animated shade — steps tone (primary pulse) */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute left-1/4 top-10 h-64 w-64 rounded-full bg-primary/12 blur-[100px] animate-blob-c" />
+        <div className="absolute right-1/4 bottom-10 h-64 w-64 rounded-full bg-warning/10 blur-[100px] animate-blob-b" />
+      </div>
+
       <div className="mx-auto max-w-6xl px-5">
         {/* Header */}
-        <div className="mb-12 text-center">
+        <div className="mb-10 text-center lg:mb-14">
           <p className="mb-3 text-sm font-bold uppercase tracking-widest text-primary">
             কীভাবে শুরু করবেন
           </p>
@@ -37,7 +43,7 @@ export function LandingSteps() {
           {/* Connector line — desktop only */}
           <div
             aria-hidden
-            className="absolute left-0 right-0 top-8 hidden h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent sm:block"
+            className="absolute left-0 right-0 top-8 hidden h-px bg-linear-to-r from-transparent via-primary/30 to-transparent sm:block"
           />
 
           {steps.map((s, i) => (
@@ -65,7 +71,7 @@ export function LandingSteps() {
         <div className="mt-12 text-center">
           <Link
             href="/login"
-            className="inline-flex h-12 items-center rounded-full bg-gradient-to-r from-primary to-primary-hover px-10 text-base font-bold text-white shadow-[0_8px_22px_rgba(22,163,74,0.35)] transition hover:brightness-105 active:scale-95"
+            className="inline-flex h-12 items-center rounded-full bg-linear-to-r from-primary to-primary-hover px-10 text-base font-bold text-white shadow-[0_8px_22px_rgba(22,163,74,0.35)] transition hover:brightness-105 active:scale-95"
           >
             এখনই শুরু করুন →
           </Link>

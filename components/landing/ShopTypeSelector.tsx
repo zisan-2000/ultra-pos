@@ -5,12 +5,12 @@ import { useState } from "react";
 type BadgeType = "ok" | "low" | "batch" | "serial" | "cut" | "service";
 
 const badge: Record<BadgeType, { bg: string; text: string; label: string }> = {
-  ok:      { bg: "bg-emerald-100 dark:bg-emerald-950/60", text: "text-emerald-700 dark:text-emerald-400", label: "✓" },
-  low:     { bg: "bg-amber-100 dark:bg-amber-950/60",    text: "text-amber-700 dark:text-amber-400",    label: "⚠" },
-  batch:   { bg: "bg-orange-100 dark:bg-orange-950/60",  text: "text-orange-600 dark:text-orange-400",  label: "Batch" },
-  serial:  { bg: "bg-blue-100 dark:bg-blue-950/60",      text: "text-blue-600 dark:text-blue-400",      label: "Serial" },
-  cut:     { bg: "bg-purple-100 dark:bg-purple-950/60",  text: "text-purple-600 dark:text-purple-400",  label: "Cut" },
-  service: { bg: "bg-primary/10",                        text: "text-primary",                          label: "Service" },
+  ok:      { bg: "bg-success-soft",        text: "text-success",          label: "✓" },
+  low:     { bg: "bg-warning-soft",        text: "text-warning",          label: "⚠" },
+  batch:   { bg: "bg-orange-100 dark:bg-orange-950/60", text: "text-orange-600 dark:text-orange-400", label: "Batch" },
+  serial:  { bg: "bg-blue-100 dark:bg-blue-950/60",     text: "text-blue-600 dark:text-blue-400",     label: "Serial" },
+  cut:     { bg: "bg-purple-100 dark:bg-purple-950/60", text: "text-purple-600 dark:text-purple-400", label: "Cut" },
+  service: { bg: "bg-primary/10",                       text: "text-primary",                         label: "Service" },
 };
 
 type Item = { name: string; qty: string; b: BadgeType };
@@ -22,6 +22,8 @@ type Shop = {
   items: Item[];
   highlight: string;
   sale: string;
+  todayCount: string;
+  topItem: string;
 };
 
 const shops: Shop[] = [
@@ -37,6 +39,8 @@ const shops: Shop[] = [
     ],
     highlight: "✂️  Cut remnant: ১১ ft auto-saved — কিছু নষ্ট হয়নি",
     sale: "৳ ৪৮,৫০০",
+    todayCount: "২৩",
+    topItem: "PVC Pipe",
   },
   {
     id: "pharmacy",
@@ -50,6 +54,8 @@ const shops: Shop[] = [
     ],
     highlight: "⚠️  Azithromycin Exp: Mar 2026 — restock reminder চালু",
     sale: "৳ ১২,৩০০",
+    todayCount: "৪১",
+    topItem: "Napa 500mg",
   },
   {
     id: "grocery",
@@ -63,6 +69,8 @@ const shops: Shop[] = [
     ],
     highlight: "📦  আটা stock কম — reorder alert পাঠানো হয়েছে",
     sale: "৳ ৮,৯০০",
+    todayCount: "৫৬",
+    topItem: "মিনিকেট চাল",
   },
   {
     id: "sweet",
@@ -76,6 +84,8 @@ const shops: Shop[] = [
     ],
     highlight: "🔥  সন্দেশ fast selling — আজ ২য়বার restock করা হয়েছে",
     sale: "৳ ৮,৫০০",
+    todayCount: "৩৮",
+    topItem: "সন্দেশ",
   },
   {
     id: "salon",
@@ -89,6 +99,8 @@ const shops: Shop[] = [
     ],
     highlight: "👤  রহিম ভাই বাকি ৳৫০০ · আজকের বুকিং: ১২ জন",
     sale: "৳ ৪,৬০০",
+    todayCount: "১২",
+    topItem: "Hair Cut",
   },
   {
     id: "restaurant",
@@ -102,6 +114,8 @@ const shops: Shop[] = [
     ],
     highlight: "🪑  Table ৩ বাকি ৳৩৬০ · আজকের অর্ডার: ৪৮ টি",
     sale: "৳ ৭,২০০",
+    todayCount: "৪৮",
+    topItem: "বিরিয়ানি",
   },
   {
     id: "electronics",
@@ -115,6 +129,8 @@ const shops: Shop[] = [
     ],
     highlight: "📋  Samsung A54 — warranty card ও IMEI auto-tracked",
     sale: "৳ ৩,৪৫,০০০",
+    todayCount: "৭",
+    topItem: "Samsung A54",
   },
   {
     id: "clothing",
@@ -128,6 +144,8 @@ const shops: Shop[] = [
     ],
     highlight: "🏷️  Jeans size ৩২ শেষ হয়ে যাচ্ছে — reorder করুন",
     sale: "৳ ১৮,৫০০",
+    todayCount: "১৯",
+    topItem: "শাড়ি",
   },
   {
     id: "shoes",
@@ -141,6 +159,8 @@ const shops: Shop[] = [
     ],
     highlight: "📦  Formal Shoes size ৪১ — reorder alert পাঠানো হয়েছে",
     sale: "৳ ২২,০০০",
+    todayCount: "১৪",
+    topItem: "Sandal",
   },
   {
     id: "stationery",
@@ -154,6 +174,8 @@ const shops: Shop[] = [
     ],
     highlight: "🖊️  Ball Pen stock কম — supplier order দেওয়া হয়েছে",
     sale: "৳ ৪,৫০০",
+    todayCount: "২৭",
+    topItem: "A4 Paper",
   },
   {
     id: "cosmetics",
@@ -167,6 +189,8 @@ const shops: Shop[] = [
     ],
     highlight: "🧴  Hair Oil batch expiry check — সব ঠিক আছে",
     sale: "৳ ৭,৮০০",
+    todayCount: "২২",
+    topItem: "Lip Gloss",
   },
   {
     id: "electrical",
@@ -180,6 +204,8 @@ const shops: Shop[] = [
     ],
     highlight: "✂️  Wire cut: ১৫ ft remnant auto-saved — নষ্ট হয়নি",
     sale: "৳ ১৮,৩০০",
+    todayCount: "১৮",
+    topItem: "Copper Wire",
   },
   {
     id: "computer",
@@ -193,6 +219,8 @@ const shops: Shop[] = [
     ],
     highlight: "🔒  SSD serial number — warranty claim এ সহজে খুঁজে পাবেন",
     sale: "৳ ৮৫,৫০০",
+    todayCount: "৯",
+    topItem: "SSD 512GB",
   },
   {
     id: "furniture",
@@ -206,6 +234,8 @@ const shops: Shop[] = [
     ],
     highlight: "📋  Steel Almirah stock শেষ হচ্ছে — factory order করুন",
     sale: "৳ ৩৫,০০০",
+    todayCount: "৪",
+    topItem: "Office Table",
   },
   {
     id: "auto-parts",
@@ -219,6 +249,8 @@ const shops: Shop[] = [
     ],
     highlight: "🔧  Brake Pad serial দিয়ে vehicle history track করুন",
     sale: "৳ ২৮,৯০০",
+    todayCount: "১৩",
+    topItem: "Engine Oil",
   },
   {
     id: "tailoring",
@@ -232,11 +264,166 @@ const shops: Shop[] = [
     ],
     highlight: "🎁  আজকের delivery: ৭টি order ready — customer notify করুন",
     sale: "৳ ৫,৮০০",
+    todayCount: "১৭",
+    topItem: "Shirt Stitching",
   },
 ];
 
+function PhoneFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mx-auto w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-card shadow-[0_20px_48px_rgba(15,23,42,0.14)]">
+      {children}
+    </div>
+  );
+}
+
+function InventoryView({ shop }: { shop: Shop }) {
+  return (
+    <PhoneFrame>
+      {/* App bar */}
+      <div className="flex items-center justify-between bg-primary px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-lg leading-none">{shop.emoji}</span>
+          <span className="text-sm font-bold text-white">স্টক ও পণ্য</span>
+        </div>
+        <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold text-white">
+          {shop.items.length}
+        </span>
+      </div>
+
+      {/* Product list */}
+      <div className="divide-y divide-border bg-card">
+        {shop.items.map((item, i) => (
+          <div key={i} className="flex items-center justify-between gap-2 px-4 py-2.5">
+            <span className="min-w-0 truncate text-sm text-foreground">{item.name}</span>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="hidden text-[11px] text-muted-foreground xs:block">{item.qty}</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${badge[item.b].bg} ${badge[item.b].text}`}
+              >
+                {badge[item.b].label}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Highlight */}
+      <div className="border-t border-primary/20 bg-primary/6 px-4 py-2.5">
+        <p className="text-xs font-semibold text-primary">{shop.highlight}</p>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+function PosView({ shop }: { shop: Shop }) {
+  return (
+    <PhoneFrame>
+      {/* App bar */}
+      <div className="flex items-center justify-between bg-foreground px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-background">🧾 নতুন বিক্রি</span>
+        </div>
+        <span className="rounded-full bg-warning px-2 py-0.5 text-[10px] font-bold text-white">
+          POS
+        </span>
+      </div>
+
+      {/* Product grid (2x2) */}
+      <div className="grid grid-cols-2 gap-2 bg-muted/30 p-3">
+        {shop.items.slice(0, 4).map((item, i) => (
+          <div
+            key={i}
+            className="rounded-xl border border-border bg-card p-2 shadow-sm"
+          >
+            <p className="line-clamp-2 text-[11px] font-semibold text-foreground">
+              {item.name}
+            </p>
+            <p className="mt-1 text-[10px] text-primary font-bold">{item.qty}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Cart preview */}
+      <div className="space-y-1 border-t border-border bg-card px-4 py-2.5">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-muted-foreground">কার্টে আইটেম</span>
+          <span className="font-bold text-foreground">৩টি</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-muted-foreground">মোট</span>
+          <span className="text-base font-bold text-success">{shop.sale}</span>
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div className="border-t border-border bg-card px-4 pb-3 pt-2">
+        <div className="rounded-full bg-primary py-2 text-center text-xs font-bold text-white">
+          ✓ বিক্রি কনফার্ম
+        </div>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+function ReportView({ shop }: { shop: Shop }) {
+  return (
+    <PhoneFrame>
+      {/* App bar */}
+      <div className="flex items-center justify-between bg-warning px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-white">📊 আজকের রিপোর্ট</span>
+        </div>
+        <span className="rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold text-white">
+          LIVE
+        </span>
+      </div>
+
+      {/* Big stat */}
+      <div className="border-b border-border bg-linear-to-br from-success-soft/60 to-card px-4 py-4 text-center">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-success/80">
+          আজকের বিক্রি
+        </p>
+        <p className="mt-1 text-2xl font-extrabold text-foreground">{shop.sale}</p>
+      </div>
+
+      {/* Sub stats */}
+      <div className="grid grid-cols-2 divide-x divide-border border-b border-border bg-card">
+        <div className="px-3 py-3 text-center">
+          <p className="text-[10px] text-muted-foreground">মোট order</p>
+          <p className="mt-0.5 text-lg font-bold text-foreground">{shop.todayCount}</p>
+        </div>
+        <div className="px-3 py-3 text-center">
+          <p className="text-[10px] text-muted-foreground">টপ আইটেম</p>
+          <p className="mt-0.5 truncate text-xs font-bold text-primary">{shop.topItem}</p>
+        </div>
+      </div>
+
+      {/* Highlight */}
+      <div className="bg-warning-soft/40 px-4 py-2.5">
+        <p className="text-[11px] font-semibold text-warning">{shop.highlight}</p>
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-border bg-card px-4 py-2 text-center">
+        <p className="text-[10px] text-muted-foreground">
+          Excel-এ ডাউনলোড করা যাবে
+        </p>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+const VIEW_LABELS = {
+  inventory: "স্টক",
+  pos: "বিক্রি",
+  report: "রিপোর্ট",
+} as const;
+type ViewKey = keyof typeof VIEW_LABELS;
+
 export function ShopTypeSelector() {
   const [activeId, setActiveId] = useState("hardware");
+  const [activeView, setActiveView] = useState<ViewKey>("inventory");
   const [fading, setFading] = useState(false);
 
   const select = (id: string) => {
@@ -251,8 +438,8 @@ export function ShopTypeSelector() {
   const current = shops.find((s) => s.id === activeId)!;
 
   return (
-    <div className="space-y-5">
-      {/* Shop type pills — horizontal scroll on mobile */}
+    <div className="space-y-6">
+      {/* Shop type pills — horizontal scroll on mobile, wrap on desktop */}
       <div className="relative">
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide sm:flex-wrap sm:justify-center sm:overflow-x-visible sm:pb-0">
           {shops.map((s) => (
@@ -273,52 +460,76 @@ export function ShopTypeSelector() {
         </div>
       </div>
 
-      {/* Mini dashboard preview */}
-      <div
-        className={`mx-auto max-w-sm overflow-hidden rounded-2xl border border-border shadow-[0_20px_48px_rgba(15,23,42,0.14)] transition-opacity duration-130 ${
-          fading ? "opacity-0" : "opacity-100"
-        }`}
-      >
-        {/* App bar */}
-        <div className="flex items-center justify-between bg-primary px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="text-lg leading-none">{current.emoji}</span>
-            <span className="font-bold text-white">{current.label} দোকান</span>
-          </div>
-          <div className="flex gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-white/25" />
-            <div className="h-2 w-2 rounded-full bg-white/25" />
-            <div className="h-2 w-2 rounded-full bg-white/50" />
-          </div>
-        </div>
-
-        {/* Product list */}
-        <div className="divide-y divide-border bg-card">
-          {current.items.map((item, i) => (
-            <div key={i} className="flex items-center justify-between gap-2 px-4 py-2.5">
-              <span className="min-w-0 truncate text-sm text-foreground">{item.name}</span>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="hidden text-[11px] text-muted-foreground xs:block">{item.qty}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${badge[item.b].bg} ${badge[item.b].text}`}
-                >
-                  {badge[item.b].label}
-                </span>
-              </div>
-            </div>
+      {/* === MOBILE: single phone + view switcher === */}
+      <div className="lg:hidden">
+        {/* View switcher tabs */}
+        <div className="mx-auto mb-3 flex w-fit gap-1 rounded-full border border-border bg-card p-1">
+          {(Object.keys(VIEW_LABELS) as ViewKey[]).map((view) => (
+            <button
+              key={view}
+              type="button"
+              onClick={() => setActiveView(view)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                activeView === view
+                  ? "bg-primary text-white"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {VIEW_LABELS[view]}
+            </button>
           ))}
         </div>
 
-        {/* Highlight row */}
-        <div className="border-t border-primary/20 bg-primary/6 px-4 py-2.5">
-          <p className="text-xs font-semibold text-primary">{current.highlight}</p>
+        <div
+          className={`transition-opacity duration-150 ${
+            fading ? "opacity-0" : "opacity-100"
+          }`}
+        >
+          {activeView === "inventory" && <InventoryView shop={current} />}
+          {activeView === "pos" && <PosView shop={current} />}
+          {activeView === "report" && <ReportView shop={current} />}
+        </div>
+      </div>
+
+      {/* === DESKTOP: 3 phones side-by-side === */}
+      <div
+        className={`hidden transition-opacity duration-150 lg:block ${
+          fading ? "opacity-0" : "opacity-100"
+        }`}
+      >
+        <div className="grid grid-cols-3 gap-6">
+          <div className="space-y-2">
+            <div className="text-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/8 px-3 py-1 text-[11px] font-bold text-primary">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                স্টক ভিউ
+              </span>
+            </div>
+            <InventoryView shop={current} />
+          </div>
+          <div className="space-y-2">
+            <div className="text-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/25 bg-warning-soft/60 px-3 py-1 text-[11px] font-bold text-warning">
+                <span className="h-1.5 w-1.5 rounded-full bg-warning" />
+                বিক্রি / POS
+              </span>
+            </div>
+            <PosView shop={current} />
+          </div>
+          <div className="space-y-2">
+            <div className="text-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success-soft/60 px-3 py-1 text-[11px] font-bold text-success">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                রিপোর্ট
+              </span>
+            </div>
+            <ReportView shop={current} />
+          </div>
         </div>
 
-        {/* Stat bar */}
-        <div className="flex items-center justify-between border-t border-border bg-muted/50 px-4 py-3">
-          <span className="text-sm font-semibold text-muted-foreground">আজকের বিক্রি</span>
-          <span className="text-xl font-bold text-foreground">{current.sale}</span>
-        </div>
+        <p className="mt-5 text-center text-xs text-muted-foreground">
+          ↑ {current.label} দোকানের জন্য — তিনটি স্ক্রিন একসাথে দেখুন
+        </p>
       </div>
     </div>
   );

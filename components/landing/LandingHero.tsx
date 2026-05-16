@@ -10,9 +10,15 @@ const stats = [
 
 export function LandingHero() {
   return (
-    <section className="relative mx-auto max-w-5xl px-5 pb-16 pt-28 text-center">
+    <section className="relative mx-auto max-w-6xl px-5 pb-16 pt-28 text-center lg:pb-20 lg:pt-32">
+      {/* Section-specific animated shade — hero primary tone */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-20 -z-10 overflow-hidden">
+        <div className="absolute left-[15%] top-0 h-72 w-72 rounded-full bg-primary/12 blur-[100px] animate-blob-a" />
+        <div className="absolute right-[10%] top-32 h-64 w-64 rounded-full bg-warning/10 blur-[110px] animate-blob-c" />
+      </div>
+
       {/* Live badge */}
-      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/8 px-4 py-1.5 text-xs font-semibold text-primary">
+      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/8 px-4 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
         বাংলাদেশের ব্যবসার জন্য তৈরি
       </div>

@@ -553,6 +553,48 @@ button {
   @apply bg-card/95 rounded-2xl border border-border/70 p-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur;
 }
 
+/* ── Landing page ambient blob animations ── */
+@keyframes blob-drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(30px, -20px) scale(1.06); }
+  66%      { transform: translate(-20px, 18px) scale(0.96); }
+}
+@keyframes blob-drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-35px, 25px) scale(1.08); }
+}
+@keyframes blob-drift-c {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40%      { transform: translate(25px, 20px) scale(0.94); }
+  80%      { transform: translate(-15px, -22px) scale(1.04); }
+}
+@keyframes blob-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.9; }
+}
+.animate-blob-a       { animation: blob-drift-a 22s ease-in-out infinite; }
+.animate-blob-b       { animation: blob-drift-b 26s ease-in-out infinite; }
+.animate-blob-c       { animation: blob-drift-c 30s ease-in-out infinite; }
+.animate-blob-pulse   { animation: blob-pulse 6s ease-in-out infinite; }
+
+/* Subtle floating accent (e.g. WhatsApp icon, hero badge) */
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+.animate-float-y { animation: float-y 4s ease-in-out infinite; }
+
+/* Respect user preference */
+@media (prefers-reduced-motion: reduce) {
+  .animate-blob-a,
+  .animate-blob-b,
+  .animate-blob-c,
+  .animate-blob-pulse,
+  .animate-float-y {
+    animation: none !important;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
